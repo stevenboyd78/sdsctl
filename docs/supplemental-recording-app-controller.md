@@ -2108,6 +2108,35 @@ observed within the original handoff cutoff; case files remain unchanged. This
 proves that offline lifetime join only. A passive status 75 and a peer-loss stop
 do not establish successful recording, native/App exit or exclusive recovery.
 
+### Original received observer through passive handoff (uninstalled)
+
+The plan receiver now retains its exact local input, original observer clock,
+original sample, local identity, outer/writer witnesses and preparation context
+on the CasePlan it actually received. `retained_idle_observer` joins only those
+same owners to the separately provisioned final observer connection and actual
+Link. An equal reconstructed plan, input reader, clock or peer witness cannot
+replace them. The original CasePlan has one consumed descriptor-intake slot,
+including on refusal; the earlier input/plan channels are never renewed.
+
+This context yields only a bootstrap receipt. It neither exposes its Link nor
+exchanges active CLI/candidate/native messages, creates a Startup/journal or
+admits any App action. Intake, caller scope, complete fresh input/plan checks,
+Link retirement and owned descriptor retirement share the original final
+connection cutoff and original plan ready limit. The existing original-channel
+retirement routine protects foreign reused descriptors. Borrowed owners remain
+the caller's responsibility and are rechecked after owned channels close.
+
+The actual three-process fixture joins this observer to the separately selected
+fixed passive writer and original outer watcher. Its normal-retirement variant
+observes the original observer exit and the watcher's resulting stop of the
+writer, with case files unchanged. Replacement owners, context/input drift,
+replay, original-cutoff expiry, cleanup failure and interruption are tested
+without granting new time or action scope. **Observer phase sequencing still
+uses fixture stdin and is not an installed completion protocol or fixed observer
+entrypoint.** Runtime/image/Engine provenance and the outer's platform lifetime
+remain synthetic/unqualified. This reduces fixture-only owner assembly, not the
+requirements for independent supervision, active admission or exclusive recovery.
+
 ## Remaining gates before a human scanner/audio test
 
 1. Complete real platform/publication and independent-observer lifetime

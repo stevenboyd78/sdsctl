@@ -103,9 +103,10 @@ def writer_case_root(case):
     return Path("/mnt/data/sdsctl-recording-handoff-" + case)
 
 
-def handoff_root(case):
+def handoff_root(case, role="writer"):
     codec.plans.base.identifier(case, case=True)
-    return Path("/mnt/data/sdsctl-recording-peer-handoff-" + case + "-writer")
+    require(type(role) is str and role in codec.ROLES)
+    return Path("/mnt/data/sdsctl-recording-peer-handoff-" + case + "-" + role)
 
 
 def _cleanup(callbacks, problem):
@@ -691,11 +692,132 @@ def receive_observer_plan(inputs, connection, timer, local, *, baseline_sha256, 
         exchange.quiet()
         guard()
         file_guard()
+        # Preserve the exact received owners for a separate final descriptor
+        # join. Equal CasePlan/clock/peer objects cannot recreate this custody.
+        original._observer_plan_context = (
+            inputs,
+            timer,
+            timer.original,
+            local,
+            connection.peer,
+            counterpart,
+            inputs._preparation_context,
+        )
+        original._observer_channel_attempted = False
         yield original
     except BaseException as error:
         problem = error
     finally:
         _cleanup(cleanup, problem)
+
+
+@contextmanager
+def retained_idle_observer(original, inputs, connection, timer, local, outer, writer):
+    """Join the actually received plan/input owners to one passive observer Link.
+
+    This is an uninstalled composition, not a fixed observer command or launch
+    sequencer. The caller separately provisions the ORIGINAL final connection,
+    qualifies runtimes/platform custody and retains the enclosing input/plan
+    receive contexts. Yield is ONLY a bootstrap receipt, not Link/action access.
+    The original connection cutoff bounds intake, caller scope and retirement;
+    no clock/Startup/plan/permission/journal/action or new deadline is created.
+    """
+    import supplemental_recording_peer_delivery as delivery
+
+    cleanup, problem, pins = [], None, None
+    endpoint = link = channels = None
+    try:
+        require(type(original) is startups.acceptance.intake.CasePlan)
+        require(original._owner == (os.getpid(), get_ident(), os.geteuid(), os.getegid()))
+        require(getattr(original, "_observer_channel_attempted", None) is False)
+        original._observer_channel_attempted = True
+        require(type(inputs) is inputs_module.Inputs)
+        require(type(connection) is connections.Connection and connection.peer is outer)
+        require(type(timer) is domains.clock.ClockWitness)
+        require(type(local) is domains.process.ProcessIdentity)
+        require(type(outer) is type(writer) is domains.process.ProcessWitness)
+        context = getattr(original, "_observer_plan_context", None)
+        require(type(context) is tuple and len(context) == 7)
+        origin, expected, cutoff = timer.original, inputs.expectations, connection.deadline
+        preparation = getattr(inputs, "_preparation_context", None)
+        plan = original.recheck()
+        require(connection.root == handoff_root(plan.case, "observer"))
+        end = min(cutoff, plan.lease["ready_by"])
+        peer_pins = tuple(
+            (peer.identity, peer.fd, links._identity(peer.fd)) for peer in (outer, writer)
+        )
+
+        def guard(*, retired=False):
+            require(time.monotonic() < end)
+            require(original._observer_plan_context is context)
+            require(original._observer_channel_attempted is True)
+            require(inputs._preparation_context is preparation)
+            require(
+                all(
+                    a is b
+                    for a, b in zip(
+                        (inputs, timer, origin, local, outer, writer, preparation),
+                        context,
+                        strict=True,
+                    )
+                )
+            )
+            require(timer.original is origin and connection.deadline == cutoff)
+            require(connection.peer is outer)
+            connection.recheck()
+            require(original.recheck() is plan)
+            require(inputs.expectations is expected and inputs.recheck(deadline=end) is expected)
+            codec.source_profile(expected, preparation=True)
+            expected.check_plan(inputs.template, plan, plan.original_clock)
+            require(plan.original_clock.before_ns >= origin.after_ns)
+            plan.check_clock(timer.read())
+            require(domains.process.read_identity(local.pid, local.container_id) == local)
+            for peer, pin in zip((outer, writer), peer_pins, strict=True):
+                _peer_guard(peer, pin)
+            if link is not None:
+                require(link.plan is plan and link.timer is timer and link.channel is channels)
+                require(link.sequence == link._sequence == 0)
+                require(not link.candidate_attempted and not link.native_attempted)
+                if retired:
+                    require(link.closed and all(sock.fileno() == -1 for sock, _, _ in pins))
+                else:
+                    link._guard(end)
+            require(time.monotonic() < end)
+
+        guard()
+        endpoint = bootstrap.Endpoint(
+            connection.channel,
+            plan,
+            timer,
+            local,
+            outer,
+            writer,
+            role="observer",
+            mode="receive",
+            declaration_sha256=inputs.expected,
+            deadline=end,
+        )
+        cleanup.append(endpoint.close)
+        channels, receipt = endpoint.receive()
+        cleanup.append(lambda: delivery._retire(channels, pins))
+        pins = tuple(
+            (sock, sock.fileno(), links._identity(sock.fileno()))
+            for sock in (channels.incoming, channels.outgoing)
+        )
+        guard()
+        link = links.Link(channels, plan, timer, writer, role="observer")
+        cleanup.append(link.close)
+        guard()
+        yield receipt
+        guard()
+    except BaseException as error:
+        problem = error
+    finally:
+        _cleanup(cleanup, problem)
+    try:
+        guard(retired=True)
+    except BaseException as error:
+        _cleanup([], error)
 
 
 def prepare_writer(

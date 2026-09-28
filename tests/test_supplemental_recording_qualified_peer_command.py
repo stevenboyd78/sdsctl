@@ -410,6 +410,7 @@ def observer_child(path, *, retained=False):
         patch.setattr(p, "preparation_root", lambda *_: Path(config["preparation"]))
         patch.setattr(p, "observer_plan_root", lambda _: Path(config["plan_socket"]))
         patch.setattr(p, "writer_case_root", lambda _: Path(config["case_root"]))
+        patch.setattr(p, "handoff_root", lambda *_: Path(config["handoff"]))
         patch.setattr(p.startups.plans.Plan, "root", property(lambda _: Path(config["case_root"])))
         outer = stack.enter_context(
             p.domains.process.ProcessWitness(
@@ -502,6 +503,95 @@ def observer_child(path, *, retained=False):
                 end = final_connection.deadline
             assert inputs.recheck(deadline=end) is inputs.expectations
             assert original.recheck() is plan and timer.original is origin
+            if config["observer_join"]:
+                assert retained
+                selected = [original, inputs, final_connection, timer, local, outer, writer_peer]
+                fault = config["observer_join_fault"]
+                if fault == "clock":
+                    selected[3] = stack.enter_context(
+                        closing(p.domains.clock.ClockWitness(p.domains.clock.read()))
+                    )
+                elif fault == "writer":
+                    selected[6] = stack.enter_context(
+                        p.domains.process.ProcessWitness(writer_peer.identity)
+                    )
+                elif fault == "local":
+                    selected[4] = p.domains.process.ProcessIdentity(**asdict(local))
+                elif fault == "inputs":
+                    selected[1] = stack.enter_context(
+                        closing(p.inputs_module.Inputs(declaration, inputs.root, inputs.expected))
+                    )
+                elif fault == "plan":
+                    selected[0] = stack.enter_context(
+                        p.startups.acceptance.intake.CasePlan(original._root, plan.sha256)
+                    )
+                elif fault == "missing-context":
+                    del original._observer_plan_context
+
+                def forbidden(*args, **kwargs):
+                    raise AssertionError("Passive observer attempted active exchange")
+
+                patch.setattr(p.links.Link, "_send", forbidden)
+                if fault in {"cleanup", "interrupt"}:
+                    # Install before the join captures its original bound
+                    # cleanup callback; replacing the method afterward does
+                    # not change that callback and would not inject a fault.
+                    close = p.links.Link.close
+
+                    def broken(link):
+                        close(link)
+                        raise ValueError("PRIVATE observer cleanup failure")
+
+                    patch.setattr(p.links.Link, "close", broken)
+                try:
+                    with p.retained_idle_observer(*selected) as receipt:
+                        result = dict(
+                            received=True, offer=receipt.offer_sha256, original_clock=True
+                        )
+                        emit(result)
+                        assert receive() == {"retire": True}
+                        if fault == "replay":
+                            with (
+                                pytest.raises(p.UnconfirmedPreparation),
+                                p.retained_idle_observer(*selected),
+                            ):
+                                raise AssertionError("Original observer handoff was replayed")
+                        elif fault == "context-drift":
+                            original._observer_plan_context = tuple(
+                                list(original._observer_plan_context)
+                            )
+                        elif fault == "input-drift":
+                            (Path(config["inputs"]) / p.inputs_module.NAME).write_bytes(
+                                b"PRIVATE changed inputs"
+                            )
+                        elif fault == "expiry":
+                            assert time.monotonic() < end
+                            select.select([], [], [], end - time.monotonic())
+                        elif fault == "interrupt":
+                            raise KeyboardInterrupt
+                except (p.UnconfirmedPreparation, KeyboardInterrupt) as error:
+                    attempted = getattr(original, "_observer_channel_attempted", None)
+                    stack.close()
+                    emit(
+                        dict(
+                            observer_join_refused=True,
+                            attempted=attempted,
+                            interrupted=isinstance(error, KeyboardInterrupt),
+                            fd_delta=len(os.listdir("/proc/self/fd")) - before,
+                        )
+                    )
+                    receive()  # Failure evidence stays distinct from a successful exit.
+                    return
+                assert original._observer_channel_attempted
+                assert original.recheck() is plan and timer.original is origin
+                stack.close()
+                emit(
+                    dict(
+                        observer_join_retired=True,
+                        fd_delta=len(os.listdir("/proc/self/fd")) - before,
+                    )
+                )
+                return
             endpoint = stack.enter_context(
                 closing(
                     p.bootstrap.Endpoint(
@@ -857,6 +947,8 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
                     template_sha256=h.template.sha256,
                     baseline=h.baseline,
                     receive_fault=options.get("receive_fault"),
+                    observer_join=options.get("observer_join", False),
+                    observer_join_fault=options.get("observer_join_fault"),
                 ),
             )
             observer_inputs.accept()
@@ -1552,6 +1644,121 @@ def test_fixed_passive_command_exit_triggers_original_watch_without_cancellation
     assert outcome.observer == s.counterpart.identity
     assert outcome.deadline_ns == watch.deadline_ns == s.custody.deadline_ns
     assert not watch.closed and watch.finished and time.monotonic() < end
+    assert files == {
+        path.relative_to(s.case_root): path.read_bytes()
+        for path in s.case_root.rglob("*")
+        if path.is_file()
+    }
+
+
+@pytest.mark.skipif(
+    not termination_tests.m.deadlines.timerfd_available(), reason="Linux timerfd API required"
+)
+@pytest.mark.parametrize(
+    "joined",
+    [
+        dict(mode="release-command-pair", observer_join=True, observer_join_fault=fault)
+        for fault in (None, "replay")
+    ],
+    indirect=True,
+)
+def test_original_received_observer_joins_fixed_writer_and_retires_before_original_cutoff(
+    joined, monkeypatch
+):
+    s = joined
+    assert s.sender.send() is None
+    result = finish(s, monkeypatch, lambda: arm_original_watch(s))
+    assert result["result"] == 75 and result["original_dispatch"] and result["fd_delta"] == 0
+    assert s.h.reads == 12 and s.comparison.counts["container"] == 10
+    files = {
+        path.relative_to(s.case_root): path.read_bytes()
+        for path in s.case_root.rglob("*")
+        if path.is_file()
+    }
+    # Fixture-only final observer sequencing; NOT an installed release command.
+    transport.command(s.observer, dict(retire=True))
+    assert json.loads(transport.line(s.observer)) == dict(observer_join_retired=True, fd_delta=0)
+    end = s.observer_listener.deadline
+    for fd in (s.counterpart.fd, s.h.witness.fd, s.watch.fd):
+        assert time.monotonic() < end
+        assert select.select([fd], [], [], end - time.monotonic())[0] == [fd]
+    assert s.observer.wait(timeout=0) == 0
+    assert s.h.child.wait(timeout=0) == -signal.SIGKILL
+    outcome = s.watch.finish()
+    assert outcome.returncode == 11 and outcome.deadline_ns == s.custody.deadline_ns
+    assert (outcome.writer, outcome.observer) == s.watch.identities
+    assert files == {
+        path.relative_to(s.case_root): path.read_bytes()
+        for path in s.case_root.rglob("*")
+        if path.is_file()
+    }
+
+
+@pytest.mark.skipif(
+    not termination_tests.m.deadlines.timerfd_available(), reason="Linux timerfd API required"
+)
+@pytest.mark.parametrize(
+    "joined",
+    [
+        pytest.param(
+            dict(mode="release-command-pair", observer_join=True, observer_join_fault=fault),
+            id=fault,
+        )
+        for fault in ("clock", "writer", "local", "inputs", "plan", "missing-context")
+    ],
+    indirect=True,
+)
+def test_replaced_observer_receive_owners_refuse_original_watched_handoff(joined, monkeypatch):
+    s = joined
+    assert s.sender.send() is None
+    with pytest.raises(delivery_tests.m.UnconfirmedDelivery):
+        finish(s, monkeypatch, lambda: arm_original_watch(s))
+    assert s.watch.closed and s.watch.finished
+    assert s.h.child.wait(timeout=3) == s.observer.wait(timeout=3) == -signal.SIGKILL
+    assert s.plan_receipt and s.pair.channel_delivery_attempted
+    assert (s.case_root / "startup-claim.json").is_file()
+    assert (s.case_root / "plan.json").is_file()
+
+
+@pytest.mark.skipif(
+    not termination_tests.m.deadlines.timerfd_available(), reason="Linux timerfd API required"
+)
+@pytest.mark.parametrize(
+    "joined",
+    [
+        pytest.param(
+            dict(mode="release-command-pair", observer_join=True, observer_join_fault=fault),
+            id=fault,
+        )
+        for fault in ("context-drift", "input-drift", "expiry", "cleanup", "interrupt")
+    ],
+    indirect=True,
+)
+def test_observer_scope_or_cleanup_failure_retires_owned_handles_and_keeps_evidence(
+    joined, monkeypatch, request
+):
+    s = joined
+    fault = request.node.callspec.params["joined"]["observer_join_fault"]
+    assert s.sender.send() is None
+    result = finish(s, monkeypatch, lambda: arm_original_watch(s))
+    assert result["result"] == 75 and result["fd_delta"] == 0
+    files = {
+        path.relative_to(s.case_root): path.read_bytes()
+        for path in s.case_root.rglob("*")
+        if path.is_file()
+    }
+    transport.command(s.observer, dict(retire=True))
+    refused = json.loads(transport.line(s.observer))
+    assert refused == dict(
+        observer_join_refused=True, attempted=True, interrupted=fault == "interrupt", fd_delta=0
+    )
+    if fault == "expiry":
+        assert time.monotonic() >= s.observer_listener.deadline
+    if fault == "input-drift":
+        assert s.path.read_bytes() == b"PRIVATE changed inputs"
+    assert not s.watch.closed and not s.watch.finished
+    s.watch.close()  # Failure cancellation, not restoration success.
+    assert s.h.child.wait(timeout=3) == s.observer.wait(timeout=3) == -signal.SIGKILL
     assert files == {
         path.relative_to(s.case_root): path.read_bytes()
         for path in s.case_root.rglob("*")
