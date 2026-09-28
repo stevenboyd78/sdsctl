@@ -35,7 +35,14 @@ assert m.declarations is declarations.m
 def peer(helper, image, monkeypatch, request, graph_mode):
     role = request.param
     root = helper.root
-    graph = m.declarations.peer_source if graph_mode else m.declarations.source
+    preparation = graph_mode == "preparation"
+    graph = (
+        m.declarations.peer_source.PreparationProfile
+        if preparation
+        else m.declarations.peer_source
+        if graph_mode
+        else m.declarations.source
+    )
     for name in graph.HELPER_FILES - m.launch.helper_source.HELPER_FILES:
         path = root / m.launch.HelperQualification.HELPER / name
         path.write_bytes(b"raise RuntimeError('PRIVATE_OBSERVED_CODE_MUST_NOT_RUN')\n")
@@ -71,7 +78,9 @@ def peer(helper, image, monkeypatch, request, graph_mode):
         "/usr/local/bin/python",
         "-I",
         "-B",
-        "/opt/sdsctl-recording-host/" + graph.__name__ + ".py",
+        "/opt/sdsctl-recording-host/"
+        + ("supplemental_recording_peer_preparation" if preparation else graph.__name__)
+        + ".py",
         template.sha256,
     )
     container = helper.container
@@ -96,14 +105,22 @@ def peer(helper, image, monkeypatch, request, graph_mode):
     )
     envelope = dict(
         schema=1,
-        kind=m.declarations.PEER_KIND if graph_mode else m.declarations.KIND,
+        kind=m.declarations.PREPARATION_KIND
+        if preparation
+        else (m.declarations.PEER_KIND if graph_mode else m.declarations.KIND),
         template_sha256=template.sha256,
         source_kind=graph.KIND,
         writer=copy.deepcopy(selected),
         observer=copy.deepcopy(selected),
     )
     envelope["observer" if role == "writer" else "writer"]["runtime"] = other
-    decode = m.declarations.decode_peer_handoff if graph_mode else m.declarations.decode
+    decode = (
+        m.declarations.decode_peer_preparation
+        if preparation
+        else m.declarations.decode_peer_handoff
+        if graph_mode
+        else m.declarations.decode
+    )
     expected = decode(envelope)
     original_open = builtins.open
 
@@ -133,7 +150,8 @@ def peer(helper, image, monkeypatch, request, graph_mode):
             container, name=name, image=observed["image"]
         ),
         command=command,
-        peer_handoff=graph_mode,
+        peer_handoff=graph_mode is True,
+        preparation=preparation,
     )
     helper.make = lambda **overrides: m.PeerRuntimeQualification(
         plan, helper.witness, helper.docker, **(arguments | overrides)
@@ -154,6 +172,35 @@ def graph_mode(request):
     # Existing fixture consumers keep the old graph and closed codec. Only
     # explicitly marked newer-profile tests construct the separate declaration.
     return getattr(request, "param", False)
+
+
+@pytest.mark.parametrize("graph_mode", ["preparation"], indirect=True)
+def test_explicit_preparation_profile_checks_complete_runtime_without_enabling_old_profile(peer):
+    test_role_uses_its_own_complete_runtime_without_replacing_original_plan(peer)
+    assert peer.obj.source is m.declarations.peer_source.PreparationProfile
+    assert peer.obj.preparation is True and peer.obj.peer_handoff is False
+    assert len(peer.obj.source.MODULES) == 104
+    for options in ({"preparation": False}, {"peer_handoff": True}, {"preparation": 1}):
+        with pytest.raises(m.launch.UnconfirmedHostLaunch):
+            peer.make(**options)
+
+
+@pytest.mark.parametrize("graph_mode", ["preparation"], indirect=True)
+@pytest.mark.parametrize("fault", ["source", "missing", "selection"])
+def test_preparation_source_and_selection_remain_pinned(peer, fault):
+    if fault == "selection":
+        peer.obj.preparation = False
+    else:
+        path = (
+            peer.root
+            / m.launch.HelperQualification.HELPER
+            / "supplemental_recording_peer_preparation.py"
+        )
+        if fault == "missing":
+            path.unlink()  # Only the disposable observed-source fixture.
+        else:
+            path.write_bytes(b"PRIVATE changed source; must not execute")
+    original.launch.denied(peer.obj)
 
 
 @pytest.mark.parametrize("graph_mode", [True], indirect=True)

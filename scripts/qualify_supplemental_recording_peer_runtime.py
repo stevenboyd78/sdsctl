@@ -47,6 +47,7 @@ class PeerRuntimeQualification(launch.HelperQualification):
         command,
         runtime_workers=1,
         peer_handoff=False,
+        preparation=False,
     ):
         try:
             require(type(self) is PeerRuntimeQualification)
@@ -56,8 +57,10 @@ class PeerRuntimeQualification(launch.HelperQualification):
             require(type(witness) is launch.engine.dispatch.process.ProcessWitness)
             require(witness.identity.pid != launch.os.getpid())
             declarations.load_bytes(expectations.raw, expectations_sha256)
-            self.source = declarations.source_profile(expectations, peer_handoff=peer_handoff)
-            self.peer_handoff = peer_handoff
+            self.source = declarations.source_profile(
+                expectations, peer_handoff=peer_handoff, preparation=preparation
+            )
+            self.peer_handoff, self.preparation = peer_handoff, preparation
             expectations.check_plan(template, plan, plan.original_clock)
             selected = declarations._read(expectations.raw)[role]
             self.template, self.expectations, self.role = template, expectations, role
@@ -74,6 +77,7 @@ class PeerRuntimeQualification(launch.HelperQualification):
                 self.role_runtime,
                 self.source,
                 self.peer_handoff,
+                self.preparation,
             )
             super().__init__(
                 plan,
@@ -107,6 +111,7 @@ class PeerRuntimeQualification(launch.HelperQualification):
                         self.role_runtime,
                         self.source,
                         self.peer_handoff,
+                        self.preparation,
                     ),
                     self.role_objects,
                     strict=True,

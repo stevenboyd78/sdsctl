@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Authenticate clock-free peer input pins before baseline collection, offline only.
+"""Authenticate original peer inputs and prepare one passive writer, uninstalled.
 
 The independently qualified original outer supplies the EXPECTED pin, never a
 hash learned from observed peer files/argv. Original private connection/listener,
 pidfd and zero-offset domain checks authenticate this exchange's local sender.
 They do not authenticate the outer's installation or make it an App authority.
-No existing source inventory or command selects this new preparation protocol.
-The exchange begins no baseline or service. A separate prepare_writer adapter
+The separate preparation profile covers the fixed passive command; older
+inventories/commands do not select it. The exchange begins no baseline or service.
+A separate prepare_writer adapter
 requires the existing independently obtained one-use preflight permission before
 joining retained inputs to original Startup. Neither path grants App actions.
 """
@@ -18,23 +19,54 @@ import secrets
 import select
 import socket
 import struct
+import sys
 import time
 from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
 from threading import get_ident
 
-import supplemental_recording_peer_bootstrap as bootstrap
-import supplemental_recording_peer_connection as connections
-import supplemental_recording_peer_inputs as inputs_module
-import supplemental_recording_peer_listener as listeners
-import supplemental_recording_time_domain as domains
+ENTRYPOINT = "/opt/sdsctl-recording-host/supplemental_recording_peer_preparation.py"
+MODE = "--prepare-idle-peer-writer"
+MESSAGE = "Recording peer preparation is unconfirmed; preserve this case and do not retry."
+
+if __name__ == "__main__":
+    try:
+        allowed = (
+            len(sys.argv) == 6
+            and sys.argv[5] == MODE
+            and sys.flags.isolated == sys.flags.dont_write_bytecode == 1
+            and os.geteuid() == os.getegid() == 0
+            and os.getcwd() == "/"
+            and Path(__file__) == Path(ENTRYPOINT)
+        )
+    except Exception:
+        allowed = False
+    if not allowed:
+        print(MESSAGE, file=sys.stderr)
+        raise SystemExit(64)
+    sys.path.insert(0, "/opt/sdsctl-recording-host")
+
+try:
+    import supplemental_recording_peer_bootstrap as bootstrap
+    import supplemental_recording_peer_connection as connections
+    import supplemental_recording_peer_inputs as inputs_module
+    import supplemental_recording_peer_listener as listeners
+    import supplemental_recording_permission_probe as preflight_channel
+    import supplemental_recording_service_permission as preflight
+    import supplemental_recording_service_startup as startups
+    import supplemental_recording_time_domain as domains
+except Exception:
+    if __name__ == "__main__":
+        print(MESSAGE, file=sys.stderr)
+        raise SystemExit(75) from None
+    raise
 
 codec, links = inputs_module.codec, bootstrap.links
 KIND = "finite-recording-peer-input-preparation-v1"
 SCOPE = "authenticate-retained-peer-inputs-only-v1"
 MAX_BYTES, ROOT_UID = 2048, 0
-MESSAGE = "Recording peer preparation is unconfirmed; preserve this case and do not retry."
+MILESTONE = "Finite peer writer prepared and retired; no App or recording action selected."
 
 
 class UnconfirmedPreparation(ValueError):
@@ -55,6 +87,11 @@ def preparation_root(case, role):
 def baseline_root(case):
     codec.plans.base.identifier(case, case=True)
     return Path("/mnt/data/sdsctl-recording-baseline-" + case)
+
+
+def handoff_root(case):
+    codec.plans.base.identifier(case, case=True)
+    return Path("/mnt/data/sdsctl-recording-peer-handoff-" + case + "-writer")
 
 
 def _cleanup(callbacks, problem):
@@ -282,7 +319,9 @@ class _Exchange:
             self.domain.close()
 
 
-def send_inputs(inputs, listener, timer, local, *, role, baseline_sha256, counterpart):
+def send_inputs(
+    inputs, listener, timer, local, *, role, baseline_sha256, counterpart, preparation=False
+):
     """Original outer sends its independently pinned input digest once.
 
     Caller must qualify BOTH original runtimes and its own installation/platform
@@ -299,7 +338,7 @@ def send_inputs(inputs, listener, timer, local, *, role, baseline_sha256, counte
             inputs.declaration, listener, timer, local, role, baseline_sha256, sending=True
         )
         declaration = inputs.recheck(deadline=exchange.end)
-        codec.source_profile(declaration, peer_handoff=True)
+        codec.source_profile(declaration, peer_handoff=not preparation, preparation=preparation)
         expected = inputs.expected
         peer_pin = counterpart.identity, counterpart.fd, links._identity(counterpart.fd)
         require(len({local.pid, listener.peer.identity.pid, counterpart.identity.pid}) == 3)
@@ -351,7 +390,9 @@ def send_inputs(inputs, listener, timer, local, *, role, baseline_sha256, counte
 
 
 @contextmanager
-def receive_inputs(declaration, connection, timer, local, *, role, baseline_sha256):
+def receive_inputs(
+    declaration, connection, timer, local, *, role, baseline_sha256, preparation=False
+):
     """Retain authentic original inputs and counterpart for the caller's lifetime.
 
     The expected digest is received only from the original authenticated outer,
@@ -395,7 +436,9 @@ def receive_inputs(declaration, connection, timer, local, *, role, baseline_sha2
             declaration, inputs_module.inputs_root(exchange.case), expected, deadline=exchange.end
         )
         cleanup.append(inputs.close)
-        codec.source_profile(inputs.expectations, peer_handoff=True)
+        codec.source_profile(
+            inputs.expectations, peer_handoff=not preparation, preparation=preparation
+        )
         counterpart = domains.process.ProcessWitness(other)
         pin = counterpart.identity, counterpart.fd, links._identity(counterpart.fd)
         cleanup.append(lambda: _peer_close(counterpart, pin))
@@ -425,6 +468,7 @@ def prepare_writer(
     original_timer,
     original_outer,
     original_connection,
+    preparation=False,
 ):
     """Join retained inputs to ONE independently admitted original baseline read.
 
@@ -439,12 +483,9 @@ def prepare_writer(
     clock renews permission; no final acceptance, handoff or service runs here.
     Return is the original UNACCEPTED startup input, not Ready or command admission.
     Complete/partial files survive failure and both original owners are poisoned.
-    This module remains outside every command-selected source inventory.
+    The fixed passive command requires the separately tagged preparation profile;
+    older profiles/commands do not select this module.
     """
-    import supplemental_recording_permission_probe as preflight_channel
-    import supplemental_recording_service_permission as preflight
-    import supplemental_recording_service_startup as startups
-
     try:
         require(type(inputs) is inputs_module.Inputs and type(owner) is startups.Startup)
         require(type(permission) is preflight.Permission)
@@ -464,7 +505,7 @@ def prepare_writer(
         require(original_connection.channel is permission.channel)
         require(original_connection.deadline == permission.deadline)
         expected = inputs.expectations
-        codec.source_profile(expected, peer_handoff=True)
+        codec.source_profile(expected, peer_handoff=not preparation, preparation=preparation)
         target = permission.target
         require(len({target.pid, original_outer.identity.pid, counterpart.identity.pid}) == 3)
         require(
@@ -540,5 +581,177 @@ def prepare_writer(
         _cleanup([], error)
 
 
+def _accepted_writer(owner, inputs, local, outer, counterpart, docker):
+    """Separate acceptance -> original descriptor/dispatcher -> passive retirement."""
+    import supplemental_recording_writer_channel as writer
+
+    clock, original, template = owner.clock, owner.original, owner.template
+    origin = clock.original
+    deadline = owner.offer.deadline
+    poll_by = deadline - 2 * writer.startup.acceptance.MAX_SECONDS
+    peers = [
+        (peer, (peer.identity, peer.fd, links._identity(peer.fd))) for peer in (outer, counterpart)
+    ]
+
+    def guard(end):
+        require(time.monotonic() < end)
+        require(owner.clock is clock and clock.original is origin and owner.original is original)
+        require(owner.template is template and inputs.declaration is owner.declaration)
+        owner._guard()
+        inputs.recheck(deadline=end)
+        for peer, pin in peers:
+            _peer_guard(peer, pin)
+        require(time.monotonic() < end)
+
+    for _ in range(151):
+        guard(poll_by)
+        accepted = owner.poll()
+        guard(poll_by)
+        if accepted is not None:
+            require(accepted is original and owner.accepted)
+            break
+        time.sleep(min(0.1, max(0, poll_by - time.monotonic())))
+    else:
+        require(False)
+    connection = None
+    try:
+        connection = connections.Connection(
+            handoff_root(original.plan.case),
+            outer,
+            deadline=min(time.monotonic() + 2, original.plan.lease["ready_by"], deadline),
+        )
+        end = connection.deadline
+        guard(end)
+        writer.prepare_idle_from_inputs(
+            owner, inputs, connection, local, outer, counterpart, docker
+        )
+        guard(end)
+    finally:
+        if connection is not None:
+            connection.close()
+    guard(end)  # Retiring the original connection cannot conceal stale success.
+    return end
+
+
+def prepare_idle_writer(case, template_sha256, baseline_sha256, outer_identity):
+    """Fixed passive flow; no expectations pin/future plan/PID is learned from argv.
+
+    The independently provisioned outer owns the private preparation, permission
+    and final handoff listeners, supplies
+    the authenticated Inputs pin/counterpart, issues separate preflight permission
+    and arranges independent final acceptance/descriptor handoff. This command
+    neither launches/qualifies that outer nor provides an App action grant. Its
+    installation and blocked-I/O termination require independent qualification.
+    Files and one-attempt evidence survive every exit, including status 75.
+    """
+    cleanup, problem, end, owner = [], None, None, None
+    try:
+        codec.plans.base.identifier(case, case=True)
+        for digest in (template_sha256, baseline_sha256):
+            codec.plans.base.digest(digest)
+        require(type(outer_identity) is domains.process.ProcessIdentity)
+        declaration = inputs_module.declarations.Declaration(
+            inputs_module.declarations.declaration_root(case), template_sha256
+        )
+        cleanup.append(declaration.close)
+        template = declaration.recheck()
+        require(codec.templates._read(template.raw)["plan"]["case"] == case)
+        local = preflight_channel.current_identity()
+        timer = domains.clock.ClockWitness(domains.clock.read())
+        cleanup.append(timer.close)
+        outer = domains.process.ProcessWitness(outer_identity)
+        cleanup.append(outer.close)
+        connection = connections.Connection(
+            preparation_root(case, "writer"), outer, deadline=time.monotonic() + 2
+        )
+        cleanup.append(connection.close)
+        with receive_inputs(
+            declaration,
+            connection,
+            timer,
+            local,
+            role="writer",
+            baseline_sha256=baseline_sha256,
+            preparation=True,
+        ) as (inputs, counterpart):
+            phase, failure = [], None
+            try:
+                domain = domains.ZeroDomain(timer.original, outer)
+                phase.append(domain.close)
+                peer = preflight_channel.PeerConnection(
+                    preflight_channel.peer_root(case),
+                    timer.original.after_ns / domains.clock.NS + preflight.WAIT_SECONDS,
+                )
+                phase.append(peer.close)
+                permission = preflight.Permission(
+                    template,
+                    template_sha256,
+                    baseline_sha256,
+                    local,
+                    outer,
+                    domain,
+                    timer,
+                    peer.channel,
+                )
+                phase.append(permission.close)
+                peer.recheck()
+                permission.wait()
+                peer.recheck()
+                # Retain the completed input socket passively until the outer's
+                # distinct permission phase. Closing just after our ack could
+                # race its final retirement checks. Never recheck/renew the old
+                # expired input exchange, and retire it before baseline I/O.
+                connection.close()
+                owner = startups.Startup(declaration)
+                phase.append(owner.close)
+                docker = startups.plans.ordinary.Docker()
+                prepare_writer(
+                    inputs,
+                    owner,
+                    permission,
+                    counterpart,
+                    baseline_root(case),
+                    docker,
+                    original_timer=timer,
+                    original_outer=outer,
+                    original_connection=peer,
+                    preparation=True,
+                )
+                end = _accepted_writer(owner, inputs, local, outer, counterpart, docker)
+            except BaseException as error:
+                failure = error
+            finally:
+                _cleanup(phase, failure)
+    except BaseException as error:
+        if type(owner) is startups.Startup:
+            owner.failed = True
+        problem = error
+    finally:
+        try:
+            _cleanup(cleanup, problem)
+        except BaseException:
+            if type(owner) is startups.Startup:
+                owner.failed = True
+            raise
+    try:
+        require(end is not None and time.monotonic() < end)
+        print(MILESTONE, flush=True)
+        require(time.monotonic() < end)
+    except BaseException as error:
+        if type(owner) is startups.Startup:
+            owner.failed = True
+        _cleanup([], error)
+    return 75  # Never a recording, restoration, Ready or installed-qualification receipt.
+
+
 if __name__ == "__main__":
-    raise SystemExit("Uninstalled peer input preparation only; no active launch enabled.")
+    try:
+        import supplemental_recording_permission_probe as command_peer
+
+        result = prepare_idle_writer(
+            sys.argv[1], sys.argv[2], sys.argv[3], command_peer.parse_identity(sys.argv[4])
+        )
+    except Exception:
+        print(MESSAGE, file=sys.stderr)
+        raise SystemExit(75) from None
+    raise SystemExit(result)

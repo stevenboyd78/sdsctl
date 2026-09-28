@@ -165,7 +165,8 @@ with ExitStack() as stack:
     print("preparation-listening", flush=True)
     owned.accept()
     receipt = p.send_inputs(inputs, owned, timer, identity(os.getpid(), table[os.getpid()]),
-        role="writer", baseline_sha256=config["baseline_sha256"], counterpart=observer)
+        role="writer", baseline_sha256=config["baseline_sha256"], counterpart=observer,
+        preparation=config.get("command", False))
     print(json.dumps(dict(prepared=receipt, deadline=owned.deadline)), flush=True)
     # The writer retires its preparation socket before the outer retires ours.
     assert json.loads(sys.stdin.buffer.readline()) == {"mode": "prepared"}
@@ -201,6 +202,53 @@ connections = {}
 """,
 )
 
+# The fixed command receives no test-only phase callbacks. Both private
+# listeners are provisioned by this original outer before the command begins.
+# Separate final acceptance is still explicitly synthetic in the fixture.
+COMMAND_OUTER = (
+    PREPARING_OUTER.replace(
+        '    print("preparation-listening", flush=True)',
+        """    permission_server = stack.enter_context(closing(
+        socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)))
+    permission_path = Path(config["permission_root"]) / "observer.sock"
+    permission_server.bind(str(permission_path))
+    permission_path.chmod(0o600)
+    permission_server.listen(1)
+    permission_server.settimeout(2)
+    print("preparation-listening", flush=True)""",
+    )
+    .replace(
+        '    assert json.loads(sys.stdin.buffer.readline()) == {"mode": "prepared"}',
+        "    pass  # No fixture handshake with the fixed command.",
+    )
+    .replace(
+        "        server = stack.enter_context(closing("
+        "socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)))\n"
+        """\
+        server.bind(str(path))
+        path.chmod(0o600)
+        server.listen(1)
+        server.settimeout(2)""",
+        "        server = permission_server",
+    )
+)
+# Keep both input and permission owners until final handoff ends. Immediate
+# sender close could race the receiver's final input checks under coverage.
+# Retention is passive: no expired exchange/scope gets reused or renewed.
+_command_prefix, _command_tail = COMMAND_OUTER.split("\nconnections = {}\n", 1)
+COMMAND_OUTER = (
+    _command_prefix.replace(
+        '        assert json.loads(sys.stdin.buffer.readline()) == {"mode": "baseline-prepared"}',
+        "        pass  # No test-only baseline-complete message to the outer.",
+    ).replace(
+        "    owned.close()  # Its original two-second bound is NOT the next phase's lease.",
+        "    pass  # Retain through the receiver's final checks, without renewal.",
+    )
+    + "\n    connections = {}\n"
+    + "\n".join("    " + line for line in _command_tail.splitlines())
+    + "\n"
+)
+
 
 @pytest.fixture
 def connection(service_case, monkeypatch, request):
@@ -218,8 +266,14 @@ def connection(service_case, monkeypatch, request):
     prep_clock = prep_connection = prep_baseline = None
     permission = permission_connection = None
     retained_path = getattr(request, "param", False)
-    preparation_path = retained_path in {"prepared-inputs", "permitted-inputs", "permission-only"}
-    permission_path = retained_path in {"permitted-inputs", "permission-only"}
+    command_path = retained_path == "command"
+    preparation_path = retained_path in {
+        "prepared-inputs",
+        "permitted-inputs",
+        "permission-only",
+        "command",
+    }
+    permission_path = retained_path in {"permitted-inputs", "permission-only", "command"}
 
     def spawn(code):
         process = subprocess.Popen(
@@ -233,7 +287,9 @@ def connection(service_case, monkeypatch, request):
         return process
 
     try:
-        outer = spawn(PREPARING_OUTER if preparation_path else OUTER)
+        outer = spawn(
+            COMMAND_OUTER if command_path else PREPARING_OUTER if preparation_path else OUTER
+        )
         assert transport.line(outer) == "listening"
         observer = spawn(
             transport.CHILD.replace(
@@ -273,7 +329,11 @@ def connection(service_case, monkeypatch, request):
         values["template_sha256"] = s.startup.template.sha256
         values["writer"]["runtime"] = json.loads(s.startup.template.raw)["plan"]["helper"]
         values["observer"]["runtime"]["source"] = values["writer"]["runtime"]["source"]
-        if (
+        if command_path:
+            values["kind"] = m.expectations.PREPARATION_KIND
+            values["source_kind"] = m.expectations.peer_source.PreparationProfile.KIND
+            declaration = m.expectations.decode_peer_preparation(values)
+        elif (
             s.input_publication is not None
             and m.expectations._read(s.expected_inputs.raw)["kind"] == m.expectations.PEER_KIND
         ):
@@ -352,9 +412,45 @@ def connection(service_case, monkeypatch, request):
                         preparation_root=str(prep_root),
                         baseline_sha256=baseline_pin,
                         permission_root=str(permission_root) if permission_root else None,
+                        command=command_path,
                     ),
                 )
                 assert transport.line(outer) == "preparation-listening"
+                if command_path:
+                    # The command, not this fixture, acquires the actual original
+                    # Declaration/Startup, clocks, inputs, permission and channels.
+                    s.startup.close()  # Retire the unused inherited fixture owner.
+                    monkeypatch.setattr(preflight_probe.m.permission, "ROOT_UID", os.geteuid())
+                    monkeypatch.setattr(
+                        preflight_probe.m, "current_identity", lambda: identities[os.getpid()]
+                    )
+                    monkeypatch.setattr(
+                        preflight_probe.m, "peer_root", lambda case: permission_root
+                    )
+                    monkeypatch.setattr(prep, "baseline_root", lambda case: baseline_root)
+                    monkeypatch.setattr(prep, "handoff_root", lambda case: Path(temporary.name))
+                    # A private constructor alias supplies the synthetic Engine
+                    # only at the command boundary; no shared class is replaced.
+                    ordinary = SimpleNamespace(**vars(prep.startups.plans.ordinary))
+                    ordinary.Docker = lambda: s.docker
+                    plans = SimpleNamespace(**vars(prep.startups.plans))
+                    plans.ordinary = ordinary
+                    startup = SimpleNamespace(**vars(prep.startups))
+                    startup.plans = plans
+                    monkeypatch.setattr(prep, "startups", startup)
+                    yield SimpleNamespace(
+                        s=s,
+                        outer=outer,
+                        observer=observer,
+                        identities=identities,
+                        table=table,
+                        baseline_pin=baseline_pin,
+                        case=case_id,
+                        run=lambda: prep.prepare_idle_writer(
+                            case_id, s.template.sha256, baseline_pin, identities[outer.pid]
+                        ),
+                    )
+                    return
                 prep_clock = prep.domains.clock.ClockWitness(prep.domains.clock.read())
                 prep_stack.callback(prep_clock.close)
                 prep_connection = prep.connections.Connection(

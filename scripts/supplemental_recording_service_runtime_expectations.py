@@ -23,6 +23,7 @@ from supplemental_handoff_host import object_json
 plans = templates.plans
 KIND = "finite-recording-service-runtime-expectations-v1"
 PEER_KIND = "finite-recording-peer-handoff-runtime-expectations-v1"
+PREPARATION_KIND = "finite-recording-peer-preparation-runtime-expectations-v1"
 MAX_BYTES = 8192
 ROLES = ("writer", "observer")
 FIELDS = frozenset({"schema", "kind", "template_sha256", "source_kind", *ROLES})
@@ -74,10 +75,14 @@ def _role(value):
 def _validate(value):
     plans.mapping(value, FIELDS)
     require(type(value["schema"]) is int and value["schema"] == 1)
-    require(type(value["kind"]) is str and value["kind"] in (KIND, PEER_KIND))
+    require(type(value["kind"]) is str and value["kind"] in (KIND, PEER_KIND, PREPARATION_KIND))
     require(type(value["template_sha256"]) is str)
     plans.base.digest(value["template_sha256"])
-    graph = source if value["kind"] == KIND else peer_source
+    graph = {
+        KIND: source,
+        PEER_KIND: peer_source,
+        PREPARATION_KIND: peer_source.PreparationProfile,
+    }[value["kind"]]
     require(type(value["source_kind"]) is str and value["source_kind"] == graph.KIND)
     writer, observer = (_role(value[name]) for name in ROLES)
     # Both roles use the same reviewed joint source graph. Runtime, environment,
@@ -175,6 +180,11 @@ def decode_peer_handoff(value):
     return _decode(value, PEER_KIND)
 
 
+def decode_peer_preparation(value):
+    """Distinct complete preparation graph; no implicit upgrade of older pins."""
+    return _decode(value, PREPARATION_KIND)
+
+
 def _decode(value, kind):
     try:
         _validate(value)  # Preserve exact input types before canonical encoding.
@@ -184,18 +194,28 @@ def _decode(value, kind):
         raise UnconfirmedExpectations(MESSAGE) from None
 
 
-def source_profile(expectations, *, peer_handoff=False):
+def source_profile(expectations, *, peer_handoff=False, preparation=False):
     """Explicit collector selection; never infer a wider profile from a pin.
 
-    Old callers keep their old kind and 90-module graph. The newer declaration
-    AND a separate exact True opt-in are required to compare the handoff graph.
-    Neither selection admits any active command or qualifies the outer owner.
+    Old callers keep their old kind and 90-module graph. The matching declaration
+    AND an exclusive exact True selector are required for either the 101-module
+    handoff or 104-module preparation graph. None of these comparisons admits
+    App actions or qualifies the outer owner; no declaration implies a selector.
     """
     try:
-        require(type(expectations) is Expectations and type(peer_handoff) is bool)
+        require(type(expectations) is Expectations)
+        require(type(peer_handoff) is bool and type(preparation) is bool)
+        require(not (peer_handoff and preparation))
         value = _read(expectations.raw)
-        require(value["kind"] == (PEER_KIND if peer_handoff else KIND))
-        return peer_source if peer_handoff else source
+        kind = PREPARATION_KIND if preparation else PEER_KIND if peer_handoff else KIND
+        require(value["kind"] == kind)
+        return (
+            peer_source.PreparationProfile
+            if preparation
+            else peer_source
+            if peer_handoff
+            else source
+        )
     except Exception:
         raise UnconfirmedExpectations(MESSAGE) from None
 

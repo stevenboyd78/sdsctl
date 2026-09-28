@@ -350,3 +350,27 @@ def test_existing_plan_template_and_source_profiles_remain_closed():
     assert NAME not in m.source.controller.MODULES
     assert NAME not in m.source.source.SERVICE_MODULES
     assert NAME not in m.source.source.MODULES
+
+
+def test_preparation_requires_its_own_kind_and_exclusive_selector():
+    supplied = value() | {
+        "kind": m.PREPARATION_KIND,
+        "source_kind": m.peer_source.PreparationProfile.KIND,
+    }
+    expected = m.decode_peer_preparation(supplied)
+    assert m.source_profile(expected, preparation=True) is m.peer_source.PreparationProfile
+    assert m.load_bytes(expected.raw, expected.sha256) == expected
+    denied(lambda: m.decode(supplied))
+    denied(lambda: m.decode_peer_handoff(supplied))
+    denied(lambda: m.source_profile(expected))
+    denied(lambda: m.source_profile(expected, peer_handoff=True))
+    denied(lambda: m.source_profile(expected, peer_handoff=True, preparation=True))
+    denied(lambda: m.source_profile(m.decode(value()), preparation=True))
+    for supplied_kind in (m.source.KIND, m.peer_source.KIND):
+        denied(
+            lambda supplied_kind=supplied_kind: m.decode_peer_preparation(
+                supplied | {"source_kind": supplied_kind}
+            )
+        )
+    for selector in (None, 1, 0, "preparation"):
+        denied(lambda selector=selector: m.source_profile(expected, preparation=selector))

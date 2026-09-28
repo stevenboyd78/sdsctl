@@ -70,12 +70,27 @@ def test_older_runtime_expectations_do_not_admit_the_new_source_kind():
 
 
 def test_exact_static_import_graph_keeps_commands_and_older_profiles_closed():
-    pending, seen = list(m.ROOTS), set()
+    seen = static_graph(m)
+    assert seen == m.MODULES and len(seen) == 101
+    assert (
+        not {
+            "supplemental_recording_permission_probe",
+            "supplemental_recording_service_permission",
+            "supplemental_recording_service_command",
+        }
+        & seen
+    )
+    assert len(m.service.MODULES) == 90 and len(service.app.m.MODULES) == 83
+    assert len(m.source.SERVICE_MODULES) == 65
+
+
+def static_graph(profile):
+    pending, seen = list(profile.ROOTS), set()
     while pending:
         name = pending.pop()
         if name in seen:
             continue
-        assert name in m.MODULES
+        assert name in profile.MODULES
         seen.add(name)
         tree = ast.parse((original.native.SCRIPTS / (name + ".py")).read_text())
         for node in ast.walk(tree):
@@ -97,24 +112,38 @@ def test_exact_static_import_graph_keeps_commands_and_older_profiles_closed():
                     ("supplemental_", "qualify_supplemental_", "accept_supplemental_")
                 )
             )
-    assert seen == m.MODULES and len(seen) == 101
-    assert (
-        not {
-            "supplemental_recording_permission_probe",
-            "supplemental_recording_service_permission",
-            "supplemental_recording_service_command",
-        }
-        & seen
-    )
-    assert len(m.service.MODULES) == 90 and len(service.app.m.MODULES) == 83
-    assert len(m.source.SERVICE_MODULES) == 65
+    return seen
+
+
+def test_preparation_profile_is_complete_without_expanding_old_graph(layout):
+    profile = m.PreparationProfile
+    assert static_graph(profile) == profile.MODULES and len(profile.MODULES) == 104
+    added = {
+        "supplemental_recording_peer_preparation",
+        "supplemental_recording_permission_probe",
+        "supplemental_recording_service_permission",
+    }
+    assert added == profile.MODULES - m.MODULES
+    for name in profile.HELPER_FILES - m.HELPER_FILES:
+        path = layout.helper / name
+        path.write_bytes(b"raise RuntimeError('OBSERVED_BYTES_MUST_NOT_EXECUTE')\n")
+        path.chmod(0o644)
+    selected = profile.Layout(layout.runtime, layout.helper)
+    evidence = selected.observe()
+    assert evidence.file_count == 106 and selected.verify(evidence.sha256) == evidence
+    original.denied(layout.observe)
+    for flag in ("startup", "permission_probe", "service_preparation"):
+        original.denied(replace(selected, **{flag: True}).observe)
+    (layout.helper / "supplemental_recording_peer_preparation.py").write_bytes(b"changed")
+    original.denied(lambda: selected.verify(evidence.sha256))
 
 
 @pytest.mark.parametrize("scope", ["inventory", "roots", "complete"])
 @pytest.mark.parametrize("allow_serial", [False, True])
 @pytest.mark.parametrize("allow_timerfd", [False, True])
+@pytest.mark.parametrize("preparation", [False, True])
 def test_reviewed_peer_imports_are_passive_and_dependencies_stay_explicit(
-    scope, allow_serial, allow_timerfd
+    scope, allow_serial, allow_timerfd, preparation
 ):
     # Reviewed repository code only. A source observation never imports its files.
     script = r"""
@@ -153,6 +182,7 @@ subprocess.Popen = forbidden
 os.fork = os.system = os.open = os.mkdir = os.unlink = os.rename = forbidden
 os.kill = signal.pidfd_send_signal = forbidden
 bundle = importlib.import_module("supplemental_recording_peer_host_source")
+if sys.argv[5] == "True": bundle = bundle.PreparationProfile
 try:
     for name in sorted({"inventory": (), "roots": bundle.ROOTS, "complete": bundle.MODULES}[scope]):
         importlib.import_module(name)
@@ -192,6 +222,7 @@ print(json.dumps({"scope": scope, "dependencies": sorted(dependencies)}))
             scope,
             str(allow_serial),
             str(allow_timerfd),
+            str(preparation),
         ],
         capture_output=True,
         timeout=10,

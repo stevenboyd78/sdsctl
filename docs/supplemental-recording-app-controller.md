@@ -1626,7 +1626,7 @@ failure, original-custody loss during final retirement and descriptor reuse.
 No older source inventory or permission format is enlarged, and no installed
 command selects this preparation function.
 
-### Next launcher ordering (not implemented)
+### Launcher ordering and the passive writer boundary
 
 The fixed peer commands must be determined before sealing their runtime
 expectations. Putting the expectations digest in the very argv that declaration
@@ -1652,9 +1652,10 @@ receives separate final acceptance may the existing final descriptor handoff
 begin, under that plan's ready limit and its own original two-second cutoff.
 Keep the same original process witnesses across these phases; no reconstructed
 Startup, replacement clock, new peer incarnation or cached success is admissible.
-The separate input exchange below now exercises part of this order. Fixed
-entrypoint selection, independent preliminary/final runtime qualification and
-launch authority remain unimplemented; the exchange is not their substitute.
+The separate input exchange and fixed passive writer below now exercise this
+writer-side order. Fixed outer/observer entrypoints, independently supervised
+preliminary/final runtime qualification and active launch authority remain
+unimplemented; the exchange and passive command are not their substitutes.
 
 ### Authenticated clock-free input preparation (uninstalled)
 
@@ -1716,10 +1717,11 @@ publication, preserving the failed file instead of resealing or replacing it.
 These are real local sockets, credentials, pidfds, clocks and private files,
 not installed-container qualification. Baseline input provenance, Engine/runtime
 pins, cgroup routing, separate acceptance and outer supervision remain synthetic
-in this fixture. The existing 83/90/101-module inventories and installed commands
-do not select the new preparation module. A separately reviewed complete source
-selection and fixed entrypoint, independently bounded outer/platform lifetime,
-explicit App action scope and exclusive recovery owner remain required.
+in this fixture. The existing 83/90/101-module inventories and older commands
+do not select the preparation module. The separate 104-module profile and passive
+writer below cover that source and writer entrypoint only. Independently bounded
+outer/platform lifetime, explicit App action scope and exclusive recovery owner
+remain required.
 
 ### Separate preflight admission on the original preparation owners (uninstalled)
 
@@ -1755,9 +1757,76 @@ late result cannot return an apparently usable Startup.
 The fixture's outer qualification callback, Engine/runtime and acceptance inputs
 are still synthetic. This is not installed qualification or a completed launcher.
 The new adapter and its imports remain outside the older source selections and
-commands. A fixed entrypoint must explicitly cover their complete source closure
-and preserve the independent outer/platform, action and recovery boundaries;
-neither this library join nor the old preflight permission supplies those gates.
+commands. The separate fixed passive entrypoint below covers their full closure,
+but neither it nor the old preflight permission supplies the independent
+outer/platform, action and recovery gates.
+
+### Fixed passive peer-writer command and source selection (uninstalled)
+
+The separately admitted writer-side ordering is now available for **offline
+qualification only**, with one exact entrypoint shape:
+
+```text
+/usr/local/bin/python -I -B /opt/sdsctl-recording-host/supplemental_recording_peer_preparation.py CASE TEMPLATE_SHA256 BASELINE_SHA256 OUTER_PID:START_TICKS:CONTAINER_ID --prepare-idle-peer-writer
+```
+
+The guard requires that exact installed path, isolated/no-bytecode Python, root
+UID/GID, `/` working directory and exact mode/argument count. Ordinary checkout
+invocation refuses before private input reads or project imports. This is not an
+installation instruction: no image, App, active controller or catalog is changed.
+
+The command's argv contains neither its Expectations digest nor future peer PIDs
+or a final plan/clock. That avoids the expectations/argv fingerprint cycle. It
+receives the independently pinned Expectations and original counterpart from the
+authenticated outer over the preparation channel, and explicitly requires the
+new `finite-recording-peer-preparation-runtime-expectations-v1` kind. Private
+inputs remain outside immutable source/image contents. The command does not
+authenticate its own launcher, outer identity, deployment or source merely by
+matching those supplied values.
+
+The matching `PreparationProfile` in `supplemental_recording_peer_host_source`
+has 104 modules: the closed 101-module graph plus preparation, permission probe
+and service permission. Its tagged inventory is distinct. The older 83/90/101
+profiles and their defaults remain unchanged. Both runtime collectors require
+the matching new declaration and exact `preparation=True` selection; combining
+that selector with `peer_handoff=True`, coercing booleans, or supplying older
+declarations refuses. Static-closure and passive-import tests cover the complete
+new graph; observed source is hashed, never imported to qualify itself.
+
+The qualified outer must provision both the input and preflight listeners before
+the command starts, and retain its original input endpoint through the receiver's
+final checks; immediate sender close can race those checks. The writer likewise
+retains its completed input socket passively
+until the separate original-outer permission arrives, so an early close cannot
+race the outer's final input checks. It then retires that socket before baseline
+reading; its original two-second exchange is never reused or renewed. Permission
+uses the same original preparation clock and the existing one-use short read
+scope. Only the complete baseline read creates the continuing service clock.
+Separate acceptance remains bounded by the original offer, with a fixed polling
+ceiling and time reserved for final intake/assembly.
+
+Final descriptor intake uses the distinct fixed private path
+`/mnt/data/sdsctl-recording-peer-handoff-CASE-writer`. The same original Startup,
+inputs, outer and counterpart continue into `prepare_idle_from_inputs`; its
+original connection bound covers descriptor intake, Link/dispatcher wiring and
+passive retirement. Cleanup closes service/journal/Link before their original
+Startup, then input and preparation borrowers before their clocks/declaration.
+Lost peers, changed inputs, interruptions or late/failed retirement preserve
+partial files, poison the original owner and never report a usable result.
+
+The command never consumes an inbox, sends Ready, runs the service, requests
+evidence, dispatches an App action, launches native work or starts a recording.
+Exit 75 and its sanitized milestone text are not action, recording, restoration
+or installed-qualification receipts. The real local three-process fixture joins
+the actual command function through separate Sender/Permission, manifest/host
+read, acceptance and final descriptor/dispatcher cleanup. Command and fault
+tests also check descriptor retirement and unchanged original failure files.
+The fixture retains the outer's preflight channel passively through final handoff,
+without requiring a test-only baseline-complete message from the writer. Both
+directions keep their original exchange bounds; passive descriptor retention is
+not additional protocol authority. Engine/runtime/cgroup routing, outer review and acceptance provenance are still
+synthetic. A fully isolated installed-command/outer lifetime and explicit active
+action/recovery admission remain separate unfinished gates.
 
 ## Remaining gates before a human scanner/audio test
 
@@ -1770,14 +1839,15 @@ neither this library join nor the old preflight permission supplies those gates.
    Link, journal, clock and worker handles. Pristine cancellation captures native
    custody without constructing a recording owner or consuming its begin slot.
    Installed evidence remains separate; do not infer the missing joins.
-2. Bind the joint controller/observer source inventory to a reviewed, independently
-   supervised entrypoint with interpreter/dependency provenance for **both** peers
+2. Bind the action-capable controller/observer source inventory to reviewed,
+   independently supervised entrypoints with interpreter/dependency provenance for **both** peers
    and a distinct explicit action-scope grant. Passive preparation must remain
    passive; neither its old permission nor a CLI evidence receipt is that grant.
    The separate peer expectations and paired read-only collectors now provide
    explicit comparison inputs and a shared collection bound; they do not
-   establish continuing peer communication/custody, qualify installed provenance
-   or admit an active entrypoint. The separate termination library now exercises
+   qualify installed provenance or admit an active entrypoint. The separate fixed
+   passive writer and its 104-module selection do not admit App actions or supply
+   qualified outer/observer commands. The separate termination library now exercises
    both original peer handles and an absolute kernel timer, but the qualified
    outer lifetime, authenticated channel join, active action scope and exclusive
    failure/recovery owner still need integration.
