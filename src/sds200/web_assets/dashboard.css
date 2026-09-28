@@ -2095,7 +2095,10 @@ body {
 
   .recordings-layout {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(0, 0.7fr) minmax(0, 1.3fr);
+    /* Size capture to its content so the library retains room for all three
+       recording rows AND the native/saved playback controls. A fixed split
+       wastes capture space and clips actions when a theme header wraps. */
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .recordings-layout > .panel {

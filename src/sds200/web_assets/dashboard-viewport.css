@@ -1070,7 +1070,8 @@
 
     .recordings-layout {
       grid-template-columns: 1fr !important;
-      grid-template-rows: minmax(0, 0.7fr) minmax(0, 1.3fr) !important;
+      /* Keep saved playback and row controls inside the library at phone width. */
+      grid-template-rows: auto minmax(0, 1fr) !important;
     }
 
     .recordings-layout > .panel {

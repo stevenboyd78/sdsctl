@@ -8,6 +8,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Fixed
 
+- Let phone-width recording capture panels size to their content so LCARS saved
+  recording Play and Download actions remain visible alongside the player controls.
+- Make the browser palette-focus audit select and verify a visible, enabled
+  control instead of mistakenly trying to focus hidden Mimic diagnostic controls.
+
 - Keep finalized recording reliability counters aligned with their saved
   metadata when shared browser audio continues. Later transport faults no longer
   change a stopped recording's status; starting another recording resumes live

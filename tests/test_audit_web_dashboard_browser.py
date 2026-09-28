@@ -17,7 +17,22 @@ def test_browser_startup_diagnostics_contract() -> None:
         pytest.skip("Node.js is unavailable")
     completed = subprocess.run(
         [_NODE, "--test", "scripts/test_browser_audit_startup.mjs"],
-        capture_output=True, text=True, timeout=15,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stderr == ""
+
+
+def test_browser_palette_focus_probe_contract() -> None:
+    if _NODE is None:
+        pytest.skip("Node.js is unavailable")
+    completed = subprocess.run(
+        [_NODE, "--test", "scripts/test_browser_audit_focus.mjs"],
+        capture_output=True,
+        text=True,
+        timeout=15,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert completed.stderr == ""
@@ -169,7 +184,7 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         "auditWebWaterfallHistoryAndPointer",
         "assertHomeAssistantWaterfallGeometry",
         'history_mode: "duration"',
-        'show_pointer: true',
+        "show_pointer: true",
         'pointerType: "touch"',
         "state.fixture.sessionCreates !== 1",
         "state.fixture.streamsAborted !== state.fixture.streamsStarted",
@@ -204,7 +219,7 @@ def test_internal_capture_bridge_documents_and_enforces_exact_cdp_viewports() ->
         "__sdsctlScreenshotEventSource",
         "__sdsctlScreenshotMessageStability",
         "waitForWaterfallCanvasStability",
-        'context.getImageData(0, 0, canvas.width, canvas.height).data',
+        "context.getImageData(0, 0, canvas.width, canvas.height).data",
         'crypto.subtle.digest("SHA-256", pixels)',
         "captureStableScreenshot",
         'cdp.send("Emulation.setDeviceMetricsOverride"',

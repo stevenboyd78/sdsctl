@@ -843,7 +843,7 @@ async function activatePane(cdp, pane) {
   await clickElement(cdp, `#pane-tab-${pane}`);
 }
 
-function browserAuditLibrary() {
+export function browserAuditLibrary() {
   const tolerance = 1.5;
   // WCAG 2.x AA requires 4.5:1 for ordinary text and permits 3:1 only for
   // large text (24 CSS px, or 18.66 CSS px at bold weight). These thresholds
@@ -1750,10 +1750,16 @@ function browserAuditLibrary() {
   function switchSystemPalette(palette) {
     const failures = [];
     const currentPane = document.documentElement.dataset.workspacePane;
-    const sentinel = document.querySelector(
+    const sentinel = Array.from(document.querySelectorAll(
       `.workspace-pane[data-workspace-pane="${currentPane}"] button:not(:disabled)`,
-    );
-    sentinel?.focus({preventScroll: true});
+    )).find(element => rendered(element) && !disabledOrInert(element) && element.tabIndex >= 0);
+    if (!(sentinel instanceof HTMLElement)) {
+      return {failures: ["System palette focus probe has no visible enabled pane button"]};
+    }
+    sentinel.focus({preventScroll: true});
+    if (document.activeElement !== sentinel) {
+      return {failures: ["System palette focus probe could not focus its visible pane button"]};
+    }
     const select = document.querySelector("#system-palette-select");
     if (!(select instanceof HTMLSelectElement)) {
       return {failures: ["System palette select is unavailable"]};
@@ -1772,7 +1778,7 @@ function browserAuditLibrary() {
     if (document.documentElement.dataset.workspacePane !== currentPane) {
       failures.push("System palette switch changed the active workspace pane");
     }
-    if (sentinel instanceof HTMLElement && document.activeElement !== sentinel) {
+    if (document.activeElement !== sentinel) {
       failures.push("System palette switch displaced focus from the active pane");
     }
     return {failures};

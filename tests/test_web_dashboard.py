@@ -772,6 +772,13 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
         stylesheet_source.text
     )
     assert "grid-template-rows: auto minmax(0, 1fr)" in stylesheet_source.text
+    # A fixed phone capture/library split clips LCARS row actions when the
+    # library header wraps above the native and explicit saved-player controls.
+    # Keep the shared rule and the higher-priority viewport override aligned;
+    # the real-browser acceptance matrix verifies actual control containment.
+    for text in (stylesheet_source.text, viewport_stylesheet.text):
+        assert "minmax(0, 0.7fr) minmax(0, 1.3fr)" not in text
+    assert "grid-template-rows: auto minmax(0, 1fr) !important" in viewport_stylesheet.text
     assert "minmax(19rem, 0.42fr)" in viewport_stylesheet.text
     assert "grid-template-columns: max-content minmax(0, 1fr)" in (
         viewport_stylesheet.text
