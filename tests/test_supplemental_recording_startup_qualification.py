@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import math
 import os
 import sys
 from pathlib import Path
@@ -170,10 +171,25 @@ def test_read_from_equal_replacement_plan_is_not_original_clock_link(observed):
     assert obj.failed and observed.helper.reads == 0
 
 
-def test_probe_cutoff_cannot_be_used_as_long_running_service_qualification(observed, monkeypatch):
+@pytest.mark.parametrize("boundary", ["at", "after"])
+def test_probe_cutoff_cannot_be_used_as_long_running_service_qualification(
+    observed, monkeypatch, boundary
+):
     obj = observed.make()
-    end = obj.plan.original_clock.after_ns / m.launch.plans.clock.NS + 13
-    monkeypatch.setattr(m.launch.time, "monotonic", lambda: end)
+    # Preserve the offer's actual subtraction order, then test its exact bound
+    # and the next representable instant. `(origin + 15) - 2` can be one float
+    # ULP later than `origin + 13`; the latter was occasionally still BEFORE
+    # the deadline on CI. No production cutoff or comparison is relaxed.
+    end = (
+        min(
+            obj.plan.lease["ready_by"],
+            obj.plan.original_clock.after_ns / m.launch.plans.clock.NS
+            + m.startup.offers.MAX_OFFER_SECONDS,
+        )
+        - m.startup.acceptance.MAX_SECONDS
+    )
+    now = end if boundary == "at" else math.nextafter(end, math.inf)
+    monkeypatch.setattr(m.launch.time, "monotonic", lambda: now)
     denied(obj)
     assert observed.helper.reads == 0
     assert not observed.clock.closed and not observed.domain.closed
