@@ -1159,6 +1159,19 @@ responses, container/cgroup/root-credential mapping and Startup/image provenance
 remain synthetic. No recorded audio, full service/recovery lifetime or live
 scanner acceptance is claimed by these readiness-only tests.
 
+The simulated Engine's creator thread now remains alive through native stdin
+withdrawal and child reap even when the recording relay fails before begin.
+Previously, that thread could exit first, causing `bwrap --die-with-parent` to
+replace an otherwise clean native refusal with a secondary SIGKILL. An actual
+process regression withdraws the original Ready transport while the fixture
+expects begin: the exchange still fails, the native command exits with refusal
+status 70, and no begin, scanner read or new recording occurs. The original
+plan, clock and older recording remain unchanged. This test is included in the
+required namespace CI profile. Its cleanup-order fix does not relax the clock's
+5 ms observation limit, any original deadline, or expected failure outcomes;
+it does not establish the cause of earlier post-begin CI failures or qualify an
+installed Engine owner.
+
 The original `AppLaunch` is then tested through that actual Engine transport and
 Ready parser, retaining its sole durable dispatch claim and real journal. A
 changed guardian claim, unsafe helper directory, or premature recording receipt

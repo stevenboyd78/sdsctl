@@ -199,11 +199,11 @@ def native_engine(
         state.exited_metadata = exited
         if recording:
             handlers.append(exited)
-        try:
-            with engine.engine(state, monkeypatch, handlers, make_client=not controller) as (
-                client,
-                requests,
-            ):
+        with engine.engine(state, monkeypatch, handlers, make_client=not controller) as (
+            client,
+            requests,
+        ):
+            try:
                 state.client, state.requests = client, requests
                 try:
                     if controller:
@@ -229,26 +229,30 @@ def native_engine(
                     if state.worker is not None:
                         state.worker.join(8)
                         assert not state.worker.is_alive()
-        finally:
-            if state.ready is not None:
-                state.ready.close()
-            if state.worker is not None:
-                state.worker.join(8)
-                assert not state.worker.is_alive()
-            if state.operator is not None:
-                if state.operator.stdin is not None:
-                    state.operator.stdin.close()
-                    state.operator.stdin = None
-                try:
-                    out, err = state.operator.communicate(timeout=6)
-                except subprocess.TimeoutExpired:
-                    assert os.getpgid(state.operator.pid) == state.operator.pid
-                    os.killpg(state.operator.pid, signal.SIGKILL)
-                    state.operator.communicate(timeout=3)
-                    raise
-                assert state.operator.returncode == (0 if state.begun else 70) and not out
-                assert err == (b"" if state.begun else io.operator.MESSAGE)
-            assert not state.errors
+            finally:
+                # Even when the relay failed before begin, keep the thread that
+                # created bwrap alive through original stdin EOF and child reap.
+                # --die-with-parent is tied to that creator thread, not merely
+                # to this pytest process. Do not replace refusal with SIGKILL.
+                if state.ready is not None:
+                    state.ready.close()
+                if state.worker is not None:
+                    state.worker.join(8)
+                    assert not state.worker.is_alive()
+                if state.operator is not None:
+                    if state.operator.stdin is not None:
+                        state.operator.stdin.close()
+                        state.operator.stdin = None
+                    try:
+                        out, err = state.operator.communicate(timeout=6)
+                    except subprocess.TimeoutExpired:
+                        assert os.getpgid(state.operator.pid) == state.operator.pid
+                        os.killpg(state.operator.pid, signal.SIGKILL)
+                        state.operator.communicate(timeout=3)
+                        raise
+                    assert state.operator.returncode == (0 if state.begun else 70) and not out
+                    assert err == (b"" if state.begun else io.operator.MESSAGE)
+                assert not state.errors
 
 
 @pytest.mark.parametrize("fault", [None, "claim", "helper_mode"])
@@ -279,4 +283,31 @@ def test_actual_original_ready_joins_app_source_and_claim_without_begin(
             assert q.failed and q.elapsed_seconds is None
         assert not mapped.scanner.reads
         ready.close()  # Explicit original transport withdrawal, not fake native exit.
+    assert (mapped.recordings / "previous.wav").read_bytes() == b"old evidence unchanged"
+
+
+def test_unexpected_withdrawal_before_begin_reaps_native_before_engine_owner_exits(
+    launch_case, mapped, staged, monkeypatch
+):
+    s = launch_case
+    original = s.plan.raw, s.plan.lease, s.native_baseline
+    qualified = s.publish()
+    with (
+        pytest.raises(AssertionError),
+        native_engine(s, mapped, staged, qualified, monkeypatch, recording=True) as state,
+    ):
+        assert state.ready.ready_raw and not state.begun
+        assert not state.ready.client.attachment.begun
+        # Unexpected original-host withdrawal while the fixture expects a
+        # begin is still a failed test exchange. It must not kill the Engine
+        # creator thread before its --die-with-parent child is retired.
+        state.ready.close()
+    assert not state.begun and [item["phase"] for item in state.envelopes] == ["ready"]
+    assert state.operator.returncode == 70  # Clean native refusal, not SIGKILL.
+    assert state.operator.stdin is None and not state.worker.is_alive()
+    assert len(state.errors) == 1 and isinstance(state.errors[0], AssertionError)
+    assert state.ready.closed and not s.witness.exited()
+    assert original == (s.plan.raw, s.plan.lease, s.native_baseline)
+    assert not mapped.scanner.reads
+    assert list(mapped.recordings.iterdir()) == [mapped.recordings / "previous.wav"]
     assert (mapped.recordings / "previous.wav").read_bytes() == b"old evidence unchanged"

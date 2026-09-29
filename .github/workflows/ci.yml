@@ -93,6 +93,7 @@ jobs:
           python -m pytest -q
           tests/test_supplemental_recording_app_native_preflight.py
           tests/test_supplemental_recording_app_fixed_operator.py
+          tests/test_supplemental_recording_app_actual_ready.py
           tests/test_supplemental_recording_app_actual_service.py
           tests/test_supplemental_recording_app_actual_recovery.py
           tests/test_supplemental_recording_app_actual_dispatch.py

@@ -20,6 +20,7 @@ REQUIRED_MODULES = (
 REQUIRED_RECORDING_MODULES = (
     "tests.test_supplemental_recording_app_native_preflight",
     "tests.test_supplemental_recording_app_fixed_operator",
+    "tests.test_supplemental_recording_app_actual_ready",
     "tests.test_supplemental_recording_app_actual_service",
     "tests.test_supplemental_recording_app_actual_recovery",
     "tests.test_supplemental_recording_app_actual_dispatch",
