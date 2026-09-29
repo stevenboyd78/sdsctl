@@ -654,6 +654,37 @@ def observer_child(path, *, retained=False):
         patch.setattr(p, "writer_case_root", lambda _: Path(config["case_root"]))
         patch.setattr(p, "handoff_root", lambda *_: Path(config["handoff"]))
         patch.setattr(p.startups.plans.Plan, "root", property(lambda _: Path(config["case_root"])))
+
+        def selected_handoff(original, inputs, connection, timer, local, outer, writer_peer):
+            # Explicit negative-fixture selection, shared by the legacy scope
+            # tests and the actual automatic observer command. Never a runtime
+            # option, replacement owner accepted by policy, or new phase budget.
+            selected = [original, inputs, connection, timer, local, outer, writer_peer]
+            fault = config.get("observer_join_fault")
+            if fault == "clock":
+                selected[3] = stack.enter_context(
+                    closing(p.domains.clock.ClockWitness(p.domains.clock.read()))
+                )
+            elif fault == "writer":
+                selected[6] = stack.enter_context(
+                    p.domains.process.ProcessWitness(writer_peer.identity)
+                )
+            elif fault == "local":
+                selected[4] = p.domains.process.ProcessIdentity(**asdict(local))
+            elif fault == "inputs":
+                selected[1] = stack.enter_context(
+                    closing(
+                        p.inputs_module.Inputs(inputs.declaration, inputs.root, inputs.expected)
+                    )
+                )
+            elif fault == "plan":
+                selected[0] = stack.enter_context(
+                    p.startups.acceptance.intake.CasePlan(original._root, original.recheck().sha256)
+                )
+            elif fault == "missing-context":
+                del original._observer_plan_context
+            return selected
+
         if automatic:
             # Retire the fixture's setup clock; the fixed function captures its
             # own original observer clock before the writer creates any plan.
@@ -683,7 +714,10 @@ def observer_child(path, *, retained=False):
 
             @contextmanager
             def observed_handoff(*args, **kwargs):
-                with handoffs(*args, **kwargs) as receipt:
+                selected = selected_handoff(*args)
+                if config.get("observer_join_fault") is not None:
+                    emit(dict(observer_handoff_fault=config["observer_join_fault"]))
+                with handoffs(*selected, **kwargs) as receipt:
                     emit(dict(received=True, offer=receipt.offer_sha256, original_clock=True))
                     yield receipt
 
@@ -807,28 +841,10 @@ def observer_child(path, *, retained=False):
             assert original.recheck() is plan and timer.original is origin
             if config["observer_join"]:
                 assert retained
-                selected = [original, inputs, final_connection, timer, local, outer, writer_peer]
+                selected = selected_handoff(
+                    original, inputs, final_connection, timer, local, outer, writer_peer
+                )
                 fault = config["observer_join_fault"]
-                if fault == "clock":
-                    selected[3] = stack.enter_context(
-                        closing(p.domains.clock.ClockWitness(p.domains.clock.read()))
-                    )
-                elif fault == "writer":
-                    selected[6] = stack.enter_context(
-                        p.domains.process.ProcessWitness(writer_peer.identity)
-                    )
-                elif fault == "local":
-                    selected[4] = p.domains.process.ProcessIdentity(**asdict(local))
-                elif fault == "inputs":
-                    selected[1] = stack.enter_context(
-                        closing(p.inputs_module.Inputs(declaration, inputs.root, inputs.expected))
-                    )
-                elif fault == "plan":
-                    selected[0] = stack.enter_context(
-                        p.startups.acceptance.intake.CasePlan(original._root, plan.sha256)
-                    )
-                elif fault == "missing-context":
-                    del original._observer_plan_context
 
                 def forbidden(*args, **kwargs):
                     raise AssertionError("Passive observer attempted active exchange")
@@ -2167,23 +2183,57 @@ def test_original_received_observer_joins_fixed_writer_and_retires_before_origin
     "joined",
     [
         pytest.param(
-            dict(mode="release-command-pair", observer_join=True, observer_join_fault=fault),
+            dict(
+                mode="release-command-pair",
+                observer_join=True,
+                automatic_observer=True,
+                observer_join_fault=fault,
+            ),
             id=fault,
         )
         for fault in ("clock", "writer", "local", "inputs", "plan", "missing-context")
     ],
     indirect=True,
 )
-def test_replaced_observer_receive_owners_refuse_original_watched_handoff(joined, monkeypatch):
+def test_replaced_observer_receive_owners_refuse_original_watched_handoff(
+    joined, monkeypatch, request
+):
     s = joined
+    fault = request.node.callspec.params["joined"]["observer_join_fault"]
+    released = []
+
+    def forbidden(*args):
+        released.append(True)
+        pytest.fail("Rejected observer admitted passive writer release")
+
+    monkeypatch.setattr(p.bootstrap.Endpoint, "send_retirement", forbidden)
     assert s.sender.send() is None
     with pytest.raises(delivery_tests.m.UnconfirmedDelivery):
         finish(s, monkeypatch, lambda: arm_original_watch(s))
     assert s.watch.closed and s.watch.finished
-    assert s.h.child.wait(timeout=3) == s.observer.wait(timeout=3) == -signal.SIGKILL
-    assert s.plan_receipt and s.pair.channel_delivery_attempted
-    assert (s.case_root / "startup-claim.json").is_file()
-    assert (s.case_root / "plan.json").is_file()
+    assert s.pair.passive_completion_attempted and not released
+    # The receiver may reject/close before the sender finishes its own plan
+    # exchange or accepts the handoff. The original outer owns all these phases;
+    # neither a delivery-attempt flag nor a sender receipt is then guaranteed.
+    assert not hasattr(s, "delivered")
+    end = s.pipeline_end
+    assert s.plan_listener.deadline == s.observer_listener.deadline == end
+    files = {path.name: path.read_bytes() for path in s.case_root.iterdir() if path.is_file()}
+    assert {"startup-claim.json", "plan.json"} <= set(files)
+    for fd in (s.h.witness.fd, s.counterpart.fd):
+        assert time.monotonic() < end
+        assert select.select([fd], [], [], end - time.monotonic())[0] == [fd]
+    assert s.h.child.wait(timeout=0) == -signal.SIGKILL
+    assert s.observer.wait(timeout=0) in (-signal.SIGKILL, 75)
+    # This must be the requested fault after the real plan exchange, not an
+    # unrelated early clock/source failure which also happens to cancel peers.
+    assert json.loads(transport.line(s.observer)) == dict(
+        plan_retained=s.pair.writer.plan.sha256, input_pin=s.inputs.expected
+    )
+    assert json.loads(transport.line(s.observer)) == dict(observer_handoff_fault=fault)
+    assert files == {
+        path.name: path.read_bytes() for path in s.case_root.iterdir() if path.is_file()
+    }
 
 
 @pytest.mark.skipif(

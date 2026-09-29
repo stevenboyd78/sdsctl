@@ -2407,6 +2407,17 @@ interpreter, initial startup or whole-platform supervision. Cooperative checks
 cannot preempt a blocked syscall. No production source profile, launcher, App
 action scope or exclusive recovery authority selects this library.
 
+Original-observer replacement/refusal cases also run through this outer and the
+fixed automatic observer. A rejecting receiver can close its sockets before
+the sender finishes checking the plan exchange or accepts the final connection.
+That does not guarantee a sender plan receipt or a descriptor-delivery attempt;
+the original outer must cancel the same watcher across all of those phases.
+The tests separately require the receiver's real plan/fault markers, no passive
+writer release, both original peer exits before the unchanged sequence cutoff,
+and preserved case bytes. They add no synchronization message or new clock and
+do not broaden the Listener's acceptance rules. These are offline fixtures,
+not installed publication, platform timing or active admission evidence.
+
 Profiling this join found repeated pure template/plan decoding within protocol
 guards. Template digest checks now retain the originally validated immutable
 bytes, verify their exact type/value and recompute the digest without decoding
