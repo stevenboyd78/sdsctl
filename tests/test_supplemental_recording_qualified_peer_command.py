@@ -2223,6 +2223,8 @@ def test_replaced_observer_receive_owners_refuse_original_watched_handoff(
     for fd in (s.h.witness.fd, s.counterpart.fd):
         assert time.monotonic() < end
         assert select.select([fd], [], [], end - time.monotonic())[0] == [fd]
+        # A ready pidfd does not prove the caller resumed before its cutoff.
+        assert time.monotonic() < end
     assert s.h.child.wait(timeout=0) == -signal.SIGKILL
     assert s.observer.wait(timeout=0) in (-signal.SIGKILL, 75)
     # This must be the requested fault after the real plan exchange, not an
