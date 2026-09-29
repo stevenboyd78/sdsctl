@@ -1172,6 +1172,16 @@ required namespace CI profile. Its cleanup-order fix does not relax the clock's
 it does not establish the cause of earlier post-begin CI failures or qualify an
 installed Engine owner.
 
+The separate in-process native recording assembly now retains test-only source
+locations before its worker consumes a schedule refusal. An actual original
+control-lock contention case starts the recorder but refuses the one optional
+arm, shuts down, preserves prior/new recording evidence and rejects reuse. A
+waiting test operator distinguishes that already-consumed refusal from the
+fault it has not yet injected; neither the wait limit nor the production
+failure-bit boundary changes. This isolates one possible early-refusal path,
+not the cause of the earlier CI pre-arm timeout. See the
+[native assembly qualification](scanner-display-supplemental-recording.md#offline-native-daemon-assembly).
+
 The original `AppLaunch` is then tested through that actual Engine transport and
 Ready parser, retaining its sole durable dispatch claim and real journal. A
 changed guardian claim, unsafe helper directory, or premature recording receipt

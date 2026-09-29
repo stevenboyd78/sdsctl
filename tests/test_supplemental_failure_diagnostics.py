@@ -155,6 +155,47 @@ def test_child_stderr_only_extracts_known_frames_and_location_notes():
     )
 
 
+def test_native_assembly_observer_rethrows_original_without_private_values(
+    monkeypatch, tmp_path, capsys
+):
+    from . import test_supplemental_recording_assembly as assembly
+
+    class PrivateError(BaseException):
+        def __str__(self):
+            pytest.fail("Private assembly exception was formatted")
+
+        def __repr__(self):
+            pytest.fail("Private assembly exception was represented")
+
+    error = captured(
+        diagnostics.SCRIPTS / "supplemental_recording_fixture.py", error=PrivateError()
+    )
+    calls = []
+
+    @contextmanager
+    def bundle(*_args):
+        yield None
+
+    def run(owner, cancel):
+        calls.append((owner, cancel))
+        raise error
+
+    owner, cancel = object(), object()
+    with monkeypatch.context() as patch:
+        patch.setattr(assembly, "native_bundle", bundle)
+        patch.setattr(assembly.n.FiniteRecordingSchedule, "run", run)
+        with contextmanager(assembly.rig.__wrapped__)(None, tmp_path, patch):
+            for _ in range(6):
+                with pytest.raises(PrivateError) as caught:
+                    assembly.n.FiniteRecordingSchedule.run(owner, cancel)
+                assert caught.value is error
+    assert calls == [(owner, cancel)] * 6
+    assert capsys.readouterr().out == (
+        "Native assembly schedule refusal locations (no values):\n"
+        "cause 1: scripts/supplemental_recording_fixture.py:1\n"
+    )
+
+
 def test_child_stderr_limits_input_output_and_does_not_format_unknown_values():
     raw = b"\n".join(
         f"cause 1: scripts/supplemental_recording_fixture.py:{index}".encode()

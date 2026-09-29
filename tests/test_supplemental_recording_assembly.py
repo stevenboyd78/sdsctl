@@ -34,6 +34,7 @@ from sds200.daemon_supplemental_acquisition import (
 from sds200.pcmu_stream import PcmuStream
 from sds200.scanner_display_supplemental_transport import SupplementalDeliveryService
 
+from ._supplemental_failure_diagnostics import failure_locations
 from .test_audio_sinks import CollectingSink
 from .test_daemon_api_recording import request
 from .test_daemon_display_frames import configured as configured
@@ -154,6 +155,23 @@ def native_bundle(native, tmp_path, *, pcmu=False, policy=None, sockets_director
 
 @pytest.fixture
 def rig(native, tmp_path, monkeypatch):
+    # The native worker intentionally exports only a fixed failure bit. Retain
+    # source locations before a schedule refusal is consumed; do not print
+    # exceptions/private values or alter success-path reads, clocks or retries.
+    original = n.FiniteRecordingSchedule.run
+    reported = set()
+
+    def observed_schedule(owner, cancel):
+        try:
+            return original(owner, cancel)
+        except BaseException as error:
+            locations = failure_locations(error)
+            if locations and locations not in reported and len(reported) < 4:
+                reported.add(locations)
+                print("Native assembly schedule refusal locations (no values):\n" + locations)
+            raise
+
+    monkeypatch.setattr(n.FiniteRecordingSchedule, "run", observed_schedule)
     with native_bundle(native, tmp_path) as value:
         try:
             yield value
@@ -170,6 +188,13 @@ def refusal(action):
 def query(peer, op, params=None):
     peer.sendall(json.dumps(request(op, params=params)).encode() + b"\n")
     return json.loads(read_line(peer))
+
+
+def wait_for_armed(rig, trial):
+    # A consumed early refusal is not a late arm and must not be hidden behind
+    # the operator's generic wait timeout. Keep the original two-second wait.
+    wait_for(lambda: rig.acquisition.status().armed or trial.worker_error)
+    assert rig.acquisition.status().armed, "Native assembly refused before acquisition armed"
 
 
 def run_observed(rig, trial, operator, *, success=True):
@@ -195,7 +220,19 @@ def run_observed(rig, trial, operator, *, success=True):
             failure = error
         finally:
             finished.set()
-        observation.result(timeout=3)
+        try:
+            observation.result(timeout=3)
+        except BaseException:
+            # Fixed booleans only; no snapshot calls, private state, exception
+            # formatting or clock reads after the original cleanup boundary.
+            print(
+                "Native assembly operator failure phase: "
+                f"worker_error={trial.worker_error is True} "
+                f"controller_created={trial.controller is not None} "
+                f"schedule_created={trial.schedule is not None} "
+                f"cleanup_complete={trial.cleanup_complete is True}"
+            )
+            raise
         if failure is not None:
             raise failure
     return result
@@ -219,7 +256,7 @@ def test_real_native_process_recording_and_explicit_demand(rig, demand):
             assert not rig.acquisition.status().armed and not rig.peer.reads
             trial.request_start()
             refusal(trial.request_start)
-            wait_for(lambda: rig.acquisition.status().armed)
+            wait_for_armed(rig, trial)
             active = query(peer, Op.RECORDING_STATUS)["result"]
             observed.append(active["active"])
             for op in (Op.RECORDING_START, Op.RECORDING_STOP, Op.DISPLAY_PROFILE_RELOAD):
@@ -332,7 +369,7 @@ def test_failures_preserve_evidence_without_success(rig, monkeypatch, fault):
     def operator(finished):
         wait_for(lambda: trial.ready)
         trial.request_start()
-        wait_for(lambda: rig.acquisition.status().armed)
+        wait_for_armed(rig, trial)
         rig.runtime.audio.stream.transport.feed(AudioChunk(b"\x80" * 160))
         if fault == "cancel":
             trial.cancel()
@@ -351,6 +388,38 @@ def test_failures_preserve_evidence_without_success(rig, monkeypatch, fault):
     assert list(rig.root.glob("*.wav")) and (rig.journal / "start-intent.json").exists()
     assert not (rig.journal / "stopped.json").exists()
     refusal(trial.run)
+
+
+def test_original_control_contention_refuses_arm_and_preserves_evidence(rig, capsys):
+    trial = rig.build()
+    observed = []
+
+    def operator(_finished):
+        wait_for(lambda: trial.ready)
+        # Hold the actual original reservation lock in the operator thread.
+        # No fake clock/scope/arm reply or retry makes this refusal pass.
+        with rig.runtime._control_lock:
+            trial.request_start()
+            with pytest.raises(AssertionError, match="refused before acquisition armed"):
+                wait_for_armed(rig, trial)
+            state = rig.acquisition.status()
+            assert state.ended and not state.armed and state.reason == "preflight_refused"
+            assert not rig.acquisition.arm()
+            observed.append(state)
+
+    run_observed(rig, trial, operator, success=False)
+    assert len(observed) == 1 and trial.worker_error and trial.cleanup_complete
+    assert trial.result is None and not rig.runtime.running
+    assert not rig.manager.snapshot().active and not rig.peer.reads
+    assert (rig.root / "older.txt").read_bytes() == b"older evidence unchanged"
+    assert list(rig.root.glob("*.wav")) and (rig.journal / "start-intent.json").exists()
+    assert not (rig.journal / "stopped.json").exists()
+    assert trial.controller.phase == "closed" and trial.schedule.phase == "unconfirmed"
+    refusal(trial.run)
+    output = capsys.readouterr().out
+    assert "Native assembly schedule refusal locations (no values):" in output
+    assert "scripts/supplemental_recording_schedule.py:" in output
+    assert str(rig.root) not in output and str(rig.journal) not in output
 
 
 @pytest.mark.parametrize("entry", ENTRIES)

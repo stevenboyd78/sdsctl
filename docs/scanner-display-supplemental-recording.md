@@ -322,6 +322,18 @@ audio packets, exactly decoded WAV bytes, continuing PSI and one audio session.
 Native cleanup closes servers, sockets, the optional reader and the audio source.
 These are not physical-scanner, real-browser, audible or installed-App results.
 
+The fixture also holds the real original runtime control lock across its sole
+start request. The recorder starts, but the optional reader's nonblocking arm
+reservation refuses once; native shutdown preserves the older file, new WAV and
+start-intent evidence without a scheduled-stop success receipt or rearm. A
+test-only observer retains bounded known-source locations before the worker
+consumes a schedule refusal, without printing private exception values. An
+operator awaiting arm now reports an already-consumed worker failure immediately
+under the same original wait limit. This distinguishes a pre-arm refusal from
+the cancellation fault that the operator has not yet injected. The production
+worker still exports only its fixed failure bit. This deterministic contention
+case does not establish the cause of the earlier CI pre-arm timeout.
+
 Separate parent-owned subprocess tests pin a Linux pidfd **before** releasing the
 start gate. They exercise successful native shutdown, blocked scheduled stop,
 blocked metadata publication, lost stop return and lost receipt-publication
