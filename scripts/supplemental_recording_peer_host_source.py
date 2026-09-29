@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only inventories for retained handoff and passive writer preparation.
+"""Read-only inventories for retained handoff and passive peer preparation.
 
 The closed controller/observer inventory predates the private input, listener,
 descriptor delivery and original writer intake joins. This separately tagged
@@ -7,8 +7,8 @@ inventory names their full static import closure without enlarging that older
 profile. Observed files are hashed, never imported or used as an allowlist.
 
 A distinct expectations kind and an explicit collector opt-in select each
-read-only comparison. The preparation profile includes its fixed passive writer
-entrypoint, not an installed or active launcher. Older declarations, collector defaults,
+read-only comparison. The preparation profile includes explicitly selected passive
+writer/observer commands, not an installed or active launcher. Older collector defaults,
 permissions and commands remain unchanged. A matching digest cannot authenticate
 its own input pin, designate an active entrypoint, qualify the outer owner/platform
 bound, or grant App actions or exclusive recovery custody. Those are separate gates.

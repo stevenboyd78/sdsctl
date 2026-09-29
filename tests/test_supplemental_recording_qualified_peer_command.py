@@ -84,6 +84,47 @@ def preparation_diagnostics(patches):
     return first
 
 
+def delivery_diagnostics(patches):
+    """Test-only source notes from the delivery function's saved first error.
+
+    Delivery deliberately sanitizes outside its except block. Inspect only the
+    exception slot of this exact reviewed frame, AFTER it refuses; never format
+    locals, values, arguments or the saved exception itself. No tracing during
+    the live protocol and no change to production exception/deadline behavior.
+    """
+    deliver = delivery_tests.m._deliver
+
+    def observed(*args, **kwargs):
+        try:
+            return deliver(*args, **kwargs)
+        except delivery_tests.m.UnconfirmedDelivery as refusal:
+            trace = refusal.__traceback__
+            for _ in range(64):
+                if trace is None:
+                    break
+                if trace.tb_frame.f_code is deliver.__code__:
+                    cause = trace.tb_frame.f_locals.get("error")
+                    locations = failure_locations(cause)
+                    if locations:
+                        refusal.add_note(locations)
+                    break
+                trace = trace.tb_next
+            raise
+
+    patches.setattr(delivery_tests.m, "_deliver", observed)
+
+
+def test_delivery_diagnostics_retain_source_without_private_values(monkeypatch):
+    delivery_diagnostics(monkeypatch)
+    # Real early refusal; the unused argument must never be rendered by notes.
+    with pytest.raises(delivery_tests.m.UnconfirmedDelivery) as failure:
+        delivery_tests.m.deliver("PRIVATE_DELIVERY_PAYLOAD", None, None, None, None)
+    assert str(failure.value) == delivery_tests.m.MESSAGE
+    notes = getattr(failure.value, "__notes__", [])
+    assert notes and "scripts/supplemental_recording_peer_delivery.py:" in notes[0]
+    assert "PRIVATE_DELIVERY_PAYLOAD" not in repr(notes)
+
+
 def test_preparation_diagnostics_never_copy_private_exception_values(monkeypatch):
     preparation_diagnostics(monkeypatch)
     with pytest.raises(p.UnconfirmedPreparation) as failure:
@@ -322,7 +363,10 @@ def child(root):
                     raise AssertionError(
                         "Original fixture writer did not reach passive retirement"
                     ) from original_failure
-                raise SystemExit(result)
+                # Match the actual command's return-then-exit boundary. Raising
+                # here retains this entire synthetic host fixture in the final
+                # SystemExit traceback throughout interpreter shutdown.
+                return result
             # Other variants retain the fixture peer for explicit cancellation.
             sys.stdin.buffer.read()
         finally:
@@ -334,12 +378,19 @@ def child(root):
 def helper(supervised, image, configured, monkeypatch, tmp_path, request):
     root = tmp_path / "writer"
     root.mkdir(mode=0o700)
+    selection = getattr(request.node, "callspec", SimpleNamespace(params={})).params.get("joined")
     code = (
         "import sys; from pathlib import Path; "
         "sys.path[:0] = [sys.argv[1], str(Path(sys.argv[1]) / 'src')]; "
         "from tests.test_supplemental_recording_qualified_peer_command import child; "
-        "child(Path(sys.argv[2]))"
+        "raise SystemExit(child(Path(sys.argv[2])))"
     )
+    if type(selection) is dict and selection.get("automatic_observer"):
+        code = code.removesuffix("raise SystemExit(child(Path(sys.argv[2])))") + (
+            "\ntry:\n result = child(Path(sys.argv[2]))\nfinally:\n"
+            " print('{\"fixture_exit_ready\":true}', flush=True)\n"
+            "raise SystemExit(result)\n"
+        )
     env = dict(entry.split("=", 1) for entry in configured)
     env.update(HOME="/root", HOSTNAME=helper_tests.env.env.HOSTNAME)
     process = subprocess.Popen(
@@ -362,9 +413,6 @@ def helper(supervised, image, configured, monkeypatch, tmp_path, request):
         diagnostic_fds.append(result_fd)
         initial = json.loads(transport.line(process))
         supplied = dict(plan=initial["base"], baseline=initial["baseline"], child=process)
-        selection = getattr(request.node, "callspec", SimpleNamespace(params={})).params.get(
-            "joined"
-        )
         mode = selection.get("mode") if type(selection) is dict else selection
         profile = "peer-retained" if mode == "release-command-pair" else "peer-preparation"
         generator = qualification.helper.__wrapped__(
@@ -525,6 +573,16 @@ def observer_child(path, *, retained=False):
         origin = timer.original
         print("ready", flush=True)
         config = receive()
+        automatic = config.get("automatic_observer", False)
+        if automatic:
+            # Initial fixture paths/identities are still synthetic setup. No
+            # subsequent plan/handoff/retire signal may enter through stdin.
+            # CPython's standard wrapper has closefd=False. Retire its exact
+            # original kernel descriptor too, not just the Python wrapper.
+            input_fd = sys.stdin.fileno()
+            sys.stdin.close()
+            os.close(input_fd)
+            before -= 1
         ids = {item["pid"]: item for item in config["identities"]}
 
         def identity(pid, cid):
@@ -546,6 +604,64 @@ def observer_child(path, *, retained=False):
         patch.setattr(p, "writer_case_root", lambda _: Path(config["case_root"]))
         patch.setattr(p, "handoff_root", lambda *_: Path(config["handoff"]))
         patch.setattr(p.startups.plans.Plan, "root", property(lambda _: Path(config["case_root"])))
+        if automatic:
+            # Retire the fixture's setup clock; the fixed function captures its
+            # own original observer clock before the writer creates any plan.
+            timer.close()
+            patch.setattr(
+                p.preflight_channel,
+                "current_identity",
+                lambda: identity(os.getpid(), ids[os.getpid()]["container_id"]),
+            )
+            receives, plans, handoffs = (
+                p.receive_inputs,
+                p.receive_observer_plan,
+                p.retained_idle_observer,
+            )
+
+            @contextmanager
+            def observed_inputs(*args, **kwargs):
+                with receives(*args, **kwargs) as value:
+                    emit(dict(inputs_retained=True))
+                    yield value
+
+            @contextmanager
+            def observed_plan(*args, **kwargs):
+                with plans(*args, **kwargs) as value:
+                    emit(dict(plan_retained=value.recheck().sha256, input_pin=args[0].expected))
+                    yield value
+
+            @contextmanager
+            def observed_handoff(*args, **kwargs):
+                with handoffs(*args, **kwargs) as receipt:
+                    emit(dict(received=True, offer=receipt.offer_sha256, original_clock=True))
+                    yield receipt
+
+            def forbidden(*args, **kwargs):
+                raise AssertionError("Passive observer command attempted an active operation")
+
+            patch.setattr(p, "receive_inputs", observed_inputs)
+            patch.setattr(p, "receive_observer_plan", observed_plan)
+            patch.setattr(p, "retained_idle_observer", observed_handoff)
+            patch.setattr(p.links.Link, "_send", forbidden)
+            patch.setattr(p.startups, "Startup", forbidden)
+            patch.setattr(p.startups.plans.ordinary, "Docker", forbidden)
+            try:
+                p.prepare_held_idle_observer(
+                    config["case"],
+                    config["template_sha256"],
+                    config["baseline"],
+                    identity(os.getppid(), ids[os.getppid()]["container_id"]),
+                )
+                raise AssertionError("Passive observer returned a completion receipt")
+            except p.UnconfirmedPreparation:
+                emit(
+                    dict(
+                        observer_command_refused=True,
+                        fd_delta=len(os.listdir("/proc/self/fd")) - before,
+                    )
+                )
+                raise SystemExit(75) from None
         outer = stack.enter_context(
             p.domains.process.ProcessWitness(
                 identity(os.getppid(), ids[os.getppid()]["container_id"])
@@ -582,7 +698,9 @@ def observer_child(path, *, retained=False):
             plan_connection = stack.enter_context(
                 closing(
                     p.connections.Connection(
-                        Path(config["plan_socket"]), outer, deadline=time.monotonic() + 2
+                        Path(config["plan_socket"]),
+                        outer,
+                        deadline=time.monotonic() + 2,
                     )
                 )
             )
@@ -762,10 +880,10 @@ def observer_child(path, *, retained=False):
     receive()  # Never turn local cleanup into an observer-exit receipt.
 
 
-def observer_runtime(h, counterpart, monkeypatch):
+def observer_runtime(h, counterpart, monkeypatch, *, passive_command=False):
     """Reuse the full collector with explicit synthetic metadata for peer two.
 
-    This inert comparison argv is not a fixed observer entrypoint or permission
+    The default inert argv is not a fixed observer entrypoint or permission
     to install it. Its actual environment, files, namespace reads and pidfd are
     still collected, independently of the already qualified writer.
     """
@@ -779,6 +897,18 @@ def observer_runtime(h, counterpart, monkeypatch):
         h.template.sha256,
         "observer",
     )
+    if passive_command:
+        command = (
+            "/usr/local/bin/python",
+            "-I",
+            "-B",
+            p.ENTRYPOINT,
+            h.plan.case,
+            h.template.sha256,
+            h.baseline,
+            p.preflight_channel.identity_argument(h.observer_identity),
+            p.OBSERVER_MODE,
+        )
     container = copy.deepcopy(h.container)
     container.update(
         Id=identity.container_id,
@@ -843,10 +973,13 @@ def observer_runtime(h, counterpart, monkeypatch):
 @pytest.fixture
 def joined(helper, monkeypatch, tmp_path, configured, request):
     preparation_diagnostics(monkeypatch)
+    delivery_diagnostics(monkeypatch)
     h = helper
     selection = getattr(request, "param", None)
     options = selection if type(selection) is dict else dict(mode=selection)
     mode = options["mode"]
+    automatic = options.get("automatic_observer", False)
+    assert not automatic or (mode == "release-command-pair" and options.get("observer_join", False))
     retained_scope = mode == "retained-scope-pair"
     fixed_release = mode == "release-command-pair"
     authenticated_release = mode in ("released-pair", "release-command-pair")
@@ -947,7 +1080,7 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
         monkeypatch.setattr(p.domains.process, "read_identity", identity)
         counterpart = stack.enter_context(p.domains.process.ProcessWitness(observer_id))
         comparison = (
-            observer_runtime(h, counterpart, monkeypatch)
+            observer_runtime(h, counterpart, monkeypatch, passive_command=automatic)
             if mode == "pair" or plan_delivery
             else None
         )
@@ -1068,15 +1201,31 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
         sender.receive()
         plan_socket = short / "observer-plan"
         observer_handoff = short / "observer-handoff"
+        staged_plan = staged_handoff = None
+        pipeline_end = None
         if plan_delivery:
             preparation = short / "observer-inputs"
             preparation.mkdir(mode=0o700)
             plan_socket.mkdir(mode=0o700)
             observer_handoff.mkdir(mode=0o700)
+            if automatic:
+                pipeline_end = time.monotonic() + 2
+                staged_plan = stack.enter_context(
+                    closing(p.listeners.Listener(plan_socket, counterpart, deadline=pipeline_end))
+                )
+                staged_handoff = stack.enter_context(
+                    closing(
+                        p.listeners.Listener(observer_handoff, counterpart, deadline=pipeline_end)
+                    )
+                )
             monkeypatch.setattr(p, "preparation_root", lambda *_: preparation)
             observer_inputs = stack.enter_context(
                 closing(
-                    p.listeners.Listener(preparation, counterpart, deadline=time.monotonic() + 2)
+                    p.listeners.Listener(
+                        preparation,
+                        counterpart,
+                        deadline=pipeline_end if automatic else time.monotonic() + 2,
+                    )
                 )
             )
             transport.command(
@@ -1090,10 +1239,12 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
                     case_root=str(case_root),
                     handoff=str(observer_handoff),
                     template_sha256=h.template.sha256,
+                    case=h.plan.case,
                     baseline=h.baseline,
                     receive_fault=options.get("receive_fault"),
                     observer_join=options.get("observer_join", False),
                     observer_join_fault=options.get("observer_join_fault"),
+                    automatic_observer=automatic,
                 ),
             )
             observer_inputs.accept()
@@ -1134,13 +1285,17 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
             retained_scope=retained_scope,
             authenticated_release=authenticated_release,
             fixed_release=fixed_release,
+            automatic_observer=automatic,
+            pipeline_end=pipeline_end,
+            staged_plan=staged_plan,
+            staged_handoff=staged_handoff,
             completion=options.get("completion", True),
             writer_handoff=roots["handoff"],
             observer_handoff=observer_handoff,
         )
 
 
-def qualify_final(s, plan):
+def qualify_final(s, plan, *, collect=True):
     runtime = qualification.runtime_tests.m
     expected = s.inputs.recheck()
     observers = s.comparison
@@ -1162,12 +1317,20 @@ def qualify_final(s, plan):
             ),
             command=command,
             preparation=True,
+            passive_observer=s.automatic_observer and role == "observer",
+            observer_baseline_sha256=s.h.baseline
+            if s.automatic_observer and role == "observer"
+            else None,
+            observer_outer=s.h.observer_identity
+            if s.automatic_observer and role == "observer"
+            else None,
         )
     s.pair = runtime.PeerRuntimePair(**qualifiers)
-    end = min(time.monotonic() + 2, plan.lease["ready_by"])
-    assert s.inputs.recheck(deadline=end) is expected
-    s.pair._collect_before(end)
-    assert s.inputs.recheck(deadline=end) is expected and time.monotonic() < end
+    if collect:
+        end = min(time.monotonic() + 2, plan.lease["ready_by"])
+        assert s.inputs.recheck(deadline=end) is expected
+        s.pair._collect_before(end)
+        assert s.inputs.recheck(deadline=end) is expected and time.monotonic() < end
     assert s.pair.writer.plan is s.pair.observer.plan is plan
     assert s.pair.writer.witness is s.h.witness and s.pair.observer.witness is s.counterpart
 
@@ -1180,9 +1343,19 @@ def finish(s, monkeypatch, after_qualification=None):
     assert plan.original_clock.before_ns > s.timer.original.after_ns
     assert plan.raw != s.q.plan.raw  # Never pass outer preview as continuing writer plan.
     if s.comparison is not None:
-        qualify_final(s, plan)
+        # In the automatic pipeline, actual Custody capture owns the first full
+        # paired collection. Do not add an unused standalone fixture snapshot
+        # immediately before that same required collection. No production guard
+        # is bypassed or cached: capture, arm and both delivery brackets still
+        # perform their own complete fresh comparisons before publication/release.
+        if s.automatic_observer:
+            assert after_qualification is not None
+        qualify_final(s, plan, collect=not s.automatic_observer)
     if after_qualification is not None:
         after_qualification()
+    if s.automatic_observer:
+        assert type(s.custody) is termination_tests.m.Custody
+        assert s.custody.pair is s.pair and s.custody.armed_watch is s.watch
     submission = writer.assembly.baseline_tests.integration.startups.sends.m
     # Only local case-file operations use this fixture path. Keeping the override
     # during fresh runtime comparison would change its expected Engine mount and
@@ -1191,15 +1364,20 @@ def finish(s, monkeypatch, after_qualification=None):
         files.setattr(p.startups.plans.Plan, "root", property(lambda _: s.case_root))
         original = s.stack.enter_context(submission.intake.CasePlan(s.case_root, plan.sha256))
         if s.plan_delivery:
-            listener = s.stack.enter_context(
-                closing(
-                    p.listeners.Listener(
-                        s.plan_socket, s.counterpart, deadline=time.monotonic() + 2
+            listener = (
+                s.staged_plan
+                if s.automatic_observer
+                else s.stack.enter_context(
+                    closing(
+                        p.listeners.Listener(
+                            s.plan_socket, s.counterpart, deadline=time.monotonic() + 2
+                        )
                     )
                 )
             )
             s.plan_listener, s.sent_plan = listener, original
-            transport.command(s.observer, dict(plan_ready=True))
+            if not s.automatic_observer:
+                transport.command(s.observer, dict(plan_ready=True))
             listener.accept()
             s.plan_receipt = p.send_observer_plan(
                 s.inputs,
@@ -1215,11 +1393,17 @@ def finish(s, monkeypatch, after_qualification=None):
             )
         if s.retained_delivery:
             end = min(time.monotonic() + 2, plan.lease["ready_by"])
+            if s.automatic_observer:
+                end = min(end, s.pipeline_end)
             s.writer_listener = s.stack.enter_context(
                 closing(p.listeners.Listener(s.writer_handoff, s.h.witness, deadline=end))
             )
-            s.observer_listener = s.stack.enter_context(
-                closing(p.listeners.Listener(s.observer_handoff, s.counterpart, deadline=end))
+            s.observer_listener = (
+                s.staged_handoff
+                if s.automatic_observer
+                else s.stack.enter_context(
+                    closing(p.listeners.Listener(s.observer_handoff, s.counterpart, deadline=end))
+                )
             )
         submission.Submission(original, s.inputs.template.sha256, plan.sha256).submit()
     if s.retained_delivery:
@@ -1228,22 +1412,23 @@ def finish(s, monkeypatch, after_qualification=None):
         writer_channel = s.stack.enter_context(closing(s.final_server.accept()[0]))
         writer_channel.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
         writer_channel.setblocking(False)
-    transport.command(
-        s.observer,
-        dict(handoff=True)
-        if s.plan_delivery
-        else dict(
-            plan=plan.raw.decode(),
-            sha256=plan.sha256,
-            role="observer",
-            declaration=s.expected.sha256,
-            identities=[asdict(item) for item in s.identities],
-            local=s.counterpart.identity.container_id,
-            outer=s.h.observer_identity.container_id,
-            peer_pid=s.h.child.pid,
-            peer=s.h.witness.identity.container_id,
-        ),
-    )
+    if not s.automatic_observer:
+        transport.command(
+            s.observer,
+            dict(handoff=True)
+            if s.plan_delivery
+            else dict(
+                plan=plan.raw.decode(),
+                sha256=plan.sha256,
+                role="observer",
+                declaration=s.expected.sha256,
+                identities=[asdict(item) for item in s.identities],
+                local=s.counterpart.identity.container_id,
+                outer=s.h.observer_identity.container_id,
+                peer_pid=s.h.child.pid,
+                peer=s.h.witness.identity.container_id,
+            ),
+        )
     if s.retained_delivery:
         s.observer_channel = s.observer_listener.accept()
     if hasattr(s, "watch"):

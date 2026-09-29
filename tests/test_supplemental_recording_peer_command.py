@@ -134,7 +134,7 @@ def test_fixed_writer_flow_joins_all_original_owners_and_retires_passively(comma
     assert writer.preflight_probe.fds() == before
 
 
-@pytest.mark.parametrize("mode", [m.MODE, m.RETAINED_MODE])
+@pytest.mark.parametrize("mode", [m.MODE, m.RETAINED_MODE, m.OBSERVER_MODE])
 def test_ordinary_invocation_refuses_before_imports_or_any_input_read(tmp_path, mode):
     # Not the fixed image path; even isolated flags and plausible argv cannot
     # admit this local checkout as an installed command.

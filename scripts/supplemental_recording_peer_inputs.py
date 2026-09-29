@@ -188,9 +188,15 @@ class Inputs:
         require(self.declaration.recheck(deadline=end) is self.template)
         require(type(self.expectations) is codec.Expectations)
         require(self.expectations is self.original_expectations)
-        require(type(self.raw) is bytes and self.expectations.raw == self.raw)
+        # Construction validates the complete canonical expectations/template
+        # join. Both records contain only immutable bytes, and the original
+        # Declaration freshly verifies its original template and file above.
+        # Compare exact types/bytes/pin here instead of decoding the same plan
+        # repeatedly. This caches no file, identity, time or runtime observation:
+        # EVERY call still rereads both original files with all original guards.
+        require(type(self.raw) is bytes and type(self.expectations.raw) is bytes)
+        require(self.expectations.raw == self.raw)
         require(hashlib.sha256(self.raw).hexdigest() == self.expected)
-        self.expectations.check_template(self.template)
         self._state(end)
 
     def recheck(self, *, deadline=None):

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Authenticate original peer inputs and prepare one passive writer, uninstalled.
+"""Authenticate original inputs and retain passive peer commands, uninstalled.
 
 The independently qualified original outer supplies the EXPECTED pin, never a
 hash learned from observed peer files/argv. Original private connection/listener,
@@ -29,13 +29,14 @@ from threading import get_ident
 ENTRYPOINT = "/opt/sdsctl-recording-host/supplemental_recording_peer_preparation.py"
 MODE = "--prepare-idle-peer-writer"
 RETAINED_MODE = "--prepare-retained-idle-peer-writer"
+OBSERVER_MODE = "--prepare-held-idle-peer-observer"
 MESSAGE = "Recording peer preparation is unconfirmed; preserve this case and do not retry."
 
 if __name__ == "__main__":
     try:
         allowed = (
             len(sys.argv) == 6
-            and sys.argv[5] in (MODE, RETAINED_MODE)
+            and sys.argv[5] in (MODE, RETAINED_MODE, OBSERVER_MODE)
             and sys.flags.isolated == sys.flags.dont_write_bytecode == 1
             and os.geteuid() == os.getegid() == 0
             and os.getcwd() == "/"
@@ -999,6 +1000,78 @@ def _accepted_writer(owner, inputs, local, outer, counterpart, docker, *, passiv
     return end
 
 
+def prepare_held_idle_observer(case, template_sha256, baseline_sha256, outer_identity):
+    """Fixed passive observer: inputs -> plan -> Link, never an active operation.
+
+    The outer must provision ALL three distinct original phase listeners before
+    launch. The first connection's original two-second cutoff bounds this whole
+    pipeline; later phases cannot extend it. Completed earlier sockets remain
+    passively owned until cleanup, not reused or rechecked as current exchanges.
+    No future plan, expected Inputs pin or writer identity comes from argv/stdin.
+
+    After descriptor intake the command waits only for original peer loss or
+    the original cutoff. Either is unconfirmed, NOT successful retirement or
+    permission. An independently armed original watcher must account for exits.
+    There is no Ready, input/baseline write, Startup, service or App action here.
+    Runtime provenance and the outer/platform lifetime remain external gates.
+    """
+    cleanup, problem = [], None
+    try:
+        codec.plans.base.identifier(case, case=True)
+        for digest in (template_sha256, baseline_sha256):
+            codec.plans.base.digest(digest)
+        require(type(outer_identity) is domains.process.ProcessIdentity)
+        declaration = inputs_module.declarations.Declaration(
+            inputs_module.declarations.declaration_root(case), template_sha256
+        )
+        cleanup.append(declaration.close)
+        require(codec.templates._read(declaration.recheck().raw)["plan"]["case"] == case)
+        local = preflight_channel.current_identity()
+        timer = domains.clock.ClockWitness(domains.clock.read())
+        cleanup.append(timer.close)
+        outer = domains.process.ProcessWitness(outer_identity)
+        cleanup.append(outer.close)
+        connection = connections.Connection(
+            preparation_root(case, "observer"), outer, deadline=time.monotonic() + 2
+        )
+        cleanup.append(connection.close)
+        end = connection.deadline
+        with receive_inputs(
+            declaration,
+            connection,
+            timer,
+            local,
+            role="observer",
+            baseline_sha256=baseline_sha256,
+            preparation=True,
+        ) as (inputs, writer):
+            plan_connection = connections.Connection(observer_plan_root(case), outer, deadline=end)
+            cleanup.append(plan_connection.close)
+            with receive_observer_plan(
+                inputs,
+                plan_connection,
+                timer,
+                local,
+                baseline_sha256=baseline_sha256,
+                counterpart=writer,
+            ) as original:
+                final = connections.Connection(
+                    handoff_root(case, "observer"),
+                    outer,
+                    deadline=min(end, original.recheck().lease["ready_by"]),
+                )
+                cleanup.append(final.close)
+                with retained_idle_observer(original, inputs, final, timer, local, outer, writer):
+                    require(time.monotonic() < final.deadline <= end)
+                    select.select([outer.fd, writer.fd], [], [], final.deadline - time.monotonic())
+                    require(False)  # Peer loss or expiry cannot become a completion receipt.
+    except BaseException as error:
+        problem = error
+    finally:
+        _cleanup(cleanup, problem)
+    require(False)
+
+
 def prepare_idle_writer(case, template_sha256, baseline_sha256, outer_identity):
     """Original immediate passive command; never waits for a retirement grant."""
     return _prepare_idle_writer(
@@ -1144,9 +1217,11 @@ if __name__ == "__main__":
     try:
         import supplemental_recording_permission_probe as command_peer
 
-        command = (
-            prepare_retained_idle_writer if sys.argv[5] == RETAINED_MODE else prepare_idle_writer
-        )
+        command = {
+            MODE: prepare_idle_writer,
+            RETAINED_MODE: prepare_retained_idle_writer,
+            OBSERVER_MODE: prepare_held_idle_observer,
+        }[sys.argv[5]]
         result = command(
             sys.argv[1], sys.argv[2], sys.argv[3], command_peer.parse_identity(sys.argv[4])
         )

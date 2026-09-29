@@ -126,6 +126,15 @@ These are reviewed fixture imports with active operations blocked, not a fixed
 production entrypoint, independent installation authentication or an installed
 peer lifetime. Default runtime comparison still rejects this new inventory kind.
 
+The same isolated staged-import fixture now separately selects the 104-module
+preparation graph used by the passive writer/observer commands. Missing each
+added preparation/permission module refuses even with a good checkout copy
+visible; older 101-module bundles still cannot import those absent helpers.
+Both source profiles retain their exact full/root closure and no-bytecode,
+unchanged-source/dependency checks. The separate service command remains absent
+from both profiles. Importing an explicitly inventoried passive helper does not
+execute its command, qualify fixed-path exec/startup, or grant its action scope.
+
 No library name is an admitted active entrypoint. A future fixed launcher must
 explicitly select its final reviewed graph and input contract, authenticate the
 installation and pins independently, retain the original startup and peer owners,
@@ -213,6 +222,17 @@ rejects foreign process/thread/credential custody, never closes an unrelated ino
 reusing an original number, and never retries an uncertain close. These guards
 do not authenticate installation provenance or defend against arbitrary trusted
 code rewriting the private ownership inventory in the same process.
+
+The complete canonical expectations/template relationship is validated when
+the original input owner is constructed. Subsequent rechecks compare the same
+exact record types, immutable bytes and independently supplied hash; they do not
+decode an unchanged template into another syntax-only plan twice on every read.
+This follows the retained Declaration's existing policy. Both original files,
+descriptors, path bindings, metadata and input identities are still freshly
+read and checked on every call, under the same original deadline. No filesystem
+or runtime observation is cached, no replacement record is adopted, and changed
+bytes (including mutable substitutes) permanently refuse. New mutation tests
+exercise the difference between reusing validated syntax and reusing stale data.
 
 Each complete input read has a two-second maximum. An explicit enclosing
 deadline narrows that budget, including nested startup declaration reads;
@@ -1676,9 +1696,10 @@ begin, under that plan's ready limit and its own original two-second cutoff.
 Keep the same original process witnesses across these phases; no reconstructed
 Startup, replacement clock, new peer incarnation or cached success is admissible.
 The separate input exchange and fixed passive writer below now exercise this
-writer-side order. Fixed outer/observer entrypoints, independently supervised
-preliminary/final runtime qualification and active launch authority remain
-unimplemented; the exchange and passive command are not their substitutes.
+writer-side order. The separately selected passive observer below also joins
+its original input/plan/handoff owners. Installed outer/observer entrypoints,
+independently supervised preliminary/final runtime qualification and active
+launch authority remain unqualified; passive commands are not their substitutes.
 
 ### Authenticated clock-free input preparation (uninstalled)
 
@@ -1961,7 +1982,9 @@ writer function executes checked-out code under explicit fixture path aliases;
 its installed command argv, image/root/cgroup/Engine/kernel metadata and input
 provenance remain synthetic. Inventoried source/runtime files are actually read
 and never imported; they are not claimed to be the executing image. The observer
-comparison argv is deliberately inert, not an admitted fixed observer command.
+comparison argv in this original variant is deliberately inert, not an admitted
+fixed observer command. The separately selected passive pipeline below uses a
+distinct exact command policy, without supplying installed provenance.
 Final acceptance is an explicit test decision with real file publication, not a
 claim of complete platform approval. The outer is still the test process, not an
 independently qualified installed supervisor. Independent outer/platform lifetime,
@@ -2165,9 +2188,10 @@ fixed passive writer and original outer watcher. Its normal-retirement variant
 observes the original observer exit and the watcher's resulting stop of the
 writer, with case files unchanged. Replacement owners, context/input drift,
 replay, original-cutoff expiry, cleanup failure and interruption are tested
-without granting new time or action scope. **Observer phase sequencing still
-uses fixture stdin and is not an installed completion protocol or fixed observer
-entrypoint.** Runtime/image/Engine provenance and the outer's platform lifetime
+without granting new time or action scope. **This original variant's observer
+phase sequencing uses fixture stdin; it is not an installed completion protocol
+or fixed observer entrypoint.** The separate passive pipeline below removes those
+later stdin steps. Runtime/image/Engine provenance and the outer's platform lifetime
 remain synthetic/unqualified. This reduces fixture-only owner assembly, not the
 requirements for independent supervision, active admission or exclusive recovery.
 
@@ -2204,10 +2228,93 @@ Neither fixture is installed launch qualification. The small exec fixture uses
 synthetic private configuration/path/cgroup mappings and an explicit fixture
 retirement message **after** authentication. The full-command fixture still uses
 stdin for its earlier host setup and observer sequencing; only the small input
-fixture eliminates the launch barrier. Neither supplies a fixed outer/observer
+fixture eliminates the launch barrier. Neither supplies an installed outer/observer
 entrypoint, proves the complete installed startup fits two seconds, or resolves
 independent platform lifetime and active action/recovery admission. No extra wire
 permission, baseline permission reuse or new App authority is introduced.
+
+### Separately selected passive observer pipeline (uninstalled)
+
+The preparation entrypoint has a distinct exact
+`--prepare-held-idle-peer-observer` selection. It accepts only the original case,
+independently pinned template/baseline digests and original outer identity, behind
+the unchanged isolated-interpreter, fixed-path, root and cwd gate. It obtains
+the expected Inputs digest and writer witness through the authenticated input
+exchange, then obtains the final writer plan through its separate authenticated
+plan exchange. No future plan, expected Inputs pin, completion message or writer
+identity is supplied through stdin or additional command arguments.
+
+The outer must provision all three private phase listeners before launch. The
+first connection's original two-second cutoff bounds this entire observer
+pipeline, including plan delivery and descriptor intake. Later connections can
+only narrow it, and final intake also retains the original plan readiness limit.
+Completed input/plan sockets remain passively owned until final cleanup, without
+being reused or treating their retired exchanges as fresh evidence. One original
+observer clock, original input/plan owners and original outer/writer witnesses
+continue through the existing `retained_idle_observer` and Link.
+
+After intake it waits only for original peer-pidfd readiness or that unchanged
+cutoff. Either causes sanitized refusal and owned-resource retirement, never a
+success receipt. It sends no active Link messages, creates no Startup/journal,
+performs no App/Engine/baseline write, and cannot grant recording or recovery.
+An independently armed original watcher must still account for peer exits.
+`Watch.close()` reaps only its watcher; callers independently observe both
+original peer handles rather than treating watcher retirement as peer-exit proof.
+
+The read-only runtime collector must explicitly opt in with
+`passive_observer=True`, the independently pinned baseline digest and the original
+outer identity. It compares the complete exact argv to its separately authenticated
+expectations. Default selection refuses the new command even when its digest is
+pinned. Non-boolean flags, wrong roles/profiles, changed selection/baseline/outer
+owners and source drift refuse; successful source comparison never grants App
+scope. The preparation source closure remains 104 modules, with changed bytes
+requiring new independent source pins. Old command defaults are unchanged.
+The original outer identity is freshly observed at construction and at every
+inherited runtime guard. Repeated immutable runtime/name accessors within that
+same guard do not each repeat the observation; no result is cached across guards
+or complete collections, and every guard retains its original cutoff.
+
+The actual subprocess fixture now executes this command function after its
+explicitly synthetic initial setup, closes the original stdin descriptor, and
+forbids later plan/handoff/retirement signals. It joins the original passive writer,
+fresh paired comparisons, preprovisioned listeners, sealed-image direct-owner
+native watcher, authenticated release and independently observed original exits.
+Actual Custody capture owns its first full paired comparison. This automatic
+variant does not add an unused standalone fixture snapshot immediately before
+capture: capture, native arming and both delivery brackets each perform their
+unchanged complete fresh checks. Nothing is published or released before capture
+and arming succeed. The ordinary standalone comparison variants stay unchanged.
+Initial source/argv/Engine/path/confinement provenance remains synthetic. Separate
+faults exercise original-cutoff expiry, lost plan channel, explicit selection
+refusal and post-qualification selection/baseline/source drift, with no release
+or retry on uncertainty and failure files preserved. Descriptor counts are checked
+when the observer performs its own cleanup; native-killed peers require actual
+pidfd exit evidence, not an invented cleanup receipt.
+Timed test diagnostics distinguish command/fixture cleanup from Python process
+shutdown; a final fixture marker is never an exit receipt. The test still requires
+all original process handles to become readable before its original cutoff, and
+late exit is preserved as a failed qualification rather than receiving more time.
+Initial Python 3.14 joins encountered delivery refusals or reached command
+cleanup without actual process exit before the original cutoff. Those failures
+are retained. Measured phase costs identified repeated pure decoding of the
+already-validated, unchanged Inputs/template relationship. Inputs now verifies
+the original immutable records and independent byte pins while still freshly
+rereading both original files and checking every original descriptor, path,
+clock and deadline. Mutation regressions refuse replacement or changed records;
+no runtime or filesystem observation is cached. The corrected automatic pipeline
+passes its local 16-case suite on Python 3.13 and 3.14, including all three native
+build variants and actual original peer exits within the unchanged two seconds.
+This is local fixture evidence, not installed timing qualification. Earlier
+delivery refusals and late shutdowns whose first cause was not captured remain
+unresolved; passing corrected runs do not retroactively explain them. Test-only
+delivery diagnostics retain reviewed source locations, never private values.
+
+This removes fixture-only **phase sequencing**, not the initial fixture setup,
+installed exec/source provenance, fixed outer launcher or independent platform
+supervision. Declaration loading precedes the first connection cutoff and still
+needs independently bounded startup; no test proves installed exec/import/loading
+fits two seconds. Active App admission and exclusive recovery remain separate
+gates, and this passive command is not a candidate for a human scanner/audio test.
 
 ## Remaining gates before a human scanner/audio test
 
@@ -2346,9 +2453,10 @@ not authorize installation or any App/scanner trial.
    The separate peer expectations and paired read-only collectors now provide
    explicit comparison inputs and a shared collection bound; they do not
    qualify installed provenance or admit an active entrypoint. The separate fixed
-   passive writer and its 104-module selection do not admit App actions or supply
-   qualified outer/observer commands. The separate termination library now exercises
-   both original peer handles and an absolute kernel timer, but the qualified
+   passive writer/observer commands and their 104-module selection do not admit
+   App actions or supply qualified installed outer/observer runtimes. The separate
+   termination library now exercises both original peer handles and an absolute
+   kernel timer, but the qualified
    outer lifetime, authenticated channel join, active action scope and exclusive
    failure/recovery owner still need integration.
 3. A fresh isolated fixed-command end-to-end lifetime joining actual native

@@ -57,13 +57,17 @@ subprocess.Popen = forbidden
 os.fork = os.system = os.open = os.mkdir = os.unlink = os.rename = forbidden
 os.kill = signal.pidfd_send_signal = forbidden
 inventory = importlib.import_module("supplemental_recording_peer_host_source")
+if sys.argv[5] == "preparation": inventory = inventory.PreparationProfile
 names = inventory.ROOTS if scope == "roots" else inventory.MODULES
 if scope == "one": names = (module,)
 for name in sorted(names): importlib.import_module(name)
 private = {name for name in sys.modules if name.startswith(prefixes)}
 deferred = {"supplemental_recording_api", "supplemental_recording_assembly",
             "supplemental_recording_schedule"}
-assert private == (inventory.MODULES - deferred if scope == "roots" else inventory.MODULES)
+if scope == "one":
+    assert module in private and private <= inventory.MODULES
+else:
+    assert private == (inventory.MODULES - deferred if scope == "roots" else inventory.MODULES)
 for name, value in tuple(sys.modules.items()):
     top = name.partition(".")[0]
     if name in private:
@@ -71,21 +75,22 @@ for name, value in tuple(sys.modules.items()):
     elif top in ("sds200", "serial"):
         base = root / ("src" if top == "sds200" else "dependencies") / top
         assert Path(value.__file__).is_relative_to(base)
-assert "serial" in sys.modules
+if scope != "one": assert "serial" in sys.modules
 assert "sds200._public" not in sys.modules
 print(json.dumps({"scope": scope, "private_modules": len(private)}))
 """
 
 
-@pytest.fixture
-def peer_bundle(tmp_path):
+@pytest.fixture(params=["library", "preparation"])
+def peer_bundle(tmp_path, request):
     root = tmp_path / "peer-bundle"
+    profile = bundle.m.PreparationProfile if request.param == "preparation" else bundle.m
     repo = bundle.original.native.SCRIPTS.parent
     scripts, product = root / "scripts", root / "src/sds200"
     scripts.mkdir(parents=True)
     ignore = shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo")
     shutil.copytree(repo / "src/sds200", product, ignore=ignore)
-    for name in bundle.m.HELPER_FILES:
+    for name in profile.HELPER_FILES:
         shutil.copyfile(repo / "scripts" / name, scripts / name)
     dependency = root / "dependencies/serial"
     shutil.copytree(Path(serial.__file__).parent, dependency, ignore=ignore)
@@ -93,7 +98,7 @@ def peer_bundle(tmp_path):
     for path in (root, *root.rglob("*")):
         assert not path.is_symlink()
         path.chmod(0o755 if path.is_dir() else 0o644)
-    source = bundle.m.Layout(product, scripts)
+    source = profile.Layout(product, scripts)
     pin = source.observe().sha256
     dependency_pin = bundle.m.source.files.inventory(dependency)
 
@@ -116,13 +121,14 @@ def peer_bundle(tmp_path):
                         str(Path(serial.__file__).parent.parent),
                     ]
                 ),
+                request.param,
             ],
             capture_output=True,
             timeout=15,
             check=False,
         )
 
-    yield root, run
+    yield root, run, profile
     assert source.verify(pin).sha256 == pin
     assert bundle.m.source.files.inventory(dependency) == dependency_pin
     assert not list(root.rglob("__pycache__"))
@@ -130,26 +136,35 @@ def peer_bundle(tmp_path):
 
 @pytest.mark.parametrize("scope", ["roots", "complete"])
 def test_peer_imports_use_only_explicit_staged_product_helper_and_serial(peer_bundle, scope):
-    _, run = peer_bundle
+    _, run, profile = peer_bundle
     result = run(scope)
     assert result.returncode == 0, result.stderr.decode(errors="replace")
     assert not result.stderr
     assert json.loads(result.stdout) == {
         "scope": scope,
-        "private_modules": 98 if scope == "roots" else 101,
+        "private_modules": len(profile.MODULES) - (3 if scope == "roots" else 0),
     }
 
 
 @pytest.mark.parametrize(
     "relative",
     ["dependencies/serial", "src/sds200"]
-    + ["scripts/" + name for name in sorted(bundle.m.HELPER_FILES - bundle.m.service.HELPER_FILES)],
+    + [
+        "scripts/" + name
+        for name in sorted(bundle.m.PreparationProfile.HELPER_FILES - bundle.m.service.HELPER_FILES)
+    ],
 )
 def test_missing_staged_peer_module_never_uses_visible_checkout_or_installed_copy(
     peer_bundle, relative
 ):
-    root, run = peer_bundle
+    root, run, profile = peer_bundle
     original, withheld = root / relative, root / "withheld"
+    if relative.startswith("scripts/") and original.name not in profile.HELPER_FILES:
+        assert not original.exists()
+        result = run("one", original.stem)
+        assert result.returncode == 1 and not result.stdout
+        assert b"ModuleNotFoundError: Missing staged peer module:" in result.stderr
+        return  # This smaller profile never admitted that module in the first place.
     original.rename(withheld)
     try:
         result = run()
@@ -163,7 +178,7 @@ def test_missing_staged_peer_module_never_uses_visible_checkout_or_installed_cop
 def test_staged_peer_import_cannot_follow_symlinks_to_checkout_or_installed_package(
     peer_bundle, replacement
 ):
-    root, run = peer_bundle
+    root, run, _ = peer_bundle
     if replacement == "module":
         name = "supplemental_recording_peer_connection.py"
         original = root / "scripts" / name
@@ -191,8 +206,17 @@ def test_staged_peer_import_cannot_follow_symlinks_to_checkout_or_installed_pack
         "supplemental_recording_permission_probe",
     ],
 )
-def test_passive_peer_bundle_does_not_import_older_action_permission_commands(peer_bundle, module):
-    _, run = peer_bundle
+def test_staged_profile_does_not_implicitly_expand_permission_command_selection(
+    peer_bundle, module
+):
+    _, run, profile = peer_bundle
     result = run("one", module)
-    assert result.returncode == 1 and not result.stdout
-    assert ("ModuleNotFoundError: Missing staged peer module: " + module).encode() in result.stderr
+    if module in profile.MODULES:
+        assert profile is bundle.m.PreparationProfile
+        assert result.returncode == 0 and not result.stderr
+        assert json.loads(result.stdout)["scope"] == "one"
+    else:
+        assert result.returncode == 1 and not result.stdout
+        assert (
+            "ModuleNotFoundError: Missing staged peer module: " + module
+        ).encode() in result.stderr

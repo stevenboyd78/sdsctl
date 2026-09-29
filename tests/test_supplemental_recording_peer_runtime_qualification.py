@@ -186,6 +186,24 @@ def test_explicit_preparation_profile_checks_complete_runtime_without_enabling_o
 
 
 @pytest.mark.parametrize("graph_mode", ["preparation"], indirect=True)
+@pytest.mark.parametrize(
+    "options",
+    [
+        dict(passive_observer=1),
+        dict(passive_observer="observer"),
+        dict(passive_observer=None),
+        dict(observer_baseline_sha256="0" * 64),
+        dict(passive_observer=True, observer_baseline_sha256="0" * 64),
+    ],
+)
+def test_passive_observer_requires_explicit_typed_selection_and_independent_outer(peer, options):
+    reads = peer.reads
+    with pytest.raises(m.launch.UnconfirmedHostLaunch):
+        peer.make(**options)
+    assert peer.reads == reads
+
+
+@pytest.mark.parametrize("graph_mode", ["preparation"], indirect=True)
 @pytest.mark.parametrize("fault", ["source", "missing", "selection"])
 def test_preparation_source_and_selection_remain_pinned(peer, fault):
     if fault == "selection":

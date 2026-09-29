@@ -48,6 +48,9 @@ class PeerRuntimeQualification(launch.HelperQualification):
         runtime_workers=1,
         peer_handoff=False,
         preparation=False,
+        passive_observer=False,
+        observer_baseline_sha256=None,
+        observer_outer=None,
     ):
         try:
             require(type(self) is PeerRuntimeQualification)
@@ -56,6 +59,31 @@ class PeerRuntimeQualification(launch.HelperQualification):
             require(type(role) is str and role in declarations.ROLES)
             require(type(witness) is launch.engine.dispatch.process.ProcessWitness)
             require(witness.identity.pid != launch.os.getpid())
+            require(type(passive_observer) is bool)
+            if passive_observer:
+                require(role == "observer" and preparation is True and peer_handoff is False)
+                launch.base.digest(observer_baseline_sha256)
+                require(type(observer_outer) is launch.engine.dispatch.process.ProcessIdentity)
+                require(observer_outer.pid == launch.os.getpid())
+                observer_outer.__post_init__()
+                require(
+                    launch.engine.dispatch.process.read_identity(
+                        observer_outer.pid, observer_outer.container_id
+                    )
+                    == observer_outer
+                )
+            else:
+                require(observer_baseline_sha256 is None and observer_outer is None)
+            self.passive_observer = passive_observer
+            self.observer_baseline_sha256, self.observer_outer = (
+                observer_baseline_sha256,
+                observer_outer,
+            )
+            self.observer_argument = (
+                f"{observer_outer.pid}:{observer_outer.start_ticks}:{observer_outer.container_id}"
+                if passive_observer
+                else None
+            )
             declarations.load_bytes(expectations.raw, expectations_sha256)
             self.source = declarations.source_profile(
                 expectations, peer_handoff=peer_handoff, preparation=preparation
@@ -78,6 +106,10 @@ class PeerRuntimeQualification(launch.HelperQualification):
                 self.source,
                 self.peer_handoff,
                 self.preparation,
+                self.passive_observer,
+                self.observer_baseline_sha256,
+                self.observer_outer,
+                self.observer_argument,
             )
             super().__init__(
                 plan,
@@ -112,6 +144,10 @@ class PeerRuntimeQualification(launch.HelperQualification):
                         self.source,
                         self.peer_handoff,
                         self.preparation,
+                        self.passive_observer,
+                        self.observer_baseline_sha256,
+                        self.observer_outer,
+                        self.observer_argument,
                     ),
                     self.role_objects,
                     strict=True,
@@ -126,6 +162,24 @@ class PeerRuntimeQualification(launch.HelperQualification):
         require(
             type(self.expectations.raw) is bytes and self.expectations.raw == self.expectations_raw
         )
+        if self.passive_observer:
+            outer = self.observer_outer
+            require(
+                self.observer_argument == f"{outer.pid}:{outer.start_ticks}:{outer.container_id}"
+            )
+            require(outer.pid == launch.os.getpid())
+
+    def _guard(self, deadline):
+        super()._guard(deadline)
+        if self.passive_observer:
+            # Re-observe at EVERY inherited runtime guard, not twice within
+            # that same guard's immutable runtime/name accessors. No result is
+            # cached across guards, full collections or external operations.
+            outer = self.observer_outer
+            require(
+                launch.engine.dispatch.process.read_identity(outer.pid, outer.container_id) == outer
+            )
+            require(launch.time.monotonic() < deadline)
 
     def _runtime_expectation(self, plan):
         self._role_binding()
@@ -152,6 +206,24 @@ class PeerRuntimeQualification(launch.HelperQualification):
         require(zero_domain is None)
         require(type(command) is tuple and len(command) >= 4)
         require(command[:3] == ("/usr/local/bin/python", "-I", "-B"))
+        observer_mode = "--prepare-held-idle-peer-observer"
+        if self.passive_observer:
+            require(
+                command
+                == (
+                    "/usr/local/bin/python",
+                    "-I",
+                    "-B",
+                    "/opt/sdsctl-recording-host/supplemental_recording_peer_preparation.py",
+                    plan.case,
+                    self.template.sha256,
+                    self.observer_baseline_sha256,
+                    self.observer_argument,
+                    observer_mode,
+                )
+            )
+        else:
+            require(observer_mode not in command)
         require(
             command[3] in {str(Path("/") / self.HELPER / name) for name in self.source.HELPER_FILES}
         )

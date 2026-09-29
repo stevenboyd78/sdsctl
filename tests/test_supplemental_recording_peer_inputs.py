@@ -99,6 +99,57 @@ def test_original_file_and_template_retained_and_freshly_read_without_mutation(
     denied(owner.recheck)
 
 
+def test_unchanged_join_is_not_redecoded_but_both_original_files_are_reread(
+    provisioned, monkeypatch
+):
+    p = provisioned
+    owner = construct(p)
+    try:
+        reads, pread = [], m.os.pread
+
+        def reading(fd, size, offset):
+            reads.append(fd)
+            return pread(fd, size, offset)
+
+        def decoded_again(*args):
+            pytest.fail("Previously validated unchanged bytes decoded again")
+
+        monkeypatch.setattr(m.os, "pread", reading)
+        monkeypatch.setattr(m.codec, "_read", decoded_again)
+        monkeypatch.setattr(m.declarations.codec, "_read", decoded_again)
+        for _ in range(3):
+            reads.clear()
+            assert owner.recheck() is owner.original_expectations
+            assert set(reads) == {owner.file, p.original.file}
+        p.path.write_bytes(b"PRIVATE changed original input")
+        denied(owner.recheck)
+        assert owner.failed and owner.closed
+    finally:
+        owner.close()
+
+
+@pytest.mark.parametrize("fault", ["valid", "invalid", "mutable", "retained-bytes", "equal-object"])
+def test_retained_expectations_mutation_never_reuses_initial_join(provisioned, fault):
+    p = provisioned
+    owner = construct(p)
+    if fault == "valid":
+        value = expectation_tests.value()
+        value["observer"]["hostname"] = "different-fixture"
+        object.__setattr__(owner.expectations, "raw", m.codec.decode(value).raw)
+    elif fault == "invalid":
+        object.__setattr__(owner.expectations, "raw", b"PRIVATE invalid")
+    elif fault == "mutable":
+        object.__setattr__(owner.expectations, "raw", bytearray(owner.raw))
+    elif fault == "retained-bytes":
+        owner.raw = b"PRIVATE changed both byte slots"
+        object.__setattr__(owner.expectations, "raw", owner.raw)
+    else:
+        owner.expectations = m.codec.load_bytes(owner.raw, owner.expected)
+    denied(owner.recheck)
+    assert owner.failed and owner.closed and not p.original.closed
+    denied(owner.recheck)
+
+
 @pytest.mark.parametrize(
     "fault",
     ["digest", "noncanonical", "empty", "large", "template", "writer", "mutable", "duplicate"],
