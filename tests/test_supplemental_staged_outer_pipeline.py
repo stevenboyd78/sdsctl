@@ -123,16 +123,24 @@ def staged(tmp_path):
 
 
 @pytest.mark.parametrize("fault", ["outside", "changed"])
-def test_direct_spec_loader_cannot_execute_outside_or_changed_staged_private_code(staged, fault):
+@pytest.mark.parametrize("role", ["outer", "writer", "observer"])
+def test_direct_spec_loader_cannot_execute_outside_or_changed_staged_private_code(
+    staged, fault, role
+):
     name = "supplemental_recording_permission_sender.py"
     target = (staged.repo if fault == "outside" else staged.root) / "scripts" / name
     original = target.read_bytes()
     if fault == "changed":
         target.write_bytes(b"raise AssertionError('PRIVATE_CODE_MUST_NOT_RUN')\n")
     try:
-        result = staged.run("probe", target, str(staged.root.parent))
+        mode = "probe" if role == "outer" else "probe-" + role
+        result = staged.run(mode, target, str(staged.root.parent))
         assert result.returncode == 75 and not result.stderr
         assert json.loads(result.stdout) == dict(source_refused=True)
+        if role != "outer":
+            reports = list((staged.root.parent / "peer-sources").iterdir())
+            assert len(reports) == 1 and reports[0].name.startswith(role + "-")
+            assert reports[0].read_bytes() == b""  # Refused before any private code.
     finally:
         if fault == "changed":
             target.write_bytes(original)
@@ -163,3 +171,15 @@ def test_original_passive_pipeline_uses_staged_outer_policy_and_unchanged_peer_p
     assert observed <= staged.names
     assert observed >= OUTER_ADDITIONS and observed >= FIXTURE_ONLY
     assert b"3 passed" in result.stdout  # dynamic/static/UBSan actual command exits.
+    reports = list((staged.root.parent / "peer-sources").iterdir())
+    assert len(reports) == 6  # Original writer/observer for each native build.
+    for role in ("writer", "observer"):
+        selected = [path for path in reports if path.name.startswith(role + "-")]
+        assert len(selected) == 3
+        for path in selected:
+            assert path.stat().st_mode & 0o777 == 0o600
+            names = set(path.read_text().splitlines())
+            assert names <= staged.names
+            assert "supplemental_recording_peer_preparation" in names
+            assert "supplemental_recording_peer_inputs" in names
+            assert "supplemental_recording_peer_listener" in names

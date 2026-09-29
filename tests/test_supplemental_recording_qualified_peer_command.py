@@ -46,6 +46,19 @@ layout, image_umask, supervised = (
     qualification.supervised,
 )
 image, configured = qualification.image, qualification.configured
+STAGED_SOURCE_GUARD = None  # Explicit staged-process fixture only; never production.
+
+
+def source_guard_prefix(role):
+    if STAGED_SOURCE_GUARD is None:
+        return ""
+    root, manifest = STAGED_SOURCE_GUARD
+    assert role in ("writer", "observer")
+    return (
+        f"import sys; sys.path.insert(0, {root!r}); "
+        "from tests._staged_passive_pipeline import install_source_guard; "
+        f"install_source_guard({root!r}, {manifest!r}, role={role!r}); "
+    )
 
 
 def emit(value):
@@ -393,6 +406,7 @@ def helper(supervised, image, configured, monkeypatch, tmp_path, request):
         )
     env = dict(entry.split("=", 1) for entry in configured)
     env.update(HOME="/root", HOSTNAME=helper_tests.env.env.HOSTNAME)
+    code = source_guard_prefix("writer") + code
     process = subprocess.Popen(
         [sys.executable, "-I", "-B", "-c", code, str(Path(p.__file__).parent.parent), str(root)],
         env=env,
@@ -1022,6 +1036,7 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
                 "m.links.clock.ClockWitness(m.links.clock.read())",
             )
         )
+        observer_code = source_guard_prefix("observer") + observer_code
         observer = subprocess.Popen(
             [
                 sys.executable,
