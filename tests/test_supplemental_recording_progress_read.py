@@ -1,8 +1,10 @@
 """Planned stage-selected progress checks; real wire/files, synthetic platform."""
 
 import json
+import math
 import time
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
@@ -106,10 +108,21 @@ def test_only_returned_published_tips_supply_continuity(active):
 
 
 @pytest.mark.parametrize("fault", ["replace", "shrink"])
-def test_unpublished_read_still_retains_in_memory_file_continuity(active, fault):
+@pytest.mark.parametrize("finalizing", [False, True])
+def test_unpublished_read_still_retains_in_memory_file_continuity(
+    active, monkeypatch, fault, finalizing
+):
     case, relay = active, active.relay
+    # This test checks file continuity, not scheduling. Select a deterministic
+    # phase in the SAME original plan instead of racing its short stop boundary
+    # under CI coverage. Only the relay's phase clock is synthetic; real file,
+    # process, collector and receipt checks remain. Separate exact-boundary and
+    # existing real/advancing-clock tests below still require late-read refusal.
+    observed_at = relay.plan.stop_at + (0.01 if finalizing else -0.01)
+    monkeypatch.setattr(m, "time", SimpleNamespace(monotonic=lambda: observed_at))
     case.files.wav.write_bytes(b"a" * 32)
-    relay.read_progress(case.progress)
+    result = relay.read_progress(case.progress)
+    assert result.files.stage == ("finalizing" if finalizing else "active")
     assert relay.ledger.state.tip is None
     if fault == "replace":
         # Preserve the old inode outside the watched recording root.
@@ -119,6 +132,28 @@ def test_unpublished_read_still_retains_in_memory_file_continuity(active, fault)
     else:
         case.files.wav.write_bytes(b"a" * 16)
     relay_tests.refused(case, lambda: relay.read_progress(case.progress))
+
+
+@pytest.mark.parametrize("after", [False, True])
+def test_crossing_original_exact_stop_boundary_cannot_return_active_progress(
+    active, monkeypatch, after
+):
+    case, relay = active, active.relay
+    original_plan, original_state = relay.plan, relay.ledger.state
+    now = [original_plan.stop_at - 0.01]
+    monkeypatch.setattr(m, "time", SimpleNamespace(monotonic=lambda: now[0]))
+    collect = m.local.protected.Collector.active
+
+    def crossing(*args, **kwargs):
+        result = collect(*args, **kwargs)
+        assert result.files.stage == "active"
+        now[0] = math.nextafter(original_plan.stop_at, math.inf) if after else original_plan.stop_at
+        return result
+
+    monkeypatch.setattr(m.local.protected.Collector, "active", crossing)
+    relay_tests.refused(case, lambda: relay.read_progress(case.progress))
+    assert relay.plan is original_plan and relay.ledger.state == original_state
+    assert relay._progress_context is None and list(case.progress.iterdir()) == []
 
 
 @pytest.mark.parametrize("fault", ["extra", "already_pinned"])
