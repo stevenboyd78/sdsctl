@@ -2292,6 +2292,22 @@ remain local evidence only. No installed selector/build/App loads the shared
 fixture, and it grants no active action or recovery authority. See the native
 README's direct-owner experiment and remaining platform requirements.
 
+An additional offline fixture binds earlier expected native-build bytes to a
+sealed executable memfd and the original direct-owner clone/exec boundary. The
+original readiness cutoff covers bounded copy, seal, re-hash and clone admission;
+there is no pathname or unsealed fallback. Actual source-path replacement,
+forbidden mutation and pre-adoption interruption tests retain original Custody,
+exact-child cleanup and consumed-attempt boundaries. The full passive-command
+join exercises both handoffs, release/exit and native loss with this sealed image.
+The separate original-outer lifetime fixture uses the same sealed route for
+pre-ingress outer loss and individual-process outer/native death or stop, while
+retaining original timers and exact-child ownership; no cgroup test is replayed.
+This is not independent installed publication/runtime or post-exec `/proc` image
+inspection: the native dumpability restriction remains intact. Compiler/libc,
+dynamic dependencies and the original outer's runtime still require independent
+qualification. The native README records the exact evidence and limitations;
+no active entrypoint/source selection, policy or action permission changes.
+
 An explicit opt-in local cgroup fixture now joins that direct-owner route to a
 fresh watcher subtree and the existing lifetime/Watch checks. Only new disposable
 processes/groups are involved; original outer and independent exact-handle

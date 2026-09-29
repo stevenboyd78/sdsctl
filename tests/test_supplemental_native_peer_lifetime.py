@@ -14,10 +14,12 @@ import sys
 import pytest
 
 from . import test_supplemental_native_peer_direct as direct
+from . import test_supplemental_native_peer_image as image_tests
 from . import test_supplemental_native_peer_ingress as ingress
 
 binary, pytestmark = ingress.binary, ingress.pytestmark
 direct_launcher = direct.direct_launcher
+reviewed_binary = image_tests.reviewed_binary
 
 # Only this disposable driver becomes a subreaper. Pytest's process attributes
 # are untouched. All signaling uses retained original pidfds; no process search,
@@ -38,7 +40,8 @@ guardian = socket.socket(fileno=int(sys.argv[7])) if group_fd is not None else N
 assert group_fd is None or (transport == "direct-owner" and mode == "native_cgroup_frozen")
 base = SimpleNamespace(m=m, OriginalChild=OriginalChild)
 ingress_tests = SimpleNamespace(MODE="--offline-original-peer-ingress-v1")
-direct_spawn = load_direct(library_path) if transport == "direct-owner" else None
+direct_spawn = load_direct(library_path) if transport != "standard" else None
+direct = SimpleNamespace(direct_parent=direct_parent)
 base_fds = len(os.listdir("/proc/self/fd"))
 targets, peers, identities = [], [], []
 outer = outer_fd = native_pid = native_fd = extra_cancel = None
@@ -102,6 +105,9 @@ try:
             if direct_spawn is None:
                 pid = spawn_standard(binary, anchors, args)
                 fd = os.pidfd_open(pid)  # Fresh OWNED spawn, before any loss.
+            elif transport == "sealed-direct-owner":
+                original = sealed_parent(direct_spawn, binary, expected_image, anchors, args)
+                pid, fd = original.pid, original.fd
             else:
                 original = direct_parent(direct_spawn, binary, anchors, args, cgroup_fd=group_fd)
                 pid, fd = original.pid, original.fd  # Kernel handle in original outer.
@@ -284,13 +290,26 @@ finally:
 """
 
 
-def lifetime_program():
+def lifetime_program(image_digest=None):
+    sealed = ""
+    if image_digest is not None:
+        assert len(image_digest) == 64 and all(c in "0123456789abcdef" for c in image_digest)
+        # Same reviewed fixture helpers in the original disposable outer, not a
+        # new installed module/source selector or a hash learned from its copy.
+        sealed = "import hashlib, stat\nfrom contextlib import contextmanager\n"
+        for name in ("MFD_EXEC", "F_ADD_SEALS", "F_GET_SEALS", "SEALS", "MAX_IMAGE"):
+            sealed += f"{name} = {getattr(image_tests, name)!r}\n"
+        sealed += f"expected_image = {image_digest!r}\n"
+        sealed += inspect.getsource(image_tests.timely)
+        sealed += inspect.getsource(image_tests.sealed_image)
+        sealed += inspect.getsource(image_tests.sealed_parent)
     return (
         "import os, fcntl, signal, ctypes\nfrom dataclasses import dataclass\n"
         + inspect.getsource(ingress.base.OriginalChild)
         + inspect.getsource(ingress.spawn_standard)
         + inspect.getsource(direct.load_direct)
         + inspect.getsource(direct.direct_parent)
+        + sealed
         + PROGRAM
     )
 
@@ -298,13 +317,16 @@ def lifetime_program():
 @pytest.mark.parametrize(
     "mode", ["outer_before_ingress", "outer_exit", "outer_frozen", "native_exit", "native_frozen"]
 )
-@pytest.mark.parametrize("transport", ["standard", "direct-owner"])
+@pytest.mark.parametrize("transport", ["standard", "direct-owner", "sealed-direct-owner"])
 def test_actual_outer_and_native_failure_domains_preserve_original_ownership(
-    binary, mode, transport, direct_launcher
+    binary, mode, transport, direct_launcher, reviewed_binary
 ):
     # Existing collision-safe exec mapping, unchanged. No fork-owned Python
     # application object is passed to the native process or another owner.
-    program = lifetime_program()
+    expected = None
+    if transport == "sealed-direct-owner":
+        binary, expected = reviewed_binary
+    program = lifetime_program(expected)
     completed = subprocess.run(
         [
             sys.executable,

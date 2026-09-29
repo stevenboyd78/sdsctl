@@ -334,6 +334,46 @@ qualified outer must incorporate an equally accountable native creation
 boundary, with independently protected placement, complete runtime/source
 provenance and exclusive recovery, before any installed or hardware trial.
 
+### Sealed executable joined to original-owner creation (test-only)
+
+The [sealed-image fixture](../../tests/test_supplemental_native_peer_image.py)
+supplies an expected SHA256 from an earlier local build step, then independently
+copies and verifies a separate candidate ELF into an executable memfd. Copying,
+sealing, re-verification and clone admission all use the **original** readiness
+cutoff, with an 8 MiB image bound and no retry or replacement allowance. Required
+seals prevent data writes, growth, shrinkage, seal removal and changes to execute
+permission. The sealed bytes are hashed again before the original direct-owner
+C boundary duplicates that same object to fd9 and calls `execveat`. There is no
+pathname-exec or unsealed fallback; unsupported/restricted kernels refuse.
+[Linux executable memfd policy](https://docs.kernel.org/userspace-api/mfd_noexec.html),
+[Linux seal definitions](https://raw.githubusercontent.com/torvalds/linux/master/include/uapi/linux/fcntl.h)
+
+Real-process tests replace the original candidate path after sealing, attempt
+forbidden image mutations, and check the exact object/seals at the C call
+boundary before native readiness and full Custody. Digest/byte mismatch, a
+symlink, expiry, and injected memfd/seal failures stop before clone, consume the
+attempt, and leave original peers accounted for. A pending Python interruption
+after kernel creation still reaps the exact original child and closes all image
+handles. Full passive-command tests join the sealed route to both real handoffs,
+writer release, peer exits, and native loss after each handoff.
+
+The existing disposable lifetime driver also selects this route explicitly:
+the original outer performs the sealed copy and owns its native child. The
+original private timers and exact handles cover outer loss before ingress,
+outer death/individual-process stop, and native death/individual-process stop.
+Only the separate disposable subreaper adopts after outer death. These joins
+do not repeat the cgroup experiment or freeze any existing process/group.
+
+The native watcher deliberately disables dumpability. An initial test's attempted
+post-readiness `/proc/<pid>/exe` stat was refused; that protection is unchanged.
+The passing descriptor-boundary check is **not** independent post-exec image
+inspection. Expected bytes still come from a fixture build, not an independently
+authenticated installed publication. Dynamic loader/library bytes, the outer
+interpreter and C fixture, compiler/libc provenance, scheduling and blocked I/O
+are not qualified by sealing this executable. A restrictive memfd policy is not
+permission to change host settings. No build target, production inventory,
+entrypoint or App selects this helper, and no installed/action grant is implied.
+
 ### Opt-in local cgroup-freeze integration
 
 The [disposable cgroup fixture](../../tests/test_supplemental_native_peer_cgroup.py)
