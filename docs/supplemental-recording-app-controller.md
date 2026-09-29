@@ -2417,9 +2417,21 @@ bytes while CasePlan still freshly reads the file and compares every decoded
 plan field. Every original input/file/process/clock/domain observation remains;
 no observation is cached. Mutation and actual-process regressions cover those
 boundaries. This reduces pure parsing cost, not the two-second requirement.
+The pinned-plan comparison also derives its closed record field names once
+from the reviewed schemas. This is immutable **schema metadata**, not a cache
+of current values: every check still reads every current and independently
+decoded field, tuple length/item and exact type. Pure regressions mutate every
+leaf, including paths and nested tuples, and prevent record equality from
+replacing recursive comparisons. All fresh filesystem/process/clock checks
+remain unchanged. Small isolated CPU benchmarks show less comparison overhead;
+they do not qualify the complete process flow or its installed timing.
 Coverage-instrumented runs still encountered actual writer exit after the
 original cutoff even when command cleanup had returned. Those remain failed
 timing qualifications; passing local runs do not establish installed timing.
+Test-only refusal diagnostics retain already-sanitized source-location notes
+through a second sanitation boundary. Only bounded lines matching the same
+closed relative-source grammar survive; exception messages, arbitrary notes
+and private values are never copied. No production refusal behavior changes.
 
 ### Staged original-outer and peer source execution, offline only
 

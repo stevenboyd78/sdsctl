@@ -11,8 +11,9 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import asdict, dataclass, field, fields, is_dataclass
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
+from types import MappingProxyType
 
 import supplemental_handoff_observer as ordinary
 import supplemental_handoff_policy as base
@@ -272,6 +273,29 @@ class Plan:
             raise UnconfirmedPlan(MESSAGE) from None
 
 
+# Only schema metadata, never plan values or observations. These are exactly
+# the closed record types constructed by decode(). Derive ALL their fields
+# from the reviewed class definitions once; every comparison below still reads
+# every current and independently decoded member, including nested tuple values.
+_PLAN_RECORD_FIELDS = MappingProxyType(
+    {
+        record: tuple(item.name for item in fields(record))
+        for record in (
+            Plan,
+            RuntimePin,
+            Deadlines,
+            ordinary.AppSeal,
+            ordinary.ProtectedFiles,
+            host.CandidateSeal,
+            fixed.StaticFiles,
+            Contract,
+            fixed.ProtectedLayout,
+            clock.Window,
+        )
+    }
+)
+
+
 def _same_plan_value(current, decoded):
     """Compare every value and type against independently decoded plan data.
 
@@ -283,14 +307,15 @@ def _same_plan_value(current, decoded):
     if type(current) is not kind:
         return False
     if kind is tuple:
-        return len(current) == len(decoded) and all(
-            _same_plan_value(a, b) for a, b in zip(current, decoded, strict=True)
-        )
-    if is_dataclass(kind):
-        return all(
-            _same_plan_value(getattr(current, item.name), getattr(decoded, item.name))
-            for item in fields(kind)
-        )
+        if len(current) != len(decoded):
+            return False
+        return all(_same_plan_value(a, b) for a, b in zip(current, decoded, strict=True))
+    names = _PLAN_RECORD_FIELDS.get(kind)
+    if names is not None:
+        for name in names:
+            if not _same_plan_value(getattr(current, name), getattr(decoded, name)):
+                return False
+        return True
     return current == decoded
 
 
