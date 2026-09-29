@@ -1924,6 +1924,17 @@ its own original resources. There is no inbox consumption, Ready, service run,
 App action, audio, recording or recovery. The fixture checks descriptor balance,
 original dispatcher/clock/plan identity and preserved failure files.
 
+The fixture also preserves refusal evidence when the outer fails before reading
+the writer's result. Original stdout/stderr read handles survive nested teardown;
+only bounded, nonblocking post-exit reads supply known-script source locations.
+Unread plans, input values and arbitrary exception text are never reported.
+The existing cleanup observer retains the first bounded source-location snapshot
+before later sanitation can obscure it. A real pre-permission half-close regression
+checks normal writer exit, no baseline read/publication, original cutoff retention
+and descriptor balance. This diagnoses fixture refusals; it does not change the
+production protocol, extend deadlines, prove a historical intermittent failure's
+cause, or qualify an installed command.
+
 The paired variant performs **fresh full writer and observer runtime collections
 against the actual newly published writer plan before submitting acceptance**.
 Both share one unchanged two-second bound, including surrounding private input
@@ -2280,6 +2291,34 @@ runtime. Same-existing-group creation and the separate process lifetime tests
 remain local evidence only. No installed selector/build/App loads the shared
 fixture, and it grants no active action or recovery authority. See the native
 README's direct-owner experiment and remaining platform requirements.
+
+An additional offline fixture binds earlier expected native-build bytes to a
+sealed executable memfd and the original direct-owner clone/exec boundary. The
+original readiness cutoff covers bounded copy, seal, re-hash and clone admission;
+there is no pathname or unsealed fallback. Actual source-path replacement,
+forbidden mutation and pre-adoption interruption tests retain original Custody,
+exact-child cleanup and consumed-attempt boundaries. The full passive-command
+join exercises both handoffs, release/exit and native loss with this sealed image.
+The separate original-outer lifetime fixture uses the same sealed route for
+pre-ingress outer loss and individual-process outer/native death or stop, while
+retaining original timers and exact-child ownership; no cgroup test is replayed.
+This is not independent installed publication/runtime or post-exec `/proc` image
+inspection: the native dumpability restriction remains intact. Compiler/libc,
+dynamic dependencies and the original outer's runtime still require independent
+qualification. The native README records the exact evidence and limitations;
+no active entrypoint/source selection, policy or action permission changes.
+
+An explicit opt-in local cgroup fixture now joins that direct-owner route to a
+fresh watcher subtree and the existing lifetime/Watch checks. Only new disposable
+processes/groups are involved; original outer and independent exact-handle
+cleanup owner remain outside the injected freeze. Kernel freeze completion is
+observed, not inferred from a write. Original deadlines, uncertainty, observed
+exits/reaping and empty-only group removal remain required. A full original
+Custody join also confirms that submitting cancellation to a frozen watcher is
+not success and does not renew the deadline or permit retry. Synthetic Engine
+facts stay synthetic. These tests need explicit local approval and are skipped
+by ordinary CI; they do not qualify installed platform placement or the whole
+outer's cgroup-failure boundary. See the native README for scope and limitations.
 
 This is an **offline prototype, not an installed host supervisor**. No existing
 entrypoint or source inventory selects it. The static build is a candidate for

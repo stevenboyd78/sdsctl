@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from . import test_supplemental_native_peer_direct as direct_tests
+from . import test_supplemental_native_peer_image as image_tests
 from . import test_supplemental_native_peer_ingress as ingress_tests
 from . import test_supplemental_native_peer_parent as parent_tests
 from . import test_supplemental_native_peer_watch as native_tests
@@ -29,10 +30,21 @@ image, configured, helper, joined = (
 binary = native_tests.binary
 parent_launcher = parent_tests.parent_launcher
 direct_launcher = direct_tests.direct_launcher
+reviewed_binary = image_tests.reviewed_binary
 pytestmark = native_tests.pytestmark
 
 
-def selected_watch(transport, binary, parent_launcher, direct_launcher):
+def selected_watch(transport, binary, parent_launcher, direct_launcher, reviewed_binary):
+    if transport == "sealed-direct-owner-ingress":
+        path, expected = reviewed_binary
+        return lambda custody: ingress_tests.ingress(
+            custody,
+            path,
+            after_exec=True,
+            launcher=lambda path, anchors, args, **kw: image_tests.sealed_parent(
+                direct_launcher, path, expected, anchors, args, **kw
+            ),
+        )
     if transport == "direct-owner-ingress":
         return lambda custody: direct_tests.direct_ingress(custody, binary, direct_launcher)
     if transport == "clone-parent-ingress":
@@ -47,16 +59,23 @@ def selected_watch(transport, binary, parent_launcher, direct_launcher):
     indirect=True,
 )
 @pytest.mark.parametrize(
-    "transport", ["inherited", "socket-ingress", "clone-parent-ingress", "direct-owner-ingress"]
+    "transport",
+    [
+        "inherited",
+        "socket-ingress",
+        "clone-parent-ingress",
+        "direct-owner-ingress",
+        "sealed-direct-owner-ingress",
+    ],
 )
 def test_native_exec_spans_original_fixed_command_handoff_release_and_actual_exit(
-    joined, monkeypatch, binary, transport, parent_launcher, direct_launcher
+    joined, monkeypatch, binary, transport, parent_launcher, direct_launcher, reviewed_binary
 ):
     s = joined
 
     def arm():
         command.arm_original_watch(
-            s, selected_watch(transport, binary, parent_launcher, direct_launcher)
+            s, selected_watch(transport, binary, parent_launcher, direct_launcher, reviewed_binary)
         )
         s.h.expected_returncode = 75
 
@@ -95,11 +114,18 @@ def test_native_exec_spans_original_fixed_command_handoff_release_and_actual_exi
     "joined", [dict(mode="release-command-pair", staged_input=True)], indirect=True
 )
 @pytest.mark.parametrize(
-    "transport", ["inherited", "socket-ingress", "clone-parent-ingress", "direct-owner-ingress"]
+    "transport",
+    [
+        "inherited",
+        "socket-ingress",
+        "clone-parent-ingress",
+        "direct-owner-ingress",
+        "sealed-direct-owner-ingress",
+    ],
 )
 @pytest.mark.parametrize("after", ["writer", "observer"])
 def test_native_death_during_real_handoff_stops_originals_without_releasing_or_retrying(
-    joined, monkeypatch, binary, transport, after, parent_launcher, direct_launcher
+    joined, monkeypatch, binary, transport, after, parent_launcher, direct_launcher, reviewed_binary
 ):
     s = joined
     sent, releases = [], []
@@ -107,7 +133,7 @@ def test_native_death_during_real_handoff_stops_originals_without_releasing_or_r
 
     def arm():
         command.arm_original_watch(
-            s, selected_watch(transport, binary, parent_launcher, direct_launcher)
+            s, selected_watch(transport, binary, parent_launcher, direct_launcher, reviewed_binary)
         )
 
     def endpoint(endpoint, channels):

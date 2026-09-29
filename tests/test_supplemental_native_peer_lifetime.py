@@ -14,10 +14,12 @@ import sys
 import pytest
 
 from . import test_supplemental_native_peer_direct as direct
+from . import test_supplemental_native_peer_image as image_tests
 from . import test_supplemental_native_peer_ingress as ingress
 
 binary, pytestmark = ingress.binary, ingress.pytestmark
 direct_launcher = direct.direct_launcher
+reviewed_binary = image_tests.reviewed_binary
 
 # Only this disposable driver becomes a subreaper. Pytest's process attributes
 # are untouched. All signaling uses retained original pidfds; no process search,
@@ -33,9 +35,13 @@ import supplemental_recording_peer_termination as m
 assert ctypes.CDLL(None).prctl(36, 1, 0, 0, 0) == 0
 binary, mode = Path(sys.argv[2]), sys.argv[3]
 transport, library_path = sys.argv[4:6]
+group_fd = int(sys.argv[6]) if len(sys.argv) > 6 else None
+guardian = socket.socket(fileno=int(sys.argv[7])) if group_fd is not None else None
+assert group_fd is None or (transport == "direct-owner" and mode == "native_cgroup_frozen")
 base = SimpleNamespace(m=m, OriginalChild=OriginalChild)
 ingress_tests = SimpleNamespace(MODE="--offline-original-peer-ingress-v1")
-direct_spawn = load_direct(library_path) if transport == "direct-owner" else None
+direct_spawn = load_direct(library_path) if transport != "standard" else None
+direct = SimpleNamespace(direct_parent=direct_parent)
 base_fds = len(os.listdir("/proc/self/fd"))
 targets, peers, identities = [], [], []
 outer = outer_fd = native_pid = native_fd = extra_cancel = None
@@ -73,6 +79,8 @@ try:
         # Original Watch is constructed HERE, never borrowed across fork.
         # Peers remain the driver's children; this outer owns only its watch.
         parent.close()
+        if guardian is not None:
+            guardian.close()  # Only the original driver sends the guardian handoff.
         watch = None
         owned = []
         channels = []
@@ -97,8 +105,11 @@ try:
             if direct_spawn is None:
                 pid = spawn_standard(binary, anchors, args)
                 fd = os.pidfd_open(pid)  # Fresh OWNED spawn, before any loss.
+            elif transport == "sealed-direct-owner":
+                original = sealed_parent(direct_spawn, binary, expected_image, anchors, args)
+                pid, fd = original.pid, original.fd
             else:
-                original = direct_parent(direct_spawn, binary, anchors, args)
+                original = direct_parent(direct_spawn, binary, anchors, args, cgroup_fd=group_fd)
                 pid, fd = original.pid, original.fd  # Kernel handle in original outer.
             receiver.close()
             watch = m.Watch(pid, fd, cancel_write, tuple(targets), tuple(identities), recover_by)
@@ -186,7 +197,18 @@ try:
     else:
         parent.send(b"G")
         assert parent.recv(2) == b"R" and time.clock_gettime_ns(time.CLOCK_BOOTTIME) < ready_by
-        if mode in ("outer_exit", "outer_frozen"):
+        if mode == "native_cgroup_frozen":
+            # External guardian retains every exact handle BEFORE injecting a
+            # freeze into its own fresh group. No PID report is reopened.
+            assert guardian is not None
+            remaining = (ready_by - time.clock_gettime_ns(time.CLOCK_BOOTTIME)) / 1e9
+            assert remaining > 0
+            guardian.settimeout(remaining)
+            guardian.sendmsg([json.dumps({"native": native_pid, "deadline": recover_by,
+                "ready_by": ready_by}).encode()], [(socket.SOL_SOCKET, socket.SCM_RIGHTS,
+                array.array("i", [native_fd, outer_fd, *targets]))])
+            assert guardian.recv(2) == b"F"
+        elif mode in ("outer_exit", "outer_frozen"):
             signal.pidfd_send_signal(outer_fd,
                 signal.SIGKILL if mode == "outer_exit" else signal.SIGSTOP)
             if mode == "outer_frozen":
@@ -235,7 +257,8 @@ try:
             assert result == dict(uncertain=False, forced=False, code=10,
                 native_status=10, native_kind=os.CLD_EXITED, deadline=recover_by)
         else:
-            assert result == dict(uncertain=True, forced=mode == "native_frozen", code=None,
+            assert result == dict(uncertain=True,
+                forced=mode in ("native_frozen", "native_cgroup_frozen"), code=None,
                 native_status=signal.SIGKILL, native_kind=os.CLD_KILLED, deadline=recover_by)
         assert select.select([outer_fd], [], [], 1)[0]
         assert os.waitstatus_to_exitcode(os.waitpid(outer, 0)[1]) == 0
@@ -259,27 +282,51 @@ finally:
             os.close(fd)
     parent.close()
     child.close()
+    # Inherited fixture anchors were included in the starting FD count.
     assert len(os.listdir("/proc/self/fd")) == base_fds
+    if guardian is not None:
+        guardian.close()
+        os.close(group_fd)
 """
 
 
-@pytest.mark.parametrize(
-    "mode", ["outer_before_ingress", "outer_exit", "outer_frozen", "native_exit", "native_frozen"]
-)
-@pytest.mark.parametrize("transport", ["standard", "direct-owner"])
-def test_actual_outer_and_native_failure_domains_preserve_original_ownership(
-    binary, mode, transport, direct_launcher
-):
-    # Existing collision-safe exec mapping, unchanged. No fork-owned Python
-    # application object is passed to the native process or another owner.
-    program = (
+def lifetime_program(image_digest=None):
+    sealed = ""
+    if image_digest is not None:
+        assert len(image_digest) == 64 and all(c in "0123456789abcdef" for c in image_digest)
+        # Same reviewed fixture helpers in the original disposable outer, not a
+        # new installed module/source selector or a hash learned from its copy.
+        sealed = "import hashlib, stat\nfrom contextlib import contextmanager\n"
+        for name in ("MFD_EXEC", "F_ADD_SEALS", "F_GET_SEALS", "SEALS", "MAX_IMAGE"):
+            sealed += f"{name} = {getattr(image_tests, name)!r}\n"
+        sealed += f"expected_image = {image_digest!r}\n"
+        sealed += inspect.getsource(image_tests.timely)
+        sealed += inspect.getsource(image_tests.sealed_image)
+        sealed += inspect.getsource(image_tests.sealed_parent)
+    return (
         "import os, fcntl, signal, ctypes\nfrom dataclasses import dataclass\n"
         + inspect.getsource(ingress.base.OriginalChild)
         + inspect.getsource(ingress.spawn_standard)
         + inspect.getsource(direct.load_direct)
         + inspect.getsource(direct.direct_parent)
+        + sealed
         + PROGRAM
     )
+
+
+@pytest.mark.parametrize(
+    "mode", ["outer_before_ingress", "outer_exit", "outer_frozen", "native_exit", "native_frozen"]
+)
+@pytest.mark.parametrize("transport", ["standard", "direct-owner", "sealed-direct-owner"])
+def test_actual_outer_and_native_failure_domains_preserve_original_ownership(
+    binary, mode, transport, direct_launcher, reviewed_binary
+):
+    # Existing collision-safe exec mapping, unchanged. No fork-owned Python
+    # application object is passed to the native process or another owner.
+    expected = None
+    if transport == "sealed-direct-owner":
+        binary, expected = reviewed_binary
+    program = lifetime_program(expected)
     completed = subprocess.run(
         [
             sys.executable,

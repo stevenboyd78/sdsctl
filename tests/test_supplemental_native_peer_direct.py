@@ -78,7 +78,16 @@ def load_direct(path):
 
 
 def direct_parent(
-    spawn, binary, anchors, args, *, extra=(), cgroup_fd=None, fault=None, observed=None
+    spawn,
+    binary,
+    anchors,
+    args,
+    *,
+    extra=(),
+    cgroup_fd=None,
+    fault=None,
+    observed=None,
+    executable_fd=None,
 ):
     """Original caller owns kernel outputs even if return/adoption fails."""
     assert not extra and len(anchors) == 3 and len(args) == 4
@@ -86,7 +95,11 @@ def direct_parent(
     cutoff = int(args[2])
     before = len(os.listdir("/proc/self/fd"))
     result = (ctypes.c_int * 2)(-1, -1)
-    executable = os.open(binary, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    executable = (
+        os.open(binary, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+        if executable_fd is None
+        else os.dup(executable_fd)
+    )
     copies, transferred = [], False
     try:
         for fd in (*anchors, executable):

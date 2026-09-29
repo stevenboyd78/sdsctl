@@ -334,6 +334,86 @@ qualified outer must incorporate an equally accountable native creation
 boundary, with independently protected placement, complete runtime/source
 provenance and exclusive recovery, before any installed or hardware trial.
 
+### Sealed executable joined to original-owner creation (test-only)
+
+The [sealed-image fixture](../../tests/test_supplemental_native_peer_image.py)
+supplies an expected SHA256 from an earlier local build step, then independently
+copies and verifies a separate candidate ELF into an executable memfd. Copying,
+sealing, re-verification and clone admission all use the **original** readiness
+cutoff, with an 8 MiB image bound and no retry or replacement allowance. Required
+seals prevent data writes, growth, shrinkage, seal removal and changes to execute
+permission. The sealed bytes are hashed again before the original direct-owner
+C boundary duplicates that same object to fd9 and calls `execveat`. There is no
+pathname-exec or unsealed fallback; unsupported/restricted kernels refuse.
+[Linux executable memfd policy](https://docs.kernel.org/userspace-api/mfd_noexec.html),
+[Linux seal definitions](https://raw.githubusercontent.com/torvalds/linux/master/include/uapi/linux/fcntl.h)
+
+Real-process tests replace the original candidate path after sealing, attempt
+forbidden image mutations, and check the exact object/seals at the C call
+boundary before native readiness and full Custody. Digest/byte mismatch, a
+symlink, expiry, and injected memfd/seal failures stop before clone, consume the
+attempt, and leave original peers accounted for. A pending Python interruption
+after kernel creation still reaps the exact original child and closes all image
+handles. Full passive-command tests join the sealed route to both real handoffs,
+writer release, peer exits, and native loss after each handoff.
+
+The existing disposable lifetime driver also selects this route explicitly:
+the original outer performs the sealed copy and owns its native child. The
+original private timers and exact handles cover outer loss before ingress,
+outer death/individual-process stop, and native death/individual-process stop.
+Only the separate disposable subreaper adopts after outer death. These joins
+do not repeat the cgroup experiment or freeze any existing process/group.
+
+The native watcher deliberately disables dumpability. An initial test's attempted
+post-readiness `/proc/<pid>/exe` stat was refused; that protection is unchanged.
+The passing descriptor-boundary check is **not** independent post-exec image
+inspection. Expected bytes still come from a fixture build, not an independently
+authenticated installed publication. Dynamic loader/library bytes, the outer
+interpreter and C fixture, compiler/libc provenance, scheduling and blocked I/O
+are not qualified by sealing this executable. A restrictive memfd policy is not
+permission to change host settings. No build target, production inventory,
+entrypoint or App selects this helper, and no installed/action grant is implied.
+
+### Opt-in local cgroup-freeze integration
+
+The [disposable cgroup fixture](../../tests/test_supplemental_native_peer_cgroup.py)
+joins direct original-owner creation and the existing lifetime driver to actual
+local cgroup v2 freezing. It requires explicit `SDSCTL_OFFLINE_CGROUP_TEST=1`
+approval on a delegated local workstation; default test runs skip it. Permission
+bits, ordinary CI success, or this documentation do not authorize opting in.
+There is no sudo, service/controller change, migration, or fallback on refusal.
+
+Only fresh temporary groups are created below the caller's current scope. The
+native watcher is born into the new leaf via `CLONE_INTO_CGROUP`; the test freezes
+only its fresh parent, observes both parent and descendant `frozen=1`, and checks
+that the original outer, driver, peers and independent guardian remain outside
+that subtree. It NEVER freezes the existing caller scope or an ancestor. Exact
+directory handles restrict writes/removal to the new groups. No `cgroup.procs`
+write, numeric-PID migration, `cgroup.kill`, or thaw operation is used.
+
+Before fault injection, the independently surviving guardian receives original
+native/outer/peer pidfds through a credential-checked private socket. It does not
+reopen reported PIDs. The original outer's existing two-second readiness and
+four-second recovery cutoffs remain unchanged. It independently stops peers and
+reaps its frozen native child at the original deadline, reporting uncertainty
+rather than successful work. The test verifies this before guardian fallback
+cleanup. A deliberate guardian **exception** after observed freeze checks exact-
+handle fallback cleanup; it is not a claim to survive guardian process death.
+
+A second join uses full original Custody comparisons and the existing eight-
+second short test plan. Cancellation written to a frozen watcher is not treated
+as success. The independently retained original timer still expires; exact-peer
+exit and native reap are observed, uncertainty is retained, original plan bytes
+and deadlines stay unchanged, and consumed Custody cannot retry. Engine/runtime
+identities in this fixture remain synthetic. Neither fixture changes production
+timeouts or active source selection. Empty-only removal follows observed exits;
+if cleanup is uncertain, the fixture fails and retains populated groups.
+
+These are local watcher-subtree freeze tests across dynamic, static and UBSan
+builds. They do NOT qualify installed independent placement, freezing the whole
+original-outer domain, simultaneous owner loss, host-wide suspension, fixed
+active entrypoints, platform provenance, App actions, or recovery authority.
+
 ## Failure model and remaining gates
 
 The original qualified outer must independently stop its retained peers if the
@@ -347,8 +427,9 @@ it from a container does not accomplish that. A frozen cgroup includes its
 descendants; a watcher inside that subtree stops executing too.
 [Linux cgroup v2 documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html)
 
-The local SIGSTOP tests show separate progress when peers or one owner stop, not
-cgroup-freeze, installed systemd, or Docker qualification. Host-wide freeze,
+The local SIGSTOP tests show separate progress when peers or one owner stop.
+The explicit opt-in cgroup tests above additionally cover one freshly isolated
+watcher subtree, not installed systemd or Docker qualification. Host-wide freeze,
 loss of scheduling, watcher SIGKILL/OOM/kernel failure and uninterruptible I/O
 remain outside this executable's guarantee. Even correct SIGKILL dispatch does
 not certify actual exit. A second qualified mechanism/outer failure contract
