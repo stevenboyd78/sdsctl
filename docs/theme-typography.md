@@ -22,7 +22,9 @@ For the four non-LCARS themed layouts, **Typography** offers:
 **Font pairing** appears only where there are alternatives. On wide screens,
 appearance controls are centered between the overview title and connection
 status, matching LCARS. In the full dashboard, widths up to 65rem wrap them onto
-a centered row below the title and status. In display-only mode, those narrow
+a centered row below the title and status. Small landscape dashboards put each
+label beside its selector in that row, preserving workspace height without
+shrinking the fonts or controls. In display-only mode, those narrow
 screens (including tall phones) keep typography in the dashboard menu's
 Appearance section instead, preserving plot space and full-sized touch controls.
 Compact display-only layouts keep their other appearance controls there too.
@@ -32,6 +34,11 @@ Preferences are independent for each theme and stored only in this browser under
 `sdsctl.web.theme-typography.v1`. Switching themes does not overwrite the previous
 theme's choices. Invalid values fall back to defaults; blocked browser storage
 does not prevent changes for the current page.
+
+Compact panes reserve space for taller bundled fonts: phone recording actions
+sit beside the filename and metadata together, and short-landscape Waterfall
+telemetry uses tighter vertical padding. These are spacing changes, not smaller
+fonts, hidden fields, or reduced control sizes.
 
 Rapid Response and OCR-A are not bundled or offered. Matrix readouts disable
 ligatures and decorative text shadows. Mimic-SDS retains its scanner-oriented

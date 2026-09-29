@@ -115,3 +115,26 @@ def test_hidden_typography_rule_shares_important_display_layer() -> None:
     assert 'relocate(element("theme-typography-pickers"), appearance, true)' in script
     assert 'narrowAppearance = window.matchMedia("(max-width: 65rem)")' in script
     assert 'narrowAppearance.addEventListener("change", update)' in script
+
+
+def test_compact_landscape_labels_share_selector_row_without_shrinking_controls() -> None:
+    css = files("sds200.web_assets").joinpath("theme-typography.css").read_text()
+    compact = css.split(
+        "@media (min-width: 44.01rem) and (max-width: 65rem) and (max-height: 38rem)", 1
+    )[1].split("#native-menu", 1)[0]
+    assert ".overview #theme-typography-pickers > div:not([hidden])" in compact
+    assert "grid-template-columns: auto minmax(0, 1fr) !important" in compact
+    assert "align-items: center !important" in compact
+    assert "font-size" not in compact and "min-height" not in compact
+    assert "display:" not in compact  # Hidden controls retain their original rule.
+
+
+def test_compact_panes_leave_room_for_taller_bundled_fonts() -> None:
+    css = files("sds200.web_assets").joinpath("dashboard-viewport.css").read_text()
+    # In narrow recording rows, actions share BOTH filename/metadata rows.
+    # A second, separate action-height row clips with taller bundled fonts.
+    phone = css.split(".recording-item-details strong {", 1)[1].split(".recording-action {", 1)[0]
+    assert "grid-column: 1 !important" in phone
+    assert "grid-row: 1 / 3 !important" in phone
+    landscape = css.split(".waterfall-telemetry > div {", 1)[1]
+    assert "padding-block: 0.1rem !important" in landscape

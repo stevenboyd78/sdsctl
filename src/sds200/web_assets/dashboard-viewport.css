@@ -980,7 +980,7 @@
     }
 
     .recording-item-details strong {
-      grid-column: 1 / -1 !important;
+      grid-column: 1 !important;
       grid-row: 1 !important;
     }
 
@@ -993,7 +993,8 @@
 
     .recording-item-actions {
       grid-column: 2 !important;
-      grid-row: 2 !important;
+      /* Share the full name/meta height, not an extra action-height row. */
+      grid-row: 1 / 3 !important;
       width: auto !important;
       flex-wrap: nowrap !important;
     }
@@ -1424,6 +1425,7 @@
 
     .waterfall-telemetry > div {
       grid-template-columns: max-content minmax(0, 1fr) !important;
+      padding-block: 0.1rem !important;
     }
 
     .waterfall-telemetry dt,

@@ -115,6 +115,17 @@
     }
     :root[data-theme-typography] #dashboard-message { grid-column: 2 !important; }
   }
+  /* Small landscape dashboards need their fixed-height pane space. Keep the
+     centered appearance row but put each label beside its original selector;
+     do not shrink fonts/controls or alter the display-only menu arrangement. */
+  @media (min-width: 44.01rem) and (max-width: 65rem) and (max-height: 38rem) {
+    .overview #theme-typography-pickers > div:not([hidden]) {
+      grid-template-columns: auto minmax(0, 1fr) !important;
+      align-items: center !important;
+      gap: 0.35rem !important;
+    }
+    .overview #theme-typography-pickers label { margin: 0 !important; }
+  }
   #native-menu #theme-typography-pickers:not([hidden]) {
     flex-direction: column !important; align-items: stretch !important;
     grid-column: auto !important; grid-row: auto !important;
