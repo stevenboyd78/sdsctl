@@ -13,7 +13,9 @@ import json
 import os
 import sys
 import tempfile
+from contextlib import ExitStack
 from pathlib import Path
+from types import SimpleNamespace
 
 PREFIXES = ("supplemental_", "qualify_supplemental_", "accept_supplemental_")
 
@@ -74,6 +76,85 @@ def install_source_guard(root, manifest, *, role=None):
     return observed
 
 
+def run_pipeline(root):
+    """Explicit fixture assembly, WITHOUT pytest collection/runner/plugin startup.
+
+    The old synthetic host/runtime fixtures are still visibly borrowed; this is
+    not a production outer command. Fixed calls replace implicit runner fixture
+    discovery, while each generator remains with its original cleanup stack.
+    Native builds precede the protocol, and every build gets fresh original
+    owners and the SAME existing two-second work bound. Failure ends this exec;
+    no retry or later build can turn that failed case into success.
+    """
+    import pytest
+
+    from tests import test_supplemental_observer_pipeline as pipeline
+
+    def runner_forbidden(*args, **kwargs):
+        raise AssertionError("Staged outer must not invoke the pytest runner")
+
+    def finish(generator):
+        try:
+            next(generator)
+        except StopIteration:
+            return
+        raise AssertionError("Fixed fixture yielded more than once")
+
+    def retain(stack, generator):
+        value = next(generator)
+        stack.callback(finish, generator)
+        return value
+
+    builds = root.parent / "builds"
+    builds.mkdir(mode=0o700)
+    factory = SimpleNamespace(
+        mktemp=lambda prefix: Path(tempfile.mkdtemp(prefix=prefix + "-", dir=builds))
+    )
+    completed = []
+    with pytest.MonkeyPatch.context() as entry:
+        entry.setattr(pytest, "main", runner_forbidden)
+        direct = pipeline.direct_launcher.__wrapped__(factory)
+        for variant in ("dynamic", "static", "ubsan"):
+            binary = pipeline.binary.__wrapped__(factory, SimpleNamespace(param=variant))
+            temporary = root.parent / ("run-" + variant)
+            temporary.mkdir(mode=0o700)
+            reports = []
+            selection = dict(pipeline.SELECTION)
+            request = SimpleNamespace(
+                param=selection,
+                node=SimpleNamespace(
+                    callspec=SimpleNamespace(params={"joined": selection}),
+                    add_report_section=lambda *parts, reports=reports: reports.append(parts),
+                ),
+            )
+            with ExitStack() as stack:
+                patches = stack.enter_context(pytest.MonkeyPatch.context())
+                umask = retain(stack, pipeline.image_umask.__wrapped__())
+                layout = pipeline.layout.__wrapped__(temporary, patches, umask)
+                supervised = pipeline.supervised.__wrapped__(layout)
+                image = pipeline.image.__wrapped__()
+                configured = pipeline.configured.__wrapped__(image)
+                reviewed = pipeline.reviewed_binary.__wrapped__(binary, temporary)
+                helper = retain(
+                    stack,
+                    pipeline.helper.__wrapped__(
+                        supervised, image, configured, patches, temporary, request
+                    ),
+                )
+                joined = retain(
+                    stack,
+                    pipeline.joined.__wrapped__(helper, patches, temporary, configured, request),
+                )
+                pipeline.exercise_original_observer_pipeline(
+                    binary, direct, reviewed, joined, patches
+                )
+            # All original exit/reap assertions AND generator retirement must
+            # return before this variant can be reported as completed.
+            assert not reports
+            completed.append(variant)
+    return completed
+
+
 def main():
     root, manifest, mode, target = sys.argv[1:]
     root = Path(root)
@@ -100,9 +181,6 @@ def main():
 
     assert mode == "pipeline"
     sys.path.extend([target, str(Path(target) / "scripts"), str(Path(target) / "src")])
-    os.environ["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
-    import pytest
-
     from tests import test_supplemental_recording_qualified_peer_command as command
 
     # Explicit test-only bootstrap selection, before either child's first
@@ -110,16 +188,20 @@ def main():
     command.STAGED_SOURCE_GUARD = (str(root), manifest)
     (root.parent / "peer-sources").mkdir(mode=0o700)
 
-    node = (
-        root / "tests/test_supplemental_observer_pipeline.py"
-    ).as_posix() + "::test_original_observer_needs_no_plan_handoff_or_completion_stdin"
-    result = pytest.main(
-        [node, "-q", "-s", "-p", "no:cacheprovider", "--basetemp", str(root.parent / "run")]
-    )
+    completed = run_pipeline(root)
     # Counts alone cannot prove equal inventories. Return the exact closed name
     # set; neither names nor hashes represent installed runtime qualification.
-    print(json.dumps(dict(staged_outer_result=int(result), modules=sorted(observed))))
-    return int(result)
+    print(
+        json.dumps(
+            dict(
+                staged_outer_result=0,
+                modules=sorted(observed),
+                builds=completed,
+                runner_used=False,
+            )
+        )
+    )
+    return 0
 
 
 if __name__ == "__main__":

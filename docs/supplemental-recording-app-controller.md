@@ -2394,6 +2394,19 @@ or changed staged bytes before their code executes. Matching module counts do
 not stand in for origin checks, and the original checkout remains available as
 a fallback candidate during the positive outer test.
 
+The staged outer now assembles its fixed offline fixture inputs explicitly;
+it no longer starts pytest collection, fixture discovery or the test runner.
+Calling `pytest.main` within that outer is an explicit failure. Dynamic, static
+and UBSan builds each get fresh original owners, while the same passive-flow
+function and all its deadline, full-comparison, descriptor and actual-exit
+assertions are shared with the ordinary regression test. Every original fixture
+generator must retire before a build is reported complete. A failed build ends
+that exec rather than advancing to another build or reusing the case.
+This removes a runner dependency from the tested entry path, not the legacy
+synthetic fixture bootstrap: MonkeyPatch/assertion helpers, fake Engine/runtime
+facts and fixture input publication remain. It supplies neither an installed
+entrypoint selector nor independent pre-readiness or whole-platform supervision.
+
 This joins actual passive flow to staged **outer and peer** execution, not a production
 Python sandbox or installed entrypoint/source qualification. Test scaffolding,
 interpreter/dependency and installed child-command provenance, Engine/runtime facts,

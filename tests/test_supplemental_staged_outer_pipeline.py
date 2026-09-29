@@ -170,7 +170,11 @@ def test_original_passive_pipeline_uses_staged_outer_policy_and_unchanged_peer_p
     observed = set(report["modules"])
     assert observed <= staged.names
     assert observed >= OUTER_ADDITIONS and observed >= FIXTURE_ONLY
-    assert b"3 passed" in result.stdout  # dynamic/static/UBSan actual command exits.
+    assert report["builds"] == ["dynamic", "static", "ubsan"]
+    assert report["runner_used"] is False
+    # The explicit staged entrypoint forbids pytest.main and reports only after
+    # actual original command exits and each fixture's own teardown returned.
+    assert b"test session starts" not in result.stdout and b"passed" not in result.stdout
     reports = list((staged.root.parent / "peer-sources").iterdir())
     assert len(reports) == 6  # Original writer/observer for each native build.
     for role in ("writer", "observer"):

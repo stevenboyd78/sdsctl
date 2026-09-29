@@ -35,7 +35,17 @@ SELECTION = dict(
 def test_original_observer_needs_no_plan_handoff_or_completion_stdin(
     binary, direct_launcher, reviewed_binary, joined, monkeypatch
 ):
-    s = joined
+    exercise_original_observer_pipeline(
+        binary, direct_launcher, reviewed_binary, joined, monkeypatch
+    )
+
+
+def exercise_original_observer_pipeline(binary, direct_launcher, reviewed_binary, s, monkeypatch):
+    """One original passive flow, shared by pytest and the explicit offline entrypoint.
+
+    Callers supply already-owned fixture resources; this function creates no
+    replacement clock or phase and does not catch/reforge a failed outcome.
+    """
     original_plan, original_handoff = s.staged_plan, s.staged_handoff
     end = s.pipeline_end
     remaining = dict(after_setup=end - time.monotonic())
