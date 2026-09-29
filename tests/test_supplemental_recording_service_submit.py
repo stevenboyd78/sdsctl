@@ -145,6 +145,69 @@ def test_file_sync_overrun_preserves_partial_evidence_without_renewing_either_bo
     assert snapshot(root) == files and len(calls) == 1
 
 
+@pytest.mark.parametrize("outer", [False, True])
+@pytest.mark.parametrize("point", ["before_create", "create", "write", "before_link", "unlink"])
+def test_each_completed_io_overrun_prevents_the_next_publication_mutation(
+    ready, monkeypatch, outer, point
+):
+    root, _, witness, now, _, original, _ = ready
+    submission, before = sender(ready), fds()
+    end = now[0] + (0.25 if outer else m.acceptance.MAX_SECONDS)
+    open_, write, fsync, link, unlink = os.open, os.write, os.fsync, os.link, os.unlink
+    names = m.publication._names
+    events, outputs = [], []
+
+    def perform(kind, action, *args, **kwargs):
+        events.append(kind)
+        result = action(*args, **kwargs)
+        if kind == point:
+            now[0] = end
+        return result
+
+    def opened(path, *args, **kwargs):
+        if path != m.PENDING:
+            return open_(path, *args, **kwargs)
+        output = perform("create", open_, path, *args, **kwargs)
+        outputs.append(output)
+        return output
+
+    def listed(fd, expected):
+        names(fd, expected)
+        phase = "before_link" if m.PENDING in expected else "before_create"
+        if phase == point:
+            now[0] = end
+
+    with monkeypatch.context() as patch:
+        patch.setattr(m.publication, "_names", listed)
+        patch.setattr(m.os, "open", opened)
+        patch.setattr(m.os, "write", lambda fd, raw: perform("write", write, fd, raw))
+        patch.setattr(
+            m.os,
+            "fsync",
+            lambda fd: perform("file_sync" if fd in outputs else "directory_sync", fsync, fd),
+        )
+        patch.setattr(m.os, "link", lambda *a, **kw: perform("link", link, *a, **kw))
+        patch.setattr(m.os, "unlink", lambda *a, **kw: perform("unlink", unlink, *a, **kw))
+        denied(lambda: submission.submit_before(end) if outer else submission.submit())
+    prefixes = dict(before_create=0, create=1, write=2, before_link=3, unlink=5)
+    assert events == ["create", "write", "file_sync", "link", "unlink"][: prefixes[point]]
+    assert submission.used and submission.failed and fds() == before
+    assert not original._closed and witness.closes == 0
+    if point == "before_create":
+        assert not (root / m.PENDING).exists()
+    elif point == "unlink":
+        assert not (root / m.PENDING).exists()
+        assert (root / m.acceptance.NAME).read_bytes() == submission.raw
+    else:
+        assert (root / m.PENDING).read_bytes() == (b"" if point == "create" else submission.raw)
+    if point != "unlink":
+        assert not (root / m.acceptance.NAME).exists()
+    preserved = snapshot(root)
+    denied(submission.submit)
+    denied(lambda: submission.submit_before(end + 100))
+    assert snapshot(root) == preserved
+
+
 def test_genuine_reader_lock_waits_before_single_publication_within_same_attempt(
     ready, monkeypatch
 ):

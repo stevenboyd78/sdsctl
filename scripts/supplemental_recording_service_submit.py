@@ -157,6 +157,7 @@ class Submission:
                 guarded()
                 base = {publication.CLAIM, "plan.json"}
                 publication._names(directory, base)
+                guarded()
                 output = os.open(
                     PENDING,
                     os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
@@ -166,7 +167,9 @@ class Submission:
                 opened = intake.files.identity(os.fstat(output))
                 require(stat.S_ISREG(opened[2]) and stat.S_IMODE(opened[2]) == 0o600)
                 require(opened[3:6] == (*self.owner[2:], 1))
+                guarded()
                 require(os.write(output, self.raw) == len(self.raw))
+                guarded()
                 os.fsync(output)
                 guarded()
                 complete = intake.files.identity(os.fstat(output))
@@ -177,6 +180,7 @@ class Submission:
                     == complete
                 )
                 publication._names(directory, base | {PENDING})
+                guarded()
                 os.link(
                     PENDING,
                     acceptance.NAME,
@@ -198,6 +202,7 @@ class Submission:
                 # Delete only our verified temporary hardlink; the submitted
                 # message and every failed/uncertain file are never overwritten.
                 os.unlink(PENDING, dir_fd=directory)
+                guarded()
                 os.fsync(directory)
                 guarded()
                 final = intake.files.identity(os.fstat(output))

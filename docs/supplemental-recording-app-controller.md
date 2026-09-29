@@ -2006,6 +2006,15 @@ checks cannot preempt a blocked kernel syscall or replace independent outer/
 platform supervision. Independently supplied approval pins and actual reader
 acceptance remain separate obligations; no active App permission is added.
 
+Both publication methods also recheck the same owner/cutoff immediately before
+each create, write, sync, link and unlink step. A preceding read or I/O operation
+returning at the cutoff must not authorize the next mutation while waiting for
+a later final check. Exact-boundary regressions retain the real completed I/O
+and verify the absence of that next step, preserved partial/ambiguous files,
+closed local descriptors and refusal of either retry method. This does not make
+a deadline check and the following syscall atomic, and cannot preempt a syscall
+already in progress; independent lifetime supervision is still required.
+
 ### Original observer inputs and separate final-plan delivery (uninstalled)
 
 The preparation library now has a separately selected, read-only final-plan
