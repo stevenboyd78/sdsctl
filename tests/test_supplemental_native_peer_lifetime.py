@@ -13,9 +13,11 @@ import sys
 
 import pytest
 
+from . import test_supplemental_native_peer_direct as direct
 from . import test_supplemental_native_peer_ingress as ingress
 
 binary, pytestmark = ingress.binary, ingress.pytestmark
+direct_launcher = direct.direct_launcher
 
 # Only this disposable driver becomes a subreaper. Pytest's process attributes
 # are untouched. All signaling uses retained original pidfds; no process search,
@@ -23,11 +25,17 @@ binary, pytestmark = ingress.binary, ingress.pytestmark
 PROGRAM = r"""
 import array, ctypes, fcntl, json, os, select, signal, socket, subprocess, sys, time
 from contextlib import suppress
+from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 sys.path[:0] = [sys.argv[1], str(Path(sys.argv[1]).parent / "src")]
 import supplemental_recording_peer_termination as m
 assert ctypes.CDLL(None).prctl(36, 1, 0, 0, 0) == 0
 binary, mode = Path(sys.argv[2]), sys.argv[3]
+transport, library_path = sys.argv[4:6]
+base = SimpleNamespace(m=m, OriginalChild=OriginalChild)
+ingress_tests = SimpleNamespace(MODE="--offline-original-peer-ingress-v1")
+direct_spawn = load_direct(library_path) if transport == "direct-owner" else None
 base_fds = len(os.listdir("/proc/self/fd"))
 targets, peers, identities = [], [], []
 outer = outer_fd = native_pid = native_fd = extra_cancel = None
@@ -85,8 +93,13 @@ try:
             channels.extend((sender, receiver))
             receiver.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
             args = ["--offline-original-peer-ingress-v1", str(recover_by), str(ready_by), boot]
-            pid = spawn_standard(binary, [receiver.fileno(), original_outer, ns], args)
-            fd = os.pidfd_open(pid)  # Fresh OWNED spawn, before any loss.
+            anchors = [receiver.fileno(), original_outer, ns]
+            if direct_spawn is None:
+                pid = spawn_standard(binary, anchors, args)
+                fd = os.pidfd_open(pid)  # Fresh OWNED spawn, before any loss.
+            else:
+                original = direct_parent(direct_spawn, binary, anchors, args)
+                pid, fd = original.pid, original.fd  # Kernel handle in original outer.
             receiver.close()
             watch = m.Watch(pid, fd, cancel_write, tuple(targets), tuple(identities), recover_by)
             owned.remove(cancel_write)
@@ -253,10 +266,20 @@ finally:
 @pytest.mark.parametrize(
     "mode", ["outer_before_ingress", "outer_exit", "outer_frozen", "native_exit", "native_frozen"]
 )
-def test_actual_outer_and_native_failure_domains_preserve_original_ownership(binary, mode):
+@pytest.mark.parametrize("transport", ["standard", "direct-owner"])
+def test_actual_outer_and_native_failure_domains_preserve_original_ownership(
+    binary, mode, transport, direct_launcher
+):
     # Existing collision-safe exec mapping, unchanged. No fork-owned Python
     # application object is passed to the native process or another owner.
-    program = "import os, fcntl, signal\n" + inspect.getsource(ingress.spawn_standard) + PROGRAM
+    program = (
+        "import os, fcntl, signal, ctypes\nfrom dataclasses import dataclass\n"
+        + inspect.getsource(ingress.base.OriginalChild)
+        + inspect.getsource(ingress.spawn_standard)
+        + inspect.getsource(direct.load_direct)
+        + inspect.getsource(direct.direct_parent)
+        + PROGRAM
+    )
     completed = subprocess.run(
         [
             sys.executable,
@@ -266,6 +289,8 @@ def test_actual_outer_and_native_failure_domains_preserve_original_ownership(bin
             str(ingress.base.SOURCE.parent.parent),
             str(binary),
             mode,
+            transport,
+            direct_launcher.fixture_library_path,
         ],
         capture_output=True,
         text=True,

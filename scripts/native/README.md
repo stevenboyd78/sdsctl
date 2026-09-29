@@ -290,6 +290,50 @@ original target-cgroup provisioning, outside-domain independence, namespace and
 binary/source/runtime authentication also remain separate requirements. Do not
 promote same-group test success into independent-platform qualification.
 
+### Direct original-owner creation experiment (test-only)
+
+The [direct fixture](../../tests/test_supplemental_native_peer_direct.py) avoids
+that helper-report interval instead of accepting lost-child discovery. A small
+[C-only clone/exec boundary](../../tests/fixtures/native_direct_spawn.c), loaded
+only into the disposable test owner, calls `clone3(CLONE_PIDFD)` there. The
+kernel writes the child's close-on-exec pidfd directly into that original
+owner's retained memory. No helper process, `CLONE_PARENT`, pidfd report, PID
+reopening, numeric-PID migration or old-clone fallback is involved. The existing
+`OriginalChild`, native ingress, full Custody comparisons and **unchanged Watch**
+then consume that exact handle and original absolute cutoffs.
+
+The child stays entirely in the small C path until native exec: collision-safe
+copies become the same three standard-I/O anchors and opened executable; other
+descriptors are closed. `CLONE_CLEAR_SIGHAND` resets caught handlers, and the
+child clears its signal mask without entering Python, running atfork callbacks,
+allocating interpreter objects, or sharing the parent's memory/descriptor table.
+These flags and the returned pidfd location follow the
+[Linux clone3 contract](https://man7.org/linux/man-pages/man2/clone.2.html).
+They do not authenticate the loaded fixture, libc, compiler or installed runtime.
+
+Failure tests retain the original kernel output even when C reports failure,
+Python is interrupted before adopting `OriginalChild`, or the C caller queues
+a signal whose Python handler raises **before ctypes returns**. Cleanup uses
+that pidfd to stop, observe and reap the exact child. No readiness is released,
+the original peers are retired, consumed Custody cannot retry, descriptors
+balance and original plan/deadline bytes remain unchanged. A rejected group
+descriptor creates no child; an explicit same-**existing**-group variant tests
+birth through the retained directory without creating, moving or freezing a
+group. Same-group success is still not independent placement.
+
+The full passive-command fixture selects this route explicitly alongside the
+earlier experiments, including native death after each real descriptor handoff.
+The lifetime fixture also creates its Watch inside the original outer and
+separates outer death/freeze from native death/freeze; only its disposable
+independent subreaper can adopt after outer death. Direct creation removes the
+separate helper's unreported-child window in this experiment, not the original
+outer's own death/freeze/platform failure requirements. No production source
+inventory, entrypoint, native build target or App selects this shared fixture.
+It is not a proposal to install a Python-loaded shared library on HAOS. A fixed
+qualified outer must incorporate an equally accountable native creation
+boundary, with independently protected placement, complete runtime/source
+provenance and exclusive recovery, before any installed or hardware trial.
+
 ## Failure model and remaining gates
 
 The original qualified outer must independently stop its retained peers if the

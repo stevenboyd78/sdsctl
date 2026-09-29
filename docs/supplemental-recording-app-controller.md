@@ -2256,6 +2256,21 @@ cgroup provisioning, source/runtime pins and platform failure supervision remain
 gates; see the native README. No numeric-PID migration or old-clone fallback is
 introduced, and no active App/recovery authority comes from these tests.
 
+A second actual creation fixture now avoids the helper-report interval: a
+small C-only clone/exec boundary runs inside the original outer, and the kernel
+writes its original child pidfd directly into that owner's retained memory.
+The child never returns to Python; the same native ingress, Custody, Watch and
+full passive-command paths consume the original handle without PID reopening.
+Failed returns and pending Python interruption before ctypes returns still
+retire/reap the exact child from that retained output. Original clocks, finite
+cutoffs, one-attempt behavior and failure files remain intact. This removes the
+separate helper's accounting gap for this test route; it does not qualify the
+outer's death/freeze supervision, independent placement, installed source or
+runtime. Same-existing-group creation and the separate process lifetime tests
+remain local evidence only. No installed selector/build/App loads the shared
+fixture, and it grants no active action or recovery authority. See the native
+README's direct-owner experiment and remaining platform requirements.
+
 This is an **offline prototype, not an installed host supervisor**. No existing
 entrypoint or source inventory selects it. The static build is a candidate for
 a host without Python, not authenticated compiler/libc/kernel or installed
