@@ -1,5 +1,6 @@
 """Pytest-only locations behind sanitized refusals; never format private values."""
 
+import json
 import re
 from pathlib import Path
 
@@ -57,4 +58,35 @@ def child_failure_locations(raw):
                 rows.append(row)
             if len(rows) == 32:
                 break
+    return "\n".join(rows)
+
+
+def child_result_failure_locations(raw):
+    """Recover only location notes from complete, unread fixture result lines.
+
+    The same stdout may contain private inputs and plans. Never report them or
+    parse more than one bounded post-exit read. Truncated lines, non-results and
+    arbitrary fields/notes are not evidence; absent output is not success.
+    """
+    if type(raw) is not bytes:
+        return ""
+    rows = []
+    for line in raw[:65536].split(b"\n")[:-1]:
+        try:
+            result = json.loads(line)
+        except (ValueError, RecursionError):
+            continue
+        if type(result) is not dict or result.get("error") != "refused":
+            continue
+        notes = result.get("refusal_locations")
+        if type(notes) is not list:
+            continue
+        for note in notes[:8]:
+            if type(note) is not str:
+                continue
+            for row in child_failure_locations(note.encode("ascii", errors="replace")).splitlines():
+                if row not in rows:
+                    rows.append(row)
+                if len(rows) == 32:
+                    return "\n".join(rows)
     return "\n".join(rows)

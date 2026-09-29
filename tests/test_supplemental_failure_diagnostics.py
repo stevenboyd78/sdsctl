@@ -1,5 +1,6 @@
 """Failure diagnostics disclose only bounded, known-checkout source locations."""
 
+import json
 from contextlib import contextmanager
 from types import SimpleNamespace
 
@@ -204,3 +205,35 @@ def test_child_stderr_limits_input_output_and_does_not_format_unknown_values():
     assert len(diagnostics.child_failure_locations(raw).splitlines()) == 32
     assert diagnostics.child_failure_locations(b"X" * 65536 + b"\n" + raw) == ""
     assert diagnostics.child_failure_locations(object()) == ""
+
+
+def test_unread_child_result_only_reports_refusal_location_notes():
+    note = "cause 1: scripts/supplemental_recording_fixture.py:12"
+    records = [
+        {"plan": "PRIVATE_PLAN", "refusal_locations": [note]},
+        {"error": None, "refusal_locations": [note]},
+        {"error": "refused", "private": note, "refusal_locations": "PRIVATE"},
+        {"error": "refused", "refusal_locations": [None, {}, "PRIVATE", note, note]},
+    ]
+    raw = b"\n".join(json.dumps(row).encode() for row in records) + b"\n"
+    assert diagnostics.child_result_failure_locations(raw) == (
+        "child: scripts/supplemental_recording_fixture.py:12"
+    )
+    assert diagnostics.child_result_failure_locations(raw.rstrip(b"\n")) == ""
+
+
+@pytest.mark.parametrize("raw", [object(), b"\xff\n", b"{}\n", b"[]\n", b"[" * 2000 + b"\n"])
+def test_unread_child_result_ignores_malformed_or_unknown_data(raw):
+    assert diagnostics.child_result_failure_locations(raw) == ""
+
+
+def test_unread_child_result_has_bounded_input_notes_and_output():
+    notes = [f"cause 1: scripts/supplemental_recording_fixture.py:{n}" for n in range(1, 80)]
+
+    def record(values):
+        return json.dumps(dict(error="refused", refusal_locations=values)).encode() + b"\n"
+
+    assert len(diagnostics.child_result_failure_locations(record(notes)).splitlines()) == 8
+    raw = record(["\n".join(notes)])
+    assert len(diagnostics.child_result_failure_locations(raw).splitlines()) == 32
+    assert diagnostics.child_result_failure_locations(b"X" * 65536 + b"\n" + raw) == ""

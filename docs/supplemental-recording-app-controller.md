@@ -1924,6 +1924,17 @@ its own original resources. There is no inbox consumption, Ready, service run,
 App action, audio, recording or recovery. The fixture checks descriptor balance,
 original dispatcher/clock/plan identity and preserved failure files.
 
+The fixture also preserves refusal evidence when the outer fails before reading
+the writer's result. Original stdout/stderr read handles survive nested teardown;
+only bounded, nonblocking post-exit reads supply known-script source locations.
+Unread plans, input values and arbitrary exception text are never reported.
+The existing cleanup observer retains the first bounded source-location snapshot
+before later sanitation can obscure it. A real pre-permission half-close regression
+checks normal writer exit, no baseline read/publication, original cutoff retention
+and descriptor balance. This diagnoses fixture refusals; it does not change the
+production protocol, extend deadlines, prove a historical intermittent failure's
+cause, or qualify an installed command.
+
 The paired variant performs **fresh full writer and observer runtime collections
 against the actual newly published writer plan before submitting acceptance**.
 Both share one unchanged two-second bound, including surrounding private input

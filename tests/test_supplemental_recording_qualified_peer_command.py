@@ -32,7 +32,11 @@ from . import test_supplemental_recording_peer_command as command_tests
 from . import test_supplemental_recording_peer_delivery as delivery_tests
 from . import test_supplemental_recording_peer_preflight_qualification as qualification
 from . import test_supplemental_recording_peer_termination as termination_tests
-from ._supplemental_failure_diagnostics import child_failure_locations, failure_locations
+from ._supplemental_failure_diagnostics import (
+    child_failure_locations,
+    child_result_failure_locations,
+    failure_locations,
+)
 
 writer, p, m = command_tests.writer, command_tests.m, qualification.m
 transport, grants = writer.transport, qualification.grants
@@ -58,6 +62,7 @@ def receive():
 def preparation_diagnostics(patches):
     """Keep bounded source locations behind sanitation; never private values."""
     cleanup = p._cleanup
+    first = []
 
     def retire(callbacks, problem):
         try:
@@ -67,9 +72,16 @@ def preparation_diagnostics(patches):
                 locations = failure_locations(problem)
                 if locations:
                     error.add_note(locations)
+                    if not first:
+                        # Later sanitation/cleanup may replace the traceback's
+                        # context. Keep its FIRST observed source-only cause;
+                        # whole lines only, with no extra child pipe writes.
+                        raw = (locations + "\n").encode("ascii")[:4096]
+                        first.append(raw.rsplit(b"\n", 1)[0].decode("ascii"))
             raise
 
     patches.setattr(p, "_cleanup", retire)
+    return first
 
 
 def test_preparation_diagnostics_never_copy_private_exception_values(monkeypatch):
@@ -120,7 +132,7 @@ def host_fixture(root, patches):
 def child(root):
     """Actual command function under explicitly synthetic host/path boundaries."""
     with pytest.MonkeyPatch.context() as patches, host_fixture(root, patches) as s:
-        preparation_diagnostics(patches)
+        first_refusal = preparation_diagnostics(patches)
         # The inherited host fixture's inert placeholder is not part of this
         # protocol. Retire it before command setup, so even an intentionally
         # killed writer below cannot orphan a fixture grandchild.
@@ -275,7 +287,9 @@ def child(root):
                 )
             except p.UnconfirmedPreparation as refusal:
                 error = "refused"
-                locations = getattr(refusal, "__notes__", [])[:8]
+                for first in first_refusal:
+                    refusal.add_note(first)
+                locations = [*first_refusal, *getattr(refusal, "__notes__", [])][:8]
                 original_failure = refusal
             emit(
                 dict(
@@ -336,12 +350,16 @@ def helper(supervised, image, configured, monkeypatch, tmp_path, request):
         stderr=subprocess.PIPE,
         bufsize=0,
     )
-    generator = h = diagnostic_fd = None
+    generator = h = diagnostic_fd = result_fd = None
+    diagnostic_fds = []
     try:
         # Nested qualification owns/closes the original stream at teardown.
         # Retain our own noninheritable read handle BEFORE handing it that peer;
         # otherwise an unexpected exit loses its cause behind a closed-file error.
         diagnostic_fd = os.dup(process.stderr.fileno())
+        diagnostic_fds.append(diagnostic_fd)
+        result_fd = os.dup(process.stdout.fileno())
+        diagnostic_fds.append(result_fd)
         initial = json.loads(transport.line(process))
         supplied = dict(plan=initial["base"], baseline=initial["baseline"], child=process)
         selection = getattr(request.node, "callspec", SimpleNamespace(params={})).params.get(
@@ -371,6 +389,22 @@ def helper(supervised, image, configured, monkeypatch, tmp_path, request):
             else:
                 process.stdin.close()
                 process.wait(timeout=3)
+            # A refusal may leave this fixture alive until normal stdin EOF.
+            # Its result is then unread when an earlier outer assertion fails.
+            # Retain the original pipe and recover only sanitized locations,
+            # AFTER exit, without consuming the running command's protocol.
+            raw_result = b""
+            if result_fd is not None:
+                os.set_blocking(result_fd, False)
+                try:
+                    raw_result = os.read(result_fd, 65536)
+                except BlockingIOError:
+                    raw_result = b""
+            result_locations = child_result_failure_locations(raw_result)
+            if result_locations:
+                request.node.add_report_section(
+                    "teardown", "Original writer refusal locations (no values)", result_locations
+                )
             expected = getattr(h, "expected_returncode", 0)
             if process.returncode != expected:
                 # The process has been waited; never block on a descendant's
@@ -394,8 +428,8 @@ def helper(supervised, image, configured, monkeypatch, tmp_path, request):
                 for stream in (process.stdin, process.stdout, process.stderr):
                     stream.close()
             finally:
-                if diagnostic_fd is not None:
-                    os.close(diagnostic_fd)
+                for fd in diagnostic_fds:
+                    os.close(fd)
 
 
 def test_writer_diagnostic_survives_nested_fixture_closing_stderr(
@@ -416,6 +450,56 @@ def test_writer_diagnostic_survives_nested_fixture_closing_stderr(
         for stream in (original.child.stdin, original.child.stdout, original.child.stderr)
     )
     assert len(os.listdir("/proc/self/fd")) == before
+
+
+def test_normal_writer_retirement_preserves_unread_permission_refusal(
+    supervised, image, configured, monkeypatch, tmp_path
+):
+    # The writer deliberately stays alive after reporting a refusal. Its normal
+    # fixture exit must not discard an unread first cause from its stdout pipe.
+    before = len(os.listdir("/proc/self/fd"))
+    reports = []
+    selection = dict(mode="release-command-pair")
+    request = SimpleNamespace(
+        node=SimpleNamespace(
+            callspec=SimpleNamespace(params=dict(joined=selection)),
+            add_report_section=lambda *args: reports.append(args),
+        )
+    )
+    helper_generator = helper.__wrapped__(
+        supervised, image, configured, monkeypatch, tmp_path, request
+    )
+    original = next(helper_generator)
+    joined_generator = joined.__wrapped__(
+        original, monkeypatch, tmp_path, configured, SimpleNamespace(param=selection)
+    )
+    try:
+        s = next(joined_generator)
+        end, review = s.sender.end, s.sender.review
+        assert not s.sender.send_attempted and not s.sender.write_attempted
+        s.sender.channel.shutdown(socket.SHUT_WR)
+        fd = original.child.stdout.fileno()
+        assert time.monotonic() < end
+        assert select.select([fd], [], [], end - time.monotonic())[0] == [fd]
+        # Do not read the result: reproduce the outer failing before its read.
+        assert not original.witness.exited() and not s.counterpart.exited()
+        assert not list(s.case_root.iterdir()) and s.h.reads == 0
+        assert s.sender.end == end and s.sender.review is review
+    finally:
+        try:
+            with pytest.raises(StopIteration):
+                next(joined_generator)
+        finally:
+            with pytest.raises(StopIteration):
+                next(helper_generator)
+    assert original.child.returncode == 0
+    assert len(os.listdir("/proc/self/fd")) == before
+    assert reports
+    phase, title, locations = reports[-1]
+    assert phase == "teardown" and title == "Original writer refusal locations (no values)"
+    assert "scripts/supplemental_recording_service_permission.py:" in locations
+    assert "scripts/supplemental_recording_peer_preparation.py:" in locations
+    assert all(line.startswith("child: scripts/supplemental_") for line in locations.splitlines())
 
 
 def observer_child(path, *, retained=False):
