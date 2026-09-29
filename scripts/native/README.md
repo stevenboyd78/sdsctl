@@ -334,6 +334,46 @@ qualified outer must incorporate an equally accountable native creation
 boundary, with independently protected placement, complete runtime/source
 provenance and exclusive recovery, before any installed or hardware trial.
 
+### Opt-in local cgroup-freeze integration
+
+The [disposable cgroup fixture](../../tests/test_supplemental_native_peer_cgroup.py)
+joins direct original-owner creation and the existing lifetime driver to actual
+local cgroup v2 freezing. It requires explicit `SDSCTL_OFFLINE_CGROUP_TEST=1`
+approval on a delegated local workstation; default test runs skip it. Permission
+bits, ordinary CI success, or this documentation do not authorize opting in.
+There is no sudo, service/controller change, migration, or fallback on refusal.
+
+Only fresh temporary groups are created below the caller's current scope. The
+native watcher is born into the new leaf via `CLONE_INTO_CGROUP`; the test freezes
+only its fresh parent, observes both parent and descendant `frozen=1`, and checks
+that the original outer, driver, peers and independent guardian remain outside
+that subtree. It NEVER freezes the existing caller scope or an ancestor. Exact
+directory handles restrict writes/removal to the new groups. No `cgroup.procs`
+write, numeric-PID migration, `cgroup.kill`, or thaw operation is used.
+
+Before fault injection, the independently surviving guardian receives original
+native/outer/peer pidfds through a credential-checked private socket. It does not
+reopen reported PIDs. The original outer's existing two-second readiness and
+four-second recovery cutoffs remain unchanged. It independently stops peers and
+reaps its frozen native child at the original deadline, reporting uncertainty
+rather than successful work. The test verifies this before guardian fallback
+cleanup. A deliberate guardian **exception** after observed freeze checks exact-
+handle fallback cleanup; it is not a claim to survive guardian process death.
+
+A second join uses full original Custody comparisons and the existing eight-
+second short test plan. Cancellation written to a frozen watcher is not treated
+as success. The independently retained original timer still expires; exact-peer
+exit and native reap are observed, uncertainty is retained, original plan bytes
+and deadlines stay unchanged, and consumed Custody cannot retry. Engine/runtime
+identities in this fixture remain synthetic. Neither fixture changes production
+timeouts or active source selection. Empty-only removal follows observed exits;
+if cleanup is uncertain, the fixture fails and retains populated groups.
+
+These are local watcher-subtree freeze tests across dynamic, static and UBSan
+builds. They do NOT qualify installed independent placement, freezing the whole
+original-outer domain, simultaneous owner loss, host-wide suspension, fixed
+active entrypoints, platform provenance, App actions, or recovery authority.
+
 ## Failure model and remaining gates
 
 The original qualified outer must independently stop its retained peers if the
@@ -347,8 +387,9 @@ it from a container does not accomplish that. A frozen cgroup includes its
 descendants; a watcher inside that subtree stops executing too.
 [Linux cgroup v2 documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html)
 
-The local SIGSTOP tests show separate progress when peers or one owner stop, not
-cgroup-freeze, installed systemd, or Docker qualification. Host-wide freeze,
+The local SIGSTOP tests show separate progress when peers or one owner stop.
+The explicit opt-in cgroup tests above additionally cover one freshly isolated
+watcher subtree, not installed systemd or Docker qualification. Host-wide freeze,
 loss of scheduling, watcher SIGKILL/OOM/kernel failure and uninterruptible I/O
 remain outside this executable's guarantee. Even correct SIGKILL dispatch does
 not certify actual exit. A second qualified mechanism/outer failure contract

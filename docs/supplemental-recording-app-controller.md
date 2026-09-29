@@ -2281,6 +2281,18 @@ remain local evidence only. No installed selector/build/App loads the shared
 fixture, and it grants no active action or recovery authority. See the native
 README's direct-owner experiment and remaining platform requirements.
 
+An explicit opt-in local cgroup fixture now joins that direct-owner route to a
+fresh watcher subtree and the existing lifetime/Watch checks. Only new disposable
+processes/groups are involved; original outer and independent exact-handle
+cleanup owner remain outside the injected freeze. Kernel freeze completion is
+observed, not inferred from a write. Original deadlines, uncertainty, observed
+exits/reaping and empty-only group removal remain required. A full original
+Custody join also confirms that submitting cancellation to a frozen watcher is
+not success and does not renew the deadline or permit retry. Synthetic Engine
+facts stay synthetic. These tests need explicit local approval and are skipped
+by ordinary CI; they do not qualify installed platform placement or the whole
+outer's cgroup-failure boundary. See the native README for scope and limitations.
+
 This is an **offline prototype, not an installed host supervisor**. No existing
 entrypoint or source inventory selects it. The static build is a candidate for
 a host without Python, not authenticated compiler/libc/kernel or installed
