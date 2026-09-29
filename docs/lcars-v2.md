@@ -42,6 +42,30 @@ and `sdsctl.web.lcars-v2-typography`. Switching away and back preserves them.
 Invalid preferences fall back to Classic and Antonio; blocked browser storage
 does not prevent selection. Changing appearance never sends scanner commands.
 
+## Responsive acceptance
+
+LCARS keeps its larger Scanner filters and readouts rather than adopting the
+compact utility-button sizing used in the other panels. On short landscape
+displays, Scanner details, Controls, recording capture/list content, and
+waterfall telemetry can scroll within their own regions. The surrounding
+workspace stays fixed; recording rows and hold controls are never compressed
+until their text or actions disappear. Compact display-only kiosks retain the
+shared kiosk layout instead of these full-dashboard scrolling overrides.
+The scrollable waterfall telemetry region has a visible keyboard-focus outline
+and an accessible name, and honors the operating system's forced-color palette.
+Its extra focus target is removed when switching themes, leaving the short
+landscape layout, or entering a compact kiosk.
+
+The browser acceptance audit waits for bundled fonts before measuring layout.
+For LCARS it checks each internal-scroll target at a reachable position and
+restores the original scroll position afterward. Hidden/clip ancestors,
+horizontal clipping, document overflow, unreadable contrast, and unreachable
+focus targets still fail. Real Tab/Shift+Tab traversal is also tested. Scanner
+filter buttons are compared with one another, and utility buttons are compared
+across panels; decorative clearance uses the actual responsive rail width.
+Deterministic counter-tests cover broken scrolling and genuine overlap so
+intentional scrolling cannot silently mask inaccessible content.
+
 The manifest and paint stylesheet live in `themes/web/lcars`. The built-in
 shell explicitly supplies `web_assets/lcars-v2.css` and `lcars-v2.js` for layout,
 pickers, and reversible Site placement. This does not expand the capabilities

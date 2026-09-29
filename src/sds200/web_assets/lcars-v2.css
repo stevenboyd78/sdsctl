@@ -344,6 +344,50 @@
   }
 }
 
+/* The larger LCARS frame leaves less room at small landscape sizes. Preserve
+ * complete control groups and recording rows; scroll their owning region
+ * instead of squeezing content into the shared dashboard's fixed rows. */
+@layer sdsctl-viewport-contract {
+  @media (min-width: 44rem) and (min-height: 28rem) and (max-height: 38rem) {
+    :root[data-theme="lcars"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) :is(.scanner-controls-panel, .recording-capture-panel, .recording-library-panel) {
+      grid-template-rows: repeat(4, max-content) !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+    }
+    :root[data-theme="lcars"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .scanner-hold-group {
+      overflow: visible !important;
+    }
+    :root[data-theme="lcars"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .waterfall-telemetry {
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      color: var(--text) !important;
+      background: var(--background) !important;
+    }
+    :root[data-theme="lcars"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .waterfall-telemetry:focus-visible {
+      outline: 2px solid var(--text);
+      outline-offset: -2px;
+    }
+    :root[data-theme="lcars"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .recording-library-panel .recording-library {
+      grid-template-rows: repeat(4, max-content) !important;
+      overflow: visible !important;
+    }
+    :root[data-theme="lcars"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .recording-list {
+      grid-template-rows: max-content !important;
+      align-content: start !important;
+      overflow: visible !important;
+    }
+    @media (forced-colors: active) {
+      :root[data-theme="lcars"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .waterfall-telemetry {
+        color: CanvasText !important;
+        background: Canvas !important;
+      }
+      :root[data-theme="lcars"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .waterfall-telemetry:focus-visible {
+        outline-color: Highlight !important;
+      }
+    }
+  }
+}
+
 /* Keep shared visibility semantics, including display-only and compact kiosks.
  * Theme layout must never resurrect a hidden tab or the standard Mimic pane. */
 @layer sdsctl-viewport-contract {

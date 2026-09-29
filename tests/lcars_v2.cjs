@@ -30,6 +30,8 @@ class Element {
     return siblings[siblings.indexOf(this) + 1] || null;
   }
   setAttribute(name, value) { this.attributes[name] = value; }
+  getAttribute(name) { return this.attributes[name] ?? null; }
+  removeAttribute(name) { delete this.attributes[name]; }
   addEventListener(name, fn) { this.listeners[name] = fn; }
 }
 function harness({stored = {}, blocked = false, loading = false, incomplete = false,
@@ -54,12 +56,15 @@ function harness({stored = {}, blocked = false, loading = false, incomplete = fa
   const originalChildren = [...panel.children];
   const writes = [], events = {}, observers = [], documentEvents = {};
   const wide = {matches: true, addEventListener: (_, fn) => { wide.changed = fn; }};
+  const shortLandscape = {matches: false, addEventListener: (_, fn) => { shortLandscape.changed = fn; }};
+  const telemetry = new Element('telemetry');
   const themePicker = {value: ''};
   const document = {
     readyState: loading ? 'loading' : 'complete', documentElement: root,
     getElementById: id => incomplete ? null : ids[id] || null,
     querySelector: selector => incomplete ? null :
-      selector === '.workspace-tabs' ? tabs : selector === '#theme-select' ? themePicker : null,
+      selector === '.workspace-tabs' ? tabs : selector === '#theme-select' ? themePicker :
+        selector === '.waterfall-telemetry' ? telemetry : null,
     querySelectorAll: () => [],
     createElement: name => new Element(name), createComment: name => new Element(name),
     addEventListener: (event, fn) => { documentEvents[event] = fn; },
@@ -72,7 +77,8 @@ function harness({stored = {}, blocked = false, loading = false, incomplete = fa
         stored[key] = value; writes.push([key, value]);
       },
     },
-    addEventListener: (event, fn) => { events[event] = fn; }, matchMedia: () => wide,
+    addEventListener: (event, fn) => { events[event] = fn; },
+    matchMedia: query => query.includes('min-width: 64rem') ? wide : shortLandscape,
   };
   class MutationObserver {
     constructor(fn) { observers.push(fn); }
@@ -86,7 +92,8 @@ function harness({stored = {}, blocked = false, loading = false, incomplete = fa
   vm.runInContext(script, context);
   return {
     root, ids, tabs, panel, controls, details, hierarchy, originalList, siteRow,
-    nextRow, originalChildren, writes, wide, events, documentEvents, themePicker, window, stored,
+    nextRow, originalChildren, writes, wide, shortLandscape, telemetry,
+    events, documentEvents, themePicker, window, stored,
     theme(value) { root.dataset.theme = value; for (const fn of observers) fn(); },
     choose(id, value) { ids[id].value = value; ids[id].listeners.change(); },
   };
@@ -119,6 +126,16 @@ for (const unused of [1, 2, 3]) {
 }
 clean.theme('lcars'); clean.wide.matches = false; clean.wide.changed();
 assert.equal(clean.tabs.attributes['aria-orientation'], 'horizontal');
+clean.shortLandscape.matches = true; clean.shortLandscape.changed();
+assert.deepEqual(clean.telemetry.attributes, {tabindex: '0', role: 'region', 'aria-label': 'Waterfall telemetry'});
+clean.root.dataset.kioskCompact = 'true'; clean.theme('lcars');
+assert.deepEqual(clean.telemetry.attributes, {});
+delete clean.root.dataset.kioskCompact; clean.theme('lcars');
+assert.equal(clean.telemetry.attributes.tabindex, '0');
+clean.theme('system');
+assert.deepEqual(clean.telemetry.attributes, {});
+clean.theme('lcars'); clean.shortLandscape.matches = false; clean.shortLandscape.changed();
+assert.deepEqual(clean.telemetry.attributes, {});
 for (const palette of ['classic', 'nemesis-blue', 'lower-decks', 'lower-decks-padd', 'voyager', 'picard']) {
   clean.choose(paletteId, palette); assert.equal(clean.root.dataset.lcarsV2Palette, palette);
 }
