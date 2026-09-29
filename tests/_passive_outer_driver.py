@@ -36,7 +36,7 @@ def failure_types(raw):
         "AttributeError",
         "TimeoutError",
     )
-    return [name for name in known if re.search(r"(?m)^E +" + name + ":", text)]
+    return [name for name in known if re.search(r"(?m)^(?:E +)?" + name + ":", text)]
 
 
 def snapshot(directory):
@@ -102,7 +102,7 @@ def main():
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            env={"TMPDIR": socket_temporary, "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"},
+            env={"TMPDIR": socket_temporary},
         )
         outer_fd = os.pidfd_open(process.pid)  # Our own fresh, still-unreaped child.
         child.close()
@@ -139,6 +139,7 @@ def main():
         writer, observer, native, cancel, directory = received
         assert all(not os.get_inheritable(fd) for fd in received)
         state = json.loads(raw)
+        assert state["runner_used"] is False
         assert state["phase"] == phase and time.monotonic() < state["end"]
         assert state["writer_reads"] >= 6 and state["observer_reads"] >= 4
         assert time.clock_gettime_ns(time.CLOCK_BOOTTIME) < state["native_deadline_ns"]
@@ -165,7 +166,17 @@ def main():
         assert observed[2] == (os.CLD_EXITED, 12)  # Original outer loss, not EOF or work success.
         assert snapshot(directory) == original
         assert time.monotonic() < state["end"]
-        print(json.dumps(dict(phase=phase, peers_exited=True, native=12, files_unchanged=True)))
+        print(
+            json.dumps(
+                dict(
+                    phase=phase,
+                    peers_exited=True,
+                    native=12,
+                    files_unchanged=True,
+                    runner_used=False,
+                )
+            )
+        )
     finally:
         # Fallback is outside the tested loss domain and never counts as a pass.
         # Only original handles delivered by our authenticated owned child.

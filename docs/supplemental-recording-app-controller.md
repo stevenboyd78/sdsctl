@@ -2477,6 +2477,20 @@ synthetic fixture bootstrap: MonkeyPatch/assertion helpers, fake Engine/runtime
 facts and fixture input publication remain. It supplies neither an installed
 entrypoint selector nor independent pre-readiness or whole-platform supervision.
 
+The original-outer-loss process now uses that same explicit fixture assembly,
+instead of starting a second pytest runner and passing setup through an
+environment variable. Both paths retain the original generator cleanup order;
+partial setup and body failures unwind only resources already yielded by their
+original owners. The independent fault driver still receives authenticated
+original handles before killing only its disposable outer, and must observe
+the original writer, observer and native watcher exit before the unchanged
+cutoff with case files preserved. It retains the separate cancellation writer
+so loss of the original outer cannot be mistaken for cancellation EOF. The
+fault path's initial fixture setup remains synthetic and is **not** qualified
+independent supervision before that handle transfer. Removing the runner does
+not cure the separately recorded coverage timing failures or admit a new source
+profile, installed service, active action grant or recovery owner.
+
 This joins actual passive flow to staged **outer and peer** execution, not a production
 Python sandbox or installed entrypoint/source qualification. Test scaffolding,
 interpreter/dependency and installed child-command provenance, Engine/runtime facts,

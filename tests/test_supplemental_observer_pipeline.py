@@ -11,7 +11,9 @@ import os
 import select
 import signal
 import time
+from contextlib import ExitStack, contextmanager
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
@@ -29,6 +31,67 @@ SELECTION = dict(
     observer_join=True,
     automatic_observer=True,
 )
+
+
+@contextmanager
+def original_pipeline_fixture(temporary, *, binary=None):
+    """Explicit TEST setup shared by staged completion and original-outer loss.
+
+    Borrow the existing synthetic Engine/runtime fixtures without invoking the
+    pytest runner, collection or plugin discovery. Register each original
+    generator on this same cleanup stack immediately after its first yield.
+    Failure neither replaces the owners nor renews the original work budget.
+    This fixture assembly is not installed startup/lifetime qualification.
+    """
+
+    def runner_forbidden(*args, **kwargs):
+        raise AssertionError("Original outer must not invoke the pytest runner")
+
+    def finish(generator):
+        try:
+            next(generator)
+        except StopIteration:
+            return
+        raise AssertionError("Fixed fixture yielded more than once")
+
+    def retain(stack, generator):
+        value = next(generator)
+        stack.callback(finish, generator)
+        return value
+
+    reports = []
+    selection = dict(SELECTION)
+    request = SimpleNamespace(
+        param=selection,
+        node=SimpleNamespace(
+            callspec=SimpleNamespace(params={"joined": selection}),
+            add_report_section=lambda *parts: reports.append(parts),
+        ),
+    )
+    with ExitStack() as stack:
+        entry = stack.enter_context(pytest.MonkeyPatch.context())
+        entry.setattr(pytest, "main", runner_forbidden)
+        patches = stack.enter_context(pytest.MonkeyPatch.context())
+        umask = retain(stack, image_umask.__wrapped__())
+        directory = layout.__wrapped__(temporary, patches, umask)
+        supervision = supervised.__wrapped__(directory)
+        original_image = image.__wrapped__()
+        configuration = configured.__wrapped__(original_image)
+        reviewed = reviewed_binary.__wrapped__(binary, temporary) if binary is not None else None
+        original = retain(
+            stack,
+            helper.__wrapped__(
+                supervision, original_image, configuration, patches, temporary, request
+            ),
+        )
+        pair = retain(
+            stack, joined.__wrapped__(original, patches, temporary, configuration, request)
+        )
+        yield pair, patches, reviewed
+    # Neither a returned body nor a cleanup marker proves successful retirement.
+    # All original cleanup assertions must finish before reporting completion.
+    if reports:
+        raise AssertionError("Original fixture retirement did not complete")
 
 
 @pytest.mark.parametrize("joined", [SELECTION], indirect=True)
