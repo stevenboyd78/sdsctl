@@ -359,15 +359,15 @@ function initializeDisplayNavigation(logout) {
   // Remember exact original positions: resizing restores desktop DOM order,
   // IDs, listeners, theme selection, field inspection and current stream state.
   const relocations = [];
-  const relocate = (node, destination) => {
+  const relocate = (node, destination, narrowAppearance = false) => {
     const anchor = document.createComment("native compact control position");
     node.before(anchor);
-    relocations.push({node, destination, anchor});
+    relocations.push({node, destination, anchor, narrowAppearance});
   };
   relocate(document.querySelector(".theme-picker"), appearance);
   relocate(element("system-palette-picker"), appearance);
   relocate(element("lcars-v2-appearance-pickers"), appearance);
-  relocate(element("theme-typography-pickers"), appearance);
+  relocate(element("theme-typography-pickers"), appearance, true);
   const details = (parent, id, selectors) => {
     const disclosure = make("details", null, "native-details");
     disclosure.id = id;
@@ -404,20 +404,25 @@ function initializeDisplayNavigation(logout) {
   scannerDetails.before(summary("native-scanner-summary", [["Frequency", "radio-frequency"], ["Modulation", "radio-modulation"], ["Signal", "radio-signal"], ["RSSI", "radio-rssi"]]));
   waterfallDetails.before(summary("native-waterfall-summary", [["Lower", "waterfall-frequency-lower"], ["Center", "waterfall-frequency-center"], ["Upper", "waterfall-frequency-upper"], ["Frame rate", "waterfall-frame-rate"]]));
   const compact = window.matchMedia("(max-width: 60rem) and (max-height: 40rem)");
+  // Tall phones keep their ordinary pane layout, but a second overview row of
+  // typography controls steals plot space. Reuse the same menu/controls rather
+  // than shrinking touch targets or removing the user's font preferences.
+  const narrowAppearance = window.matchMedia("(max-width: 65rem)");
   const update = () => {
     const focused = document.activeElement;
     dialog.close();
     document.documentElement.dataset.kioskCompact = String(compact.matches);
     views.hidden = !compact.matches;
-    appearance.hidden = !compact.matches;
-    for (const {node, destination, anchor} of relocations) {
-      if (compact.matches) destination.append(node);
+    appearance.hidden = !compact.matches && !narrowAppearance.matches;
+    for (const {node, destination, anchor, narrowAppearance: narrow} of relocations) {
+      if (compact.matches || (narrow && narrowAppearance.matches)) destination.append(node);
       else anchor.after(node);
     }
     if (focused instanceof HTMLElement && focused !== document.body && focused.getClientRects().length === 0) trigger.focus();
     syncDisplayNavigation();
   };
   compact.addEventListener("change", update);
+  narrowAppearance.addEventListener("change", update);
   update();
 }
 

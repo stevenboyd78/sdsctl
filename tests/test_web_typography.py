@@ -60,7 +60,11 @@ def test_typography_routes_are_exact_local_and_do_not_contact_daemon() -> None:
             elif path.endswith(".txt"):
                 assert response.headers["content-type"].startswith("text/plain")
         for name in (
-            "unknown.ttf", "rapid-response.ttf", "ocr-a.ttf", "dashboard.js", "..%2Fdashboard.js",
+            "unknown.ttf",
+            "rapid-response.ttf",
+            "ocr-a.ttf",
+            "dashboard.js",
+            "..%2Fdashboard.js",
         ):
             assert client.get(f"/assets/fonts/{name}").status_code == 404
 
@@ -74,7 +78,10 @@ def test_typography_controller_is_presentation_only_and_handles_preferences() ->
         assert forbidden not in script.read_text()
     result = subprocess.run(
         [node, str(Path(__file__).with_name("theme_typography.cjs")), str(script)],
-        capture_output=True, text=True, check=False, timeout=15,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=15,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "checks passed" in result.stdout
@@ -94,3 +101,17 @@ def test_typography_layout_centers_controls_and_keeps_responsive_fallbacks() -> 
     assert "grid-template-columns: repeat(2, minmax(0, 1fr)) !important" in narrow
     assert "#native-menu #theme-typography-pickers:not([hidden])" in narrow
     assert "flex-direction: column !important; align-items: stretch !important" in narrow
+
+
+def test_hidden_typography_rule_shares_important_display_layer() -> None:
+    css = files("sds200.web_assets").joinpath("theme-typography.css").read_text()
+    layer = css.split("@layer sdsctl-viewport-contract {", 1)[1]
+    assert "#theme-font-picker[hidden] { display: none !important; }" in layer
+    assert "#theme-typography-pickers[hidden]" in layer
+    assert "#theme-typography-pickers > div {\n    display: grid !important" in layer
+    # The real-Chrome audit additionally checks computed visibility, menu
+    # reachability/touch sizing, and the unchanged phone geometry limits.
+    script = files("sds200.web_assets").joinpath("dashboard.js").read_text()
+    assert 'relocate(element("theme-typography-pickers"), appearance, true)' in script
+    assert 'narrowAppearance = window.matchMedia("(max-width: 65rem)")' in script
+    assert 'narrowAppearance.addEventListener("change", update)' in script

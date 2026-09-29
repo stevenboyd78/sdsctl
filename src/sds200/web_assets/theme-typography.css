@@ -78,8 +78,10 @@
 
 /* Center appearance controls between the overview title and status, like LCARS.
    Preserve the viewport contract's compact menu and enlarged-text fallbacks. */
-#theme-typography-pickers[hidden], #theme-font-picker[hidden] { display: none !important; }
 @layer sdsctl-viewport-contract {
+  /* Important layer rules outrank unlayered [hidden] rules. Keep this in the
+     same layer as the child display rule so an unavailable font stays hidden. */
+  #theme-typography-pickers[hidden], #theme-font-picker[hidden] { display: none !important; }
   :root[data-theme-typography] #main-content > .overview {
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important;
   }

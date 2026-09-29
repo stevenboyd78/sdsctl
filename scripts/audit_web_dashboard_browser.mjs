@@ -1439,26 +1439,49 @@ export function browserAuditLibrary() {
     const messageStyle = getComputedStyle(message);
     const tracks = overviewStyle.gridTemplateColumns.trim().split(/\s+/);
     const overviewRect = overview.getBoundingClientRect();
+    // Grid tracks occupy the content box, excluding theme decoration (for
+    // example Pip-Boy's asymmetric left border). Do not count paint as a track.
+    const contentLeft = overviewRect.left + Number.parseFloat(overviewStyle.borderLeftWidth) +
+      Number.parseFloat(overviewStyle.paddingLeft);
+    const contentRight = overviewRect.right - Number.parseFloat(overviewStyle.borderRightWidth) -
+      Number.parseFloat(overviewStyle.paddingRight);
     const messageRect = message.getBoundingClientRect();
     const lineHeight = Number.parseFloat(messageStyle.lineHeight);
+    // The independently added typography layout intentionally centers controls
+    // in a third desktop column. Small layouts still require two columns.
+    const appearance = [
+      overview.querySelector('#theme-typography-pickers'),
+      overview.querySelector('#lcars-v2-appearance-pickers'),
+    ].find(rendered);
+    const centered = appearance !== undefined && !matchMedia('(max-width: 65rem)').matches;
+    const expectedColumns = centered ? 3 : 2;
     if (overviewStyle.display !== "grid") {
       failures.push(
         `non-System overview display is ${overviewStyle.display}, expected grid`,
       );
     }
-    if (tracks.length !== 2) {
+    if (tracks.length !== expectedColumns) {
       failures.push(
-        `non-System overview exposes ${tracks.length} columns instead of two: ` +
+        `non-System overview exposes ${tracks.length} columns instead of ${expectedColumns}: ` +
           overviewStyle.gridTemplateColumns,
       );
     }
-    if (messageStyle.gridColumnStart !== "2") {
+    if (messageStyle.gridColumnStart !== String(expectedColumns)) {
       failures.push(
         `non-System live daemon status starts in grid column ` +
-          `${messageStyle.gridColumnStart}, expected 2`,
+          `${messageStyle.gridColumnStart}, expected ${expectedColumns}`,
       );
     }
-    if (Math.abs(messageRect.right - overviewRect.right) > tolerance) {
+    if (centered) {
+      const rect = appearance.getBoundingClientRect();
+      const style = getComputedStyle(appearance);
+      if (style.gridColumnStart !== '2' || style.gridRowStart !== '1' ||
+          Math.abs((rect.left + rect.right) - (contentLeft + contentRight)) > 2 * tolerance ||
+          rect.right > messageRect.left + tolerance) {
+        failures.push('desktop typography controls are not centered in their own non-overlapping column');
+      }
+    }
+    if (Math.abs(messageRect.right - contentRight) > tolerance) {
       failures.push("non-System live daemon status is not right-aligned");
     }
     if (Number.isFinite(lineHeight) && messageRect.height > lineHeight * 1.5) {
@@ -2450,7 +2473,7 @@ async function auditEnlargedText(cdp, collector, theme) {
   await frames(cdp);
 }
 
-async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
+export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
   const collector = new FailureCollector();
   await setViewport(cdp, VIEWPORTS[0]);
   await navigate(cdp, `${baseUrl}/`, timeoutMs);
@@ -3267,6 +3290,27 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
           picker.value = theme;
           picker.dispatchEvent(new Event('change'));
           await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          await document.fonts.ready;
+          const typography = document.querySelector('#theme-typography-pickers');
+          const fontPicker = document.querySelector('#theme-font-picker');
+          for (const node of [typography, fontPicker]) {
+            if (node.hidden && getComputedStyle(node).display !== 'none') {
+              throw new Error('Hidden typography control is rendered: ' + node.id);
+            }
+          }
+          if (matchMedia('(max-width: 65rem)').matches) {
+            const menu = document.querySelector('#native-menu');
+            if (!menu.contains(typography)) throw new Error('Narrow display typography is outside menu');
+            document.querySelector('#native-menu-toggle').click();
+            const selectors = [...typography.querySelectorAll('select')]
+              .filter(node => node.getClientRects().length > 0);
+            if (!typography.hidden && (selectors.length === 0 || selectors.some(node => {
+              const rect = node.getBoundingClientRect();
+              const bounds = menu.getBoundingClientRect();
+              return rect.height < 44 || rect.left < bounds.left || rect.right > bounds.right + 1;
+            }))) throw new Error('Narrow typography menu controls are inaccessible or too small');
+            menu.close();
+          }
           const overview = document.querySelector('.overview').getBoundingClientRect();
           const banner = document.querySelector('#native-session-status').getBoundingClientRect();
           const workspace = document.querySelector('.workspace-shell').getBoundingClientRect();
