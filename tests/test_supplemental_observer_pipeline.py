@@ -90,7 +90,7 @@ def exercise_original_observer_pipeline(binary, direct_launcher, reviewed_binary
         ("observer", s.counterpart.fd),
         ("native", s.watch.fd),
     ):
-        assert time.monotonic() < end, remaining
+        assert time.monotonic() < end, (role, remaining)
         observed = select.select([fd], [], [], end - time.monotonic())[0]
         # Retain bounded role/exit diagnostics only; no private peer values.
         if observed != [fd]:
@@ -191,7 +191,7 @@ def test_observer_command_drift_stops_originals_without_release_or_deadline_rene
             path.write_bytes(b"PRIVATE changed disposable source; must not run\n")
 
     assert s.sender.send() is None
-    with pytest.raises(command.delivery_tests.m.UnconfirmedDelivery):
+    with pytest.raises(command.delivery_tests.m.UnconfirmedDelivery) as refused:
         command.finish(s, monkeypatch, arm_and_change)
     assert not sent and s.watch.closed and s.watch.finished
     assert s.pipeline_end == s.staged_plan.deadline == s.staged_handoff.deadline == end
@@ -202,9 +202,20 @@ def test_observer_command_drift_stops_originals_without_release_or_deadline_rene
         assert select.select([fd], [], [], end - time.monotonic())[0] == [fd]
     assert s.h.child.wait(timeout=0) == -signal.SIGKILL
     assert s.observer.wait(timeout=0) in (-signal.SIGKILL, 75)
-    assert s.custody.armed_watch is s.watch and s.pair.channel_delivery_attempted
+    assert s.custody.armed_watch is s.watch and s.pair.passive_completion_attempted
+    # Wrong selection/baseline now refuses at the outer entry, before any
+    # plan/acceptance/channel publication. Source drift is caught by the same
+    # fresh complete pre-delivery collection, after those earlier phases.
+    assert s.pair.channel_delivery_attempted is (fault == "source"), getattr(
+        refused.value, "__notes__", []
+    )
+    assert hasattr(s, "plan_receipt") is (fault == "source")
     files = {path.name: path.read_bytes() for path in s.case_root.iterdir() if path.is_file()}
     assert {"startup-claim.json", "plan.json"} <= set(files)
+    if fault != "source":
+        assert set(files) == {"startup-claim.json", "plan.json"}
+        assert not s.plan_listener.accepted and not s.writer_listener.accepted
+        assert not s.observer_listener.accepted
     with pytest.raises(command.delivery_tests.m.UnconfirmedDelivery):
         command.delivery_tests.m.deliver_and_release_passive_writer(
             s.custody,
@@ -253,9 +264,11 @@ def test_native_loss_during_automatic_handoff_keeps_original_cutoff_and_refuses_
     monkeypatch.setattr(command.p.bootstrap.Endpoint, "deliver", endpoint)
     monkeypatch.setattr(command.p.bootstrap.Endpoint, "send_retirement", release)
     assert s.sender.send() is None
-    with pytest.raises(command.delivery_tests.m.UnconfirmedDelivery):
+    with pytest.raises(command.delivery_tests.m.UnconfirmedDelivery) as refused:
         command.finish(s, monkeypatch, arm)
-    assert sent == (["writer"] if after == "writer" else ["writer", "observer"])
+    assert sent == (["writer"] if after == "writer" else ["writer", "observer"]), getattr(
+        refused.value, "__notes__", []
+    )
     assert not releases and s.plan_receipt and s.pair.channel_delivery_attempted
     assert s.custody.armed_watch is s.watch and s.watch.closed and s.watch.finished
     assert s.pipeline_end == s.staged_plan.deadline == s.staged_handoff.deadline == end

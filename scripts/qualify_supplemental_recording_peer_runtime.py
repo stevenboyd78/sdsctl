@@ -255,6 +255,7 @@ class PeerRuntimePair:
         # peers once, before any action. Comparison itself still signals none.
         self.termination_capture_attempted = False
         self.channel_delivery_attempted = False
+        self.passive_completion_attempted = False
         try:
             require(type(self) is PeerRuntimePair)
             require(

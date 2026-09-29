@@ -1,6 +1,6 @@
 """Actual passive flow from separately staged source; no installed admission.
 
-The 104-module peer profile stays unchanged. Seven actual outer-policy imports
+The 104-module peer profile stays unchanged. Eight actual outer-policy imports
 are an explicit TEST candidate, while six legacy imports belong only to the
 existing fixture bootstrap. This test never calls that union a production pin.
 """
@@ -29,6 +29,7 @@ OUTER_ADDITIONS = frozenset(
         "supplemental_recording_permission_review",
         "supplemental_recording_permission_sender",
         "supplemental_recording_service_command",
+        "supplemental_recording_passive_outer",
     }
 )
 FIXTURE_ONLY = frozenset(
@@ -48,11 +49,45 @@ def test_outer_candidate_closure_does_not_expand_the_admitted_peer_profile():
     candidate = SimpleNamespace(
         MODULES=peer.MODULES | OUTER_ADDITIONS,
         ROOTS=peer.ROOTS
-        | {"qualify_supplemental_recording_service", "supplemental_recording_permission_sender"},
+        | {
+            "qualify_supplemental_recording_service",
+            "supplemental_recording_permission_sender",
+            "supplemental_recording_passive_outer",
+        },
     )
     assert source.static_graph(candidate) == candidate.MODULES
-    assert len(peer.MODULES) == 104 and len(candidate.MODULES) == 111
+    assert len(peer.MODULES) == 104 and len(candidate.MODULES) == 112
     assert not (FIXTURE_ONLY & candidate.MODULES)
+
+
+def test_reusable_outer_import_has_no_process_network_or_publication_activity():
+    script = r"""
+import os, signal, socket, subprocess, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+sys.path[:0] = [str(root / "scripts"), str(root / "src")]
+def forbidden(*args, **kwargs):
+    raise AssertionError("Passive outer import performed activity")
+subprocess.Popen = forbidden
+for name in ("open", "fork", "system", "mkdir", "unlink", "rename", "kill"):
+    setattr(os, name, forbidden)
+signal.pidfd_send_signal = forbidden
+for name in ("connect", "connect_ex", "bind", "listen", "send", "sendall", "sendto", "sendmsg"):
+    setattr(socket.socket, name, forbidden)
+import supplemental_recording_passive_outer as outer
+assert outer.complete.__module__ == "supplemental_recording_passive_outer"
+print("passive import only")
+"""
+    result = subprocess.run(
+        [sys.executable, "-I", "-B", "-c", script, str(Path(__file__).parents[1])],
+        env={},
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode == 0, failure_types(result.stderr.encode())
+    assert result.stdout == "passive import only\n" and not result.stderr
 
 
 @pytest.fixture

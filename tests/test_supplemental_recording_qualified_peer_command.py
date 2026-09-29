@@ -9,6 +9,7 @@ No live App, active permission, recording, recovery or installed launcher claim.
 
 import builtins
 import copy
+import importlib.util
 import inspect
 import io
 import json
@@ -47,6 +48,14 @@ layout, image_umask, supervised = (
 )
 image, configured = qualification.image, qualification.configured
 STAGED_SOURCE_GUARD = None  # Explicit staged-process fixture only; never production.
+OUTER_NAME = "supplemental_recording_passive_outer"
+OUTER_SPEC = importlib.util.spec_from_file_location(
+    OUTER_NAME, Path(p.__file__).with_name(OUTER_NAME + ".py")
+)
+outer = importlib.util.module_from_spec(OUTER_SPEC)
+sys.modules[OUTER_NAME] = outer
+OUTER_SPEC.loader.exec_module(outer)
+OUTER_COMPLETE_CODE = outer.complete.__code__
 
 
 def source_guard_prefix(role):
@@ -125,6 +134,33 @@ def delivery_diagnostics(patches):
             raise
 
     patches.setattr(delivery_tests.m, "_deliver", observed)
+
+
+def passive_outer_diagnostics(refusal):
+    """Inspect only the saved cause slot of the exact refused outer frame."""
+    trace = refusal.__traceback__
+    for _ in range(64):
+        if trace is None:
+            break
+        if trace.tb_frame.f_code is OUTER_COMPLETE_CODE:
+            locations = failure_locations(trace.tb_frame.f_locals.get("problem"))
+            if locations:
+                refusal.add_note(locations)
+            break
+        trace = trace.tb_next
+
+
+def test_passive_outer_diagnostics_never_copy_private_values():
+    with pytest.raises(delivery_tests.m.UnconfirmedDelivery) as failure:
+        try:
+            outer.complete("PRIVATE_OUTER_PAYLOAD", *([None] * 7), deadline=0)
+        except delivery_tests.m.UnconfirmedDelivery as refusal:
+            passive_outer_diagnostics(refusal)
+            raise
+    assert str(failure.value) == delivery_tests.m.MESSAGE
+    notes = getattr(failure.value, "__notes__", [])
+    assert notes and "scripts/supplemental_recording_passive_outer.py:" in notes[0]
+    assert "PRIVATE_OUTER_PAYLOAD" not in repr(notes)
 
 
 def test_delivery_diagnostics_retain_source_without_private_values(monkeypatch):
@@ -1371,6 +1407,7 @@ def finish(s, monkeypatch, after_qualification=None):
     if s.automatic_observer:
         assert type(s.custody) is termination_tests.m.Custody
         assert s.custody.pair is s.pair and s.custody.armed_watch is s.watch
+        return finish_automatic(s, plan, monkeypatch)
     submission = writer.assembly.baseline_tests.integration.startups.sends.m
     # Only local case-file operations use this fixture path. Keeping the override
     # during fresh runtime comparison would change its expected Engine mount and
@@ -1379,20 +1416,15 @@ def finish(s, monkeypatch, after_qualification=None):
         files.setattr(p.startups.plans.Plan, "root", property(lambda _: s.case_root))
         original = s.stack.enter_context(submission.intake.CasePlan(s.case_root, plan.sha256))
         if s.plan_delivery:
-            listener = (
-                s.staged_plan
-                if s.automatic_observer
-                else s.stack.enter_context(
-                    closing(
-                        p.listeners.Listener(
-                            s.plan_socket, s.counterpart, deadline=time.monotonic() + 2
-                        )
+            listener = s.stack.enter_context(
+                closing(
+                    p.listeners.Listener(
+                        s.plan_socket, s.counterpart, deadline=time.monotonic() + 2
                     )
                 )
             )
             s.plan_listener, s.sent_plan = listener, original
-            if not s.automatic_observer:
-                transport.command(s.observer, dict(plan_ready=True))
+            transport.command(s.observer, dict(plan_ready=True))
             listener.accept()
             s.plan_receipt = p.send_observer_plan(
                 s.inputs,
@@ -1408,23 +1440,14 @@ def finish(s, monkeypatch, after_qualification=None):
             )
         if s.retained_delivery:
             end = min(time.monotonic() + 2, plan.lease["ready_by"])
-            if s.automatic_observer:
-                end = min(end, s.pipeline_end)
             s.writer_listener = s.stack.enter_context(
                 closing(p.listeners.Listener(s.writer_handoff, s.h.witness, deadline=end))
             )
-            s.observer_listener = (
-                s.staged_handoff
-                if s.automatic_observer
-                else s.stack.enter_context(
-                    closing(p.listeners.Listener(s.observer_handoff, s.counterpart, deadline=end))
-                )
+            s.observer_listener = s.stack.enter_context(
+                closing(p.listeners.Listener(s.observer_handoff, s.counterpart, deadline=end))
             )
         approved = submission.Submission(original, s.inputs.template.sha256, plan.sha256)
-        if s.automatic_observer:
-            approved.submit_before(s.pipeline_end)
-        else:
-            approved.submit()
+        approved.submit()
     if s.retained_delivery:
         writer_channel = s.writer_listener.accept()
     else:
@@ -1514,6 +1537,61 @@ def finish(s, monkeypatch, after_qualification=None):
     if s.authenticated_release and outcome != milestone:
         return json.loads(outcome)  # Refusal, not passive preparation completion.
     assert outcome == milestone
+    return json.loads(transport.line(s.h.child))
+
+
+def finish_automatic(s, plan, monkeypatch):
+    """Synthetic path mapping only; real sequence lives outside legacy fixtures."""
+    original_root = p.startups.plans.Plan.root
+    with monkeypatch.context() as files:
+        files.setattr(p.startups.plans.Plan, "root", property(lambda _: s.case_root))
+        original = s.stack.enter_context(outer.submission.intake.CasePlan(s.case_root, plan.sha256))
+        # Only the retained file-plan object uses the fixture path. Full paired
+        # runtime comparisons still see their originally pinned canonical root.
+        files.setattr(
+            p.startups.plans.Plan,
+            "root",
+            property(
+                lambda value: s.case_root if value is original._plan else original_root.fget(value)
+            ),
+        )
+        s.sent_plan, s.plan_listener = original, s.staged_plan
+        s.observer_listener = s.staged_handoff
+        end = min(s.pipeline_end, plan.lease["ready_by"])
+        s.writer_listener = s.stack.enter_context(
+            closing(p.listeners.Listener(s.writer_handoff, s.h.witness, deadline=end))
+        )
+        send_plan = p.send_observer_plan
+
+        def observed_plan(*args, **kwargs):
+            # Test-only phase evidence survives later refusal. This is the real
+            # transport result, not a forged overall completion/exit receipt.
+            receipt = send_plan(*args, **kwargs)
+            s.plan_receipt = receipt
+            return receipt
+
+        files.setattr(p, "send_observer_plan", observed_plan)
+        try:
+            result = outer.complete(
+                s.custody,
+                s.watch,
+                s.h.observer_identity,
+                s.inputs,
+                original,
+                s.plan_listener,
+                s.writer_listener,
+                s.observer_listener,
+                deadline=s.pipeline_end,
+            )
+        except delivery_tests.m.UnconfirmedDelivery as error:
+            passive_outer_diagnostics(error)
+            raise
+    s.plan_receipt, s.delivered = result.plan_receipt, result.delivered
+    assert json.loads(transport.line(s.observer)) == dict(
+        plan_retained=plan.sha256, input_pin=s.inputs.expected
+    )
+    assert json.loads(transport.line(s.observer))["received"]
+    assert transport.line(s.h.child) == p.RETAINED_MILESTONE
     return json.loads(transport.line(s.h.child))
 
 

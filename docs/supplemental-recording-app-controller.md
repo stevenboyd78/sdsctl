@@ -2372,6 +2372,55 @@ needs independently bounded startup; no test proves installed exec/import/loadin
 fits two seconds. Active App admission and exclusive recovery remain separate
 gates, and this passive command is not a candidate for a human scanner/audio test.
 
+### Reusable original-outer passive completion (uninstalled)
+
+`supplemental_recording_passive_outer.complete` now joins the formerly
+fixture-sequenced final-plan transport, bounded startup-acceptance publication
+and passive descriptor delivery/release. It borrows the same original qualified
+pair, armed Custody/Watch, clock, Inputs, independently reviewed retained
+CasePlan and three already provisioned listeners. It constructs no process,
+listener, new clock, service, journal, recording or recovery owner. Only the
+exact separately selected passive writer/observer argv and original outer
+identity are allowed; changing selection or baseline refuses before publishing
+acceptance. A returned value contains only transport facts, never Ready, App
+permission, peer-exit evidence or successful retirement.
+
+The original pair has one completion slot. Once the binding is validated and
+that slot consumed, uncertainty cancels the exact original watcher. Original
+case files and partial publication survive; correcting arguments cannot reuse
+the failed attempt. Unrelated unbound objects are not adopted or closed.
+All phases retain their original owners and finite cutoffs, including the
+publication's explicit original-outer bound. The three listeners must name
+the same original whole-sequence cutoff; a later phase is not relabeled with
+a smaller bound it does not itself enforce. Each accept is followed by the
+original guard before any next phase. A syscall returning at the cutoff cannot
+permit one more plan send or observer accept. Full pre/post delivery runtime
+collections remain fresh; no previous comparison is treated as current evidence.
+Release can cause immediate writer exit, so there is no subsequent live-peer
+guard or claim that a transport return proves exit. The caller still must
+independently observe and reap its original peers and watcher.
+
+The actual automatic process fixture and separately staged flow call this same
+library. Their initial Engine/runtime/path aliases and input provenance remain
+synthetic; this extraction does not qualify a fixed installed outer command,
+interpreter, initial startup or whole-platform supervision. Cooperative checks
+cannot preempt a blocked syscall. No production source profile, launcher, App
+action scope or exclusive recovery authority selects this library.
+
+Profiling this join found repeated pure template/plan decoding within protocol
+guards. Template digest checks now retain the originally validated immutable
+bytes, verify their exact type/value and recompute the digest without decoding
+the whole plan again. A changed valid template cannot be resealed by calling
+its initializer. The final-plan exchange validates its complete structural
+relation once, then checks those same original template/expectation objects and
+bytes while CasePlan still freshly reads the file and compares every decoded
+plan field. Every original input/file/process/clock/domain observation remains;
+no observation is cached. Mutation and actual-process regressions cover those
+boundaries. This reduces pure parsing cost, not the two-second requirement.
+Coverage-instrumented runs still encountered actual writer exit after the
+original cutoff even when command cleanup had returned. Those remain failed
+timing qualifications; passing local runs do not establish installed timing.
+
 ### Staged original-outer and peer source execution, offline only
 
 An additional process fixture copies reviewed checkout sources into a separate
@@ -2383,7 +2432,7 @@ original two-second work cutoff is unchanged. Dynamic, static and UBSan native
 builds execute; no cgroup freeze or live App action is involved.
 
 The existing admitted peer preparation profile remains exactly 104 modules.
-Seven additional outer-policy modules form a separately measured 111-module
+Eight additional outer-policy modules form a separately measured 112-module
 **test candidate** closure, not a newly admitted source kind. Six legacy files
 are needed only by the existing test bootstrap, and remain explicitly separate.
 Three of those use direct file loaders without registering their module objects

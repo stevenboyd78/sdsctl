@@ -565,7 +565,9 @@ def _plan_file_guard(exchange, inputs, counterpart, original):
     require(type(original) is intake.CasePlan)
     plan = original.recheck()
     require(plan.root == writer_case_root(exchange.case))
-    inputs.expectations.check_plan(inputs.template, plan, plan.original_clock)
+    template, expected = inputs.template, inputs.expectations
+    expected.check_plan(template, plan, plan.original_clock)
+    template_raw, expected_raw = template.raw, expected.raw
     # Structural comparison uses the writer's reported Window, never creates
     # another ClockWitness from it. Executing-writer provenance remains external.
     require(plan.original_clock.before_ns >= exchange.origin.after_ns)
@@ -579,7 +581,14 @@ def _plan_file_guard(exchange, inputs, counterpart, original):
             require(proof.original_clock is exchange.origin)
             require(proof.native_time == plan.original_clock.namespace)
             require(original.recheck() is plan)
-            inputs.expectations.check_plan(inputs.template, plan, plan.original_clock)
+            # The complete relation was validated above. CasePlan still rereads
+            # and checks ALL original decoded fields at each call; input guards
+            # likewise retain their fresh file/descriptor checks. Verify these
+            # same immutable records and bytes, not another pure JSON decode of
+            # an unchanged relation. Replacement records are never adopted.
+            require(inputs.template is template and inputs.expectations is expected)
+            require(type(template.raw) is bytes and template.raw == template_raw)
+            require(type(expected.raw) is bytes and expected.raw == expected_raw)
             plan.check_clock(exchange.timer.read())
             require(time.monotonic() < min(exchange.end, plan.lease["ready_by"]))
 
