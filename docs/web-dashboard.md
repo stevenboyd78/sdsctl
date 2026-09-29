@@ -587,6 +587,14 @@ subtitle and visible `Theme` label are omitted from that narrow presentation
 while the selector retains its accessible name, so long theme names remain
 complete and more height stays available to the working pane.
 
+The captures use each theme's [default typography](theme-typography.md),
+including the locally bundled theme fonts.
+Appearance controls are centered above the workspace, wrapping onto a centered
+row when needed. LCARS shows the replacement v2 design with its Classic palette,
+Antonio font, segmented frame, and Site field beneath System. At compact
+landscape sizes its pane content can scroll internally to keep full-size fields
+and controls reachable; see [LCARS responsive acceptance](lcars-v2.md#responsive-acceptance).
+
 The unreleased phone Recordings layout places the small library label and
 Refresh button above a full-width title. The current recording's filename also
 uses a full-width telemetry row. This keeps wider system fonts from wrapping
@@ -669,9 +677,12 @@ spectrum and rolling history, relative-data labeling, lifecycle telemetry, and
 theme tokens without including live scanner frequencies or programming.
 
 Regenerate the checked-in gallery from a repository checkout with Chrome or
-Chromium and the web dependencies available:
+Chromium and the web dependencies available. The active environment must have
+this checkout installed, because the child demo server does not inherit
+`PYTHONPATH`:
 
 ```bash
+python -m pip install -e ".[dev]"
 python scripts/generate_web_dashboard_screenshots.py
 ```
 
