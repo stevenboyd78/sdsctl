@@ -4175,6 +4175,12 @@ If a disposable fixed writer exits unexpectedly, its fixture also makes one
 bounded nonblocking stderr read and extracts only known-checkout frame/location
 lines. Arbitrary child stderr is never echoed, and extracted locations are
 diagnostics, not authenticated evidence or permission to retry.
+The exiting-writer fixture also retains a caught preparation refusal as the
+cause of an unexpected terminal result. Otherwise an outer still checking its
+original pair could see only an exited writer and a later fixture assertion,
+without ever reading the earlier stdout report. A real subprocess regression
+changes only its disposable input after publication and checks that the original
+refusal locations, closed owners and unchanged failure files survive that exit.
 
 Additional integration cases keep one real PCMU Unix consumer and the recorder
 on the same RTP owner while native FQK or DTM acquisition succeeds or times out.

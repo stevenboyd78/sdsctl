@@ -260,7 +260,7 @@ def child(root):
 
             patches.setattr(p.startups.Startup, "poll", polling)
             original_fds = writer.preflight_probe.fds()
-            result, error, locations = None, None, []
+            result, error, locations, original_failure = None, None, [], None
             try:
                 command = (
                     p.prepare_retained_idle_writer
@@ -276,6 +276,7 @@ def child(root):
             except p.UnconfirmedPreparation as refusal:
                 error = "refused"
                 locations = getattr(refusal, "__notes__", [])[:8]
+                original_failure = refusal
             emit(
                 dict(
                     result=result,
@@ -299,7 +300,14 @@ def child(root):
                 )
             )
             if config["exit_after_result"]:
-                assert config["fixed_release"] and result == 75 and error is None
+                if not (config["fixed_release"] and result == 75 and error is None):
+                    # The outer may still be collecting its independent pair
+                    # when this child exits. Keep the original refusal behind
+                    # the terminal error; its stdout result may never be read.
+                    # The parent's stderr extractor exposes only source lines.
+                    raise AssertionError(
+                        "Original fixture writer did not reach passive retirement"
+                    ) from original_failure
                 raise SystemExit(result)
             # Other variants retain the fixture peer for explicit cancellation.
             sys.stdin.buffer.read()
@@ -1278,6 +1286,35 @@ def test_input_change_after_publication_keeps_failure_files_and_no_service(joine
     assert result["input_baseline_preserved"]
     assert original == {path.name: path.read_bytes() for path in s.case_root.iterdir()}
     assert s.path.read_bytes() == b"PRIVATE changed after publication"
+
+
+@pytest.mark.parametrize(
+    "joined", [dict(mode="release-command-pair", exit_after_result=True)], indirect=True
+)
+def test_exiting_writer_preserves_original_refusal_when_outer_has_not_read_result(joined):
+    s = joined
+    assert s.sender.send() is None
+    assert "plan" in json.loads(transport.line(s.h.child))
+    original = {path.name: path.read_bytes() for path in s.case_root.iterdir()}
+    s.path.write_bytes(b"PRIVATE changed after publication")
+    # The result is read here only as an oracle. In the failing native-command
+    # path the outer was still checking the pair when the writer had exited.
+    result = json.loads(transport.line(s.h.child))
+    assert result["error"] == "refused" and not result["accepted"]
+    assert result["retired"] and result["clocks_closed"] and result["fd_delta"] == 0
+    assert result["services"] == result["links"] == 0
+    s.h.expected_returncode = 1
+    assert s.h.child.wait(timeout=3) == 1 and s.h.witness.exited()
+    fd = s.h.child.stderr.fileno()
+    os.set_blocking(fd, False)
+    report = child_failure_locations(os.read(fd, 65536))
+    expected = child_failure_locations("\n".join(result["refusal_locations"]).encode())
+    assert expected and set(expected.splitlines()) <= set(report.splitlines())
+    assert "scripts/supplemental_recording_peer_preparation.py:" in report
+    assert "PRIVATE" not in report
+    assert original == {path.name: path.read_bytes() for path in s.case_root.iterdir()}
+    assert s.path.read_bytes() == b"PRIVATE changed after publication"
+    assert not s.counterpart.exited()  # This test never armed a peer watcher.
 
 
 @pytest.mark.parametrize("joined", ["pair"], indirect=True)
