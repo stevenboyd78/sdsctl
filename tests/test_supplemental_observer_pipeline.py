@@ -211,6 +211,69 @@ def test_observer_command_drift_stops_originals_without_release_or_deadline_rene
 
 
 @pytest.mark.parametrize("joined", [SELECTION | dict(exit_after_result=False)], indirect=True)
+@pytest.mark.parametrize("after", ["writer", "observer"])
+def test_native_loss_during_automatic_handoff_keeps_original_cutoff_and_refuses_release(
+    binary, direct_launcher, reviewed_binary, joined, monkeypatch, after
+):
+    s = joined
+    end, sent, releases = s.pipeline_end, [], []
+    endpoint_send = command.p.bootstrap.Endpoint.deliver
+
+    def arm():
+        command.arm_original_watch(
+            s,
+            native.selected_watch(
+                "sealed-direct-owner-ingress", binary, None, direct_launcher, reviewed_binary
+            ),
+        )
+
+    def endpoint(endpoint, channels):
+        result = endpoint_send(endpoint, channels)
+        sent.append(endpoint.role)
+        if endpoint.role == after:
+            signal.pidfd_send_signal(s.watch.fd, signal.SIGKILL)
+            assert time.monotonic() < end
+            assert select.select([s.watch.fd], [], [], end - time.monotonic())[0] == [s.watch.fd]
+        return result
+
+    def release(*args):
+        releases.append(True)
+        pytest.fail("Lost native watcher admitted passive writer release")
+
+    monkeypatch.setattr(command.p.bootstrap.Endpoint, "deliver", endpoint)
+    monkeypatch.setattr(command.p.bootstrap.Endpoint, "send_retirement", release)
+    assert s.sender.send() is None
+    with pytest.raises(command.delivery_tests.m.UnconfirmedDelivery):
+        command.finish(s, monkeypatch, arm)
+    assert sent == (["writer"] if after == "writer" else ["writer", "observer"])
+    assert not releases and s.plan_receipt and s.pair.channel_delivery_attempted
+    assert s.custody.armed_watch is s.watch and s.watch.closed and s.watch.finished
+    assert s.pipeline_end == s.staged_plan.deadline == s.staged_handoff.deadline == end
+    # Watch retirement is not peer-exit proof. Observe original handles before
+    # cleanup can add a reap allowance or act on the already consumed custody.
+    for fd in (s.h.witness.fd, s.counterpart.fd):
+        assert time.monotonic() < end
+        assert select.select([fd], [], [], end - time.monotonic())[0] == [fd]
+    assert s.h.child.wait(timeout=0) == -signal.SIGKILL
+    assert s.observer.wait(timeout=0) in (-signal.SIGKILL, 75)
+    files = {path.name: path.read_bytes() for path in s.case_root.iterdir() if path.is_file()}
+    assert {"startup-claim.json", "plan.json"} <= set(files)
+    with pytest.raises(command.delivery_tests.m.UnconfirmedDelivery):
+        command.delivery_tests.m.deliver_and_release_passive_writer(
+            s.custody,
+            s.watch,
+            s.h.observer_identity,
+            s.inputs,
+            s.writer_listener,
+            s.observer_listener,
+        )
+    assert not releases
+    assert files == {
+        path.name: path.read_bytes() for path in s.case_root.iterdir() if path.is_file()
+    }
+
+
+@pytest.mark.parametrize("joined", [SELECTION | dict(exit_after_result=False)], indirect=True)
 def test_each_runtime_guard_freshly_observes_original_outer_identity(joined, monkeypatch):
     s = joined
     assert s.sender.send() is None

@@ -2309,6 +2309,17 @@ delivery refusals and late shutdowns whose first cause was not captured remain
 unresolved; passing corrected runs do not retroactively explain them. Test-only
 delivery diagnostics retain reviewed source locations, never private values.
 
+The automatic observer also joins native-watchdog loss after each actual peer
+handoff. The full paired comparison, original Custody and sealed direct-owner
+watcher remain real; only the original watcher is deliberately killed, using its
+retained pidfd. Delivery must refuse before passive writer release, both original
+peer exits must be observed within the original two-second pipeline cutoff, and
+the consumed custody must refuse retry without changing the original failure
+files. The observer may be killed by exact-handle cleanup or independently refuse
+on original peer loss; neither outcome is successful work. This extends the
+earlier fixture-sequenced watchdog-loss checks to the new automatic path, not to
+an installed outer command, platform service or a broader failure domain.
+
 This removes fixture-only **phase sequencing**, not the initial fixture setup,
 installed exec/source provenance, fixed outer launcher or independent platform
 supervision. Declaration loading precedes the first connection cutoff and still
