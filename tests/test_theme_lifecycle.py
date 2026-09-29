@@ -1504,7 +1504,6 @@ def test_absent_inventory_is_read_only_and_always_lists_built_ins(
     assert tuple(package.identity for package in inventory.packages) == (
         "web/system",
         "web/lcars",
-        "web/lcars-v2",
         "web/matrix",
         "web/first-responder",
         "web/amateur-radio",
@@ -1517,6 +1516,21 @@ def test_absent_inventory_is_read_only_and_always_lists_built_ins(
         "tui/light",
     )
     assert all(package.origin == "built-in" for package in inventory.packages)
+
+
+def test_retired_lcars_preview_identity_cannot_be_shadowed(tmp_path: Path) -> None:
+    source = _web_theme(tmp_path, "lcars-v2")
+    root = tmp_path / "managed"
+    with pytest.raises(ThemeLifecycleError, match="must not shadow"):
+        install_theme_package(source, root)
+    assert not root.exists()
+    # Also reject a manually copied package during read-only discovery.
+    destination = root / "web" / "lcars-v2"
+    shutil.copytree(source, destination)
+    inventory = discover_theme_inventory(root)
+    assert all(package.identity != "web/lcars-v2" for package in inventory.packages)
+    assert any("must not shadow" in issue.message for issue in inventory.issues)
+    assert destination.is_dir()
 
 
 def test_inventory_discovers_all_interfaces_and_isolates_invalid_entries(

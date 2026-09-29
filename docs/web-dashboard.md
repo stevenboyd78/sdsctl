@@ -1,5 +1,8 @@
 # Web dashboard
 
+See [built-in theme typography](theme-typography.md) for offline font pairings,
+readable/system fallbacks, per-theme preferences and font attribution.
+
 Milestone 20.1 established the optional daemon-backed HTTP service and
 loopback-only command. Milestone 20.2 added the first accessible responsive,
 read-only browser shell. Milestone 20.3 added live ordered browser updates over
@@ -8,7 +11,7 @@ PCMU audio. Milestone 20.5 added daemon-owned recording workflows, finalized
 recording inventory, and safe saved-WAV playback and download. Milestone 20.6
 added capability-negotiated scanner hold, previous/next navigation, and bounded
 reconnect controls without changing daemon scanner ownership. Milestone 20.7
-adds browser-local system-adaptive, LCARS-inspired, Matrix-inspired,
+adds browser-local system-adaptive, LCARS, Matrix-inspired,
 First Responder, and Amateur Radio themes over the same accessible dashboard
 structure, including immersive full-screen desktop compositions and compact
 responsive fallbacks for the four custom environments. Milestone 20.11 adds an
@@ -339,12 +342,12 @@ http://127.0.0.1:8000/
 ```
 
 Theme selection is presentation-only and browser-local. The deterministic
-built-in picker order is **System**, **LCARS-inspired**, **LCARS v2**, **Matrix-inspired**,
+built-in picker order is **System**, **LCARS**, **Matrix-inspired**,
 **First Responder**, **Amateur Radio**, and **Pip-Boy-inspired**. System follows
 the browser or operating-system light/dark preference and remains the stable
 default and safe fallback. It now frames the shared workspace and prominent
 scanner pane around the established scanner-display proportions, hierarchy,
-status treatment, and adaptive screen profiles. The six custom choices are
+status treatment, and adaptive screen profiles. The five custom choices are
 more theatrical while preserving the same dashboard semantics:
 
 When **System** is active, a second browser-local selector appears in the center
@@ -367,14 +370,12 @@ accent-filled controls receive the higher-contrast black or white label. On
 phone-sized viewports the selector moves below the overview title and connection
 message rather than compressing either one.
 
-- **LCARS-inspired** connects the six operational panels with asymmetric rails,
-  segmented console bands, luminous command-deck surfaces, and layered display
-  depth.
-- **LCARS v2** is a separate, opt-in redesign with exact TheLCARS palette colors,
+- **LCARS** uses the v2 redesign with exact TheLCARS palette colors,
   segmented rails, a wide-screen navigation column, Site beneath System, and
   local Antonio / readable-mix / system typography. Its palette and typography
-  preferences are saved independently. The original LCARS theme is unchanged;
-  replacement is deferred to release review. See [LCARS v2](lcars-v2.md).
+  preferences are saved independently. Existing `lcars` selections use this
+  design; preview `lcars-v2` selections migrate to `lcars` without losing palette
+  or font preferences. See [LCARS design and migration](lcars-v2.md).
 - **Matrix-inspired** turns the shared dashboard into a cinematic terminal
   workstation with varied terminal panes, technical grids, scan illumination,
   data-field staging, and perspective depth.
@@ -604,15 +605,15 @@ not install fonts, change production font preferences, or replace the gallery.
 
 ![System theme at a 390x844 CSS viewport and DPR2](assets/web-dashboard/theme-system-390x844-dpr2.png)
 
-### LCARS-inspired
+### LCARS
 
-![LCARS-inspired theme at 1920x1080](assets/web-dashboard/theme-lcars-1920x1080.png)
+![LCARS theme at 1920x1080](assets/web-dashboard/theme-lcars-1920x1080.png)
 
-![LCARS-inspired theme at 1366x768](assets/web-dashboard/theme-lcars-1366x768.png)
+![LCARS theme at 1366x768](assets/web-dashboard/theme-lcars-1366x768.png)
 
-![LCARS-inspired theme at 800x480](assets/web-dashboard/theme-lcars-800x480.png)
+![LCARS theme at 800x480](assets/web-dashboard/theme-lcars-800x480.png)
 
-![LCARS-inspired theme at a 390x844 CSS viewport and DPR2](assets/web-dashboard/theme-lcars-390x844-dpr2.png)
+![LCARS theme at a 390x844 CSS viewport and DPR2](assets/web-dashboard/theme-lcars-390x844-dpr2.png)
 
 ### Matrix-inspired
 
@@ -1205,7 +1206,7 @@ The dashboard now includes:
   daemon-shutdown finalization before audio runtime teardown;
 - idle disconnected daemon event-client reaping;
 - restrictive static-, event-, audio-, and recording-file response headers;
-- browser-local System, LCARS-inspired, Matrix-inspired, First Responder,
+- browser-local System, LCARS, Matrix-inspired, First Responder,
   Amateur Radio, and original asset-free Pip-Boy-inspired themes in deterministic
   order over one shared accessible workspace, with managed-theme compatibility,
   reduced-motion and forced-color handling, CSP-safe pre-paint restoration, and

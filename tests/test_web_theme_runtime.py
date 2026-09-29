@@ -77,7 +77,6 @@ def test_runtime_defaults_to_exact_built_in_registry() -> None:
     assert runtime.registry.identifiers == (
         "system",
         "lcars",
-        "lcars-v2",
         "matrix",
         "first-responder",
         "amateur-radio",
@@ -112,7 +111,6 @@ def test_runtime_merges_valid_web_theme_in_manifest_order(tmp_path: Path) -> Non
     assert runtime.registry.identifiers == (
         "system",
         "lcars",
-        "lcars-v2",
         "solarized",
         "matrix",
         "first-responder",

@@ -71,6 +71,7 @@ from .web_theme_runtime import (
     read_web_theme_stylesheet,
 )
 from .web_themes import WebThemeError
+from .web_typography import WEB_TYPOGRAPHY_FONTS
 
 WEB_DASHBOARD_API_PROTOCOL = "sdsctl.web"
 WEB_DASHBOARD_API_VERSION = 1
@@ -676,6 +677,24 @@ def create_web_dashboard_app(
     @app.get("/assets/fonts/antonio-OFL.txt", include_in_schema=False)
     def lcars_v2_font_license() -> Response:
         return _asset_response("fonts/antonio-OFL.txt", media_type="text/plain")
+
+    @app.get("/assets/theme-typography.css", include_in_schema=False)
+    def theme_typography_stylesheet() -> Response:
+        return _asset_response("theme-typography.css", media_type="text/css")
+
+    @app.get("/assets/theme-typography.js", include_in_schema=False)
+    def theme_typography_script() -> Response:
+        return _asset_response("theme-typography.js", media_type="application/javascript")
+
+    @app.get("/assets/fonts/{name}", include_in_schema=False)
+    def theme_typography_font(name: str) -> Response:
+        if name not in WEB_TYPOGRAPHY_FONTS:
+            raise HTTPException(status_code=404, detail="Font asset not found.")
+        return Response(
+            content=files(_WEB_ASSET_PACKAGE).joinpath(f"fonts/{name}").read_bytes(),
+            media_type="font/ttf" if name.endswith(".ttf") else "text/plain",
+            headers=dict(_WEB_RESPONSE_HEADERS),
+        )
 
     @app.get("/assets/mimic-sds.css", include_in_schema=False, response_class=Response)
     def mimic_stylesheet() -> Response:

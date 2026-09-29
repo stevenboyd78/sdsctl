@@ -635,7 +635,7 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
         'id="status-badge"'
     ) < response.text.index('class="header-actions"')
     assert '<option value="system">System</option>' in response.text
-    assert '<option value="lcars">LCARS-inspired</option>' in response.text
+    assert '<option value="lcars">LCARS</option>' in response.text
     assert '<option value="matrix">Matrix-inspired</option>' in response.text
     assert '<option value="first-responder">First Responder</option>' in response.text
     assert '<option value="amateur-radio">Amateur Radio</option>' in response.text
@@ -873,7 +873,7 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     )
     assert "color: var(--background);" in stylesheet_source.text
     assert "color: var(--background);" in theme_text["system"]
-    assert "--lcars-panel:" in theme_text["lcars"]
+    assert "--lcars-v2-rail:" in theme_text["lcars"]
     assert "--term-accent:" in theme_text["matrix"]
     assert "--dispatch-accent:" in theme_text["first-responder"]
     assert "--radio-accent:" in theme_text["amateur-radio"]

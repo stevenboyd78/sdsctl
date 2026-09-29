@@ -224,7 +224,7 @@ safe saved-WAV playback and download, and browser-local visual presentation.
 
 The web process remains a daemon client and does not open scanner hardware or a
 second RTSP/RTP session. The dashboard also provides capability-negotiated
-semantic scanner controls and browser-local System, LCARS-inspired,
+semantic scanner controls and browser-local System, LCARS,
 Matrix-inspired, First Responder, Amateur Radio, and Pip-Boy-inspired themes over
 one shared accessible structure. The stable `system` identity remains the
 browser-local default and safe fallback, with scanner-display hierarchy and
@@ -426,7 +426,7 @@ deliberately trusts only the Supervisor proxy peer.
 
 A future desktop GUI may reuse the same services and API.
 
-The web dashboard now provides System, LCARS-inspired, Matrix-inspired, First
+The web dashboard now provides System, LCARS, Matrix-inspired, First
 Responder, Amateur Radio, and original Pip-Boy-inspired environments over one
 shared accessible structure rather than separate interfaces. They use
 renderer-specific structural tokens and an ARIA-hidden decorative stage for

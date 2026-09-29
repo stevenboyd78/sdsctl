@@ -64,7 +64,7 @@
     if (system && originalList) originalList.insertBefore(anchor, siteRow);
 
     function sync() {
-      const active = root.dataset.theme === "lcars-v2";
+      const active = root.dataset.theme === "lcars";
       if (wrapper) wrapper.hidden = !active;
       if (tabs) tabs.setAttribute("aria-orientation", active && wide.matches ? "vertical" : "horizontal");
       // Compact display navigation owns its disclosure content; do not pull

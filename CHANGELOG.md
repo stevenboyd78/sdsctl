@@ -8,6 +8,10 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Bundle offline, licensed typography for First Responder, Amateur Radio,
+  Pip-Boy-inspired and Matrix, with per-theme font pairing and readable/system
+  fallback choices. Keep Mimic-SDS, System and terminal fonts independent;
+  exclude Rapid Response and OCR-A from shipped assets.
 - Add a read-only TUI Scanner details drawer (X / command palette) for existing
   talkgroup/unit IDs, reported P25 status and raw battery telemetry, without
   adding compact dashboard rows or issuing scanner commands. Clear unconfirmed
@@ -16,6 +20,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   panel, separately from the local client version and scanner firmware. Reuse
   existing authenticated snapshots, show unavailable for older daemons, and
   clear stale metadata on daemon disconnection without adding a Pi layout row.
+
+### Changed
+
+- Replace the original WebUI LCARS theme with the reviewed v2 design: six
+  palettes, bundled offline Antonio typography options, segmented rails, and
+  Site beneath System. Keep the stable `lcars` theme ID and migrate saved
+  `lcars-v2` preview selections without resetting palette or font preferences.
+  System remains the default; no live installation is updated by this change.
 
 ### Fixed
 

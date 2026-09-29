@@ -1,9 +1,22 @@
 # LCARS v2
 
-LCARS v2 is a separate WebUI theme (`lcars-v2`). Select it in the normal Theme
-picker. The original LCARS-inspired (`lcars`) theme remains unchanged, and
-System remains the default. Do not migrate existing `lcars` preferences: whether
-to replace the original theme is a later release-review decision.
+LCARS v2 now replaces the original LCARS-inspired WebUI design. Select **LCARS**
+in the normal Theme picker; its stable identifier remains `lcars`. System is
+still the default and safe fallback. There is no duplicate LCARS v2 entry.
+
+## Existing selections
+
+- A saved `sdsctl.web.theme=lcars` automatically uses the new design.
+- The preview identifier `lcars-v2` is normalized to `lcars` before first paint
+  and repaired in browser storage when storage is writable.
+- Existing v2 palette and typography keys are retained unchanged. No system
+  palette, other theme selection, scanner setting, or server configuration is
+  migrated. If browser storage is blocked, theme selection still works for the
+  current page; persistence is optional.
+- The retired `lcars-v2` identity remains reserved against managed-theme
+  installation to prevent another package from capturing migrated selections.
+- The old artwork is no longer shipped as a selectable theme. System remains
+  the alternative for users who prefer the original functional layout.
 
 ## Appearance
 
@@ -29,7 +42,7 @@ and `sdsctl.web.lcars-v2-typography`. Switching away and back preserves them.
 Invalid preferences fall back to Classic and Antonio; blocked browser storage
 does not prevent selection. Changing appearance never sends scanner commands.
 
-The manifest and paint stylesheet live in `themes/web/lcars-v2`. The built-in
+The manifest and paint stylesheet live in `themes/web/lcars`. The built-in
 shell explicitly supplies `web_assets/lcars-v2.css` and `lcars-v2.js` for layout,
 pickers, and reversible Site placement. This does not expand the capabilities
 of third-party CSS-only theme packages. Same-origin assets use the existing
@@ -53,9 +66,9 @@ the application's MIT license.
 
 ## Scope and release review
 
-This is a WebUI integration, not a TUI or Home Assistant card redesign. No
-existing preference, installation, or runtime daemon configuration is changed.
-The previously published six-theme screenshot gallery remains a historical
-gallery until release documentation is refreshed. Before replacing the original
-LCARS theme, review user acceptance, actual ingress and Pi/browser behavior,
-contrast/accessibility, and an explicit preference migration plan.
+This is a WebUI integration, not a TUI or Home Assistant card redesign. Theme
+replacement was approved following the design review. It does not install an
+update on Home Assistant or either Pi, change scanner behavior, or change
+runtime daemon configuration. The LCARS gallery shows the replacement design;
+normal release-wide checks and real ingress/Pi browser acceptance remain part
+of rollout. Source history retains the former theme for recovery.

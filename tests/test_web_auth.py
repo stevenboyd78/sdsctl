@@ -166,9 +166,10 @@ def test_display_allowlist_denies_every_other_route_before_daemon_work() -> None
         assert client.get("/auth/session").json()["display_only"] is True
         assert client.get("/assets/themes/system/theme.css").status_code == 200
         for path in (
-            "/assets/themes/lcars-v2/theme.css", "/assets/lcars-v2.css",
+            "/assets/themes/lcars/theme.css", "/assets/lcars-v2.css",
             "/assets/lcars-v2.js", "/assets/fonts/antonio-variable.ttf",
             "/assets/fonts/antonio-OFL.txt",
+            *web_auth.WEB_TYPOGRAPHY_READ_PATHS,
         ):
             assert client.get(path).status_code == 200
         assert client.get("/assets/dashboard.css?sdsctl_source=1").status_code == 200
@@ -181,6 +182,7 @@ def test_display_allowlist_denies_every_other_route_before_daemon_work() -> None
                 assert client.request(method, path, headers={"Origin": ORIGIN}).status_code == 403
         for path in (
             "/api/v1/future", "/assets/future.js", "/api/v1/home-assistant/advanced-access",
+            "/assets/fonts/unknown.ttf", "/assets/fonts/rapid-response.ttf",
             "/api/v1/home-assistant/advanced-access/display-password/rotate",
         ):
             assert client.get(path).status_code == 403

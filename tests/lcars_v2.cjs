@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const script = fs.readFileSync(process.argv[2], 'utf8');
+const bootstrap = fs.readFileSync(0, 'utf8');
 
 class Element {
   constructor(name) {
@@ -31,7 +32,8 @@ class Element {
   setAttribute(name, value) { this.attributes[name] = value; }
   addEventListener(name, fn) { this.listeners[name] = fn; }
 }
-function harness({stored = {}, blocked = false, loading = false, incomplete = false} = {}) {
+function harness({stored = {}, blocked = false, loading = false, incomplete = false,
+  withBootstrap = false, writeBlocked = false} = {}) {
   const root = new Element('html'); root.dataset.theme = 'system';
   const ids = {};
   for (const id of ['lcars-v2-appearance-pickers', 'lcars-v2-palette-select',
@@ -52,17 +54,23 @@ function harness({stored = {}, blocked = false, loading = false, incomplete = fa
   const originalChildren = [...panel.children];
   const writes = [], events = {}, observers = [], documentEvents = {};
   const wide = {matches: true, addEventListener: (_, fn) => { wide.changed = fn; }};
+  const themePicker = {value: ''};
   const document = {
     readyState: loading ? 'loading' : 'complete', documentElement: root,
     getElementById: id => incomplete ? null : ids[id] || null,
-    querySelector: () => incomplete ? null : tabs,
+    querySelector: selector => incomplete ? null :
+      selector === '.workspace-tabs' ? tabs : selector === '#theme-select' ? themePicker : null,
+    querySelectorAll: () => [],
     createElement: name => new Element(name), createComment: name => new Element(name),
     addEventListener: (event, fn) => { documentEvents[event] = fn; },
   };
   const window = {
     localStorage: {
       getItem: key => { if (blocked) throw Error('blocked'); return stored[key] ?? null; },
-      setItem: (key, value) => { if (blocked) throw Error('blocked'); writes.push([key, value]); },
+      setItem: (key, value) => {
+        if (blocked || writeBlocked) throw Error('blocked');
+        stored[key] = value; writes.push([key, value]);
+      },
     },
     addEventListener: (event, fn) => { events[event] = fn; }, matchMedia: () => wide,
   };
@@ -73,10 +81,12 @@ function harness({stored = {}, blocked = false, loading = false, incomplete = fa
       assert.equal(options.attributeFilter.join(','), 'data-theme,data-kiosk-compact');
     }
   }
-  vm.runInNewContext(script, {document, window, MutationObserver});
+  const context = vm.createContext({document, window, MutationObserver});
+  if (withBootstrap) vm.runInContext(bootstrap, context);
+  vm.runInContext(script, context);
   return {
     root, ids, tabs, panel, controls, details, hierarchy, originalList, siteRow,
-    nextRow, originalChildren, writes, wide, events, documentEvents,
+    nextRow, originalChildren, writes, wide, events, documentEvents, themePicker, window, stored,
     theme(value) { root.dataset.theme = value; for (const fn of observers) fn(); },
     choose(id, value) { ids[id].value = value; ids[id].listeners.change(); },
   };
@@ -92,13 +102,13 @@ assert.equal(clean.writes.length, 0);
 const site = clean.ids['radio-site'];
 site.textContent = 'Live Site';
 for (const unused of [1, 2, 3]) {
-  clean.theme('lcars-v2');
+  clean.theme('lcars');
   assert.equal(clean.ids['lcars-v2-appearance-pickers'].hidden, false);
   assert.equal(clean.tabs.attributes['aria-orientation'], 'vertical');
   assert.equal(clean.siteRow.parentElement.className, 'lcars-v2-site-list');
   assert.equal(site.textContent, 'Live Site');
   assert.equal(clean.controls.nextElementSibling, clean.details);
-  for (const theme of ['lcars', 'matrix', 'system']) {
+  for (const theme of ['first-responder', 'matrix', 'system']) {
     clean.theme(theme);
     assert.equal(clean.ids['lcars-v2-appearance-pickers'].hidden, true);
     assert.equal(clean.tabs.attributes['aria-orientation'], 'horizontal');
@@ -107,7 +117,7 @@ for (const unused of [1, 2, 3]) {
     assert.deepEqual(clean.panel.children, clean.originalChildren);
   }
 }
-clean.theme('lcars-v2'); clean.wide.matches = false; clean.wide.changed();
+clean.theme('lcars'); clean.wide.matches = false; clean.wide.changed();
 assert.equal(clean.tabs.attributes['aria-orientation'], 'horizontal');
 for (const palette of ['classic', 'nemesis-blue', 'lower-decks', 'lower-decks-padd', 'voyager', 'picard']) {
   clean.choose(paletteId, palette); assert.equal(clean.root.dataset.lcarsV2Palette, palette);
@@ -139,16 +149,58 @@ assert.equal(early.root.dataset.lcarsV2Type, 'system');
 early.documentEvents.DOMContentLoaded();
 assert.equal(early.ids[paletteId].value, 'nemesis-blue');
 assert.equal(early.ids[typeId].value, 'system');
-harness({incomplete: true}).theme('lcars-v2');
+harness({incomplete: true}).theme('lcars');
 // The display-only compact controller temporarily owns details and controls.
 const compact = harness();
 const disclosure = new Element('compact-details');
 disclosure.append(compact.controls); disclosure.append(compact.details);
-compact.theme('lcars-v2');
-assert.equal(compact.controls.parentElement, disclosure);
 compact.theme('lcars');
 assert.equal(compact.controls.parentElement, disclosure);
+compact.theme('system');
+assert.equal(compact.controls.parentElement, disclosure);
 compact.panel.append(compact.controls); compact.panel.append(compact.details);
-compact.theme('lcars-v2');
+compact.theme('lcars');
 assert.equal(compact.controls.nextElementSibling, compact.details);
+
+// Exercise the actual served bootstrap and controller together. Both saved IDs
+// must activate the new layout before any user selection, without losing prefs.
+const themeKey = 'sdsctl.web.theme', systemPaletteKey = 'sdsctl.web.system-palette';
+for (const savedTheme of ['lcars', 'lcars-v2']) {
+  const migrated = harness({withBootstrap: true, stored: {
+    [themeKey]: savedTheme, [paletteKey]: 'picard', [typeKey]: 'mixed',
+    [systemPaletteKey]: 'auto', unrelated: 'preserve-me',
+  }});
+  assert.equal(migrated.root.dataset.theme, 'lcars');
+  assert.equal(migrated.themePicker.value, 'lcars');
+  assert.equal(migrated.stored[themeKey], 'lcars');
+  assert.equal(migrated.root.dataset.lcarsV2Palette, 'picard');
+  assert.equal(migrated.root.dataset.lcarsV2Type, 'mixed');
+  assert.equal(migrated.siteRow.parentElement.className, 'lcars-v2-site-list');
+  assert.equal(migrated.ids['lcars-v2-appearance-pickers'].hidden, false);
+  assert.equal(migrated.stored.unrelated, 'preserve-me');
+  assert.equal(migrated.stored[systemPaletteKey], 'auto');
+  assert.equal(migrated.writes.length, savedTheme === 'lcars-v2' ? 1 : 0);
+  assert.equal(migrated.window.sdsctlTheme.choices.filter(id => id === 'lcars').length, 1);
+  assert.equal(migrated.window.sdsctlTheme.choices.includes('lcars-v2'), false);
+  const reload = harness({withBootstrap: true, stored: {...migrated.stored}});
+  assert.equal(reload.root.dataset.theme, 'lcars');
+  assert.equal(reload.root.dataset.lcarsV2Palette, 'picard');
+  assert.equal(reload.writes.length, 0);
+  assert.equal(reload.window.sdsctlTheme.select('lcars-v2'), 'lcars');
+  assert.equal(reload.window.sdsctlTheme.select('matrix'), 'matrix');
+  reload.theme(reload.window.sdsctlTheme.current());
+  assert.equal(reload.siteRow.parentElement, reload.originalList);
+}
+const readOnly = harness({withBootstrap: true, writeBlocked: true,
+  stored: {[themeKey]: 'lcars-v2', [paletteKey]: 'voyager', [typeKey]: 'system'}});
+assert.equal(readOnly.root.dataset.theme, 'lcars');
+assert.equal(readOnly.root.dataset.lcarsV2Palette, 'voyager');
+assert.equal(readOnly.ids['lcars-v2-appearance-pickers'].hidden, false);
+const noStorage = harness({withBootstrap: true, blocked: true});
+assert.equal(noStorage.root.dataset.theme, 'system');
+assert.equal(noStorage.window.sdsctlTheme.select('lcars-v2'), 'lcars');
+noStorage.theme(noStorage.window.sdsctlTheme.current());
+assert.equal(noStorage.ids['lcars-v2-appearance-pickers'].hidden, false);
+assert.equal(harness({withBootstrap: true}).root.dataset.theme, 'system');
+assert.equal(harness({withBootstrap: true, stored: {[themeKey]: 'bogus'}}).root.dataset.theme, 'system');
 console.log('LCARS v2 preference and reversible-layout checks passed');

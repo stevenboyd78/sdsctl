@@ -1,0 +1,126 @@
+{
+  "purpose": "Unmodified, locally bundled OFL 1.1 fonts for built-in WebUI typography",
+  "googleFontsRevision": "23e54b51ddffbc7713c583748e3bd86f62b1fa4a",
+  "files": [
+    {
+      "path": "src/sds200/web_assets/fonts/share-tech-mono.ttf",
+      "source": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/sharetechmono/ShareTechMono-Regular.ttf",
+      "bytes": 43272,
+      "sha256": "9ceab1f87414829af259c0f537573ae03ef7dd3147c0b27a36a1a0beb6732677"
+    },
+    {
+      "path": "src/sds200/web_assets/fonts/share-tech-mono-OFL.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/sharetechmono/OFL.txt",
+      "bytes": 4429,
+      "sha256": "9d96f445b6e9c701428811d0177f894874f8d6f07ecc30d568c506542368f3ff"
+    },
+    {
+      "path": "src/sds200/web_assets/fonts/ibm-plex-mono-regular.ttf",
+      "source": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/ibmplexmono/IBMPlexMono-Regular.ttf",
+      "bytes": 135580,
+      "sha256": "6a3412f058c7d8dfd9170c41e85ade48e5156ecb89356110ca57a0a27734af46"
+    },
+    {
+      "path": "src/sds200/web_assets/fonts/ibm-plex-mono-medium.ttf",
+      "source": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/ibmplexmono/IBMPlexMono-Medium.ttf",
+      "bytes": 136704,
+      "sha256": "a9b4c49bb299e05b5f6c481e7fb5e78943d2793249a0c8874ab574a2d1ea6755"
+    },
+    {
+      "path": "src/sds200/web_assets/fonts/ibm-plex-mono-OFL.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/ibmplexmono/OFL.txt",
+      "bytes": 4456,
+      "sha256": "7e6b2818edbd8f6a01ae80641cc8f16a51080d08fb4e532be3a0b6f74adb07da"
+    },
+    {
+      "path": "src/sds200/web_assets/fonts/barlow-condensed-regular.ttf",
+      "source": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/barlowcondensed/BarlowCondensed-Regular.ttf",
+      "bytes": 102480,
+      "sha256": "583cec5da3b84bc4dc7c9c72e2a565c94d34e431518b19d7e250b7830ad5f996"
+    },
+    {
+      "path": "src/sds200/web_assets/fonts/barlow-condensed-medium.ttf",
+      "source": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/barlowcondensed/BarlowCondensed-Medium.ttf",
+      "bytes": 103360,
+      "sha256": "262bd143292ce479ee0cd09a42b47ab173fca8e9c6eb5ed0b5c8a845bc371d17"
+    },
+    {
+      "path": "src/sds200/web_assets/fonts/barlow-condensed-OFL.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/barlowcondensed/OFL.txt",
+      "bytes": 4377,
+      "sha256": "186d750eb496a4c17a76385f82be6aea2ac1cf2de074a811d63786cf374ea73f"
+    },
+    {
+      "path": "src/sds200/web_assets/fonts/orbitron-variable.ttf",
+      "source": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/orbitron/Orbitron%5Bwght%5D.ttf",
+      "bytes": 38576,
+      "sha256": "f42db2dd16e642258e35782916eceb1dcdbea06fb958d77ad71dc5963587e8fd"
+    },
+    {
+      "path": "src/sds200/web_assets/fonts/orbitron-OFL.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/orbitron/OFL.txt",
+      "bytes": 4426,
+      "sha256": "ab609b0e110d622435ff337cdf233288556e011bbf9bd0550be98846c0630819"
+    },
+    {
+      "path": "src/sds200/web_assets/fonts/audiowide.ttf",
+      "source": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/audiowide/Audiowide-Regular.ttf",
+      "bytes": 69916,
+      "sha256": "c7c0f2b0f6fad8c623e31772ce79f94a4edb9321ffce9fce978ea892d20ae730"
+    },
+    {
+      "path": "src/sds200/web_assets/fonts/audiowide-OFL.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/audiowide/OFL.txt",
+      "bytes": 4430,
+      "sha256": "4fe01b13ffb41faa8f030d84843a95dab32792dfeeca7c072abbfd3f4d6896ad"
+    },
+    {
+      "path": "src/sds200/web_assets/fonts/atkinson-next-variable.ttf",
+      "source": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/atkinsonhyperlegiblenext/AtkinsonHyperlegibleNext%5Bwght%5D.ttf",
+      "bytes": 114552,
+      "sha256": "5a455d1cfa099b601ab70751bb9673e8fe1854dc4500c80e1a220d0d75e31745"
+    },
+    {
+      "path": "src/sds200/web_assets/fonts/atkinson-next-OFL.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/atkinsonhyperlegiblenext/OFL.txt",
+      "bytes": 4431,
+      "sha256": "aca6a428580965d2297d1b718042dd427c2a9443ece3b0d02d758e161e0c4030"
+    },
+    {
+      "path": "src/sds200/web_assets/fonts/atkinson-mono-variable.ttf",
+      "source": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/atkinsonhyperlegiblemono/AtkinsonHyperlegibleMono%5Bwght%5D.ttf",
+      "bytes": 53960,
+      "sha256": "5ce8b1698d1ded7dff2178c1a3ad159470085a58ea239e8b2cb88f4fb4a6f646"
+    },
+    {
+      "path": "src/sds200/web_assets/fonts/atkinson-mono-OFL.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/atkinsonhyperlegiblemono/OFL.txt",
+      "bytes": 4436,
+      "sha256": "1ebb31cf7393164f20d10c1d48406cddb5314feff8465531cf1e4ba37e9dd740"
+    },
+    {
+      "path": "src/sds200/web_assets/fonts/jetbrains-mono-variable.ttf",
+      "source": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf",
+      "bytes": 187208,
+      "sha256": "48715a42ec242c21e9f02692891e147d022299a52e48d5e413e1a942193ffeda"
+    },
+    {
+      "path": "src/sds200/web_assets/fonts/jetbrains-mono-OFL.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/jetbrainsmono/OFL.txt",
+      "bytes": 4399,
+      "sha256": "b2fe5e8987594e9ffd1d2ca52a2f5d73eb8335243893c5d6254b5ad69269591d"
+    },
+    {
+      "path": "src/sds200/web_assets/fonts/source-code-pro-variable.ttf",
+      "source": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/sourcecodepro/SourceCodePro%5Bwght%5D.ttf",
+      "bytes": 212340,
+      "sha256": "b400fc584e10aff25d0e775ce181b4fc1c5ea1b5dc37b81aeb2084375b945790"
+    },
+    {
+      "path": "src/sds200/web_assets/fonts/source-code-pro-OFL.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/sourcecodepro/OFL.txt",
+      "bytes": 4622,
+      "sha256": "cb30d3086a8b3ce0b9e3690bf48d6620402b61160bc658076f95180ccd9e9dae"
+    }
+  ]
+}

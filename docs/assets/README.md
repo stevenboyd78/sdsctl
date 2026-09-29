@@ -55,7 +55,7 @@ all screenshots together so the documented interface remains reproducible.
 The `web-dashboard/` directory contains native Chrome captures of the real
 packaged dashboard using deterministic fictional daemon, scanner, radio, audio,
 recording, and reliability state. The gallery covers the deterministic built-in
-theme order—System, LCARS-inspired, Matrix-inspired, First Responder, Amateur
+theme order—System, LCARS, Matrix-inspired, First Responder, Amateur
 Radio, and Pip-Boy-inspired—and the normal-zoom reference viewports 390x844,
 800x480, 1366x768, and 1920x1080 used by the responsive six-pane workspace.
 Two additional captures select the live deterministic Waterfall pane in System

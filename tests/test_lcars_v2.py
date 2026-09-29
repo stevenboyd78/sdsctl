@@ -18,19 +18,19 @@ def forbidden_client():
     raise AssertionError("theme assets must never connect to the daemon")
 
 
-def test_lcars_v2_is_separate_and_assets_are_local() -> None:
+def test_lcars_v2_replaces_original_and_assets_are_local() -> None:
     registry = built_in_web_theme_registry()
-    assert registry.require("lcars").label == "LCARS-inspired"
-    assert registry.require("lcars-v2").label == "LCARS v2"
+    assert registry.require("lcars").label == "LCARS"
+    assert "lcars-v2" not in registry.identifiers
     with TestClient(create_web_dashboard_app(forbidden_client)) as client:
         shell = client.get("/").text
         assert '<html lang="en" data-theme="system"' in shell
-        for identifier in ("lcars", "lcars-v2"):
-            assert f'<option value="{identifier}">' in shell
+        assert '<option value="lcars">LCARS</option>' in shell
+        assert '<option value="lcars-v2">' not in shell
         for name, media_type in (
             ("lcars-v2.css", "text/css"), ("lcars-v2.js", "application/javascript"),
             ("fonts/antonio-variable.ttf", "font/ttf"), ("fonts/antonio-OFL.txt", "text/plain"),
-            ("themes/lcars-v2/theme.css", "text/css"),
+            ("themes/lcars/theme.css", "text/css"),
         ):
             response = client.get(f"/assets/{name}")
             assert response.status_code == 200
@@ -73,6 +73,9 @@ def test_lcars_v2_visibility_and_responsive_guards() -> None:
     assert '[data-kiosk-compact="true"] .workspace-tabs' in css
     assert '.workspace-tabs::before' in css and '--lcars-v2-nav-cap: 3.2rem;' in css
     script = assets.joinpath("lcars-v2.js").read_text()
+    assert 'root.dataset.theme === "lcars"' in script
+    assert ':root[data-theme="lcars"]' in css
+    assert 'data-theme="lcars-v2"' not in css
     for forbidden in ("fetch(", "XMLHttpRequest", "WebSocket", "innerHTML", "eval("):
         assert forbidden not in script
     for content in (css, script):
@@ -83,17 +86,19 @@ def test_lcars_v2_controller_preferences_and_reversible_layout() -> None:
     node = shutil.which("node")
     if node is None:
         pytest.skip("Node is required for browser-controller tests")
+    with TestClient(create_web_dashboard_app(forbidden_client)) as client:
+        bootstrap = client.get("/assets/theme-bootstrap.js").text
     result = subprocess.run(
         [node, str(Path(__file__).with_name("lcars_v2.cjs")),
          str(files("sds200.web_assets").joinpath("lcars-v2.js"))],
-        capture_output=True, text=True, check=False, timeout=15,
+        input=bootstrap, capture_output=True, text=True, check=False, timeout=15,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "checks passed" in result.stdout
 
 
 def test_palette_foreground_and_control_contrasts() -> None:
-    css = files("sds200.themes").joinpath("web/lcars-v2/theme.css").read_text()
+    css = files("sds200.themes").joinpath("web/lcars/theme.css").read_text()
     variants = {
         name: dict(re.findall(r"(--[\w-]+):\s*(#[0-9a-f]{6});", body))
         for name, body in re.findall(r'\[data-lcars-v2-palette="([\w-]+)"\]\s*\{([^}]+)\}', css)

@@ -1386,7 +1386,7 @@ scanner-control, PSI, and RTSP/RTP owner.
 
 The acceptance run confirmed:
 
-- System, LCARS-inspired, Matrix-inspired, First Responder, Amateur Radio, and
+- System, LCARS, Matrix-inspired, First Responder, Amateur Radio, and
   Pip-Boy-inspired appeared in deterministic order over the shared Scanner,
   Controls, Audio, Recordings, and Diagnostics panes. System and
   Pip-Boy-inspired were visually inspected through live Ingress; theme, pane,

@@ -9,7 +9,7 @@ description = "Python control library for Uniden SDS100, SDS150, and SDS200 scan
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
-license-files = ["LICENSE", "src/sds200/web_assets/fonts/antonio-OFL.txt"]
+license-files = ["LICENSE", "src/sds200/web_assets/fonts/*-OFL.txt"]
 authors = [
   { name = "Steven Boyd", email = "steven.boyd78@gmail.com" }
 ]

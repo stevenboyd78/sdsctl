@@ -22,6 +22,7 @@ from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .exceptions import ConfigurationError
+from .web_typography import WEB_TYPOGRAPHY_READ_PATHS
 
 WEB_DASHBOARD_AUTH_COOKIE = "__Host-sdsctl-session"
 WEB_DASHBOARD_LOGIN_PATH = "/auth/login"
@@ -60,6 +61,7 @@ _SESSION_TOKEN_CHARACTERS = frozenset(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 )
 _DISPLAY_READ_PATHS = frozenset({
+    *WEB_TYPOGRAPHY_READ_PATHS,
     "/", "/healthz", "/api/v1/status", "/api/v1/snapshot",
     "/api/v1/display-frame",
     "/api/v1/display-supplemental/context", "/api/v1/display-supplemental/frame",
