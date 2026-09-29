@@ -2348,6 +2348,36 @@ needs independently bounded startup; no test proves installed exec/import/loadin
 fits two seconds. Active App admission and exclusive recovery remain separate
 gates, and this passive command is not a candidate for a human scanner/audio test.
 
+### Staged original-outer source execution, offline only
+
+An additional process fixture copies reviewed checkout sources into a separate
+tree and records their hashes before executing the fixed **test** entrypoint.
+Its outer process runs the existing full automatic passive pipeline, including
+the genuine preflight/final paired checks, original Custody, sealed native watch,
+both handoffs, passive refusal/retirement and actual original peer exits. The
+original two-second work cutoff is unchanged. Dynamic, static and UBSan native
+builds execute; no cgroup freeze or live App action is involved.
+
+The existing admitted peer preparation profile remains exactly 104 modules.
+Seven additional outer-policy modules form a separately measured 111-module
+**test candidate** closure, not a newly admitted source kind. Six legacy files
+are needed only by the existing test bootstrap, and remain explicitly separate.
+Three of those use direct file loaders without registering their module objects
+in `sys.modules`; counting that table alone missed their execution. The staged
+outer's execution audit checks both normal imports and direct file loaders
+against the independently recorded file origins/hashes. Negative tests refuse
+an outside source and changed staged bytes before their code executes. Matching
+module counts do not stand in for origin checks, and the original checkout
+remains available as a fallback candidate during the positive test.
+
+This joins actual passive flow to staged **outer** execution, not a production
+Python sandbox or installed entrypoint/source qualification. Test scaffolding,
+interpreter/dependency provenance, child-exec provenance, Engine/runtime facts,
+input publication and initial startup supervision remain synthetic or separately
+unqualified. The Python execution audit is test-only and does not certify its
+own launcher or an independently authenticated installed manifest. No source
+profile, command selector, App admission or exclusive recovery rule is expanded.
+
 ## Remaining gates before a human scanner/audio test
 
 ### Offline host-side native prototype
