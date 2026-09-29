@@ -186,6 +186,19 @@ after the cutoff never extends readiness, work, or recovery permission. These
 tests use synthetic container identities, not runtime/cgroup qualification.
 They do not prove survival of simultaneous parent/native failure or host freeze.
 
+The [automatic full-command outer-loss fixture](../../tests/test_supplemental_observer_outer_loss.py)
+also runs the original Custody, fixed passive command functions and sealed
+direct-owner watch in a disposable outer. After arming or either real descriptor
+handoff, an independent fixture driver retains every original pidfd and an extra
+cancellation writer, then kills only that outer. It requires both original peer
+exits and native exit `12` before the unchanged pipeline cutoff, and unchanged
+case-file bytes with no passive release or replacement attempt. The driver
+verifies it cannot reap the outer's children while that owner lives; only after
+death does its disposable subreaper adopt them. Cleanup signals are not passing
+exit evidence. Engine/source/publication and initial fixture setup remain
+synthetic; its setup/reaping ceiling is not installed startup qualification.
+No cgroup freeze, installed service, active action or recovery is exercised.
+
 The full-command fixture separately kills the actual native watcher after each
 real descriptor handoff. Existing delivery guards refuse the remaining phase,
 the original outer retires both peers, and no passive writer-release message is

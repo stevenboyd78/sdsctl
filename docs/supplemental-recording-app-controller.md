@@ -2320,6 +2320,27 @@ on original peer loss; neither outcome is successful work. This extends the
 earlier fixture-sequenced watchdog-loss checks to the new automatic path, not to
 an installed outer command, platform service or a broader failure domain.
 
+A further full-flow fault join runs that same original Custody/automatic peer
+pipeline inside a disposable outer process, rather than substituting inert
+peer processes for the lifetime check. The independent fixture driver retains
+the original writer, observer and sealed native-watch pidfds before deliberately
+killing only the original outer, either after arming or after either actual
+descriptor handoff. It also holds a duplicate cancellation writer, so cancellation
+EOF cannot stand in for the tested outer-loss event. Both original peer exits
+and native exit 12 are observed before the unchanged pipeline cutoff; retained
+case-file bytes are checked before and after, and no passive writer release or
+replacement outer/attempt occurs. Merely receiving the handles does not make
+the driver their parent: it verifies that distinction before loss and reaps
+only after its own disposable subreaper adopts them. Exact-handle fallback
+cleanup is separate and never counts as passing evidence.
+
+Initial setup is still synthetic and uses a separate fixture setup/reaping
+ceiling; that ceiling is **not** an installed import/startup bound or an extension
+of the original two-second work window. No cgroup freeze, platform service,
+installed command or active permission is added. This closes the earlier gap
+between automatic full-command flow and individual outer-death testing, not
+whole-domain failure, startup qualification or exclusive recovery.
+
 This removes fixture-only **phase sequencing**, not the initial fixture setup,
 installed exec/source provenance, fixed outer launcher or independent platform
 supervision. Declaration loading precedes the first connection cutoff and still
