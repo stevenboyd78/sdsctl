@@ -78,3 +78,19 @@ def test_typography_controller_is_presentation_only_and_handles_preferences() ->
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "checks passed" in result.stdout
+
+
+def test_typography_layout_centers_controls_and_keeps_responsive_fallbacks() -> None:
+    css = files("sds200.web_assets").joinpath("theme-typography.css").read_text()
+    # These rules must beat the legacy two-column theme overview without
+    # replacing its display mode (compact kiosk and zoom own that behavior).
+    wide, narrow = css.split("@media (max-width: 65rem)", 1)
+    assert ":root[data-theme-typography] #main-content > .overview" in wide
+    assert "grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important" in wide
+    assert "grid-column: 3 !important; grid-row: 1 !important" in wide
+    assert "justify-content: center !important" in wide
+    assert "grid-column: 2 !important; grid-row: 1 !important" in wide
+    assert "grid-column: 1 / -1 !important; grid-row: 2 !important" in narrow
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr)) !important" in narrow
+    assert "#native-menu #theme-typography-pickers:not([hidden])" in narrow
+    assert "flex-direction: column !important; align-items: stretch !important" in narrow

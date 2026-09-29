@@ -76,19 +76,46 @@
 :root[data-theme-typography] :is(.technical-value, .radio-field-list dd, .radio-summary dd, .status-list dd, .native-summary dd, code, pre) { font-family: var(--type-data) !important; font-variant-numeric: tabular-nums slashed-zero; font-weight: 400 !important; }
 :root[data-theme="matrix"][data-theme-typography] :is(body, h1, h2, h3, button, select, input, textarea, dt, dd, .primary-value, .secondary-value, .technical-value) { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; text-shadow: none; }
 
-/* Fit additional appearance controls without changing panel/viewport sizing. */
+/* Center appearance controls between the overview title and status, like LCARS.
+   Preserve the viewport contract's compact menu and enlarged-text fallbacks. */
 #theme-typography-pickers[hidden], #theme-font-picker[hidden] { display: none !important; }
 @layer sdsctl-viewport-contract {
+  :root[data-theme-typography] #main-content > .overview {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important;
+  }
+  :root[data-theme-typography] #dashboard-message {
+    grid-column: 3 !important; grid-row: 1 !important;
+  }
   #theme-typography-pickers:not([hidden]) {
     display: flex !important; flex-wrap: wrap !important; gap: 0.5rem !important;
-    grid-column: 1 / -1 !important; grid-row: 2 !important; min-width: 0 !important;
+    align-items: end !important; justify-content: center !important;
+    justify-self: center !important; margin-inline: auto !important;
+    grid-column: 2 !important; grid-row: 1 !important;
+    width: max-content !important; max-width: 100% !important; min-width: 0 !important;
   }
-  #theme-typography-pickers > div { min-width: 0 !important; max-width: 100% !important; }
+  #theme-typography-pickers > div {
+    display: grid !important; grid-template-columns: minmax(0, 1fr) !important;
+    grid-column: auto !important; grid-row: auto !important;
+    min-width: 0 !important; max-width: 100% !important;
+  }
   #theme-typography-pickers :is(label, select) {
     font-family: system-ui, sans-serif !important; font-size: 0.85rem !important;
     letter-spacing: normal !important; text-transform: none !important;
     max-width: 100% !important; min-width: 0 !important;
   }
   #theme-typography-pickers select { width: auto !important; }
-  #native-menu #theme-typography-pickers:not([hidden]) { flex-direction: column !important; }
+  @media (max-width: 65rem) {
+    :root[data-theme-typography] #main-content > .overview {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+    #theme-typography-pickers:not([hidden]) {
+      grid-column: 1 / -1 !important; grid-row: 2 !important; width: 100% !important;
+    }
+    :root[data-theme-typography] #dashboard-message { grid-column: 2 !important; }
+  }
+  #native-menu #theme-typography-pickers:not([hidden]) {
+    flex-direction: column !important; align-items: stretch !important;
+    grid-column: auto !important; grid-row: auto !important;
+    width: 100% !important; margin-inline: 0 !important;
+  }
 }

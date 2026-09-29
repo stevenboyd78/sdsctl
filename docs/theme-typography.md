@@ -19,8 +19,11 @@ For the four non-LCARS themed layouts, **Typography** offers:
   text, and native monospace readouts.
 - **System fonts:** native sans-serif with native monospace readouts throughout.
 
-**Font pairing** appears only where there are alternatives. On compact/kiosk
-layouts these controls live in the dashboard menu's Appearance section.
+**Font pairing** appears only where there are alternatives. On wide screens,
+appearance controls are centered between the overview title and connection
+status, matching LCARS. At widths up to 65rem they wrap onto a centered row below
+the title and status. On compact/kiosk layouts these controls remain in the
+dashboard menu's Appearance section.
 Preferences are independent for each theme and stored only in this browser under
 `sdsctl.web.theme-typography.v1`. Switching themes does not overwrite the previous
 theme's choices. Invalid values fall back to defaults; blocked browser storage
