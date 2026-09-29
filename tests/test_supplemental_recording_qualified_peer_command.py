@@ -336,8 +336,12 @@ def helper(supervised, image, configured, monkeypatch, tmp_path, request):
         stderr=subprocess.PIPE,
         bufsize=0,
     )
-    generator = h = None
+    generator = h = diagnostic_fd = None
     try:
+        # Nested qualification owns/closes the original stream at teardown.
+        # Retain our own noninheritable read handle BEFORE handing it that peer;
+        # otherwise an unexpected exit loses its cause behind a closed-file error.
+        diagnostic_fd = os.dup(process.stderr.fileno())
         initial = json.loads(transport.line(process))
         supplied = dict(plan=initial["base"], baseline=initial["baseline"], child=process)
         selection = getattr(request.node, "callspec", SimpleNamespace(params={})).params.get(
@@ -371,10 +375,10 @@ def helper(supervised, image, configured, monkeypatch, tmp_path, request):
             if process.returncode != expected:
                 # The process has been waited; never block on a descendant's
                 # stderr or echo private traceback values from the child.
-                fd = process.stderr.fileno()
-                os.set_blocking(fd, False)
+                assert diagnostic_fd is not None
+                os.set_blocking(diagnostic_fd, False)
                 try:
-                    raw = os.read(fd, 65536)
+                    raw = os.read(diagnostic_fd, 65536)
                 except BlockingIOError:
                     raw = b""
                 locations = child_failure_locations(raw)
@@ -383,11 +387,35 @@ def helper(supervised, image, configured, monkeypatch, tmp_path, request):
                     + locations
                 )
         finally:
-            if process.poll() is None:
-                process.kill()
-                process.wait(timeout=3)
-            for stream in (process.stdin, process.stdout, process.stderr):
-                stream.close()
+            try:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=3)
+                for stream in (process.stdin, process.stdout, process.stderr):
+                    stream.close()
+            finally:
+                if diagnostic_fd is not None:
+                    os.close(diagnostic_fd)
+
+
+def test_writer_diagnostic_survives_nested_fixture_closing_stderr(
+    supervised, image, configured, monkeypatch, tmp_path, request
+):
+    # Real original writer/qualification teardown. Force an unexpected exit
+    # expectation to exercise diagnostics AFTER nested teardown closes streams.
+    before = len(os.listdir("/proc/self/fd"))
+    generator = helper.__wrapped__(supervised, image, configured, monkeypatch, tmp_path, request)
+    original = next(generator)
+    original.expected_returncode = 999
+    original.child.stdin.close()
+    code = original.child.wait(timeout=3)
+    with pytest.raises(AssertionError, match=f"Original fixture writer exit {code}; expected 999"):
+        next(generator)
+    assert all(
+        stream.closed
+        for stream in (original.child.stdin, original.child.stdout, original.child.stderr)
+    )
+    assert len(os.listdir("/proc/self/fd")) == before
 
 
 def observer_child(path, *, retained=False):
