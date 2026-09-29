@@ -2,6 +2,7 @@
 
 import fcntl
 import importlib.util
+import math
 import os
 import stat
 import subprocess
@@ -57,6 +58,91 @@ def test_complete_publication_is_separate_from_original_owner_acceptance(ready, 
     files = snapshot(root)
     denied(submission.submit)
     assert snapshot(root) == files
+
+
+def test_explicit_outer_bound_keeps_original_plan_and_single_publication(ready):
+    root, offer, witness, now, _, original, reader = ready
+    submission = sender(ready)
+    before = fds()
+    end = now[0] + 0.25
+    digest = submission.submit_before(end)
+    assert digest == m.intake.plans.base.checksum(
+        readers.m.object_json((root / m.acceptance.NAME).read_bytes())
+    )
+    assert reader.poll() is offer.plan
+    assert submission.used and not submission.failed
+    assert not original._closed and witness.closes == 0 and fds() == before
+    files = snapshot(root)
+    denied(lambda: submission.submit_before(end + 100))
+    assert snapshot(root) == files
+
+
+@pytest.mark.parametrize("boundary", ["at", "after"])
+def test_outer_cutoff_refuses_before_any_publication(ready, boundary):
+    root, _, witness, now, _, original, _ = ready
+    submission = sender(ready)
+    files, before = snapshot(root), fds()
+    end = now[0] if boundary == "at" else math.nextafter(now[0], -math.inf)
+    denied(lambda: submission.submit_before(end))
+    assert submission.failed and submission.used
+    assert snapshot(root) == files and fds() == before
+    assert not original._closed and witness.closes == 0
+    denied(submission.submit)  # Cannot discard the outer bound after refusal.
+
+
+@pytest.mark.parametrize(
+    "deadline", [None, True, False, "2", float("nan"), float("inf"), -float("inf")]
+)
+def test_explicit_outer_cutoff_never_coerces_or_adopts_an_invalid_bound(ready, deadline):
+    root, *_ = ready
+    submission = sender(ready)
+    files = snapshot(root)
+    denied(lambda: submission.submit_before(deadline))
+    assert submission.failed and submission.used and snapshot(root) == files
+    denied(submission.submit)
+
+
+def test_contended_publication_lock_keeps_the_earlier_outer_cutoff(ready, monkeypatch):
+    root, _, _, now, _, _, _ = ready
+    submission = sender(ready)
+    end, files, waits = now[0] + 0.25, snapshot(root), []
+
+    def wait(seconds):
+        waits.append(seconds)
+        now[0] = end
+
+    monkeypatch.setattr(m.time, "sleep", wait)
+    with m.publication.protected._private_directory(root, exclusive=False):
+        denied(lambda: submission.submit_before(end))
+    assert waits == [m.LOCK_POLL_SECONDS]
+    assert submission.used and submission.failed and snapshot(root) == files
+
+
+@pytest.mark.parametrize("earlier_outer", [True, False])
+def test_file_sync_overrun_preserves_partial_evidence_without_renewing_either_bound(
+    ready, monkeypatch, earlier_outer
+):
+    root, _, witness, now, _, original, _ = ready
+    submission = sender(ready)
+    end = now[0] + (0.25 if earlier_outer else 100)
+    actual_end = min(end, now[0] + m.acceptance.MAX_SECONDS)
+    fsync, calls, before = os.fsync, [], fds()
+
+    def delayed(fd):
+        calls.append(fd)
+        fsync(fd)
+        now[0] = actual_end
+
+    monkeypatch.setattr(m.os, "fsync", delayed)
+    denied(lambda: submission.submit_before(end))
+    assert len(calls) == 1 and (root / m.PENDING).read_bytes() == submission.raw
+    assert not (root / m.acceptance.NAME).exists()
+    assert submission.failed and submission.used and fds() == before
+    assert not original._closed and witness.closes == 0
+    files = snapshot(root)
+    denied(lambda: submission.submit_before(actual_end + 100))
+    denied(submission.submit)
+    assert snapshot(root) == files and len(calls) == 1
 
 
 def test_genuine_reader_lock_waits_before_single_publication_within_same_attempt(
@@ -346,7 +432,8 @@ def test_submitter_is_outside_qualified_helper_allowlist():
     assert '"service_submit"' not in source
 
 
-def test_separate_process_submission_rejoins_original_real_clock_owner(tmp_path, monkeypatch):
+@pytest.mark.parametrize("mode", ["legacy", "outer", "expired-outer"])
+def test_separate_process_submission_rejoins_original_real_clock_owner(tmp_path, monkeypatch, mode):
     root = tmp_path / "separate-submitter-case"
     root.mkdir(mode=0o700)
     monkeypatch.setattr(m.intake.plans.Plan, "root", property(lambda _: root))
@@ -376,8 +463,18 @@ def forbidden(*args, **kwargs):
 submit.intake.plans.clock.read = forbidden
 submit.intake.plans.ordinary.Docker = forbidden
 with submit.intake.CasePlan(root, sys.argv[4]) as original:
-    print(submit.Submission(original, sys.argv[3], sys.argv[4]).submit())
+    sender = submit.Submission(original, sys.argv[3], sys.argv[4])
+    if sys.argv[5] == "legacy":
+        print(sender.submit())
+    else:
+        try:
+            print(sender.submit_before(float(sys.argv[6])))
+        except submit.UnconfirmedSubmission:
+            assert sys.argv[5] == "expired-outer" and sender.failed and sender.used
+            print("original-outer-cutoff-refused")
 """
+        before_files = snapshot(root)
+        end = m.time.monotonic() + (0 if mode == "expired-outer" else 2)
         result = subprocess.run(
             [
                 sys.executable,
@@ -389,6 +486,8 @@ with submit.intake.CasePlan(root, sys.argv[4]) as original:
                 str(root),
                 template.sha256,
                 offer.plan.sha256,
+                mode,
+                repr(end),
             ],
             check=True,
             capture_output=True,
@@ -396,10 +495,16 @@ with submit.intake.CasePlan(root, sys.argv[4]) as original:
             timeout=5,
         )
         expected = m.acceptance.acceptance_bytes(template.sha256, offer.plan.sha256)
-        assert result.stderr == "" and result.stdout.strip() == m.intake.plans.base.checksum(
-            m.acceptance.object_json(expected)
-        )
-        assert not offer.used and reader.poll() is offer.plan
+        assert result.stderr == "" and not offer.used
+        if mode == "expired-outer":
+            assert result.stdout.strip() == "original-outer-cutoff-refused"
+            assert snapshot(root) == before_files and reader.poll() is None
+        else:
+            assert result.stdout.strip() == m.intake.plans.base.checksum(
+                m.acceptance.object_json(expected)
+            )
+            assert mode == "legacy" or m.time.monotonic() < end
+            assert reader.poll() is offer.plan
         reader.close()
         original.close()
         offer.close()

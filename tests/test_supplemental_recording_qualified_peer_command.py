@@ -1420,7 +1420,11 @@ def finish(s, monkeypatch, after_qualification=None):
                     closing(p.listeners.Listener(s.observer_handoff, s.counterpart, deadline=end))
                 )
             )
-        submission.Submission(original, s.inputs.template.sha256, plan.sha256).submit()
+        approved = submission.Submission(original, s.inputs.template.sha256, plan.sha256)
+        if s.automatic_observer:
+            approved.submit_before(s.pipeline_end)
+        else:
+            approved.submit()
     if s.retained_delivery:
         writer_channel = s.writer_listener.accept()
     else:

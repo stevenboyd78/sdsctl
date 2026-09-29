@@ -1991,6 +1991,21 @@ independently qualified installed supervisor. Independent outer/platform lifetim
 fixed outer/observer source and interpreter provenance,
 explicit active-action admission and exclusive recovery remain separate gates.
 
+The automatic pipeline now passes its original outer cutoff explicitly into
+`Submission.submit_before`. The same original publication owner uses the lesser
+of that absolute same-domain MONOTONIC cutoff and its existing two-second limit
+through lock acquisition, file writes, publication, descriptor retirement and
+the final check. It never captures a new clock, changes the reader's deadline,
+or restarts an earlier exchange. Invalid or expired bounds consume the attempt;
+partial files and ambiguous completed publication remain evidence, not grounds
+to retry through the old standalone `submit` method. Older callers keep that
+method's existing behavior. Actual subprocess tests cover both deadline refusal
+before writing and ordinary publication joined to the original reader/clock;
+the full staged three-process flow uses the same new bound. These cooperative
+checks cannot preempt a blocked kernel syscall or replace independent outer/
+platform supervision. Independently supplied approval pins and actual reader
+acceptance remain separate obligations; no active App permission is added.
+
 ### Original observer inputs and separate final-plan delivery (uninstalled)
 
 The preparation library now has a separately selected, read-only final-plan

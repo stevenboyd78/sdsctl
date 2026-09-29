@@ -9,6 +9,7 @@ original clock/domain/acceptance deadline. No cross-domain clock is relabeled.
 
 from __future__ import annotations
 
+import math
 import os
 import stat
 import time
@@ -95,6 +96,22 @@ class Submission:
         raise UnconfirmedSubmission(MESSAGE) from None
 
     def submit(self):
+        """Legacy standalone attempt; the reader still owns its acceptance bound."""
+        return self._submit(None, outer_required=False)
+
+    def submit_before(self, deadline):
+        """Narrow this attempt by the original outer's absolute MONOTONIC cutoff.
+
+        Borrow a same-domain cutoff, never capture/relabel a peer clock or renew
+        an earlier phase. Lock acquisition, every publication guard and final
+        retirement all share the lesser of this cutoff and the existing two
+        seconds. Refusal consumes this owner, including invalid input bounds.
+        Cooperative guards cannot preempt a blocked kernel syscall; independent
+        outer/platform lifetime supervision remains a separate prerequisite.
+        """
+        return self._submit(deadline, outer_required=True)
+
+    def _submit(self, deadline, *, outer_required):
         acquired = False
         output = -1
         try:
@@ -103,6 +120,9 @@ class Submission:
             require(not self.used and not self.failed)
             self.used = True
             end = time.monotonic() + acceptance.MAX_SECONDS
+            if outer_required:
+                require(type(deadline) in (int, float) and math.isfinite(deadline))
+                end = min(end, deadline)
 
             def check():
                 require(not self.failed and time.monotonic() < end)
