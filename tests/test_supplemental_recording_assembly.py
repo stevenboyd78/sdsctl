@@ -53,7 +53,16 @@ SPEC.loader.exec_module(n)
 
 @contextmanager
 def native_bundle(native, tmp_path, *, pcmu=False, policy=None, sockets_directory=None):
-    runtime = DaemonRuntime(native.scanner, native.audio, native.router, psi_timeout=1)
+    runtime = DaemonRuntime(
+        native.scanner,
+        native.audio,
+        native.router,
+        psi_timeout=1,
+        # The finite candidate has one explicit acquisition admission and a
+        # separately supervised recovery owner.  Automatic PSI recovery would
+        # let the ordinary process poller race that one nonblocking arm attempt.
+        psi_auto_recover=False,
+    )
     root = tmp_path / "recordings"
     root.mkdir()
     (root / "older.txt").write_bytes(b"older evidence unchanged")
@@ -464,6 +473,12 @@ def test_failed_acquisition_binding_is_terminal(rig):
         rig.api.bind_acquisition(rig.acquisition, rig.delivery)
     assert rig.api.handle_payload(request(Op.PING)).error.code == DaemonApiErrorCode.INTERNAL_ERROR
     assert not rig.peer.commands
+
+
+def test_automatic_psi_recovery_is_refused_before_native_startup(rig):
+    rig.runtime.psi_auto_recover = True
+    refusal(rig.build)
+    assert not rig.peer.commands and not list(rig.journal.iterdir())
 
 
 @pytest.mark.parametrize("extra", ("fanout", "router"))

@@ -1,7 +1,7 @@
 # Project visual assets
 
-This directory contains the sdsctl project branding and reproducible Textual TUI
-screenshots.
+This directory contains the sdsctl project branding and reproducible screenshots
+of the Textual TUI, WebUI, and Home Assistant waterfall card.
 
 ## Branding
 
@@ -31,9 +31,14 @@ The `screenshots/` directory contains native SVG exports from the real Textual
 application:
 
 - `screenshots/tui-overview.svg` — wide operational view with an active recording;
-- `screenshots/tui-recordings.svg` — recording-library view;
+- `screenshots/tui-recordings.svg` — recording-library view scrolled to show all
+  three demonstration files;
 - `screenshots/tui-compact.svg` — 24-row compact layout with concise audio,
-  PSI health, and essential-control summaries.
+  PSI health, and essential-control summaries;
+- `screenshots/tui-pi-network-compact.svg` — 100×30 compact two-column network
+  view with audio controls;
+- `screenshots/tui-usb-compact.svg` — 100×30 compact direct-USB view without
+  network-audio controls.
 
 All scanner names, departments, sites, channels, frequencies, endpoints, logs,
 recordings, and timestamps shown in these images are fictional demonstration
@@ -60,12 +65,20 @@ Radio, and Pip-Boy-inspired—and the normal-zoom reference viewports 390x844,
 800x480, 1366x768, and 1920x1080 used by the responsive six-pane workspace.
 Two additional captures select the live deterministic Waterfall pane in System
 at 1920x1080 and Pip-Boy-inspired at 800x480.
-The original Pip-Boy-inspired presentation uses only project-owned declarative
-CSS and contains no game assets.
+The gallery uses each theme's default typography, including the locally bundled
+fonts, and LCARS uses its replacement v2 layout with the Classic palette and
+Antonio font. Appearance selectors are centered above the workspace. See
+[built-in WebUI typography](../theme-typography.md) for the font choices and
+[LCARS design and migration](../lcars-v2.md) for the replacement theme.
+The original Pip-Boy-inspired presentation uses project-owned declarative CSS
+and redistributable fonts, and contains no game assets.
 
 Regenerate the complete checked-in gallery from the repository root with Chrome
-or Chromium and the web dependencies installed:
+or Chromium and the web dependencies installed. Use an environment whose
+installed `sds200` package points to this checkout, including when working in an
+isolated checkout; the helper's child server deliberately drops `PYTHONPATH`:
 
+    python -m pip install -e ".[dev]"
     python scripts/generate_web_dashboard_screenshots.py
 
 The helper requires Node.js 24 or newer and starts a temporary loopback-only demo

@@ -52,6 +52,10 @@
     const hierarchy = panel?.querySelector(".scanner-display-hierarchy");
     const details = document.getElementById("radio-field-groups");
     const wide = window.matchMedia("(min-width: 64rem) and (min-height: 38rem)");
+    const shortLandscape = window.matchMedia("(min-width: 44rem) and (min-height: 28rem) and (max-height: 38rem)");
+    const telemetry = document.querySelector(".waterfall-telemetry");
+    const telemetryAttributes = ["tabindex", "role", "aria-label"].map(name =>
+      [name, telemetry?.getAttribute(name) ?? null]);
     const system = document.getElementById("radio-system");
     const siteRow = document.getElementById("radio-site")?.parentElement;
     const originalList = siteRow?.parentElement;
@@ -67,6 +71,20 @@
       const active = root.dataset.theme === "lcars";
       if (wrapper) wrapper.hidden = !active;
       if (tabs) tabs.setAttribute("aria-orientation", active && wide.matches ? "vertical" : "horizontal");
+      // A scroll-only region needs an explicit keyboard target and name, even
+      // on browsers which do not automatically focus native scroll containers.
+      if (telemetry) {
+        if (active && shortLandscape.matches && root.dataset.kioskCompact !== "true") {
+          telemetry.setAttribute("tabindex", "0");
+          telemetry.setAttribute("role", "region");
+          telemetry.setAttribute("aria-label", "Waterfall telemetry");
+        } else {
+          for (const [name, value] of telemetryAttributes) {
+            if (value === null) telemetry.removeAttribute(name);
+            else telemetry.setAttribute(name, value);
+          }
+        }
+      }
       // Compact display navigation owns its disclosure content; do not pull
       // those controls out of it or insert before a non-child.
       if (panel && controls?.parentElement === panel && hierarchy?.parentElement === panel &&
@@ -89,6 +107,7 @@
       attributes: true, attributeFilter: ["data-theme", "data-kiosk-compact"],
     });
     wide.addEventListener("change", sync);
+    shortLandscape.addEventListener("change", sync);
     sync();
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", connect, {once: true});

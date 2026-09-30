@@ -206,7 +206,9 @@ their space-saving, mutually exclusive drawers.
 ![sdsctl TUI recording library populated with fictional demonstration WAV files](assets/screenshots/tui-recordings.svg)
 
 The recording library presents compatible WAV recordings newest first and
-supports selection, playback, pause, resume, and return to live audio.
+supports selection, playback, pause, resume, and return to live audio. This
+100-by-50 capture is scrolled to Network Audio so all three demonstration files
+are visible; the application header and keyboard shortcuts remain in place.
 
 ### Compact layout
 

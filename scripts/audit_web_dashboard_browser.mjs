@@ -491,7 +491,9 @@ async function frames(cdp, count = 2) {
       let remaining = ${count};
       const next = () => {
         remaining -= 1;
-        if (remaining <= 0) resolve(true);
+        // Theme switching can load a bundled face after initial layout. Audit
+        // its final metrics, including trusted keyboard traversal, not fallback.
+        if (remaining <= 0) document.fonts.ready.then(() => requestAnimationFrame(() => resolve(true)));
         else requestAnimationFrame(next);
       };
       requestAnimationFrame(next);
@@ -870,6 +872,7 @@ export function browserAuditLibrary() {
     '[role="spinbutton"]',
     '[role="combobox"]',
     '[role="tab"]',
+    '[role="region"][tabindex="0"]',
   ].join(",");
 
   function label(element) {
@@ -938,6 +941,44 @@ export function browserAuditLibrary() {
       }
     }
     return null;
+  }
+
+  function lcarsScrollableLayout() {
+    const {theme, lcarsV2Layout, kioskCompact} = document.documentElement.dataset;
+    return theme === "lcars" && lcarsV2Layout === "v2" && kioskCompact !== "true";
+  }
+
+  // LCARS deliberately keeps larger readouts in internal scroll panels. Test
+  // each target at a reachable scroll position, not all targets simultaneously.
+  // Only real vertical scrollers INSIDE the workspace qualify: hidden/clip
+  // ancestors, horizontal overflow and document escape still fail unchanged.
+  function withReachableLcarsTarget(element, check) {
+    const positions = [];
+    if (lcarsScrollableLayout() && element.closest(".workspace-pane") !== null) {
+      for (let current = element.parentElement;
+        current !== null && !current.matches(".workspace-pane");
+        current = current.parentElement) {
+        if (["auto", "scroll"].includes(getComputedStyle(current).overflowY) &&
+            current.scrollHeight > current.clientHeight + tolerance) {
+          positions.push([current, current.scrollTop]);
+        }
+      }
+    }
+    try {
+      for (const [scroller] of positions) {
+        const target = element.getBoundingClientRect();
+        const bounds = scroller.getBoundingClientRect();
+        scroller.scrollTo({
+          top: scroller.scrollTop + (target.top + target.bottom - bounds.top - bounds.bottom) / 2,
+          behavior: "instant",
+        });
+      }
+      return check();
+    } finally {
+      for (const [scroller, top] of positions.reverse()) {
+        scroller.scrollTo({top, behavior: "instant"});
+      }
+    }
   }
 
   function disabledOrInert(element) {
@@ -1135,14 +1176,16 @@ export function browserAuditLibrary() {
       failures.push(`#${field.id} is unreadably small at ${fontSize}px`);
     }
     failures.push(...readabilityFailures(field, `#${field.id}`));
-    const rect = textRect(field);
-    const clipping = clippingAncestor(field, rect);
-    if (clipping !== null) {
-      failures.push(`#${field.id} is clipped by ${label(clipping)}`);
-    }
-    if (outside(rect, viewportRect())) {
-      failures.push(`#${field.id} is outside the viewport`);
-    }
+    withReachableLcarsTarget(field, () => {
+      const rect = textRect(field);
+      const clipping = clippingAncestor(field, rect);
+      if (clipping !== null) {
+        failures.push(`#${field.id} is clipped by ${label(clipping)}`);
+      }
+      if (outside(rect, viewportRect())) {
+        failures.push(`#${field.id} is outside the viewport`);
+      }
+    });
     return failures;
   }
 
@@ -1224,30 +1267,31 @@ export function browserAuditLibrary() {
     for (const element of document.querySelectorAll(selectors)) {
       if (!rendered(element) || element.matches(".skip-link:not(:focus)")) continue;
       if (!directText(element) && element.children.length > 0) continue;
-      const rect = textRect(element);
-      if (rect.width <= 0 || rect.height <= 0) continue;
-
-      if (
-        element.clientWidth > 0 &&
-        element.scrollWidth > element.clientWidth + tolerance
-      ) {
-        failures.push(
-          `${label(element)} clips or ellipsizes horizontal semantic text ` +
-            `(${element.scrollWidth.toFixed(1)} > ${element.clientWidth.toFixed(1)})`,
-        );
-      }
-      const clipping = clippingAncestor(element, rect);
-      if (clipping !== null) {
-        failures.push(`${label(element)} text is clipped by ${label(clipping)}`);
-      }
-      if (!allowVerticalDocumentScroll && outside(rect, viewportRect())) {
-        failures.push(`${label(element)} text is outside the CSS viewport`);
-      } else if (
-        allowVerticalDocumentScroll &&
-        (rect.left < -tolerance || rect.right > innerWidth + tolerance)
-      ) {
-        failures.push(`${label(element)} text causes horizontal document escape`);
-      }
+      withReachableLcarsTarget(element, () => {
+        const rect = textRect(element);
+        if (rect.width <= 0 || rect.height <= 0) return;
+        if (
+          element.clientWidth > 0 &&
+          element.scrollWidth > element.clientWidth + tolerance
+        ) {
+          failures.push(
+            `${label(element)} clips or ellipsizes horizontal semantic text ` +
+              `(${element.scrollWidth.toFixed(1)} > ${element.clientWidth.toFixed(1)})`,
+          );
+        }
+        const clipping = clippingAncestor(element, rect);
+        if (clipping !== null) {
+          failures.push(`${label(element)} text is clipped by ${label(clipping)}`);
+        }
+        if (!allowVerticalDocumentScroll && outside(rect, viewportRect())) {
+          failures.push(`${label(element)} text is outside the CSS viewport`);
+        } else if (
+          allowVerticalDocumentScroll &&
+          (rect.left < -tolerance || rect.right > innerWidth + tolerance)
+        ) {
+          failures.push(`${label(element)} text causes horizontal document escape`);
+        }
+      });
     }
     return failures;
   }
@@ -1271,22 +1315,24 @@ export function browserAuditLibrary() {
         element.getAttribute("aria-hidden") !== "true",
     );
     for (const control of controls) {
-      if (allowScroll) {
-        control.scrollIntoView({block: "center", inline: "nearest"});
-      }
-      control.focus({preventScroll: !allowScroll});
-      if (document.activeElement !== control) {
-        failures.push(`${label(control)} cannot receive focus`);
-        continue;
-      }
-      const rect = control.getBoundingClientRect();
-      if (outside(rect, viewportRect())) {
-        failures.push(`${label(control)} cannot be brought inside the viewport`);
-      }
-      const clipping = clippingAncestor(control, rect);
-      if (clipping !== null) {
-        failures.push(`${label(control)} is clipped by ${label(clipping)}`);
-      }
+      withReachableLcarsTarget(control, () => {
+        if (allowScroll) {
+          control.scrollIntoView({block: "center", inline: "nearest"});
+        }
+        control.focus({preventScroll: !allowScroll});
+        if (document.activeElement !== control) {
+          failures.push(`${label(control)} cannot receive focus`);
+          return;
+        }
+        const rect = control.getBoundingClientRect();
+        if (outside(rect, viewportRect())) {
+          failures.push(`${label(control)} cannot be brought inside the viewport`);
+        }
+        const clipping = clippingAncestor(control, rect);
+        if (clipping !== null) {
+          failures.push(`${label(control)} is clipped by ${label(clipping)}`);
+        }
+      });
     }
     return {count: controls.length, failures};
   }
@@ -1377,7 +1423,11 @@ export function browserAuditLibrary() {
 
   function subpanelButtonGeometry(expectedPane) {
     const failures = [];
-    const reference = document.querySelector("#radio-view-auto");
+    // Prominent LCARS Scanner filters are a separate role from compact utility
+    // actions. Keep utility geometry consistent across every other pane.
+    const referenceSelector = lcarsScrollableLayout() && expectedPane !== "scanner"
+      ? "#scanner-reconnect" : "#radio-view-auto";
+    const reference = document.querySelector(referenceSelector);
     const pane = document.querySelector(
       `.workspace-pane[data-workspace-pane="${expectedPane}"]`,
     );
@@ -1411,7 +1461,7 @@ export function browserAuditLibrary() {
         ) {
           failures.push(
             `${label(button)} ${property} ${style[property]} does not match ` +
-              `the Scanner sub-panel control ${referenceStyle[property]}`,
+              `the ${referenceSelector} reference control ${referenceStyle[property]}`,
           );
         }
       }
@@ -1419,7 +1469,7 @@ export function browserAuditLibrary() {
         if (style[property] !== referenceStyle[property]) {
           failures.push(
             `${label(button)} ${property} ${style[property]} does not match ` +
-              `the Scanner sub-panel control ${referenceStyle[property]}`,
+              `the ${referenceSelector} reference control ${referenceStyle[property]}`,
           );
         }
       }
@@ -1495,7 +1545,7 @@ export function browserAuditLibrary() {
     const header = document.querySelector(".site-header");
     const brand = header?.querySelector(".brand");
     if (theme === "lcars" && rendered(header) && rendered(brand)) {
-      const railWidth = 1.4 * Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+      const railWidth = Number.parseFloat(getComputedStyle(header).borderLeftWidth);
       if (brand.getBoundingClientRect().left < header.getBoundingClientRect().left + railWidth + 4) {
         failures.push("LCARS brand intrudes into the decorative left rail");
       }
@@ -2137,8 +2187,10 @@ export function browserAuditLibrary() {
   return Object.freeze({
     clearSequentialFocus,
     controlContext,
+    decorativeClearanceFailures,
     enlargedText,
     focusInventory,
+    focusFailures,
     forcedColors,
     ingressDiagnosticsLayout,
     ingressHomeAssistantLayout,
@@ -2147,10 +2199,13 @@ export function browserAuditLibrary() {
     paginationState,
     prefixedUrls,
     radioFields,
+    radioValueFailures,
     readabilityFailures,
     reducedMotion,
     resetPagination,
     sequentialFocusState,
+    semanticClipping,
+    subpanelButtonGeometry,
     switchSystemPalette,
     switchTheme,
   });

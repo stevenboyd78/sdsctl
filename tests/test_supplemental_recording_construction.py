@@ -148,6 +148,7 @@ def test_construction_is_passive_and_closes_only_unstarted_resources(prepared, m
     with build(prepared) as trial:
         assert type(trial) is assembly.n.NativeRecordingAssembly
         assert not trial.runtime.running and not trial.runtime.scanner.connected
+        assert trial.runtime.psi_auto_recover is False
         assert not trial.manager.snapshot().active and not trial.ready
         assert not trial.acquisition.status().armed and not trial.acquisition._started
         assert trial.runtime.audio.stream.transport is trial.process.pcmu_server.stream.source

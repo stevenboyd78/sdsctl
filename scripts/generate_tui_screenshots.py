@@ -332,6 +332,11 @@ async def capture(
             await pilot.pause()
             await pilot.press("down")
             await pilot.pause()
+            # The tall single-column layout places audio below the initial
+            # viewport. Show the real library panel, not only its heading at
+            # the bottom edge of an otherwise unrelated dashboard capture.
+            app.query_one("#audio").scroll_visible(animate=False, top=True)
+            await pilot.pause()
 
         await asyncio.sleep(0.35)
 
@@ -341,6 +346,16 @@ async def capture(
             title="sdsctl TUI — Demonstration data",
             simplify=True,
         )
+        if show_library:
+            assert session is not None
+            visible_svg = unescape(svg)
+            missing = [
+                entry.path.name
+                for entry in session.recordings
+                if entry.path.name not in visible_svg
+            ]
+            if missing:
+                raise RuntimeError(f"Recording-library screenshot omits demo entries: {missing}")
         output.write_text(
             normalize_svg(svg, namespace=output.stem),
             encoding="utf-8",

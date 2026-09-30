@@ -72,6 +72,12 @@ def test_lcars_v2_visibility_and_responsive_guards() -> None:
     assert '.workspace-tabs [role="tab"][hidden]' in css
     assert '[data-kiosk-compact="true"] .workspace-tabs' in css
     assert '.workspace-tabs::before' in css and '--lcars-v2-nav-cap: 3.2rem;' in css
+    assert ':is(.scanner-controls-panel, .recording-capture-panel, .recording-library-panel)' in css
+    assert '.waterfall-telemetry:focus-visible' in css
+    assert 'grid-template-rows: max-content !important;' in css
+    assert 'grid-template-rows: repeat(4, max-content) !important;' in css
+    assert 'color: CanvasText !important;' in css
+    assert 'background: Canvas !important;' in css
     script = assets.joinpath("lcars-v2.js").read_text()
     assert 'root.dataset.theme === "lcars"' in script
     assert ':root[data-theme="lcars"]' in css

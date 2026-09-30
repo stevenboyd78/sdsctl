@@ -187,6 +187,9 @@ class NativeRecordingAssembly:
         require(
             type(self.runtime) is DaemonRuntime and type(self.manager) is DaemonRecordingManager
         )
+        # This one-attempt assembly has a separate recovery owner.  Do not let
+        # the ordinary daemon poller race its nonblocking acquisition admission.
+        require(self.runtime.psi_auto_recover is False)
         require(type(self.signals) is DaemonSignalController)
         require(p.runtime is self.runtime is self.api.runtime is self.acquisition._runtime)
         require(p.recording_manager is self.manager is self.api.recording_manager)

@@ -38,6 +38,19 @@ def test_browser_palette_focus_probe_contract() -> None:
     assert completed.stderr == ""
 
 
+def test_browser_lcars_reachability_contract() -> None:
+    if _NODE is None:
+        pytest.skip("Node.js is unavailable")
+    completed = subprocess.run(
+        [_NODE, "--test", "scripts/test_browser_audit_lcars.mjs"],
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stderr == ""
+
+
 def _run_node(*arguments: str) -> subprocess.CompletedProcess[str]:
     if _NODE is None:
         pytest.skip("Node.js is unavailable")
