@@ -223,7 +223,10 @@ def construct(
         )
         router = services.PcmSinkRouter(name="finite-recording-pcm")
         audio = services.AudioFanoutSession(services.AudioStream(source), (router,))
-        runtime = services.DaemonRuntime(scanner, audio, router)
+        # This finite one-attempt candidate assigns recovery to its independent
+        # outer owner.  Keep the ordinary daemon PSI poller out of the same
+        # nonblocking acquisition-admission boundary.
+        runtime = services.DaemonRuntime(scanner, audio, router, psi_auto_recover=False)
         manager = services.DaemonRecordingManager(
             runtime, root, template=template(stored.baseline.case)
         )
