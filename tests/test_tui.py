@@ -142,13 +142,13 @@ def test_pi_scanner_identity_fits_with_audio_and_logs(tmp_path: Path) -> None:
             )
         )
         async with app.run_test(size=(100, 30)) as pilot:
-            await pilot.pause()
+            await _settle_responsive_layout(app, pilot)
             body = app.query_one("#body")
             identity = app.query_one("#identity", Static)
             for show_logs in (False, True, False):
                 if app.logs_visible != show_logs:
                     await pilot.press("g")
-                    await pilot.pause()
+                    await _settle_responsive_layout(app, pilot)
                 lower_panel = app.query_one("#logs" if show_logs else "#audio")
                 assert identity.display
                 assert identity.region.height == 3
@@ -158,11 +158,11 @@ def test_pi_scanner_identity_fits_with_audio_and_logs(tmp_path: Path) -> None:
                 assert body.max_scroll_y == 0
 
             await pilot.resize_terminal(160, 45)
-            await pilot.pause()
+            await _settle_responsive_layout(app, pilot)
             assert "\n" in _plain(identity)
             assert identity.region.y == app.query_one("#connection").region.y
             await pilot.resize_terminal(100, 30)
-            await pilot.pause()
+            await _settle_responsive_layout(app, pilot)
             assert "\n" not in _plain(identity)
             assert identity.region.bottom <= body.content_region.bottom
             assert body.max_scroll_y == 0

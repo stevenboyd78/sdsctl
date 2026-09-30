@@ -23,6 +23,7 @@ import pytest
 
 from . import test_supplemental_recording_app_fixed_operator as fixed
 from . import test_supplemental_recording_app_ready_qualification as readiness
+from ._supplemental_failure_diagnostics import child_failure_locations
 
 bwrap, staged, mapped = fixed.bwrap, fixed.staged, fixed.mapped
 layout, image_umask, supervised = fixed.layout, fixed.image_umask, fixed.supervised
@@ -144,6 +145,10 @@ def native_engine(
                         assert begin["body"]["intent_sha256"] == state.ledger.state.sha256
                         assert s.journal.entries[-1]["event"]["kind"] == "authorize_recording"
                         state.begun = True
+                        if fault == "changed_baseline":
+                            (mapped.recordings / "unexpected-native-start.wav").write_bytes(
+                                b"changed before the one native start"
+                            )
                         raw = io.operator.w.encode(begin)
                         state.operator.stdin.write(io.operator.w.HEADER.pack(len(raw)) + raw)
                         state.operator.stdin.flush()
@@ -199,6 +204,7 @@ def native_engine(
         state.exited_metadata = exited
         if recording:
             handlers.append(exited)
+        original_error = None
         with engine.engine(state, monkeypatch, handlers, make_client=not controller) as (
             client,
             requests,
@@ -216,7 +222,11 @@ def native_engine(
                             profile_sha256=mapped.profile,
                             original_clock=s.plan.original_clock,
                         )
-                    yield state
+                    try:
+                        yield state
+                    except BaseException as error:
+                        original_error = error
+                        raise
                 finally:
                     # Keep the owning Engine fixture thread alive until its
                     # bwrap child has withdrawn/reaped (--die-with-parent).
@@ -250,9 +260,42 @@ def native_engine(
                         os.killpg(state.operator.pid, signal.SIGKILL)
                         state.operator.communicate(timeout=3)
                         raise
-                    assert state.operator.returncode == (0 if state.begun else 70) and not out
-                    assert err == (b"" if state.begun else io.operator.MESSAGE)
-                assert not state.errors
+                    locations = child_failure_locations(err)
+                    prefix = (
+                        err[: -len(io.operator.MESSAGE)]
+                        if err.endswith(io.operator.MESSAGE)
+                        else err
+                    )
+                    safe_lines = prefix.decode("ascii", errors="replace").splitlines()
+                    valid_locations = bool(locations) and len(locations.splitlines()) == len(
+                        safe_lines
+                    )
+                    expected_code = 0 if state.begun else 70
+                    expected_stderr = (
+                        not err
+                        if state.begun
+                        else (
+                            err == io.operator.MESSAGE
+                            or (err.endswith(io.operator.MESSAGE) and valid_locations)
+                        )
+                    )
+                    state.operator_outcome = {
+                        "code": state.operator.returncode,
+                        "unread_stdout": bool(out),
+                        "stderr": (
+                            "empty"
+                            if not err
+                            else "source_locations"
+                            if valid_locations
+                            else "refusal"
+                            if err == io.operator.MESSAGE
+                            else "other"
+                        ),
+                        "source_locations": locations.splitlines(),
+                    }
+                    if state.operator.returncode != expected_code or out or not expected_stderr:
+                        state.errors.append(AssertionError("Unexpected finite operator outcome"))
+                io.report_fixture_errors(state, mapped.scanner, original_error)
 
 
 @pytest.mark.parametrize("fault", [None, "claim", "helper_mode"])

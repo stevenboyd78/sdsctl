@@ -46,6 +46,32 @@ def require(value):
         raise ValueError(MESSAGE)
 
 
+def _failure_locations(error):
+    """Bounded source locations for the explicit offline test boundary only."""
+    source = Path(__file__).parent
+    seen, rows = set(), []
+    for index in range(8):
+        if not isinstance(error, BaseException) or id(error) in seen:
+            break
+        seen.add(id(error))
+        trace = error.__traceback__
+        for _ in range(64):
+            if trace is None:
+                break
+            path = Path(trace.tb_frame.f_code.co_filename)
+            if path.parent == source and re.fullmatch(
+                r"(?:accept_)?supplemental_[a-z0-9_]+\.py", path.name
+            ):
+                row = f"cause {index + 1}: scripts/{path.name}:{trace.tb_lineno}"
+                if row not in rows:
+                    rows.append(row)
+                    if len(rows) == 32:
+                        return tuple(rows)
+            trace = trace.tb_next
+        error = error.__cause__ if error.__cause__ is not None else error.__context__
+    return tuple(rows)
+
+
 class _Parser(argparse.ArgumentParser):
     def error(self, message):
         raise ValueError(MESSAGE)
@@ -190,7 +216,10 @@ def main(argv=None):
     try:
         run(sys.argv[1:] if argv is None else argv)
         return 0
-    except BaseException:
+    except BaseException as error:
+        if os.environ.get("SDSCTL_TEST_FAILURE_LOCATIONS") == "1":
+            for location in _failure_locations(error):
+                print(location, file=sys.stderr)
         print(MESSAGE, file=sys.stderr)
         return 70
 

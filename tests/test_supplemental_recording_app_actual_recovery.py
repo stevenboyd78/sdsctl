@@ -35,7 +35,15 @@ def test_original_service_recovers_after_actual_recording_and_owned_init_exit(
 
 
 def run_recovery(
-    s, mapped, staged, monkeypatch, *, initial=False, fault=None, observer_factory=None
+    s,
+    mapped,
+    staged,
+    monkeypatch,
+    *,
+    initial=False,
+    fault=None,
+    observer_factory=None,
+    native_fault=None,
 ):
     actual.route_recordings(s, mapped, monkeypatch)
     with actual.actual.native_engine(
@@ -47,6 +55,7 @@ def run_recovery(
         controller=True,
         operator_capture=True,
         recording=True,
+        fault=native_fault,
     ) as io:
         io.handlers.extend([io.exited_metadata, io.exited_metadata])
         audit = launch.engine.Endpoint()
@@ -190,3 +199,21 @@ def run_recovery(
         finally:
             resources.close()
             audit.close()
+
+
+def test_native_start_refusal_preserves_child_source_locations(
+    service_case, mapped, staged, monkeypatch
+):
+    with pytest.raises(AssertionError) as caught:
+        run_recovery(
+            service_case,
+            mapped,
+            staged,
+            monkeypatch,
+            native_fault="changed_baseline",
+        )
+    notes = getattr(caught.value, "__notes__", [])
+    report = "\n".join(note for note in notes if note.startswith("Native relay fixture outcome:"))
+    assert "source_locations" in report
+    assert "scripts/supplemental_recording_owner.py:" in report
+    assert str(mapped.recordings) not in report and "changed before" not in report
