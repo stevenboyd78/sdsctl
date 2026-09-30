@@ -1,9 +1,11 @@
 """Exact child + native construction + localhost RTP; no physical scanner."""
 
 import json
+import os
 import socket
 import time
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import replace
 from threading import Event
 
@@ -16,11 +18,27 @@ m = channel.m
 tree, configured, prepared = construction.tree, construction.configured, construction.prepared
 
 
+def injected_fault(fault, reached):
+    """Only the exact reached test injection can explain an assembly refusal."""
+    return fault in ("lost_started_return", "cleanup_failure") and reached.is_set()
+
+
+@contextmanager
+def expected_assembly_refusal(fault, reached):
+    try:
+        yield
+    except construction.assembly.n.UnconfirmedAssembly:
+        if not injected_fault(fault, reached):
+            raise
+
+
 def native_run(prepared, binding, send, fault):
     # Only this child owns the synthetic scanner and all native runtime objects.
     # Its two reporting call sites are the actual post-start and post-cleanup
     # success returns, not polling or reading native receipt files.
     scanner = construction.LoopbackScanner()
+    previous_diagnostics = os.environ.get("SDSCTL_TEST_FAILURE_LOCATIONS")
+    os.environ["SDSCTL_TEST_FAILURE_LOCATIONS"] = "1"
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as packets:
             packets.bind(("127.0.0.1", 0))
@@ -36,6 +54,7 @@ def native_run(prepared, binding, send, fault):
             spec = replace(prepared.spec, control_port=scanner.socket.getsockname()[1])
             config = replace(prepared.config, scanner_target=f"udp://127.0.0.1:{spec.control_port}")
             done = Event()
+            fault_reached = Event()
             with construction.build(prepared, specification=spec, configuration=config) as trial:
                 trial.runtime.audio.stream.transport._rtsp_client_factory = lambda *_: rtsp
                 if fault == "lost_started_return":
@@ -44,6 +63,7 @@ def native_run(prepared, binding, send, fault):
                     def lost(owner, name, now, snapshot=None):
                         original(owner, name, now, snapshot)
                         if name == "started":
+                            fault_reached.set()
                             raise TimeoutError(
                                 "Native receipt exists, but successful return was lost"
                             )
@@ -54,6 +74,7 @@ def native_run(prepared, binding, send, fault):
 
                     def failed():
                         original()
+                        fault_reached.set()
                         raise RuntimeError("Native run must not claim successful cleanup")
 
                     trial.process.run = failed
@@ -84,10 +105,9 @@ def native_run(prepared, binding, send, fault):
                 with ThreadPoolExecutor(max_workers=1) as pool:
                     task = pool.submit(operator)
                     try:
-                        result = trial.run()
-                        assert fault is None and result.artifact.samples == 1280
-                    except construction.assembly.n.UnconfirmedAssembly:
-                        assert fault is not None
+                        with expected_assembly_refusal(fault, fault_reached):
+                            result = trial.run()
+                            assert fault is None and result.artifact.samples == 1280
                     finally:
                         done.set()
                     task.result(timeout=3)
@@ -95,7 +115,41 @@ def native_run(prepared, binding, send, fault):
             assert len(rtsp.started_ports) == rtsp.teardowns == 1
             assert not scanner.reads and not scanner.errors
     finally:
-        scanner.close()
+        try:
+            scanner.close()
+        finally:
+            if previous_diagnostics is None:
+                os.environ.pop("SDSCTL_TEST_FAILURE_LOCATIONS", None)
+            else:
+                os.environ["SDSCTL_TEST_FAILURE_LOCATIONS"] = previous_diagnostics
+
+
+@pytest.mark.parametrize(
+    ("fault", "reached", "expected"),
+    [
+        (None, False, False),
+        ("lost_started_return", False, False),
+        ("lost_started_return", True, True),
+        ("cleanup_failure", False, False),
+        ("cleanup_failure", True, True),
+        ("unknown", True, False),
+    ],
+)
+def test_assembly_refusal_requires_the_exact_injected_fault(fault, reached, expected):
+    marker = Event()
+    if reached:
+        marker.set()
+    assert injected_fault(fault, marker) is expected
+
+    def refuse():
+        with expected_assembly_refusal(fault, marker):
+            raise construction.assembly.n.UnconfirmedAssembly(construction.assembly.n.MESSAGE)
+
+    if expected:
+        refuse()
+    else:
+        with pytest.raises(construction.assembly.n.UnconfirmedAssembly):
+            refuse()
 
 
 @pytest.mark.parametrize("fault", [None, "lost_started_return", "cleanup_failure"])
