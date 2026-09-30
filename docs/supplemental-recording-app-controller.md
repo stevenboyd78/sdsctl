@@ -2372,6 +2372,78 @@ needs independently bounded startup; no test proves installed exec/import/loadin
 fits two seconds. Active App admission and exclusive recovery remain separate
 gates, and this passive command is not a candidate for a human scanner/audio test.
 
+### Reusable original-outer passive completion (uninstalled)
+
+`supplemental_recording_passive_outer.complete` now joins the formerly
+fixture-sequenced final-plan transport, bounded startup-acceptance publication
+and passive descriptor delivery/release. It borrows the same original qualified
+pair, armed Custody/Watch, clock, Inputs, independently reviewed retained
+CasePlan and three already provisioned listeners. It constructs no process,
+listener, new clock, service, journal, recording or recovery owner. Only the
+exact separately selected passive writer/observer argv and original outer
+identity are allowed; changing selection or baseline refuses before publishing
+acceptance. A returned value contains only transport facts, never Ready, App
+permission, peer-exit evidence or successful retirement.
+
+The original pair has one completion slot. Once the binding is validated and
+that slot consumed, uncertainty cancels the exact original watcher. Original
+case files and partial publication survive; correcting arguments cannot reuse
+the failed attempt. Unrelated unbound objects are not adopted or closed.
+All phases retain their original owners and finite cutoffs, including the
+publication's explicit original-outer bound. The three listeners must name
+the same original whole-sequence cutoff; a later phase is not relabeled with
+a smaller bound it does not itself enforce. Each accept is followed by the
+original guard before any next phase. A syscall returning at the cutoff cannot
+permit one more plan send or observer accept. Full pre/post delivery runtime
+collections remain fresh; no previous comparison is treated as current evidence.
+Release can cause immediate writer exit, so there is no subsequent live-peer
+guard or claim that a transport return proves exit. The caller still must
+independently observe and reap its original peers and watcher.
+
+The actual automatic process fixture and separately staged flow call this same
+library. Their initial Engine/runtime/path aliases and input provenance remain
+synthetic; this extraction does not qualify a fixed installed outer command,
+interpreter, initial startup or whole-platform supervision. Cooperative checks
+cannot preempt a blocked syscall. No production source profile, launcher, App
+action scope or exclusive recovery authority selects this library.
+
+Original-observer replacement/refusal cases also run through this outer and the
+fixed automatic observer. A rejecting receiver can close its sockets before
+the sender finishes checking the plan exchange or accepts the final connection.
+That does not guarantee a sender plan receipt or a descriptor-delivery attempt;
+the original outer must cancel the same watcher across all of those phases.
+The tests separately require the receiver's real plan/fault markers, no passive
+writer release, both original peer exits before the unchanged sequence cutoff,
+and preserved case bytes. They add no synchronization message or new clock and
+do not broaden the Listener's acceptance rules. These are offline fixtures,
+not installed publication, platform timing or active admission evidence.
+
+Profiling this join found repeated pure template/plan decoding within protocol
+guards. Template digest checks now retain the originally validated immutable
+bytes, verify their exact type/value and recompute the digest without decoding
+the whole plan again. A changed valid template cannot be resealed by calling
+its initializer. The final-plan exchange validates its complete structural
+relation once, then checks those same original template/expectation objects and
+bytes while CasePlan still freshly reads the file and compares every decoded
+plan field. Every original input/file/process/clock/domain observation remains;
+no observation is cached. Mutation and actual-process regressions cover those
+boundaries. This reduces pure parsing cost, not the two-second requirement.
+The pinned-plan comparison also derives its closed record field names once
+from the reviewed schemas. This is immutable **schema metadata**, not a cache
+of current values: every check still reads every current and independently
+decoded field, tuple length/item and exact type. Pure regressions mutate every
+leaf, including paths and nested tuples, and prevent record equality from
+replacing recursive comparisons. All fresh filesystem/process/clock checks
+remain unchanged. Small isolated CPU benchmarks show less comparison overhead;
+they do not qualify the complete process flow or its installed timing.
+Coverage-instrumented runs still encountered actual writer exit after the
+original cutoff even when command cleanup had returned. Those remain failed
+timing qualifications; passing local runs do not establish installed timing.
+Test-only refusal diagnostics retain already-sanitized source-location notes
+through a second sanitation boundary. Only bounded lines matching the same
+closed relative-source grammar survive; exception messages, arbitrary notes
+and private values are never copied. No production refusal behavior changes.
+
 ### Staged original-outer and peer source execution, offline only
 
 An additional process fixture copies reviewed checkout sources into a separate
@@ -2383,7 +2455,7 @@ original two-second work cutoff is unchanged. Dynamic, static and UBSan native
 builds execute; no cgroup freeze or live App action is involved.
 
 The existing admitted peer preparation profile remains exactly 104 modules.
-Seven additional outer-policy modules form a separately measured 111-module
+Eight additional outer-policy modules form a separately measured 112-module
 **test candidate** closure, not a newly admitted source kind. Six legacy files
 are needed only by the existing test bootstrap, and remain explicitly separate.
 Three of those use direct file loaders without registering their module objects
@@ -2415,6 +2487,20 @@ This removes a runner dependency from the tested entry path, not the legacy
 synthetic fixture bootstrap: MonkeyPatch/assertion helpers, fake Engine/runtime
 facts and fixture input publication remain. It supplies neither an installed
 entrypoint selector nor independent pre-readiness or whole-platform supervision.
+
+The original-outer-loss process now uses that same explicit fixture assembly,
+instead of starting a second pytest runner and passing setup through an
+environment variable. Both paths retain the original generator cleanup order;
+partial setup and body failures unwind only resources already yielded by their
+original owners. The independent fault driver still receives authenticated
+original handles before killing only its disposable outer, and must observe
+the original writer, observer and native watcher exit before the unchanged
+cutoff with case files preserved. It retains the separate cancellation writer
+so loss of the original outer cannot be mistaken for cancellation EOF. The
+fault path's initial fixture setup remains synthetic and is **not** qualified
+independent supervision before that handle transfer. Removing the runner does
+not cure the separately recorded coverage timing failures or admit a new source
+profile, installed service, active action grant or recovery owner.
 
 This joins actual passive flow to staged **outer and peer** execution, not a production
 Python sandbox or installed entrypoint/source qualification. Test scaffolding,
@@ -2532,8 +2618,26 @@ exits/reaping and empty-only group removal remain required. A full original
 Custody join also confirms that submitting cancellation to a frozen watcher is
 not success and does not renew the deadline or permit retry. Synthetic Engine
 facts stay synthetic. These tests need explicit local approval and are skipped
-by ordinary CI; they do not qualify installed platform placement or the whole
-outer's cgroup-failure boundary. See the native README for scope and limitations.
+by ordinary CI; they do not qualify installed platform placement.
+
+The separately approved inverse fixture now births the disposable original
+outer and both fixed peers directly in a second fresh subtree while the outer's
+genuine direct-child watcher is born back in the retained caller cgroup. Before
+freeze, two outside cleanup owners retain authenticated native/outer/peer pidfds,
+the exact new directories and the original BOOTTIME cutoffs. Only the new outer
+subtree is frozen. An outside timerfd acts on the original recovery cutoff; the
+watcher's existing deadline/outer-loss refusal retires the peers, and the driver
+requires actual native/outer/peer exits plus original/adopted-owner reaping.
+Empty groups remain frozen until exact removal; no thaw, `cgroup.kill`, PID
+migration, numeric-PID signal, replacement budget or retry is used. Dynamic,
+static and UBSan cases pass this actual local fault.
+
+This closes only the local whole-outer cgroup-failure boundary. The fixture's
+entrypoint, interpreter environment, C compiler/libc and native image are local
+test inputs, not authenticated installed publication. It does not establish an
+HAOS/systemd placement mechanism, the initial interval before all exact handles
+are transferred, simultaneous outside-guardian loss, active App admission or
+exclusive recovery. See the native README for the exact scope and limitations.
 
 This is an **offline prototype, not an installed host supervisor**. No existing
 entrypoint or source inventory selects it. The static build is a candidate for
@@ -2553,7 +2657,10 @@ not authorize installation or any App/scanner trial.
    joins finalized, abandoned-recording and pristine-cancellation paths with real
    Link, journal, clock and worker handles. Pristine cancellation captures native
    custody without constructing a recording owner or consuming its begin slot.
-   Installed evidence remains separate; do not infer the missing joins.
+   The local watcher-subtree and whole-outer-subtree failure boundaries are now
+   exercised with exact handles and original clocks. Installed placement,
+   publication and platform lifetime evidence remain separate; do not infer
+   those missing joins.
 2. Bind the action-capable controller/observer source inventory to reviewed,
    independently supervised entrypoints with interpreter/dependency provenance for **both** peers
    and a distinct explicit action-scope grant. Passive preparation must remain

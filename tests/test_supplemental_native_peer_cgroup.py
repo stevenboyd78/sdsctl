@@ -1,15 +1,18 @@
 """OPT-IN local disposable cgroup freeze; never installed/platform qualification.
 
 Only fresh children are born into new groups. No existing process is migrated,
-no existing control is written, and the caller's scope is NEVER frozen. The
-original lifetime driver/outer and this independent guardian stay outside the
-new subtree. An explicit opt-in requires user/delegation authority; CI success
-or writable cgroup files are not that authority.
+no existing control is written, and the caller's scope is NEVER frozen. One
+fault keeps the original lifetime driver/outer and guardian outside a watcher
+subtree. A distinct fault puts the disposable outer and peers in a fresh subtree
+while its direct-child watcher and two cleanup owners remain outside. An explicit
+opt-in requires user/delegation authority; CI success or writable cgroup files
+are not that authority.
 """
 
 import array
 import json
 import os
+import re
 import select
 import signal
 import socket
@@ -60,8 +63,9 @@ def boot_ns():
 
 
 @contextmanager
-def fresh_group():
+def fresh_group(leaf_name="native"):
     """Retained exact directories; empty-only removal, no recovery-by-group-kill."""
+    assert leaf_name in ("native", "outer")
     original = Path("/proc/self/cgroup").read_text()
     assert original.startswith("0::/") and original.count("\n") == 1
     relative = Path(original[3:].strip()).relative_to("/")
@@ -79,15 +83,15 @@ def fresh_group():
         os.mkdir(name, mode=0o700, dir_fd=caller)
         root_created = True
         root = os.open(name, DIR, dir_fd=caller)
-        os.mkdir("native", mode=0o700, dir_fd=root)
+        os.mkdir(leaf_name, mode=0o700, dir_fd=root)
         leaf_created = True
-        leaf = os.open("native", DIR, dir_fd=root)
+        leaf = os.open(leaf_name, DIR, dir_fd=root)
         for directory in (root, leaf):
             assert os.fstat(directory).st_uid == os.getuid()
             assert os.fstat(directory).st_dev == os.fstat(caller).st_dev
             assert read_control(directory, "cgroup.procs") == ""
             assert events(directory) == {"populated": "0", "frozen": "0"}
-        yield root, leaf, "/" + str(relative / name / "native"), original
+        yield root, leaf, "/" + str(relative / name / leaf_name), original
     finally:
         # If exact cleanup failed, retain populated groups and fail visibly.
         # There is no recursive removal, ancestor thaw, or cgroup.kill fallback.
@@ -96,7 +100,7 @@ def fresh_group():
                 assert read_control(leaf, "cgroup.procs") == ""
                 assert events(leaf)["populated"] == "0"
             if leaf_created:
-                os.rmdir("native", dir_fd=root)
+                os.rmdir(leaf_name, dir_fd=root)
             if root is not None:
                 assert read_control(root, "cgroup.procs") == ""
                 assert events(root)["populated"] == "0"
@@ -159,6 +163,123 @@ def original_handoff(channel, driver, owned):
     assert lifetime.ingress.base.m.deadlines._fdinfo(owned[0])[b"Pid"] == str(
         report["native"]
     ).encode("ascii")
+    return report
+
+
+@pytest.fixture(scope="module")
+def cgroup_exec_launcher(tmp_path_factory):
+    source = Path(__file__).parent / "fixtures/cgroup_exec_spawn.c"
+    peer_source = Path(__file__).parent / "fixtures/cgroup_peer_wait.c"
+    directory = tmp_path_factory.mktemp("cgroup-exec-fixture")
+    output = directory / "cgroup-exec.so"
+    peer = directory / "cgroup-peer"
+    result = subprocess.run(
+        [
+            "cc",
+            "-std=c11",
+            "-O2",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-Wconversion",
+            "-Wshadow",
+            "-Wformat=2",
+            "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
+            "-fPIC",
+            "-shared",
+            "-Wl,-z,relro,-z,now",
+            str(source),
+            "-o",
+            str(output),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    peer_result = subprocess.run(
+        [
+            "cc",
+            "-std=c11",
+            "-O2",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-Wconversion",
+            "-Wshadow",
+            "-Wformat=2",
+            "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
+            "-fPIE",
+            "-pie",
+            "-Wl,-z,relro,-z,now",
+            str(peer_source),
+            "-o",
+            str(peer),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert peer_result.returncode == 0, peer_result.stderr
+    return output, peer
+
+
+def whole_outer_handoff(channel, driver, owned):
+    raw, ancillary, flags, _ = channel.recvmsg(
+        2048,
+        socket.CMSG_SPACE(4 * array.array("i").itemsize) + socket.CMSG_SPACE(struct.calcsize("3i")),
+        socket.MSG_CMSG_CLOEXEC,
+    )
+    credentials = []
+    rights_count = 0
+    for level, kind, data in ancillary:
+        if (level, kind) == (socket.SOL_SOCKET, socket.SCM_RIGHTS):
+            rights = array.array("i")
+            rights.frombytes(data)
+            owned.extend(rights)
+            rights_count += 1
+    for level, kind, data in ancillary:
+        assert level == socket.SOL_SOCKET
+        assert kind in (socket.SCM_RIGHTS, socket.SCM_CREDENTIALS)
+        if kind == socket.SCM_CREDENTIALS:
+            credentials.append(struct.unpack("3i", data))
+    assert not (flags & (socket.MSG_TRUNC | socket.MSG_CTRUNC))
+    assert credentials == [(driver.pid, os.getuid(), os.getgid())]
+    if rights_count == 0:
+        refusal = json.loads(raw)
+        assert set(refusal) == {"error", "stage"}
+        locations = []
+        failures = []
+        with suppress(subprocess.TimeoutExpired):
+            driver.wait(timeout=2)
+        if refusal["stage"].startswith("transport-"):
+            diagnostic = driver.stderr.read(65536)
+            locations = re.findall(
+                r'_whole_outer_cgroup_driver\.py", line ([0-9]+), in _outer', diagnostic
+            )
+            failures = sorted(
+                set(re.findall(r"^([A-Za-z]+(?:Error|Exception)):", diagnostic, re.M))
+            )
+        pytest.fail(
+            f"Whole-outer fixture refused before injection: {refusal['stage']} "
+            f"({refusal['error']}); source lines={locations}, failures={failures}"
+        )
+    assert rights_count == 1 and len(owned) == 4
+    assert len({os.fstat(fd).st_ino for fd in owned}) == 4
+    assert all(not os.get_inheritable(fd) for fd in owned)
+    assert not any(select.select([fd], [], [], 0)[0] for fd in owned)
+    report = json.loads(raw)
+    assert set(report) == {"deadline", "native", "outer", "peers", "ready_by"}
+    assert all(type(report[key]) is int for key in ("deadline", "native", "outer", "ready_by"))
+    assert len(report["peers"]) == 2 and all(type(pid) is int for pid in report["peers"])
+    assert report["deadline"] - report["ready_by"] == 2 * 10**9
+    assert boot_ns() < report["ready_by"]
+    expected = [report["native"], report["outer"], *report["peers"]]
+    assert [int(base.m.deadlines._fdinfo(fd)[b"Pid"]) for fd in owned] == expected
     return report
 
 
@@ -314,4 +435,112 @@ def test_full_original_custody_and_watch_keep_uncertainty_after_frozen_cancel(
             lifetime.direct.direct_ingress(custody, binary, direct_launcher, cgroup_fd=leaf),
         ):
             pytest.fail("Consumed custody retried after cgroup failure")
+    assert len(os.listdir("/proc/self/fd")) == before
+
+
+def test_whole_original_outer_group_freeze_keeps_native_and_cleanup_owner_outside(
+    binary, direct_launcher, cgroup_exec_launcher
+):
+    """Freeze only fresh outer/peers; act on the original absolute cutoff.
+
+    The disposable driver and this test both retain exact fallback handles
+    before injection.  Passing evidence is produced before either fallback may
+    signal anything.  The frozen group is never resumed or group-killed.
+    """
+    before = len(os.listdir("/proc/self/fd"))
+    original = Path("/proc/self/cgroup").read_text()
+    relative = Path(original[3:].strip()).relative_to("/")
+    caller_path = Path("/sys/fs/cgroup") / relative
+    caller = os.open(caller_path, DIR)
+    handles = []
+    driver = driver_fd = None
+    parent = child = None
+    communicated = False
+    try:
+        with fresh_group("outer") as (root, leaf, expected_path, observed_original):
+            assert observed_original == original
+            parent, child = socket.socketpair(
+                socket.AF_UNIX, socket.SOCK_SEQPACKET | socket.SOCK_CLOEXEC
+            )
+            parent.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
+            parent.settimeout(6)  # Transport ceiling, never a new readiness budget.
+            helper_program = Path(__file__).with_name("_whole_outer_cgroup_driver.py")
+            repo = Path(__file__).resolve().parents[1]
+            driver = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-I",
+                    "-B",
+                    str(helper_program),
+                    "driver",
+                    str(repo),
+                    str(binary),
+                    direct_launcher.fixture_library_path,
+                    str(cgroup_exec_launcher[0]),
+                    str(cgroup_exec_launcher[1]),
+                    str(leaf),
+                    str(caller),
+                    str(child.fileno()),
+                    expected_path,
+                    original,
+                ],
+                pass_fds=(leaf, caller, child.fileno()),
+                env={},
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            driver_fd = os.pidfd_open(driver.pid)
+            child.close()
+            child = None
+            report = whole_outer_handoff(parent, driver, handles)
+            assert Path("/proc/self/cgroup").read_text() == original
+            assert Path(f"/proc/{driver.pid}/cgroup").read_text() == original
+            assert Path(f"/proc/{report['native']}/cgroup").read_text() == original
+            members = {int(line) for line in read_control(leaf, "cgroup.procs").splitlines()}
+            assert members == {report["outer"], *report["peers"]}
+            assert read_control(root, "cgroup.procs") == ""
+            for pid in (report["outer"], *report["peers"]):
+                assert Path(f"/proc/{pid}/cgroup").read_text() == f"0::{expected_path}\n"
+            freeze_fresh(root, leaf, report["ready_by"])
+            assert parent.send(b"F") == 1
+            observe_by = report["deadline"] + int(base.m.RETIRE_SECONDS * 10**9)
+            out, err = driver.communicate(timeout=max(0.001, (observe_by - boot_ns()) / 1e9))
+            communicated = True
+            assert driver.returncode == 0, err
+            result = json.loads(out)
+            assert result["passed"] is True
+            assert result["deadline"] == report["deadline"]
+            assert result["dispatch_ns"] >= report["deadline"]
+            assert result["outer_code"] == -signal.SIGKILL
+            assert result["peer_codes"] == [-signal.SIGKILL, -signal.SIGKILL]
+            assert result["native_code"] in (10, 12)
+            assert all(select.select([fd], [], [], 0)[0] for fd in handles)
+            assert select.select([driver_fd], [], [], 0)[0]
+            assert events(root) == events(leaf) == {"populated": "0", "frozen": "1"}
+    finally:
+        # This independent fallback is outside the tested outcome.  It uses
+        # only retained exact handles and cannot turn failed evidence into pass.
+        for fd in handles:
+            if fd is not None:
+                with suppress(ProcessLookupError):
+                    signal.pidfd_send_signal(fd, signal.SIGKILL)
+        if parent is not None:
+            parent.close()
+        if child is not None:
+            child.close()
+        if driver is not None and not communicated:
+            try:
+                driver.communicate(timeout=2)
+            except subprocess.TimeoutExpired:
+                if driver_fd is not None:
+                    with suppress(ProcessLookupError):
+                        signal.pidfd_send_signal(driver_fd, signal.SIGKILL)
+                driver.communicate(timeout=2)
+        for fd in [*handles, driver_fd]:
+            if fd is not None:
+                with suppress(AssertionError):
+                    assert select.select([fd], [], [], 2)[0]
+                os.close(fd)
+        os.close(caller)
     assert len(os.listdir("/proc/self/fd")) == before

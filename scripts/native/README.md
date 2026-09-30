@@ -427,6 +427,48 @@ builds. They do NOT qualify installed independent placement, freezing the whole
 original-outer domain, simultaneous owner loss, host-wide suspension, fixed
 active entrypoints, platform provenance, App actions, or recovery authority.
 
+### Opt-in whole-original-outer freeze integration
+
+The same explicitly approved local-only module now covers the distinct inverse
+boundary. A small test-only `clone3(CLONE_PIDFD | CLONE_INTO_CGROUP)` exec
+boundary births a fixed blocking peer executable and the disposable original
+outer directly in a fresh `outer` leaf. There is no numeric-PID migration,
+manager fallback, or Python execution between clone and exec. That outer uses
+the existing direct-owner boundary to create its native watcher as its genuine
+direct child in the retained caller cgroup, outside the target subtree.
+
+The external driver owns the peers and receives the native's original pidfd from
+the outer over a credential-checked private socket. Before injection, it passes
+the native, outer and both peer pidfds to a second guardian that also retains the
+exact group directories and original two-/four-second BOOTTIME cutoffs. The
+guardian verifies outer/peer and native/driver placement on opposite sides of
+the boundary, freezes only the fresh outer subtree and observes kernel
+`frozen=1` for both levels. No fault is injected during creation or handle
+transfer.
+
+An outside timerfd is armed to the original outer's recovery cutoff. At that
+same absolute cutoff the driver signals only the retained outer pidfd. The
+outside watcher can then retire both exact peers; depending on which event it
+observes first at the shared cutoff, its existing deadline or outer-loss refusal
+is retained. The driver requires actual native, outer and peer exits, exact
+SIGKILL peer/outer status and adopted-owner reaping before success. Both cgroup
+levels must become empty while still frozen before exact empty-only removal.
+Neither normal success nor fallback uses thaw, `cgroup.kill`, PID signaling,
+process discovery, a replacement budget or a second attempt.
+
+Dynamic, static and UBSan executions pass this actual local fault. Earlier
+pre-injection construction/diagnostic failures remain evidence; none froze a
+group or weakened an assertion. The final fixture uses an explicit inherited
+site-packages path because fd-exec of the resolved interpreter does not discover
+the invoking test venv, and a fixed no-argument C peer because `/bin/sleep`
+returned before identity capture. Those are fixture-source repairs, not installed
+runtime or command qualification.
+
+This establishes the local whole-outer group boundary only. It does not
+authenticate installed source/interpreter/compiler/libc, qualify a systemd or
+HAOS placement mechanism, cover the initial pre-handoff interval, survive loss
+of both outside cleanup owners, or grant active App actions or recovery custody.
+
 ## Failure model and remaining gates
 
 The original qualified outer must independently stop its retained peers if the
@@ -441,12 +483,13 @@ descendants; a watcher inside that subtree stops executing too.
 [Linux cgroup v2 documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html)
 
 The local SIGSTOP tests show separate progress when peers or one owner stop.
-The explicit opt-in cgroup tests above additionally cover one freshly isolated
-watcher subtree, not installed systemd or Docker qualification. Host-wide freeze,
+The explicit opt-in cgroup tests above cover freshly isolated watcher and whole-
+outer subtrees, not installed systemd or Docker qualification. Host-wide freeze,
 loss of scheduling, watcher SIGKILL/OOM/kernel failure and uninterruptible I/O
-remain outside this executable's guarantee. Even correct SIGKILL dispatch does
-not certify actual exit. A second qualified mechanism/outer failure contract
-and independently observed exact-peer/native/App exits are still required.
+remain outside this executable's guarantee. The whole-outer case requires actual
+exit and reaping after exact-handle dispatch, but does not install or authenticate
+the mechanism that would supply those boundaries on HAOS. Exact App exits remain
+separately required.
 
 No arbitrary restored-App or recording recovery is attempted here. Fixed
 outer/observer entrypoints, protected descriptor transfer from a real host

@@ -10,6 +10,9 @@ process deadline/recovery contract are prerequisites to live use.
 from __future__ import annotations
 
 import math
+import os
+import re
+import sys
 from pathlib import Path
 from threading import Event, Lock, Thread
 from time import monotonic
@@ -57,6 +60,32 @@ class UnconfirmedAssembly(ValueError):
 def require(value: bool) -> None:
     if not value:
         raise UnconfirmedAssembly(MESSAGE)
+
+
+def _failure_locations(error):
+    """Bounded source locations for the explicit offline test boundary only."""
+    source = Path(__file__).parent
+    seen, rows = set(), []
+    for index in range(8):
+        if not isinstance(error, BaseException) or id(error) in seen:
+            break
+        seen.add(id(error))
+        trace = error.__traceback__
+        for _ in range(64):
+            if trace is None:
+                break
+            path = Path(trace.tb_frame.f_code.co_filename)
+            if path.parent == source and re.fullmatch(
+                r"(?:accept_)?supplemental_[a-z0-9_]+\.py", path.name
+            ):
+                row = f"cause {index + 1}: scripts/{path.name}:{trace.tb_lineno}"
+                if row not in rows:
+                    rows.append(row)
+                    if len(rows) == 32:
+                        return tuple(rows)
+            trace = trace.tb_next
+        error = error.__cause__ if error.__cause__ is not None else error.__context__
+    return tuple(rows)
 
 
 class NativeRecordingAssembly:
@@ -283,9 +312,12 @@ class NativeRecordingAssembly:
                     self._bindings()
                     break
                 self._cancel.wait(0.025)
-        except BaseException:
+        except BaseException as error:
             # Only a fixed failure bit crosses the worker boundary.
             self.worker_error = True
+            if os.environ.get("SDSCTL_TEST_FAILURE_LOCATIONS") == "1":
+                for location in _failure_locations(error):
+                    print(location, file=sys.stderr, flush=True)
         finally:
             self._ready.clear()
             self.acquisition._end("recording_assembly_ended")

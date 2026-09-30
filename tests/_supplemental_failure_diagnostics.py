@@ -36,6 +36,30 @@ def failure_locations(error):
             if path.parent == SCRIPTS and NAME.fullmatch(path.name):
                 rows.append(f"cause {index + 1}: scripts/{path.name}:{trace.tb_lineno}")
             trace = trace.tb_next
+        # A prior test-only observer may have saved source locations before a
+        # second production sanitation boundary discarded that inner traceback.
+        # Only the same closed relative-location grammar is allowed through;
+        # arbitrary note text/objects and private exception values stay private.
+        notes = getattr(error, "__notes__", None)
+        retained = []
+        if type(notes) is list:
+            for note in notes[:8]:
+                if type(note) is not str:
+                    continue
+                bounded = note[:4096]
+                if len(note) > 4096:
+                    # Never turn the prefix of an invalid/trailing-private
+                    # line into apparently complete source evidence.
+                    bounded = bounded.rsplit("\n", 1)[0] if "\n" in bounded else ""
+                for line in bounded.splitlines()[:64]:
+                    match = CHILD_NOTE.fullmatch(line)
+                    if match is not None:
+                        row = f"cause {index + 1}: scripts/{match[1]}:{match[2]}"
+                        if row not in rows and row not in retained:
+                            retained.append(row)
+                if len(retained) >= 64:
+                    break
+        rows.extend(retained[:64])
         error = error.__cause__ if error.__cause__ is not None else error.__context__
     return "\n".join(rows)
 

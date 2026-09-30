@@ -85,7 +85,10 @@ def start_operator(s, mapped, staged, command, *, recording=False):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         bufsize=0,
-        env={"PATH": "/usr/bin:/bin"},
+        env={
+            "PATH": "/usr/bin:/bin",
+            **({"SDSCTL_TEST_FAILURE_LOCATIONS": "1"} if recording else {}),
+        },
         start_new_session=True,
     )
 

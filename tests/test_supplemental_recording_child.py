@@ -119,6 +119,18 @@ def changed(args, key, value):
     return copied
 
 
+def test_failure_locations_are_bounded_to_known_source_without_values():
+    try:
+        m.require(False)
+    except ValueError as error:
+        locations = m._failure_locations(error)
+    assert len(locations) == 1
+    assert re.fullmatch(
+        r"cause 1: scripts/accept_supplemental_recording\.py:[0-9]{1,6}", locations[0]
+    )
+    assert "PRIVATE" not in "\n".join(locations)
+
+
 @pytest.mark.parametrize(
     "fault",
     [

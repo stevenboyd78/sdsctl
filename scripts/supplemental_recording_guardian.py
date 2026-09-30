@@ -289,13 +289,17 @@ def open_session(layout, path, *, plan_sha256, source_sha256, ready_by):
         }
         args = [sys.executable, "-I", "-B", str(layout.native / "accept_supplemental_recording.py")]
         args += [part for name, value in fields.items() for part in ("--" + name, str(value))]
+        diagnostic = os.environ.get("SDSCTL_TEST_FAILURE_LOCATIONS") == "1"
         process = subprocess.Popen(
             args,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=None if diagnostic else subprocess.DEVNULL,
             cwd="/",
-            env={"PATH": "/usr/bin:/bin"},
+            env={
+                "PATH": "/usr/bin:/bin",
+                **({"SDSCTL_TEST_FAILURE_LOCATIONS": "1"} if diagnostic else {}),
+            },
             close_fds=True,
             pass_fds=(right.incoming.fileno(), right.outgoing.fileno(), read),
         )

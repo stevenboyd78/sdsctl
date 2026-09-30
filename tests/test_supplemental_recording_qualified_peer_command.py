@@ -9,6 +9,7 @@ No live App, active permission, recording, recovery or installed launcher claim.
 
 import builtins
 import copy
+import importlib.util
 import inspect
 import io
 import json
@@ -47,6 +48,14 @@ layout, image_umask, supervised = (
 )
 image, configured = qualification.image, qualification.configured
 STAGED_SOURCE_GUARD = None  # Explicit staged-process fixture only; never production.
+OUTER_NAME = "supplemental_recording_passive_outer"
+OUTER_SPEC = importlib.util.spec_from_file_location(
+    OUTER_NAME, Path(p.__file__).with_name(OUTER_NAME + ".py")
+)
+outer = importlib.util.module_from_spec(OUTER_SPEC)
+sys.modules[OUTER_NAME] = outer
+OUTER_SPEC.loader.exec_module(outer)
+OUTER_COMPLETE_CODE = outer.complete.__code__
 
 
 def source_guard_prefix(role):
@@ -125,6 +134,33 @@ def delivery_diagnostics(patches):
             raise
 
     patches.setattr(delivery_tests.m, "_deliver", observed)
+
+
+def passive_outer_diagnostics(refusal):
+    """Inspect only the saved cause slot of the exact refused outer frame."""
+    trace = refusal.__traceback__
+    for _ in range(64):
+        if trace is None:
+            break
+        if trace.tb_frame.f_code is OUTER_COMPLETE_CODE:
+            locations = failure_locations(trace.tb_frame.f_locals.get("problem"))
+            if locations:
+                refusal.add_note(locations)
+            break
+        trace = trace.tb_next
+
+
+def test_passive_outer_diagnostics_never_copy_private_values():
+    with pytest.raises(delivery_tests.m.UnconfirmedDelivery) as failure:
+        try:
+            outer.complete("PRIVATE_OUTER_PAYLOAD", *([None] * 7), deadline=0)
+        except delivery_tests.m.UnconfirmedDelivery as refusal:
+            passive_outer_diagnostics(refusal)
+            raise
+    assert str(failure.value) == delivery_tests.m.MESSAGE
+    notes = getattr(failure.value, "__notes__", [])
+    assert notes and "scripts/supplemental_recording_passive_outer.py:" in notes[0]
+    assert "PRIVATE_OUTER_PAYLOAD" not in repr(notes)
 
 
 def test_delivery_diagnostics_retain_source_without_private_values(monkeypatch):
@@ -618,6 +654,37 @@ def observer_child(path, *, retained=False):
         patch.setattr(p, "writer_case_root", lambda _: Path(config["case_root"]))
         patch.setattr(p, "handoff_root", lambda *_: Path(config["handoff"]))
         patch.setattr(p.startups.plans.Plan, "root", property(lambda _: Path(config["case_root"])))
+
+        def selected_handoff(original, inputs, connection, timer, local, outer, writer_peer):
+            # Explicit negative-fixture selection, shared by the legacy scope
+            # tests and the actual automatic observer command. Never a runtime
+            # option, replacement owner accepted by policy, or new phase budget.
+            selected = [original, inputs, connection, timer, local, outer, writer_peer]
+            fault = config.get("observer_join_fault")
+            if fault == "clock":
+                selected[3] = stack.enter_context(
+                    closing(p.domains.clock.ClockWitness(p.domains.clock.read()))
+                )
+            elif fault == "writer":
+                selected[6] = stack.enter_context(
+                    p.domains.process.ProcessWitness(writer_peer.identity)
+                )
+            elif fault == "local":
+                selected[4] = p.domains.process.ProcessIdentity(**asdict(local))
+            elif fault == "inputs":
+                selected[1] = stack.enter_context(
+                    closing(
+                        p.inputs_module.Inputs(inputs.declaration, inputs.root, inputs.expected)
+                    )
+                )
+            elif fault == "plan":
+                selected[0] = stack.enter_context(
+                    p.startups.acceptance.intake.CasePlan(original._root, original.recheck().sha256)
+                )
+            elif fault == "missing-context":
+                del original._observer_plan_context
+            return selected
+
         if automatic:
             # Retire the fixture's setup clock; the fixed function captures its
             # own original observer clock before the writer creates any plan.
@@ -647,7 +714,10 @@ def observer_child(path, *, retained=False):
 
             @contextmanager
             def observed_handoff(*args, **kwargs):
-                with handoffs(*args, **kwargs) as receipt:
+                selected = selected_handoff(*args)
+                if config.get("observer_join_fault") is not None:
+                    emit(dict(observer_handoff_fault=config["observer_join_fault"]))
+                with handoffs(*selected, **kwargs) as receipt:
                     emit(dict(received=True, offer=receipt.offer_sha256, original_clock=True))
                     yield receipt
 
@@ -771,28 +841,10 @@ def observer_child(path, *, retained=False):
             assert original.recheck() is plan and timer.original is origin
             if config["observer_join"]:
                 assert retained
-                selected = [original, inputs, final_connection, timer, local, outer, writer_peer]
+                selected = selected_handoff(
+                    original, inputs, final_connection, timer, local, outer, writer_peer
+                )
                 fault = config["observer_join_fault"]
-                if fault == "clock":
-                    selected[3] = stack.enter_context(
-                        closing(p.domains.clock.ClockWitness(p.domains.clock.read()))
-                    )
-                elif fault == "writer":
-                    selected[6] = stack.enter_context(
-                        p.domains.process.ProcessWitness(writer_peer.identity)
-                    )
-                elif fault == "local":
-                    selected[4] = p.domains.process.ProcessIdentity(**asdict(local))
-                elif fault == "inputs":
-                    selected[1] = stack.enter_context(
-                        closing(p.inputs_module.Inputs(declaration, inputs.root, inputs.expected))
-                    )
-                elif fault == "plan":
-                    selected[0] = stack.enter_context(
-                        p.startups.acceptance.intake.CasePlan(original._root, plan.sha256)
-                    )
-                elif fault == "missing-context":
-                    del original._observer_plan_context
 
                 def forbidden(*args, **kwargs):
                     raise AssertionError("Passive observer attempted active exchange")
@@ -1371,6 +1423,7 @@ def finish(s, monkeypatch, after_qualification=None):
     if s.automatic_observer:
         assert type(s.custody) is termination_tests.m.Custody
         assert s.custody.pair is s.pair and s.custody.armed_watch is s.watch
+        return finish_automatic(s, plan, monkeypatch)
     submission = writer.assembly.baseline_tests.integration.startups.sends.m
     # Only local case-file operations use this fixture path. Keeping the override
     # during fresh runtime comparison would change its expected Engine mount and
@@ -1379,20 +1432,15 @@ def finish(s, monkeypatch, after_qualification=None):
         files.setattr(p.startups.plans.Plan, "root", property(lambda _: s.case_root))
         original = s.stack.enter_context(submission.intake.CasePlan(s.case_root, plan.sha256))
         if s.plan_delivery:
-            listener = (
-                s.staged_plan
-                if s.automatic_observer
-                else s.stack.enter_context(
-                    closing(
-                        p.listeners.Listener(
-                            s.plan_socket, s.counterpart, deadline=time.monotonic() + 2
-                        )
+            listener = s.stack.enter_context(
+                closing(
+                    p.listeners.Listener(
+                        s.plan_socket, s.counterpart, deadline=time.monotonic() + 2
                     )
                 )
             )
             s.plan_listener, s.sent_plan = listener, original
-            if not s.automatic_observer:
-                transport.command(s.observer, dict(plan_ready=True))
+            transport.command(s.observer, dict(plan_ready=True))
             listener.accept()
             s.plan_receipt = p.send_observer_plan(
                 s.inputs,
@@ -1408,23 +1456,14 @@ def finish(s, monkeypatch, after_qualification=None):
             )
         if s.retained_delivery:
             end = min(time.monotonic() + 2, plan.lease["ready_by"])
-            if s.automatic_observer:
-                end = min(end, s.pipeline_end)
             s.writer_listener = s.stack.enter_context(
                 closing(p.listeners.Listener(s.writer_handoff, s.h.witness, deadline=end))
             )
-            s.observer_listener = (
-                s.staged_handoff
-                if s.automatic_observer
-                else s.stack.enter_context(
-                    closing(p.listeners.Listener(s.observer_handoff, s.counterpart, deadline=end))
-                )
+            s.observer_listener = s.stack.enter_context(
+                closing(p.listeners.Listener(s.observer_handoff, s.counterpart, deadline=end))
             )
         approved = submission.Submission(original, s.inputs.template.sha256, plan.sha256)
-        if s.automatic_observer:
-            approved.submit_before(s.pipeline_end)
-        else:
-            approved.submit()
+        approved.submit()
     if s.retained_delivery:
         writer_channel = s.writer_listener.accept()
     else:
@@ -1514,6 +1553,61 @@ def finish(s, monkeypatch, after_qualification=None):
     if s.authenticated_release and outcome != milestone:
         return json.loads(outcome)  # Refusal, not passive preparation completion.
     assert outcome == milestone
+    return json.loads(transport.line(s.h.child))
+
+
+def finish_automatic(s, plan, monkeypatch):
+    """Synthetic path mapping only; real sequence lives outside legacy fixtures."""
+    original_root = p.startups.plans.Plan.root
+    with monkeypatch.context() as files:
+        files.setattr(p.startups.plans.Plan, "root", property(lambda _: s.case_root))
+        original = s.stack.enter_context(outer.submission.intake.CasePlan(s.case_root, plan.sha256))
+        # Only the retained file-plan object uses the fixture path. Full paired
+        # runtime comparisons still see their originally pinned canonical root.
+        files.setattr(
+            p.startups.plans.Plan,
+            "root",
+            property(
+                lambda value: s.case_root if value is original._plan else original_root.fget(value)
+            ),
+        )
+        s.sent_plan, s.plan_listener = original, s.staged_plan
+        s.observer_listener = s.staged_handoff
+        end = min(s.pipeline_end, plan.lease["ready_by"])
+        s.writer_listener = s.stack.enter_context(
+            closing(p.listeners.Listener(s.writer_handoff, s.h.witness, deadline=end))
+        )
+        send_plan = p.send_observer_plan
+
+        def observed_plan(*args, **kwargs):
+            # Test-only phase evidence survives later refusal. This is the real
+            # transport result, not a forged overall completion/exit receipt.
+            receipt = send_plan(*args, **kwargs)
+            s.plan_receipt = receipt
+            return receipt
+
+        files.setattr(p, "send_observer_plan", observed_plan)
+        try:
+            result = outer.complete(
+                s.custody,
+                s.watch,
+                s.h.observer_identity,
+                s.inputs,
+                original,
+                s.plan_listener,
+                s.writer_listener,
+                s.observer_listener,
+                deadline=s.pipeline_end,
+            )
+        except delivery_tests.m.UnconfirmedDelivery as error:
+            passive_outer_diagnostics(error)
+            raise
+    s.plan_receipt, s.delivered = result.plan_receipt, result.delivered
+    assert json.loads(transport.line(s.observer)) == dict(
+        plan_retained=plan.sha256, input_pin=s.inputs.expected
+    )
+    assert json.loads(transport.line(s.observer))["received"]
+    assert transport.line(s.h.child) == p.RETAINED_MILESTONE
     return json.loads(transport.line(s.h.child))
 
 
@@ -2089,23 +2183,59 @@ def test_original_received_observer_joins_fixed_writer_and_retires_before_origin
     "joined",
     [
         pytest.param(
-            dict(mode="release-command-pair", observer_join=True, observer_join_fault=fault),
+            dict(
+                mode="release-command-pair",
+                observer_join=True,
+                automatic_observer=True,
+                observer_join_fault=fault,
+            ),
             id=fault,
         )
         for fault in ("clock", "writer", "local", "inputs", "plan", "missing-context")
     ],
     indirect=True,
 )
-def test_replaced_observer_receive_owners_refuse_original_watched_handoff(joined, monkeypatch):
+def test_replaced_observer_receive_owners_refuse_original_watched_handoff(
+    joined, monkeypatch, request
+):
     s = joined
+    fault = request.node.callspec.params["joined"]["observer_join_fault"]
+    released = []
+
+    def forbidden(*args):
+        released.append(True)
+        pytest.fail("Rejected observer admitted passive writer release")
+
+    monkeypatch.setattr(p.bootstrap.Endpoint, "send_retirement", forbidden)
     assert s.sender.send() is None
     with pytest.raises(delivery_tests.m.UnconfirmedDelivery):
         finish(s, monkeypatch, lambda: arm_original_watch(s))
     assert s.watch.closed and s.watch.finished
-    assert s.h.child.wait(timeout=3) == s.observer.wait(timeout=3) == -signal.SIGKILL
-    assert s.plan_receipt and s.pair.channel_delivery_attempted
-    assert (s.case_root / "startup-claim.json").is_file()
-    assert (s.case_root / "plan.json").is_file()
+    assert s.pair.passive_completion_attempted and not released
+    # The receiver may reject/close before the sender finishes its own plan
+    # exchange or accepts the handoff. The original outer owns all these phases;
+    # neither a delivery-attempt flag nor a sender receipt is then guaranteed.
+    assert not hasattr(s, "delivered")
+    end = s.pipeline_end
+    assert s.plan_listener.deadline == s.observer_listener.deadline == end
+    files = {path.name: path.read_bytes() for path in s.case_root.iterdir() if path.is_file()}
+    assert {"startup-claim.json", "plan.json"} <= set(files)
+    for fd in (s.h.witness.fd, s.counterpart.fd):
+        assert time.monotonic() < end
+        assert select.select([fd], [], [], end - time.monotonic())[0] == [fd]
+        # A ready pidfd does not prove the caller resumed before its cutoff.
+        assert time.monotonic() < end
+    assert s.h.child.wait(timeout=0) == -signal.SIGKILL
+    assert s.observer.wait(timeout=0) in (-signal.SIGKILL, 75)
+    # This must be the requested fault after the real plan exchange, not an
+    # unrelated early clock/source failure which also happens to cancel peers.
+    assert json.loads(transport.line(s.observer)) == dict(
+        plan_retained=s.pair.writer.plan.sha256, input_pin=s.inputs.expected
+    )
+    assert json.loads(transport.line(s.observer)) == dict(observer_handoff_fault=fault)
+    assert files == {
+        path.name: path.read_bytes() for path in s.case_root.iterdir() if path.is_file()
+    }
 
 
 @pytest.mark.skipif(

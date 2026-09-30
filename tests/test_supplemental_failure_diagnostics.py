@@ -82,6 +82,43 @@ def test_nonexception_is_ignored(error):
     assert diagnostics.failure_locations(error) == ""
 
 
+def test_saved_source_notes_survive_a_second_sanitized_boundary():
+    first = captured(diagnostics.SCRIPTS / "supplemental_recording_fixture.py")
+    sanitized = RuntimeError("PRIVATE_WRAPPER")
+    sanitized.add_note(diagnostics.failure_locations(first))
+    sanitized.add_note("PRIVATE_NOTE\ncause 1: scripts/ordinary.py:99")
+    # The first cause was deliberately sanitized outside its except block;
+    # its source-only note is the only remaining location evidence.
+    assert sanitized.__context__ is sanitized.__cause__ is None
+    assert diagnostics.failure_locations(sanitized) == (
+        "cause 1: scripts/supplemental_recording_fixture.py:1"
+    )
+
+
+def test_saved_notes_are_bounded_and_never_format_arbitrary_objects():
+    error = RuntimeError("PRIVATE")
+    safe = "cause 1: scripts/supplemental_recording_fixture.py:12"
+    error.__notes__ = [object(), {}, safe + "PRIVATE", safe, safe, "x" * 65536 + safe]
+    assert diagnostics.failure_locations(error) == safe
+    error.__notes__ = ["PRIVATE"] * 8 + [safe]
+    assert diagnostics.failure_locations(error) == ""
+    error.__notes__ = ["\n".join(safe.replace(":12", f":{n}") for n in range(1, 80))]
+    assert len(diagnostics.failure_locations(error).splitlines()) == 64
+    error.__notes__ = "PRIVATE"
+    assert diagnostics.failure_locations(error) == ""
+
+
+def test_truncating_a_note_does_not_manufacture_a_valid_location():
+    error = RuntimeError("PRIVATE")
+    safe = "cause 1: scripts/supplemental_recording_fixture.py:12"
+    prefix = "x" * (4095 - len(safe)) + "\n" + safe
+    assert len(prefix) == 4096
+    error.__notes__ = [prefix + "PRIVATE_TRAILER"]
+    assert diagnostics.failure_locations(error) == ""
+    error.__notes__ = [safe + "\n" + "x" * 8192]
+    assert diagnostics.failure_locations(error) == safe
+
+
 @pytest.mark.parametrize("fault", [None, "success", "no_error", "other_test", "other_script"])
 def test_report_hook_is_restricted_to_failing_supplemental_tests(fault):
     error = captured(

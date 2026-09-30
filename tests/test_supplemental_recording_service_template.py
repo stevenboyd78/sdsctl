@@ -101,6 +101,50 @@ def test_input_mutation_cannot_change_template_or_budgets():
     assert repr(template) == "Template()"
 
 
+def test_digest_rechecks_immutable_bytes_without_redecoding_the_whole_plan(monkeypatch):
+    template = m.decode(value())
+    digest, reads = template.sha256, []
+    read = m._read
+
+    def observed(raw):
+        reads.append(True)
+        return read(raw)
+
+    monkeypatch.setattr(m, "_read", observed)
+    assert template.sha256 == digest
+    assert template.sha256 == digest
+    assert not reads  # Pure retained bytes, NOT cached file/runtime observations.
+    template.preview(clock())
+    assert reads  # Preview still validates its complete supplied clock/plan.
+
+
+@pytest.mark.parametrize("fault", ["valid_changed", "invalid", "mutable", "subclass"])
+@pytest.mark.parametrize("access", ["digest", "preview", "reinitialize"])
+def test_template_rejects_changed_original_bytes_even_when_another_template_is_valid(fault, access):
+    template = m.decode(value())
+    if fault == "valid_changed":
+        changed = value()
+        changed["budget"]["ready_seconds"] += 1
+        raw = m.decode(changed).raw
+    elif fault == "invalid":
+        raw = b"PRIVATE_CHANGED_TEMPLATE"
+    elif fault == "mutable":
+        raw = bytearray(template.raw)
+    else:
+
+        class Bytes(bytes):
+            pass
+
+        raw = Bytes(template.raw)
+    object.__setattr__(template, "raw", raw)
+    actions = {
+        "digest": lambda: template.sha256,
+        "preview": lambda: template.preview(clock()),
+        "reinitialize": template.__post_init__,
+    }
+    denied(actions[access])
+
+
 @pytest.mark.parametrize("field", ["original_clock", "deadlines", "unknown"])
 def test_final_clock_deadlines_or_unknown_fields_cannot_enter_template(field):
     supplied = value()

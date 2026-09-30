@@ -11,7 +11,9 @@ import os
 import select
 import signal
 import time
+from contextlib import ExitStack, contextmanager
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
@@ -29,6 +31,67 @@ SELECTION = dict(
     observer_join=True,
     automatic_observer=True,
 )
+
+
+@contextmanager
+def original_pipeline_fixture(temporary, *, binary=None):
+    """Explicit TEST setup shared by staged completion and original-outer loss.
+
+    Borrow the existing synthetic Engine/runtime fixtures without invoking the
+    pytest runner, collection or plugin discovery. Register each original
+    generator on this same cleanup stack immediately after its first yield.
+    Failure neither replaces the owners nor renews the original work budget.
+    This fixture assembly is not installed startup/lifetime qualification.
+    """
+
+    def runner_forbidden(*args, **kwargs):
+        raise AssertionError("Original outer must not invoke the pytest runner")
+
+    def finish(generator):
+        try:
+            next(generator)
+        except StopIteration:
+            return
+        raise AssertionError("Fixed fixture yielded more than once")
+
+    def retain(stack, generator):
+        value = next(generator)
+        stack.callback(finish, generator)
+        return value
+
+    reports = []
+    selection = dict(SELECTION)
+    request = SimpleNamespace(
+        param=selection,
+        node=SimpleNamespace(
+            callspec=SimpleNamespace(params={"joined": selection}),
+            add_report_section=lambda *parts: reports.append(parts),
+        ),
+    )
+    with ExitStack() as stack:
+        entry = stack.enter_context(pytest.MonkeyPatch.context())
+        entry.setattr(pytest, "main", runner_forbidden)
+        patches = stack.enter_context(pytest.MonkeyPatch.context())
+        umask = retain(stack, image_umask.__wrapped__())
+        directory = layout.__wrapped__(temporary, patches, umask)
+        supervision = supervised.__wrapped__(directory)
+        original_image = image.__wrapped__()
+        configuration = configured.__wrapped__(original_image)
+        reviewed = reviewed_binary.__wrapped__(binary, temporary) if binary is not None else None
+        original = retain(
+            stack,
+            helper.__wrapped__(
+                supervision, original_image, configuration, patches, temporary, request
+            ),
+        )
+        pair = retain(
+            stack, joined.__wrapped__(original, patches, temporary, configuration, request)
+        )
+        yield pair, patches, reviewed
+    # Neither a returned body nor a cleanup marker proves successful retirement.
+    # All original cleanup assertions must finish before reporting completion.
+    if reports:
+        raise AssertionError("Original fixture retirement did not complete")
 
 
 @pytest.mark.parametrize("joined", [SELECTION], indirect=True)
@@ -90,7 +153,7 @@ def exercise_original_observer_pipeline(binary, direct_launcher, reviewed_binary
         ("observer", s.counterpart.fd),
         ("native", s.watch.fd),
     ):
-        assert time.monotonic() < end, remaining
+        assert time.monotonic() < end, (role, remaining)
         observed = select.select([fd], [], [], end - time.monotonic())[0]
         # Retain bounded role/exit diagnostics only; no private peer values.
         if observed != [fd]:
@@ -191,7 +254,7 @@ def test_observer_command_drift_stops_originals_without_release_or_deadline_rene
             path.write_bytes(b"PRIVATE changed disposable source; must not run\n")
 
     assert s.sender.send() is None
-    with pytest.raises(command.delivery_tests.m.UnconfirmedDelivery):
+    with pytest.raises(command.delivery_tests.m.UnconfirmedDelivery) as refused:
         command.finish(s, monkeypatch, arm_and_change)
     assert not sent and s.watch.closed and s.watch.finished
     assert s.pipeline_end == s.staged_plan.deadline == s.staged_handoff.deadline == end
@@ -202,9 +265,20 @@ def test_observer_command_drift_stops_originals_without_release_or_deadline_rene
         assert select.select([fd], [], [], end - time.monotonic())[0] == [fd]
     assert s.h.child.wait(timeout=0) == -signal.SIGKILL
     assert s.observer.wait(timeout=0) in (-signal.SIGKILL, 75)
-    assert s.custody.armed_watch is s.watch and s.pair.channel_delivery_attempted
+    assert s.custody.armed_watch is s.watch and s.pair.passive_completion_attempted
+    # Wrong selection/baseline now refuses at the outer entry, before any
+    # plan/acceptance/channel publication. Source drift is caught by the same
+    # fresh complete pre-delivery collection, after those earlier phases.
+    assert s.pair.channel_delivery_attempted is (fault == "source"), getattr(
+        refused.value, "__notes__", []
+    )
+    assert hasattr(s, "plan_receipt") is (fault == "source")
     files = {path.name: path.read_bytes() for path in s.case_root.iterdir() if path.is_file()}
     assert {"startup-claim.json", "plan.json"} <= set(files)
+    if fault != "source":
+        assert set(files) == {"startup-claim.json", "plan.json"}
+        assert not s.plan_listener.accepted and not s.writer_listener.accepted
+        assert not s.observer_listener.accepted
     with pytest.raises(command.delivery_tests.m.UnconfirmedDelivery):
         command.delivery_tests.m.deliver_and_release_passive_writer(
             s.custody,
@@ -253,9 +327,11 @@ def test_native_loss_during_automatic_handoff_keeps_original_cutoff_and_refuses_
     monkeypatch.setattr(command.p.bootstrap.Endpoint, "deliver", endpoint)
     monkeypatch.setattr(command.p.bootstrap.Endpoint, "send_retirement", release)
     assert s.sender.send() is None
-    with pytest.raises(command.delivery_tests.m.UnconfirmedDelivery):
+    with pytest.raises(command.delivery_tests.m.UnconfirmedDelivery) as refused:
         command.finish(s, monkeypatch, arm)
-    assert sent == (["writer"] if after == "writer" else ["writer", "observer"])
+    assert sent == (["writer"] if after == "writer" else ["writer", "observer"]), getattr(
+        refused.value, "__notes__", []
+    )
     assert not releases and s.plan_receipt and s.pair.channel_delivery_attempted
     assert s.custody.armed_watch is s.watch and s.watch.closed and s.watch.finished
     assert s.pipeline_end == s.staged_plan.deadline == s.staged_handoff.deadline == end

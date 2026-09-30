@@ -4,7 +4,7 @@ import importlib.util
 import json
 import sys
 from copy import deepcopy
-from dataclasses import FrozenInstanceError, replace
+from dataclasses import FrozenInstanceError, fields, replace
 from pathlib import Path
 
 import pytest
@@ -301,15 +301,41 @@ def test_runtime_values_are_exact_strings_before_json_encoding(role, field):
 
 def test_subclass_template_and_plan_cannot_replace_original_comparisons():
     expected = m.decode(value())
+    calls = []
 
     class Other(original.m.Template):
+        @property
+        def sha256(self):
+            calls.append("foreign digest")
+            return template.sha256
+
         def check_plan(self, *args):
-            raise AssertionError("Should not call foreign comparison")
+            calls.append("foreign comparison")
+
+    class OtherPlan(m.plans.Plan):
+        def __post_init__(self):
+            calls.append("foreign plan validation")
 
     template, clock = original.m.decode(original.value()), original.clock()
     plan = template.preview(clock)
-    denied(lambda: expected.check_template(Other(template.raw)))
-    denied(lambda: expected.check_plan(Other(template.raw), plan, clock))
+    # Template now refuses subclass construction itself. Preserve that earlier
+    # boundary, then deliberately forge a subclass ONLY in this negative test
+    # to reach the independent Expectations comparison boundary as intended.
+    original.denied(lambda: Other(template.raw))
+
+    def forged(kind, source):
+        result = object.__new__(kind)
+        for member in fields(source):
+            object.__setattr__(result, member.name, getattr(source, member.name))
+        return result
+
+    other = forged(Other, template)
+    denied(lambda: expected.check_template(other))
+    denied(lambda: expected.check_plan(other, plan, clock))
+    denied(lambda: expected.check_plan(template, forged(OtherPlan, plan), clock))
+    # An exception from a foreign method could be sanitized into the expected
+    # refusal and otherwise hide an unintended call. Assert none was invoked.
+    assert not calls
 
 
 def test_valid_role_swap_cannot_join_writer_runtime_to_the_template():

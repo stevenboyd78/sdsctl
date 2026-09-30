@@ -78,17 +78,34 @@ def _read(raw):
 @dataclass(frozen=True)
 class Template:
     raw: bytes = field(repr=False)
+    _validated_raw: bytes = field(init=False, repr=False, compare=False)
 
     def __post_init__(self):
         try:
+            require(type(self) is Template)
+            if hasattr(self, "_validated_raw"):
+                self._original_bytes()  # Reinitialization cannot reseal changed bytes.
             _read(self.raw)
+            object.__setattr__(self, "_validated_raw", self.raw)
+        except Exception:
+            raise UnconfirmedTemplate(MESSAGE) from None
+
+    def _original_bytes(self):
+        """Unchanged fully validated immutable value, never an observed file cache."""
+        try:
+            require(type(self) is Template and type(self.raw) is bytes)
+            require(type(self._validated_raw) is bytes and self.raw == self._validated_raw)
+            return self.raw
         except Exception:
             raise UnconfirmedTemplate(MESSAGE) from None
 
     @property
     def sha256(self):
-        self.__post_init__()
-        return hashlib.sha256(self.raw).hexdigest()
+        # Construction already performed full canonical/schema validation.
+        # Check the original exact bytes/type and recompute their digest, rather
+        # than decoding the entire clock-free plan on every protocol guard.
+        # File owners still freshly read their original files at every recheck.
+        return hashlib.sha256(self._original_bytes()).hexdigest()
 
     def preview(self, original):
         """Pure final bytes for a supplied clock; not its ownership/provenance.
@@ -98,7 +115,7 @@ class Template:
         Calling this codec does none of those things and enables no service.
         """
         try:
-            return _plan(_read(self.raw), original)
+            return _plan(_read(self._original_bytes()), original)
         except Exception:
             raise UnconfirmedTemplate(MESSAGE) from None
 

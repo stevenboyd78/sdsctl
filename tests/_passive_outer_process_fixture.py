@@ -1,6 +1,6 @@
 """Disposable original outer for the full passive pipeline; NOT a launcher.
 
-Explicitly collected only by the independent test driver. Initial setup,
+Explicitly assembled only by the independent test driver, without pytest.main. Initial setup,
 Engine/runtime/source publication and acceptance are the existing synthetic
 fixtures. No installed qualification, active App action or recovery is claimed.
 """
@@ -11,28 +11,16 @@ import os
 import socket
 import sys
 import time
-
-import pytest
+from pathlib import Path
 
 from . import test_supplemental_observer_pipeline as pipeline
 
 command, native = pipeline.command, pipeline.native
-layout, image_umask, supervised = pipeline.layout, pipeline.image_umask, pipeline.supervised
-image, configured, helper, joined = (
-    pipeline.image,
-    pipeline.configured,
-    pipeline.helper,
-    pipeline.joined,
-)
 
 
-@pytest.mark.parametrize("joined", [pipeline.SELECTION], indirect=True)
-def test_original_outer_loss(joined, monkeypatch):
+def exercise_original_outer_loss(s, monkeypatch, config, channel):
     # The caller created this private socket before our exec. These fixture
     # arguments are NOT a production command, permission or publication pin.
-    config = json.loads(os.environ["SDSCTL_DISPOSABLE_OUTER_FIXTURE"])
-    channel = socket.socket(fileno=config["fd"])
-    s = joined
     attempted, releases = [], []
     send_retirement = command.p.bootstrap.Endpoint.send_retirement
     deliver = command.p.bootstrap.Endpoint.deliver
@@ -56,6 +44,7 @@ def test_original_outer_loss(joined, monkeypatch):
                     native_deadline_ns=s.custody.deadline_ns,
                     writer_reads=s.h.reads,
                     observer_reads=s.comparison.counts["container"],
+                    runner_used=False,
                 ),
                 separators=(",", ":"),
             ).encode()
@@ -85,7 +74,7 @@ def test_original_outer_loss(joined, monkeypatch):
         # so outer-pidfd loss cannot be confused with cancellation EOF.
         channel.settimeout(max(0.001, s.pipeline_end - time.monotonic()))
         channel.recv(1)
-        pytest.fail("Original outer survived its marked loss; no continuation/retry permitted")
+        raise AssertionError("Original outer survived its marked loss; no continuation/retry")
 
     def endpoint(endpoint, channels):
         receipt = deliver(endpoint, channels)
@@ -112,10 +101,17 @@ def test_original_outer_loss(joined, monkeypatch):
     monkeypatch.setattr(command.p.bootstrap.Endpoint, "deliver", endpoint)
     assert s.sender.send() is None
     command.finish(s, monkeypatch, arm)
-    pytest.fail("Marked original outer loss did not occur")
+    raise AssertionError("Marked original outer loss did not occur")
 
 
 def main():
     config = json.loads(sys.argv[1])
-    os.environ["SDSCTL_DISPOSABLE_OUTER_FIXTURE"] = json.dumps(config)
-    return pytest.main([__file__, "-q", "-s", "--basetemp", config["temporary"]])
+    temporary = Path(config["temporary"])
+    temporary.mkdir(mode=0o700)
+    with (
+        socket.socket(fileno=config["fd"]) as channel,
+        pipeline.original_pipeline_fixture(temporary) as (joined, patches, reviewed),
+    ):
+        assert reviewed is None  # Driver supplied the separately reviewed native image.
+        exercise_original_outer_loss(joined, patches, config, channel)
+    raise AssertionError("Marked original outer loss returned without termination")

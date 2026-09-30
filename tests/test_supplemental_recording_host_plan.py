@@ -190,6 +190,97 @@ def test_plan_pin_nested_reference_is_independently_decoded():
     assert pin._decoded is not plan
 
 
+def test_plan_pin_rechecks_values_without_rebuilding_closed_record_metadata(monkeypatch):
+    plan = m.decode(value())
+    pin = m.PinnedPlan(plan)
+
+    def no_repeat(*_):
+        pytest.fail("Closed record field names must not be rediscovered on each check")
+
+    monkeypatch.setattr(m, "fields", no_repeat)
+    for _ in range(3):
+        assert pin.check(plan) is None
+    # Retaining schema metadata must never retain the current field values.
+    object.__setattr__(plan.normal.files, "recordings", "9" * 64)
+    denied(lambda: pin.check(plan))
+
+
+def test_pinned_record_metadata_covers_exactly_the_closed_decoded_schema():
+    plan = m.decode(value())
+
+    def record_types(value):
+        if is_dataclass(value):
+            yield type(value)
+            for item in fields(value):
+                yield from record_types(getattr(value, item.name))
+        elif type(value) is tuple:
+            for item in value:
+                yield from record_types(item)
+
+    records = set(record_types(plan))
+    assert set(m._PLAN_RECORD_FIELDS) == records
+    for record in records:
+        assert m._PLAN_RECORD_FIELDS[record] == tuple(item.name for item in fields(record))
+    with pytest.raises(TypeError):
+        m._PLAN_RECORD_FIELDS[m.Plan] = ()
+
+
+def _plan_leaves(current, path=()):
+    if is_dataclass(current):
+        for item in fields(current):
+            yield from _plan_leaves(getattr(current, item.name), (*path, item.name))
+    elif type(current) is tuple:
+        for index, item in enumerate(current):
+            yield from _plan_leaves(item, (*path, index))
+    else:
+        yield path
+
+
+def _change_leaf(current, path, replacement):
+    name, *rest = path
+    member = current[name] if type(name) is int else getattr(current, name)
+    changed = _change_leaf(member, rest, replacement) if rest else replacement
+    if type(name) is int:
+        return current[:name] + (changed,) + current[name + 1 :]
+    object.__setattr__(current, name, changed)
+    return current
+
+
+@pytest.mark.parametrize("path", list(_plan_leaves(m.decode(value()))))
+def test_plan_pin_rechecks_same_typed_values_at_every_leaf_including_nested_tuples(path):
+    plan = m.decode(value())
+    pin = m.PinnedPlan(plan)
+    original = _member(plan, path)
+    if type(original) is str:
+        changed = original + "x"
+    elif type(original) is bytes:
+        changed = original + b"x"
+    elif type(original) in (int, float):
+        changed = original + 1
+    else:
+        assert isinstance(original, Path)
+        changed = original / "changed"
+    assert type(original) is type(changed) and original != changed
+    _change_leaf(plan, path, changed)
+    denied(lambda: pin.check(plan))
+
+
+def test_plan_pin_does_not_call_record_equality(monkeypatch):
+    plan = m.decode(value())
+    pin = m.PinnedPlan(plan)
+    records = {type(_member(plan, path)) for path in _plan_members(plan)} | {m.Plan}
+
+    def untrusted_equality(*_):
+        pytest.fail("Frozen record equality must not replace recursive value/type checks")
+
+    for record in records:
+        if is_dataclass(record):
+            monkeypatch.setattr(record, "__eq__", untrusted_equality)
+    assert pin.check(plan) is None
+    object.__setattr__(plan.deadlines, "ready_by", float(plan.deadlines.ready_by))
+    denied(lambda: pin.check(plan))
+
+
 @pytest.mark.parametrize("changed", [None, {}, b"PRIVATE"])
 def test_plan_pin_refuses_non_plan_without_leaking_input(changed):
     denied(lambda: m.PinnedPlan(changed))

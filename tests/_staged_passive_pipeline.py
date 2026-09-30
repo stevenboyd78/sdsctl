@@ -13,7 +13,6 @@ import json
 import os
 import sys
 import tempfile
-from contextlib import ExitStack
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -93,18 +92,6 @@ def run_pipeline(root):
     def runner_forbidden(*args, **kwargs):
         raise AssertionError("Staged outer must not invoke the pytest runner")
 
-    def finish(generator):
-        try:
-            next(generator)
-        except StopIteration:
-            return
-        raise AssertionError("Fixed fixture yielded more than once")
-
-    def retain(stack, generator):
-        value = next(generator)
-        stack.callback(finish, generator)
-        return value
-
     builds = root.parent / "builds"
     builds.mkdir(mode=0o700)
     factory = SimpleNamespace(
@@ -112,45 +99,22 @@ def run_pipeline(root):
     )
     completed = []
     with pytest.MonkeyPatch.context() as entry:
+        # Preserve the original prohibition during native builds as well as
+        # setup/body/retirement inside the shared fixture assembly.
         entry.setattr(pytest, "main", runner_forbidden)
         direct = pipeline.direct_launcher.__wrapped__(factory)
         for variant in ("dynamic", "static", "ubsan"):
             binary = pipeline.binary.__wrapped__(factory, SimpleNamespace(param=variant))
             temporary = root.parent / ("run-" + variant)
             temporary.mkdir(mode=0o700)
-            reports = []
-            selection = dict(pipeline.SELECTION)
-            request = SimpleNamespace(
-                param=selection,
-                node=SimpleNamespace(
-                    callspec=SimpleNamespace(params={"joined": selection}),
-                    add_report_section=lambda *parts, reports=reports: reports.append(parts),
-                ),
-            )
-            with ExitStack() as stack:
-                patches = stack.enter_context(pytest.MonkeyPatch.context())
-                umask = retain(stack, pipeline.image_umask.__wrapped__())
-                layout = pipeline.layout.__wrapped__(temporary, patches, umask)
-                supervised = pipeline.supervised.__wrapped__(layout)
-                image = pipeline.image.__wrapped__()
-                configured = pipeline.configured.__wrapped__(image)
-                reviewed = pipeline.reviewed_binary.__wrapped__(binary, temporary)
-                helper = retain(
-                    stack,
-                    pipeline.helper.__wrapped__(
-                        supervised, image, configured, patches, temporary, request
-                    ),
-                )
-                joined = retain(
-                    stack,
-                    pipeline.joined.__wrapped__(helper, patches, temporary, configured, request),
-                )
+            with pipeline.original_pipeline_fixture(temporary, binary=binary) as (
+                joined,
+                patches,
+                reviewed,
+            ):
                 pipeline.exercise_original_observer_pipeline(
                     binary, direct, reviewed, joined, patches
                 )
-            # All original exit/reap assertions AND generator retirement must
-            # return before this variant can be reported as completed.
-            assert not reports
             completed.append(variant)
     return completed
 
