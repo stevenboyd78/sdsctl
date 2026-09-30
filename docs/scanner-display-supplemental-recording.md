@@ -304,6 +304,15 @@ live-audio encoders and waterfall services; it does not silently remove them
 from a normal product configuration. Consequently it is not a drop-in wrapper
 for the ordinary CLI's complete construction path.
 
+The finite assembly also requires automatic PSI recovery to be disabled on its
+runtime. Its single acquisition arm is a nonblocking, consumed admission, while
+independent outer supervision owns recovery for this candidate. Allowing the
+ordinary daemon poller to perform automatic recovery would create a competing
+control path and could turn a transient internal state-lock observation into a
+terminal preflight refusal. The assembly checks this policy before native
+startup; it does not retry an arm, wait through contention, change a recording
+deadline or weaken the acquisition owner's fail-closed behavior.
+
 Readiness requires native startup, the expected cached scanner identity and a
 supported cached display context. Readiness alone starts no recording and arms
 no reads. The one explicit request creates a fixed monotonic recording plan and
