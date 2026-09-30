@@ -2618,8 +2618,26 @@ exits/reaping and empty-only group removal remain required. A full original
 Custody join also confirms that submitting cancellation to a frozen watcher is
 not success and does not renew the deadline or permit retry. Synthetic Engine
 facts stay synthetic. These tests need explicit local approval and are skipped
-by ordinary CI; they do not qualify installed platform placement or the whole
-outer's cgroup-failure boundary. See the native README for scope and limitations.
+by ordinary CI; they do not qualify installed platform placement.
+
+The separately approved inverse fixture now births the disposable original
+outer and both fixed peers directly in a second fresh subtree while the outer's
+genuine direct-child watcher is born back in the retained caller cgroup. Before
+freeze, two outside cleanup owners retain authenticated native/outer/peer pidfds,
+the exact new directories and the original BOOTTIME cutoffs. Only the new outer
+subtree is frozen. An outside timerfd acts on the original recovery cutoff; the
+watcher's existing deadline/outer-loss refusal retires the peers, and the driver
+requires actual native/outer/peer exits plus original/adopted-owner reaping.
+Empty groups remain frozen until exact removal; no thaw, `cgroup.kill`, PID
+migration, numeric-PID signal, replacement budget or retry is used. Dynamic,
+static and UBSan cases pass this actual local fault.
+
+This closes only the local whole-outer cgroup-failure boundary. The fixture's
+entrypoint, interpreter environment, C compiler/libc and native image are local
+test inputs, not authenticated installed publication. It does not establish an
+HAOS/systemd placement mechanism, the initial interval before all exact handles
+are transferred, simultaneous outside-guardian loss, active App admission or
+exclusive recovery. See the native README for the exact scope and limitations.
 
 This is an **offline prototype, not an installed host supervisor**. No existing
 entrypoint or source inventory selects it. The static build is a candidate for
@@ -2639,7 +2657,10 @@ not authorize installation or any App/scanner trial.
    joins finalized, abandoned-recording and pristine-cancellation paths with real
    Link, journal, clock and worker handles. Pristine cancellation captures native
    custody without constructing a recording owner or consuming its begin slot.
-   Installed evidence remains separate; do not infer the missing joins.
+   The local watcher-subtree and whole-outer-subtree failure boundaries are now
+   exercised with exact handles and original clocks. Installed placement,
+   publication and platform lifetime evidence remain separate; do not infer
+   those missing joins.
 2. Bind the action-capable controller/observer source inventory to reviewed,
    independently supervised entrypoints with interpreter/dependency provenance for **both** peers
    and a distinct explicit action-scope grant. Passive preparation must remain
