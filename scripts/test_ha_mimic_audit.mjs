@@ -73,10 +73,12 @@ test('accepts device-pixel rounding and either LED treatment without geometry ch
 });
 
 test('fixture embeds data without allowing script tags to terminate the JSON', () => {
-  const page=fixturePage({example:'</script><script>unexpected()</script>'});
+  const page=fixturePage({example:'</script><script>unexpected()</script>'},null,
+    {keys:[{label:'</script><script>unexpected()</script>'}]});
   assert.ok(!page.includes('<script>unexpected()'));
   assert.ok(page.includes('\\u003c/script>'));
   assert.ok(page.includes("window.fetch=async"));
+  assert.ok(page.includes('api/v1/scanner/front-panel'));
 });
 
 for (const [name, change] of Object.entries({

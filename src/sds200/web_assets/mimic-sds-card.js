@@ -3,6 +3,30 @@ const TAG = "sds200-mimic-card";
 const layouts = [{value: "preferred", label: "Profile preference"}, {value: "simple", label: "Simple"}, {value: "detail", label: "Detail"}];
 const treatments = [{value: "strips", label: "Top and bottom strips"}, {value: "border", label: "Surrounding border"}];
 const densities = [{value: "compact", label: "Compact"}, {value: "standard", label: "Standard"}, {value: "tall", label: "Tall"}];
+const FRONT_PANEL_VERSION = 1;
+const FRONT_PANEL_CODES = Object.freeze([
+  "M", "F", "L", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0",
+  ".", "E", ">", "<", "^", "V", "Q", "Y", "A", "B", "C", "Z", "T", "R",
+]);
+function frontPanelText(value) {
+  return typeof value === "string" && value.length > 0 && value.length <= 256 && /^[\x20-\x7e]+$/.test(value);
+}
+function decodeFrontPanel(payload) {
+  require(keys(payload, ["protocol", "version", "front_panel"]) && payload.protocol === "sdsctl.web" && payload.version === 1);
+  const value = payload.front_panel;
+  require(keys(value, ["version", "controls_available", "keys"]) &&
+    value.version === FRONT_PANEL_VERSION && value.controls_available === false &&
+    Array.isArray(value.keys) && value.keys.length === FRONT_PANEL_CODES.length);
+  const fields = ["code", "label", "context_note", "reference_status", "control_status", "available", "unavailable_reason"];
+  value.keys.forEach((entry, index) => {
+    require(keys(entry, fields) && entry.code === FRONT_PANEL_CODES[index] &&
+      frontPanelText(entry.label) && frontPanelText(entry.context_note) && frontPanelText(entry.unavailable_reason) &&
+      ["listed", "absent_for_model", "model_not_listed"].includes(entry.reference_status) &&
+      entry.control_status === (entry.reference_status === "absent_for_model" ? "unsupported" : "unqualified") &&
+      entry.available === false);
+  });
+  return value;
+}
 function configValue(input) {
   const allowed = ["type", "title", "layout", "led_treatment", "density", "show_details", "grid_options"];
   if (input === null || typeof input !== "object" || Array.isArray(input) || Object.keys(input).some(key => !allowed.includes(key))) throw new Error("Unsupported Mimic-SDS card option.");
@@ -43,6 +67,7 @@ class Sds200MimicCard extends HTMLElement {
     this._supplemental = supplemental; this._auxGuard = null; this._needNegotiation = true;
     this._terminal = false; this._retiredConnections = new Set(); this._retiredProfiles = new Set();
     this._requestTimer = null; this._auxExpiry = null;
+    this._frontPanelController = null; this._frontPanelTimer = null; this._frontPanelAttempted = false;
     this._config = configValue({});
     this._connected = false; this._visible = false; this._mount = 0; this._epoch = 0;
     this._api = null; this._ui = null; this._panelsKey = null; this._unsubscribe = null; this._observer = null;
@@ -86,6 +111,16 @@ class Sds200MimicCard extends HTMLElement {
       details { font:12px/1.4 system-ui; overflow-wrap:anywhere; }
       pre { max-width:100%; margin:4px 0; white-space:pre-wrap; overflow-wrap:anywhere; font:12px/1.4 monospace; }
       summary { cursor:pointer; min-height:28px; }
+      .front-panel { border-top:1px solid rgba(148,163,184,.35); padding-top:4px; }
+      .front-panel-status { margin:4px 0 8px; }
+      .front-panel-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr)); gap:6px; min-width:0; }
+      .front-panel-key { appearance:none; width:100%; min-width:0; padding:7px; border:1px solid rgba(148,163,184,.4);
+        border-radius:6px; background:rgba(148,163,184,.08); color:inherit; opacity:1;
+        text-align:left; font:12px/1.35 system-ui; overflow-wrap:anywhere; }
+      .front-panel-code { display:inline-block; min-width:3ch; font:700 13px/1.35 monospace; }
+      .front-panel-label { font-weight:700; }
+      .front-panel-meta, .front-panel-context, .front-panel-reason { display:block; margin-top:3px; }
+      .front-panel-meta { font-family:monospace; }
       details p { margin:4px 0; } ul { padding-left:20px; } [hidden] { display:none !important; }
     `;
     this._card = make("ha-card"); this._title = make("h2", this._config.title);
@@ -95,8 +130,20 @@ class Sds200MimicCard extends HTMLElement {
     this._note = make("p"); this._fields = make("ul"); this._details.append(this._note, this._fields);
     this._auxNote = make("p"); this._favorites = make("pre");
     if (supplemental) this._details.append(this._auxNote, this._favorites);
+    this._frontPanel = null; this._frontPanelStatus = null; this._frontPanelGrid = null;
+    if (!supplemental) {
+      this._frontPanel = make("details", undefined, "front-panel");
+      this._frontPanel.append(make("summary", "Front panel (read-only inventory)"));
+      this._frontPanelStatus = make("p", undefined, "front-panel-status");
+      this._frontPanelStatus.id = "front-panel-status";
+      this._frontPanelGrid = make("div", undefined, "front-panel-grid");
+      this._frontPanelGrid.setAttribute("aria-label", "Scanner front-panel key inventory");
+      this._frontPanel.append(this._frontPanelStatus, this._frontPanelGrid);
+    }
     this._card.append(this._title, this._status, this._surround, this._details);
+    if (this._frontPanel !== null) this._card.append(this._frontPanel);
     this.shadowRoot.append(css, this._card);
+    this._resetFrontPanel("Front-panel inventory is unavailable; all controls remain disabled.");
     this._clear("Waiting for Home Assistant…");
   }
   setConfig(input) {
@@ -156,6 +203,65 @@ class Sds200MimicCard extends HTMLElement {
     this._surround.style.setProperty("--mimic-led", "#3b4654"); this._surround.dataset.led = "unknown";
     this._note.textContent = "Read-only scanner presentation. No scanner commands are sent."; this._fields.replaceChildren();
   }
+  _resetFrontPanel(message) {
+    this._frontPanelController?.abort(); this._frontPanelController = null;
+    window.clearTimeout(this._frontPanelTimer); this._frontPanelTimer = null;
+    this._frontPanelAttempted = false;
+    if (this._frontPanelStatus !== null) this._frontPanelStatus.textContent = message;
+    this._frontPanelGrid?.replaceChildren();
+  }
+  _renderFrontPanel(value) {
+    const buttons = value.keys.map(entry => {
+      const button = make("button", undefined, "front-panel-key");
+      button.type = "button"; button.disabled = true;
+      button.dataset.referenceStatus = entry.reference_status;
+      button.dataset.controlStatus = entry.control_status;
+      button.setAttribute("aria-describedby", "front-panel-status");
+      button.title = entry.unavailable_reason;
+      button.append(
+        make("span", entry.code, "front-panel-code"),
+        make("span", entry.label, "front-panel-label"),
+        make("span", `reference: ${entry.reference_status}; control: ${entry.control_status}`, "front-panel-meta"),
+        make("span", entry.context_note, "front-panel-context"),
+        make("span", entry.unavailable_reason, "front-panel-reason"),
+      );
+      return button;
+    });
+    const unsupported = value.keys.filter(entry => entry.control_status === "unsupported").length;
+    this._frontPanelGrid.replaceChildren(...buttons);
+    this._frontPanelStatus.textContent =
+      `Inventory v${value.version} — ${value.keys.length} keys shown; all controls remain unavailable` +
+      (unsupported > 0 ? ` (${unsupported} unsupported for this model).` : ".");
+  }
+  async _loadFrontPanel(displayUrl, route, parentSignal, epoch) {
+    if (this._frontPanel === null || this._frontPanelAttempted) return;
+    this._frontPanelAttempted = true;
+    this._frontPanelStatus.textContent = "Checking front-panel inventory; all controls remain disabled.";
+    const controller = new AbortController(); this._frontPanelController = controller;
+    const abort = () => controller.abort();
+    parentSignal.addEventListener("abort", abort, {once: true});
+    const timeout = window.setTimeout(abort, 2000); this._frontPanelTimer = timeout;
+    try {
+      require(typeof displayUrl === "string" && displayUrl.endsWith(route));
+      const url = displayUrl.slice(0, -route.length) + "api/v1/scanner/front-panel";
+      const response = await fetch(url, {headers: {Accept: "application/json"}, signal: controller.signal,
+        credentials: "same-origin", cache: "no-store", redirect: "error"});
+      if (epoch !== this._epoch || !this._demanded() || parentSignal.aborted || controller.signal.aborted) return;
+      const value = await readResponse(response, () => {}, () => {}, decodeFrontPanel, 64 * 1024);
+      if (epoch !== this._epoch || !this._demanded() || parentSignal.aborted || controller.signal.aborted) return;
+      require(this._frontPanelController === controller); this._renderFrontPanel(value);
+    } catch {
+      if (epoch === this._epoch && this._demanded() && this._frontPanelController === controller) {
+        this._frontPanelGrid.replaceChildren();
+        this._frontPanelStatus.textContent = "Front-panel inventory is unavailable; all controls remain disabled.";
+      }
+    } finally {
+      parentSignal.removeEventListener("abort", abort);
+      window.clearTimeout(timeout);
+      if (this._frontPanelTimer === timeout) this._frontPanelTimer = null;
+      if (this._frontPanelController === controller) this._frontPanelController = null;
+    }
+  }
   _render() {
     if (this._latest === null) return;
     if (this._deadline !== null && performance.now() >= this._deadline) { this._clear(states.stale); return; }
@@ -199,6 +305,7 @@ class Sds200MimicCard extends HTMLElement {
     if (uncertain) { this._terminal = true; this._renewalPending = false; this._auxGuard?.close(); }
     this._epoch++; this._controller?.abort(); this._controller = null;
     window.clearTimeout(this._requestTimer); this._requestTimer = null;
+    this._resetFrontPanel("Front-panel inventory is unavailable; all controls remain disabled.");
     this._auxGuard?.suspend(); this._needNegotiation = true;
     window.clearTimeout(this._timer); this._timer = null;
     this._clear(uncertain ? "Supplemental demand unconfirmed — renewal stopped; reads may have occurred."
@@ -312,6 +419,7 @@ class Sds200MimicCard extends HTMLElement {
           if (this._supplemental) require(this._auxGuard.accept(ticket, decoded.supplemental, performance.now() / 1000));
           const data = this._supplemental ? decoded.display : decoded;
           this._accept(data, started);
+          if (!this._supplemental) void this._loadFrontPanel(url, route, controller.signal, epoch);
           this._timer = window.setTimeout(() => { this._timer = null; void poll(); }, 250);
         } catch { if (this._renewalPending) this._stop(); else failed(); }
         finally {
@@ -322,6 +430,7 @@ class Sds200MimicCard extends HTMLElement {
       const failed = () => {
         if (epoch !== this._epoch) return;
         this._controller = null; controller.abort(); release?.();
+        this._resetFrontPanel("Front-panel inventory is unavailable; all controls remain disabled.");
         this._auxGuard?.suspend(); this._needNegotiation = true;
         this._clear("Mimic-SDS data unavailable — retrying safely.");
         if (this._demanded()) this._timer = window.setTimeout(() => { this._timer = null; void this._start(); }, 2000);
@@ -331,6 +440,7 @@ class Sds200MimicCard extends HTMLElement {
     } catch {
       if (epoch !== this._epoch) return;
       controller.abort(); release?.(); this._controller = null;
+      this._resetFrontPanel("Front-panel inventory is unavailable; all controls remain disabled.");
       this._auxGuard?.suspend(); this._needNegotiation = true;
       this._clear("Home Assistant App unavailable or ambiguous — retrying safely.");
       if (this._demanded()) this._timer = window.setTimeout(() => { this._timer = null; void this._start(); }, 2000);

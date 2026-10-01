@@ -19,7 +19,8 @@ Audit the packaged Mimic-SDS Home Assistant card in an isolated headless Chrome.
 Uses fictional frames and a synthetic HA context on a new loopback-only server;
 never contacts Home Assistant, a scanner, or an existing browser profile.
 Checks all screen fixtures/layouts, panel-relative LED frames, stable automatic
-height, fixed-row containment, resizing, keyboard details, and multi-card cleanup.
+height, fixed-row containment, resizing, keyboard details, the disabled
+front-panel inventory, and multi-card cleanup.
 Loads the exact digest-qualified aggregate and all four packaged card modules.
 Requires Node 24+, Chrome/Chromium and the repository's Python development dependencies.
 No screenshots are written. Only this run's temporary browser profile is removed.
@@ -43,6 +44,7 @@ export function parseArguments(args) {
 
 const PYTHON_FIXTURES = `
 import json, runpy
+from sds200.front_panel_keys import front_panel_inventory_snapshot
 from sds200.scanner_display_frame import project_scanner_display_frame
 from sds200.home_assistant_themes import (
     built_in_home_assistant_theme_registry,
@@ -62,7 +64,7 @@ for name, variants in scenarios.items():
             "preferred" if style == "profile" else style: project_scanner_display_frame(frame)
             for style, frame in variants.items()}))
 registry = built_in_home_assistant_theme_registry()
-print(json.dumps(dict(scenarios=result, resources=[dict(
+print(json.dumps(dict(scenarios=result, front_panel=front_panel_inventory_snapshot("SDS200"), resources=[dict(
     url=theme.resource_url, element=theme.custom_element,
     body=read_built_in_home_assistant_theme_module(theme).decode("utf-8"),
 ) for theme in registry.themes], aggregate=dict(
@@ -91,8 +93,9 @@ export function validateResourceBundle(bundle) {
   return bundle;
 }
 
-export function fixturePage(scenarios, aggregateUrl = null) {
+export function fixturePage(scenarios, aggregateUrl = null, frontPanel = null) {
   const payload = JSON.stringify(scenarios).replaceAll("<", "\\u003c");
+  const inventory = JSON.stringify(frontPanel).replaceAll("<", "\\u003c");
   if (aggregateUrl !== null) assert.match(aggregateUrl, /^\/local\/sds200\/sds200-cards\.js\?v=[0-9a-f]{64}$/);
   const scripts = aggregateUrl === null
     ? '<script type="module" src="/waterfall.js"></script><script type="module" src="/mimic.js"></script>'
@@ -102,8 +105,9 @@ export function fixturePage(scenarios, aggregateUrl = null) {
 border:1px solid #657287;--primary-text-color:#edf4fc;--ha-card-background:#101923}</style>
 <main></main><script>
 const scenarios = ${payload};
+const frontPanel = ${inventory};
 window.fixture = {name:'held_trunk', requests:0, sequence:0, sessions:0, unsubscribed:0,
-  waterfallRequests:0, waterfallClosed:0, errors:[]};
+  frontPanelRequests:0, waterfallRequests:0, waterfallClosed:0, errors:[]};
 const api = {callWS: async request => {
   if(request.endpoint==='/ingress/session'){fixture.sessions++;return {session:'synthetic_session_example_1234'};}
   if(request.endpoint==='/ingress/validate_session')return {};
@@ -117,6 +121,12 @@ document.addEventListener('context-request',event=>{
   event.callback(event.context==='hassApi'?api:ui,()=>fixture.unsubscribed++);
 });
 window.fetch=async(url,options={})=>{
+  if(String(url)===location.origin+'/api/hassio_ingress/example_key/api/v1/scanner/front-panel' &&
+      (!options.method || options.method==='GET')){
+    fixture.frontPanelRequests++;
+    return new Response(JSON.stringify({protocol:'sdsctl.web',version:1,front_panel:structuredClone(frontPanel)}),
+      {headers:{'content-type':'application/json'}});
+  }
   if(String(url)===location.origin+'/api/hassio_ingress/example_key/api/v1/waterfall' &&
       (!options.method || options.method==='GET')){
     fixture.waterfallRequests++;
@@ -202,24 +212,24 @@ export async function fixtureAssets(python, timeoutMs = 30000) {
     cwd: ROOT, env: {...process.env, PYTHONPATH: path.join(ROOT, 'src'), PYTHONNOUSERSITE: '1'},
     encoding: 'utf8', timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024,
   })));
-  const {scenarios, resources, aggregate} = bundle;
+  const {scenarios, front_panel: frontPanel, resources, aggregate} = bundle;
   assert.equal(Object.keys(scenarios).length, 33);
   const assets = new Map([
-    ['/', ['text/html; charset=utf-8', fixturePage(scenarios, aggregate.url)]],
+    ['/', ['text/html; charset=utf-8', fixturePage(scenarios, aggregate.url, frontPanel)]],
     // Keep the direct-module aliases for the independent finite human preview
     // and same-byte duplicate-registration checks; never accept arbitrary queries.
     ['/mimic.js', ['text/javascript', resources[3].body]],
     ['/waterfall.js', ['text/javascript', resources[2].body]],
     ...[...resources, aggregate].map(resource=>[resource.url, ['text/javascript', resource.body]]),
   ]);
-  return {scenarios, assets, resources, aggregate};
+  return {scenarios, frontPanel, assets, resources, aggregate};
 }
 
 async function run(options) {
   assert.ok(Number(process.versions.node.split('.')[0]) >= 24 && typeof WebSocket === "function", "Node 24+ is required.");
   const python = await findExecutable(options.python, [path.join(ROOT, '.venv/bin/python'), 'python3'], 'Python');
   const chrome = await findExecutable(options.chrome, ['google-chrome', 'chromium', 'chromium-browser'], 'Chrome');
-  const {scenarios, assets, resources, aggregate} = await fixtureAssets(python, options.timeoutMs);
+  const {scenarios, frontPanel, assets, resources, aggregate} = await fixtureAssets(python, options.timeoutMs);
   const requests = [], errors = [], failures = [];
   const server = createServer((request, response) => {
     const asset = assets.get(request.url);
@@ -261,6 +271,36 @@ async function run(options) {
     await cdp.send('Emulation.setDeviceMetricsOverride', {width: 1400, height: 1100, deviceScaleFactor: 1, mobile: false});
     await evaluate(cdp, "addCard('card',{layout:'detail',led_treatment:'border',grid_options:{rows:'auto',columns:'full'}}); true");
     await until(cdp, "document.getElementById('card')._card.dataset.state==='current'", options.timeoutMs);
+    await until(cdp, "document.getElementById('card')._frontPanelGrid.children.length===27", options.timeoutMs);
+    const panelInventory = await evaluate(cdp, `(() => {
+      const card=document.getElementById('card'),buttons=[...card._frontPanelGrid.children];
+      return {status:card._frontPanelStatus.textContent,requests:fixture.frontPanelRequests,
+        buttons:buttons.map(button=>({tag:button.tagName,type:button.type,disabled:button.disabled,
+          code:button.querySelector('.front-panel-code')?.textContent,
+          label:button.querySelector('.front-panel-label')?.textContent,
+          reference:button.dataset.referenceStatus,control:button.dataset.controlStatus,
+          context:button.querySelector('.front-panel-context')?.textContent,
+          reason:button.querySelector('.front-panel-reason')?.textContent,title:button.title,
+          describedBy:button.getAttribute('aria-describedby')}))};
+    })()`);
+    assert.equal(panelInventory.requests, 1, 'Card must fetch one inventory snapshot after its first valid frame.');
+    assert.match(panelInventory.status, /27 keys shown; all controls remain unavailable/);
+    assert.deepEqual(panelInventory.buttons, frontPanel.keys.map(entry=>({tag:'BUTTON',type:'button',disabled:true,
+      code:entry.code,label:entry.label,reference:entry.reference_status,control:entry.control_status,
+      context:entry.context_note,reason:entry.unavailable_reason,title:entry.unavailable_reason,
+      describedBy:'front-panel-status'})), 'Front-panel drawer must preserve the exact disabled inventory.');
+    const panelRequestCount = panelInventory.requests;
+    await evaluate(cdp, "document.getElementById('card')._frontPanel.open=true;true");
+    await evaluate(cdp, 'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+    assert.equal(await evaluate(cdp, `(() => {
+      const card=document.getElementById('card'),grid=card._frontPanelGrid.getBoundingClientRect(),
+        host=card._card.getBoundingClientRect(),status=card._frontPanelStatus.getBoundingClientRect();
+      return grid.left>=host.left-1&&grid.right<=host.right+1&&status.left>=host.left-1&&status.right<=host.right+1&&
+        document.documentElement.scrollWidth<=innerWidth+1;
+    })()`), true, 'Open front-panel inventory must stay within the card and viewport.');
+    assert.equal(await evaluate(cdp, 'fixture.frontPanelRequests'), panelRequestCount,
+      'Opening the inventory drawer must not issue another request.');
+    await evaluate(cdp, "document.getElementById('card')._frontPanel.open=false;true");
     const measure = () => evaluate(cdp, `(${geometry})('card')`);
     const selectScenario = async name => {
       const previous = await evaluate(cdp, `fixture.name=${JSON.stringify(name)}; fixture.requests`);
@@ -347,6 +387,9 @@ async function run(options) {
     assert.equal(await evaluate(cdp, "document.activeElement?.shadowRoot?.activeElement?.tagName"), 'SUMMARY');
     await evaluate(cdp, "document.getElementById('card')._details.open=false;addCard('second',{density:'compact',layout:'simple',led_treatment:'strips'});true");
     await until(cdp, "document.getElementById('second')._card.dataset.state==='current'", options.timeoutMs);
+    await until(cdp, "document.getElementById('second')._frontPanelGrid.children.length===27", options.timeoutMs);
+    assert.equal(await evaluate(cdp, 'fixture.frontPanelRequests'), 2,
+      'Each live card must fetch exactly one independently validated inventory snapshot.');
     assert.equal(await evaluate(cdp, 'fixture.sessions'), 1);
     assert.equal(await evaluate(cdp, "globalThis[Symbol.for('sdsctl.home-assistant.ingress.v1')]._leases"), 2);
     assert.deepEqual(await evaluate(cdp, "['card','second'].map(id=>document.getElementById(id)._config.layout)"), ['detail','simple']);
@@ -378,7 +421,7 @@ async function run(options) {
     assert.deepEqual(await evaluate(cdp, 'fixture.errors'), []);assert.deepEqual(errors, []);
     assert.deepEqual(failures, [], 'A packaged browser resource failed to load.');
     assert.ok(requests.every(url=>new URL(url).origin===origin), 'Audit reached a non-fixture origin.');
-    console.log(`PASS: exact versioned four-card aggregate and duplicate registration, ${frames} Mimic frame/layout cases, ${sizes} sizing cases, held profile colors, 3% LED geometry, stable rows, trusted keyboard details, shared session and complete removal cleanup.`);
+    console.log(`PASS: exact versioned four-card aggregate and duplicate registration, ${frames} Mimic frame/layout cases, ${sizes} sizing cases, held profile colors, 3% LED geometry, stable rows, trusted keyboard details, exact disabled 27-key inventory, shared session and complete removal cleanup.`);
   } finally {
     cdp?.close();await stopChild(browser?.child ?? null);
     server.closeAllConnections();await new Promise(resolve=>server.close(resolve));

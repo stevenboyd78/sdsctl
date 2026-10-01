@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from sds200.exceptions import SDS200Error
+from sds200.front_panel_keys import front_panel_inventory_snapshot
 from sds200.home_assistant_lovelace import (
     HOME_ASSISTANT_LOVELACE_MIMIC_CARD_RESOURCE_URL,
     install_home_assistant_lovelace_mimic_card,
@@ -128,6 +129,9 @@ def test_mimic_installer_refuses_symlinks(tmp_path, part):
         "expired_auth",
         "fetch_timeout",
         "instance_options",
+        "front_panel",
+        "front_panel_invalid",
+        "front_panel_lifecycle",
     ],
 )
 def test_mimic_browser_lifecycle(case):
@@ -142,6 +146,7 @@ def test_mimic_browser_lifecycle(case):
                 "script": module(),
                 "waterfall": module("waterfall"),
                 "scenarios": scenarios,
+                "front_panel": front_panel_inventory_snapshot("SDS200"),
                 "case": case,
             }
         ),

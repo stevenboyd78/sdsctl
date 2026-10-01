@@ -1083,7 +1083,12 @@ programming, power-off, mass-storage switching or speculative key sequences.
    height, fixed-row containment, and a common Ingress session owner with
    Waterfall. Installer/registry/aggregate generation, bounded discovery,
    multi-consumer/late-callback tests and synthetic Chromium sizing checks are
-   in place. No installed HA or physical acceptance is claimed.
+   in place. Its ordinary card also presents the independently validated exact
+   27-key inventory in a closed, read-only disclosure after one same-root
+   snapshot request per visible lifecycle. All entries remain disabled; opening
+   the disclosure performs no request or scanner action, and malformed or
+   unexpectedly enabled input fails closed. No installed HA or physical
+   acceptance is claimed.
 4. **Profile acquisition during Favorites sync:** independently qualify copied,
    already-mounted USB and any supported network path. Test wrong endpoint,
    changed file during read, partial/failed sync, missing profile, source conflict

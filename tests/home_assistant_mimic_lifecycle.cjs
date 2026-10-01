@@ -14,7 +14,7 @@ class Element {
 }
 function nodes(root) { return [root,...root.children.flatMap(nodes)]; }
 function harness() {
-  let now=0, next=0, sessions=0, calls=0;
+  let now=0, next=0, sessions=0, calls=0, frontPanelCalls=0;
   const origin=input.origin??'https://ha.example.test';
   const timers=new Map(), definitions=new Map(), observers=[], cookies=[];
   const document={hidden:false, createElement:tag=>new Element(tag), addEventListener(){},removeEventListener(){}};
@@ -37,6 +37,12 @@ function harness() {
   let renewed=false;
   const defaultRequest=async(url,options)=>{
     assert.equal(options.credentials,'same-origin');assert.equal(options.redirect,'error');assert.equal(options.cache,'no-store');
+    if(url.endsWith('/api/v1/scanner/front-panel')){
+      assert.equal(input.supplemental??false,false);
+      assert.equal(url,origin+'/api/hassio_ingress/example_key/api/v1/scanner/front-panel');
+      assert.equal(options.method,undefined);frontPanelCalls++;
+      return response({protocol:'sdsctl.web',version:1,front_panel:structuredClone(input.front_panel)});
+    }
     if(input.supplemental){
       assert.equal(options.headers['X-SDSCTL-Supplemental-Version'],'1');
       if(url.endsWith('/demand')){
@@ -74,7 +80,7 @@ function harness() {
   const start=async c=>{c.connectedCallback();c.contexts.hassApi(api);c.contexts.hassUi(ui,()=>{});observers.at(-1).callback([{isIntersecting:true}]);await flush();};
   const raw=c=>nodes(c.shadowRoot).filter(node=>node.dataset.valueStatus==='raw_source');
   return {Card,card,start,raw,ctx,owner,window,document,api,ui,panel,cookies,timers,response,contextResponse,defaultRequest,definitions,
-    get calls(){return calls;},get sessions(){return sessions;},get frame(){return frame;},
+    get calls(){return calls;},get frontPanelCalls(){return frontPanelCalls;},get sessions(){return sessions;},get frame(){return frame;},
     set ws(fn){ws=fn;},set request(fn){request=fn;},
     newer(){for(const f of Object.values(frame.display.frames))f.sequence++;if(input.supplemental)frame.supplemental.psi.sequence++;},
     scenario(name){frame=structuredClone(input.scenarios[name]);for(const f of Object.values(frame.display.frames)){if(f.sequence!==null){f.sequence=100;f.age_seconds=0;}}},
@@ -84,7 +90,60 @@ function harness() {
   };
 }
 const clockShown=c=>nodes(c._surround).some(node=>node.textContent==='21:26');
+const frontPanelButtons=c=>c._frontPanelGrid===null?[]:c._frontPanelGrid.children;
 const cases={
+  async front_panel(h){
+    const c=h.card();await h.start(c);assert.ok(h.raw(c).length);assert.equal(h.frontPanelCalls,1);
+    const buttons=frontPanelButtons(c);assert.equal(buttons.length,27);
+    assert.deepEqual(buttons.map(button=>button.children[0].textContent),input.front_panel.keys.map(entry=>entry.code));
+    buttons.forEach((button,index)=>{
+      const entry=input.front_panel.keys[index];
+      assert.equal(button.tag,'button');assert.equal(button.type,'button');assert.equal(button.disabled,true);
+      assert.deepEqual(button.listeners,{});assert.equal(button.dataset.referenceStatus,entry.reference_status);
+      assert.equal(button.dataset.controlStatus,entry.control_status);assert.equal(button.title,entry.unavailable_reason);
+      assert.equal(button['aria-describedby'],'front-panel-status');
+      assert.deepEqual(button.children.map(node=>node.textContent),[entry.code,entry.label,
+        `reference: ${entry.reference_status}; control: ${entry.control_status}`,entry.context_note,entry.unavailable_reason]);
+    });
+    assert.ok(c._frontPanelStatus.textContent.includes('all controls remain unavailable'));
+    c._frontPanel.open=true;const requests=h.frontPanelCalls;await h.tick(1000);assert.equal(h.frontPanelCalls,requests);
+    c.disconnectedCallback();assert.equal(frontPanelButtons(c).length,0);assert.equal(h.timers.size,0);
+  },
+  async front_panel_invalid(h){
+    const malformed=[];
+    const reordered=structuredClone(input.front_panel);[reordered.keys[0],reordered.keys[1]]=[reordered.keys[1],reordered.keys[0]];malformed.push(reordered);
+    const enabled=structuredClone(input.front_panel);enabled.controls_available=true;enabled.keys[0].available=true;malformed.push(enabled);
+    const hostile=structuredClone(input.front_panel);hostile.keys[0].label='PRIVATE\u001b[31m';malformed.push(hostile);
+    const missing=structuredClone(input.front_panel);missing.keys.pop();malformed.push(missing);
+    for(const value of malformed){
+      h.request=(url,options)=>url.endsWith('/api/v1/scanner/front-panel')
+        ? h.response({protocol:'sdsctl.web',version:1,front_panel:value}) : h.defaultRequest(url,options);
+      const c=h.card();await h.start(c);assert.ok(h.raw(c).length);assert.equal(frontPanelButtons(c).length,0);
+      assert.equal(c._frontPanelStatus.textContent,'Front-panel inventory is unavailable; all controls remain disabled.');
+      assert.ok(!c._frontPanelStatus.textContent.includes('PRIVATE'));c.disconnectedCallback();assert.equal(h.timers.size,0);
+    }
+  },
+  async front_panel_lifecycle(h){
+    let inventoryRequests=0;
+    h.request=(url,options)=>{
+      if(!url.endsWith('/api/v1/scanner/front-panel'))return h.defaultRequest(url,options);
+      inventoryRequests++;
+      return new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(Error('PRIVATE timeout')), {once:true}));
+    };
+    const timed=h.card();await h.start(timed);assert.ok(h.raw(timed).length);await h.tick(2000);
+    assert.ok(h.raw(timed).length);assert.equal(frontPanelButtons(timed).length,0);
+    assert.equal(timed._frontPanelStatus.textContent,'Front-panel inventory is unavailable; all controls remain disabled.');
+    assert.equal(inventoryRequests,1);timed.disconnectedCallback();assert.equal(h.timers.size,0);
+
+    let finish;
+    h.request=(url,options)=>url.endsWith('/api/v1/scanner/front-panel')
+      ? new Promise(resolve=>{finish=()=>resolve(h.response({protocol:'sdsctl.web',version:1,front_panel:input.front_panel}));})
+      : h.defaultRequest(url,options);
+    const late=h.card();await h.start(late);assert.ok(h.raw(late).length);late.disconnectedCallback();finish();await flush();
+    assert.equal(frontPanelButtons(late).length,0);
+    assert.equal(late._frontPanelStatus.textContent,'Front-panel inventory is unavailable; all controls remain disabled.');
+    assert.equal(h.timers.size,0);
+  },
   async acceptance_registration(h){
     const first=input.case==='acceptance_registration_first';
     assert.ok(input.tag);assert.deepEqual([...h.definitions.keys()],first?['sds200-mimic-card',input.tag]:[input.tag]);

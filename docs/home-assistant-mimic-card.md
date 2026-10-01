@@ -109,6 +109,19 @@ removed cards stop polling, release their session lease and clear live values;
 late callbacks cannot repopulate a detached card. The final consumer stops the
 renewal timer. Returning to the dashboard automatically requests fresh data.
 
+After the first valid frame in each visible-card lifecycle, the ordinary card
+makes one bounded request to the same App root for the versioned front-panel
+inventory. A separate closed-by-default **Front panel (read-only inventory)**
+disclosure lists the exact 27 reference keys, their context notes, model-table
+status and explicit control status. Every entry is a disabled button and every
+aggregate/per-key availability value must be false. Opening the disclosure does
+not make a request, install a keyboard handler or send a scanner command. The
+card independently rejects missing, reordered, malformed or unexpectedly
+enabled input and shows only a generic unavailable message; rejected source text
+is not reflected into the page. Hiding, removing or changing the card's App
+context aborts and clears an in-flight inventory request. This is presentation
+of a fail-closed capability inventory, not general front-panel control.
+
 The details disclosure identifies raw/unavailable fields. Source text is
 preserved, including already-formatted frequency strings. Alert color is
 reported, but blink timing is not inferred. BLACK/WHITE transforms, exact icon
@@ -137,8 +150,10 @@ duplicate individual module loads must retain the original custom-element
 classes, picker entries and shared Ingress owner. CI runs this independently
 of the general dashboard/Waterfall audit. All 33 frame scenarios in three local
 layouts, four viewport/DPR configurations, three densities, both LED treatments,
-host-only resizing, short fixed rows, trusted keyboard disclosure/focus and
-two-card presentation choices are covered. A third, real Waterfall element uses
+host-only resizing, short fixed rows, trusted keyboard disclosure/focus, the
+exact disabled 27-key inventory and two-card presentation choices are covered.
+The inventory audit opens its disclosure, proves it remains within the card,
+and verifies that opening does not fetch again. A third, real Waterfall element uses
 an idle fictional SSE stream: removing either Mimic card must preserve its
 session/stream, and removing the final consumer must release every lease and
 context subscription. This tests mixed-card lifecycle, not scanner acquisition.
@@ -164,9 +179,10 @@ live-data fidelity, physical-scanner or Firefox/WPE acceptance.
 
 Deterministic tests cover configuration, all seven layouts, malformed/oversized
 responses, source/sequence aging, late authentication and context callbacks,
-visibility, multiple leases, renewal shutdown, installer safety and existing
-cards. Synthetic Chromium checks cover narrow/wide intrinsic sizing, fixed
-rows, text containment, per-card choices and final-consumer cleanup. These do
+visibility, multiple leases, renewal shutdown, strict inventory rejection,
+installer safety and existing cards. Synthetic Chromium checks cover
+narrow/wide intrinsic sizing, fixed rows, text containment, the disabled
+inventory, per-card choices and final-consumer cleanup. These do
 not substitute for actual Home Assistant/Pi/scanner acceptance, or establish
 Firefox/WPE compatibility. Paired candidate packaging and the real-screen
 comparison remain required before release.
