@@ -26,6 +26,16 @@ visual/keyboard checks passed on September 28, 2026, using installed candidate
 field-specific hardware evidence remains separate and pending. See the
 [TUI candidate guide](tui.md#unreleased-read-only-scanner-details).
 
+The later daemon-backed TUI waterfall candidate is also no longer waiting on
+its first physical presentation check. Exact head `85042e6` passed authenticated
+live 240-bin streaming and user-reported visual/interaction acceptance on the
+100x30 small Pi. The finite guardian restored the unchanged previous display
+service, and a post-termination checkpoint proved there was no stale waterfall
+consumer. The candidate was still active when closeout began, so a physical
+`Q`-triggered process exit is not independently claimed; exact offline Q cleanup
+and actual live guarded consumer release are separate retained evidence. The
+160x45 HDMI display remains outside this live claim.
+
 The following findings record the earlier baseline and motivation, not outstanding
 requests to add these same values again.
 
@@ -81,7 +91,9 @@ TUI layout or physical-evidence boundary.
   The later unreleased TUI candidate now consumes that stream without exposing
   another port or bypassing the shared daemon owner. It adds a bounded relative
   pane only for daemon-backed sessions; the baseline statement that no pane
-  existed remains historical. Physical scanner-mode acceptance is still open.
+  existed remains historical. The exact 100x30 live scanner-mode visual and
+  guarded-consumer-cleanup boundary passed; HDMI and independently observed
+  physical-Q termination remain unclaimed.
 
 ## Fixture and layout contract before implementing the four rows
 
@@ -118,7 +130,12 @@ TUI layout or physical-evidence boundary.
 | [Daemon TUI](../tests/test_daemon_tui.py) | Authoritative snapshots, typed decoding, battery validation and reconnect behavior | Per-field decoder-to-panel checks with populated and cleared values |
 | [Web field parity](../tests/test_web_dashboard_field_parity.py) | All 35 fields have unique targets; complete projection and group hooks; zero/false-like formatting | Browser visibility depends on selected group; these source-contract tests are not screenshots or physical evidence |
 | [TUI](../tests/test_tui.py) | Current adaptive panels, Weather labels, recording distinction and USB audio omission | New rows, stable dimensions, long/raw values, mode changes and both Pi layouts |
-| [Remote observation](../tests/test_daemon_remote_observation.py), [transport](../tests/test_daemon_remote_transport.py), [reconnect](../tests/test_daemon_remote_reconnect.py), [TUI waterfall](../tests/test_tui_waterfall.py) | Shared waterfall demand, routed record protocol, fresh-checkpoint reconnect, strict relative normalization, bounded local history, responsive rendering and one-screen cleanup | Exact installed-candidate live scanner-mode appearance and exit-cleanup acceptance |
+| [Remote observation](../tests/test_daemon_remote_observation.py), [transport](../tests/test_daemon_remote_transport.py), [reconnect](../tests/test_daemon_remote_reconnect.py), [TUI waterfall](../tests/test_tui_waterfall.py) | Shared waterfall demand, routed record protocol, fresh-checkpoint reconnect, strict relative normalization, bounded local history, responsive rendering and one-screen cleanup | Small-Pi live appearance and guarded cleanup passed at `85042e6`; HDMI and independently observed physical-Q termination remain unclaimed |
+
+For the final row, the exact installed 100x30 appearance and guarded live
+consumer cleanup have passed at `85042e6`. Retain the remaining HDMI and
+physical-Q limitations instead of treating that historical “still needed” cell
+as an unchecked request to repeat the accepted small-Pi pass.
 
 Run these unchanged baselines before editing; report their exact candidate and
 scope separately from any newly added tests. This packet itself adds no parser,

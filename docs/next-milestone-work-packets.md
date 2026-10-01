@@ -34,7 +34,7 @@ historical; consult the [release record](release-0.30.0.md) for current status.
 | TUI endpoint identity and connection duration | Yes | Build on the accepted local-date presentation; trace actual endpoint metadata and link ownership | Exact endpoint semantics and both Pi layouts |
 | Mimic-SDS and full front-panel controls | Yes for offline foundations | Read-only profile parser, shared slot/color/live-data map and typed key inventory | Profile acquisition, all three renderers and model-specific supervised control acceptance |
 | Renderer field parity | Yes | Reconcile the existing audit against current models and synthetic fixtures | Per-field provenance and targeted physical observations |
-| TUI waterfall | Offline candidate implemented over the existing daemon data plane | Strict relative renderer, bounded history, reconnect, local pause/clear and fake-stream tests | Exact candidate review plus live scanner-mode visual and exit-cleanup acceptance |
+| TUI waterfall | Candidate implemented over the existing daemon data plane; exact 100x30 small-Pi live visual and guarded-cleanup acceptance passed | Strict relative renderer, bounded history, reconnect, local pause/clear and fake-stream tests | HDMI remains unclaimed; a physical `Q`-triggered exit was not independently observed, although exact offline Q cleanup and live guarded consumer release passed |
 | Weather/alert presentation and recording | Partly | Define unknown/unavailable states and sanitized fixture requirements | Genuine alert evidence and reviewed recording lifecycle |
 | Advanced protocol/menu/analysis | Partly | Evidence inventory and lossless parser fixtures | Exact command/model/firmware proof before any mutation |
 | Audio client and playback follow-ups | Yes | Bounded fanout and failure-isolation test design | One scanner stream and physical audio acceptance |
@@ -145,10 +145,16 @@ pause/clear presentation-only. Transport loss clears unconfirmed values before
 a fresh checkpoint reconnect; an invalid payload fails closed without retry.
 The existing shared-session tests retain zero/one/multiple-consumer and
 last-consumer cleanup coverage, while the TUI tests cover one-screen ownership,
-bounded shutdown and both Pi geometries. Live scanner-mode appearance and exact
-candidate exit cleanup remain a separate physical gate. Rendering at a faster
-rate must not be described as a higher scanner acquisition rate. Binary GW2
-remains deferred unless new independently reproducible evidence changes the
+bounded shutdown and both Pi geometries. Exact development head `85042e6`
+subsequently passed authenticated live 240-bin streaming and user-reported
+visual/interaction acceptance on the 100x30 small Pi. Its finite guardian
+restored the unchanged prior service, and a post-termination checkpoint proved
+that no stale waterfall consumer remained. The candidate was still running when
+closeout began, so that evidence does not independently qualify physical
+`Q`-triggered termination; the exact Textual regression retains Q/quit cleanup
+coverage. The 160x45 HDMI display remains outside the live claim. Rendering at a
+faster rate must not be described as a higher scanner acquisition rate. Binary
+GW2 remains deferred unless new independently reproducible evidence changes the
 recorded conclusion.
 
 ## 3. Weather, menus and advanced analysis

@@ -112,7 +112,11 @@ passed offline fictional-data visual checks. The complete front-panel key
 inventory is implemented read-only; new
 key dispatch and control UI remain pending. No milestone/release number is
 assigned. Waterfall-screen fidelity needs its own layout evidence and remains
-a separate slice.
+a separate slice. The later exact `85042e6` daemon-backed TUI waterfall passed
+authenticated live 240-bin streaming and user-reported visual/interaction
+acceptance on the 100x30 small Pi, followed by successful guarded restoration
+and no stale consumer. HDMI and independently observed physical-Q termination
+remain unclaimed; this does not broaden front-panel-control authorization.
 
 ### Low-priority TUI usability follow-up
 
