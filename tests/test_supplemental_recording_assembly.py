@@ -165,8 +165,10 @@ def native_bundle(native, tmp_path, *, pcmu=False, policy=None, sockets_director
 @pytest.fixture
 def rig(native, tmp_path, monkeypatch):
     # The native worker intentionally exports only a fixed failure bit. Retain
-    # source locations before a schedule refusal is consumed; do not print
-    # exceptions/private values or alter success-path reads, clocks or retries.
+    # bounded source locations before either a pre-controller worker refusal or
+    # a schedule refusal is consumed; do not print exceptions/private values or
+    # alter success-path reads, clocks or retries.
+    monkeypatch.setenv("SDSCTL_TEST_FAILURE_LOCATIONS", "1")
     original = n.FiniteRecordingSchedule.run
     reported = set()
 
@@ -362,6 +364,29 @@ def test_readiness_alone_times_out_without_recording_or_reads(rig):
     assert rig.manager.snapshot().completed_recordings == 0 and not rig.peer.reads
     assert not list(rig.journal.iterdir())
     assert [p.name for p in rig.root.iterdir()] == ["older.txt"]
+
+
+def test_pre_controller_worker_refusal_retains_bounded_location(rig, monkeypatch, capsys):
+    trial = rig.build()
+
+    def fail_plan(*_args, **_kwargs):
+        raise OSError("PRIVATE_PLAN_PATH")
+
+    monkeypatch.setattr(n, "Plan", fail_plan)
+
+    def operator(_finished):
+        wait_for(lambda: trial.ready)
+        trial.request_start()
+        wait_for(lambda: trial.worker_error)
+
+    run_observed(rig, trial, operator, success=False)
+    assert trial.worker_error and trial.cleanup_complete
+    assert trial.controller is None and trial.schedule is None and trial.result is None
+    assert not list(rig.journal.iterdir()) and not list(rig.root.glob("*.wav"))
+    output = capsys.readouterr().err
+    assert "cause 1: scripts/supplemental_recording_assembly.py:" in output
+    assert "PRIVATE_PLAN_PATH" not in output
+    assert str(rig.root) not in output and str(rig.journal) not in output
 
 
 @pytest.mark.parametrize("fault", ("cancel", "signal", "connection", "old_file", "metadata"))
