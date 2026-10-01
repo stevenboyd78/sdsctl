@@ -82,6 +82,38 @@ changes and resizing. On September 28, 2026, the installed development wheel at
 restored with their configuration and fonts unchanged. This verifies physical
 presentation, not a real daemon's reported version or live transport behavior.
 
+## Unreleased daemon event-link duration follow-up
+
+Daemon-backed sessions also show `Link for HH:MM:SS` on the existing Daemon row,
+or `Nd HH:MM:SS` after 24 hours. This is the elapsed age of this TUI client's
+current daemon **event-stream link**. It is not daemon process uptime, scanner
+connection age, PSI freshness, or the age of the initial API snapshot. Direct
+scanner and replay sessions do not gain this field.
+
+The adapter records a monotonic start only after the stream supplies its first
+authoritative snapshot. A preliminary API snapshot therefore shows
+`Link for Unavailable` rather than inventing an earlier start. Event-stream loss
+returns the value to `Unavailable`; a successful reconnect begins again only
+after its fresh authoritative snapshot. A scanner-only disconnect, stale PSI,
+degraded status, theme change, resize or redraw does not reset the event link.
+Disconnected time is never added to a later link.
+
+Duration uses the TUI host's monotonic clock and whole elapsed seconds. It does
+not jump when the wall clock or daylight-saving offset changes, add a tolerance,
+approximate calendar months/years, or wrap at 24 hours. Missing, non-finite or
+future clock observations are `Unavailable`. A one-second in-memory refresh makes
+the value advance without another daemon request or scanner command. The full
+runtime drawer labels the same value `Daemon event link for`.
+
+The Daemon row retains its existing row budget. During a wide-to-compact resize,
+the version/endpoint prefix is ellipsized against both current panel geometry and
+the incoming 100×30 two-column width before the fixed link suffix is appended.
+Automated checks cover the exact 59/60, 3599/3600 and 86399/86400 boundaries,
+multi-day values, invalid/unknown sources, initial stream establishment,
+scanner-only disconnect, event loss, authenticated reconnect, direct-session
+absence, both Pi geometries, themes, audio/no-audio and live resize. This does
+not yet claim a live endpoint or physical-display acceptance pass.
+
 ## Unreleased read-only scanner details
 
 From the ordinary dashboard, press **X** or choose **Scanner details** in the

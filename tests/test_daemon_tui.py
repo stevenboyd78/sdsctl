@@ -192,11 +192,19 @@ def make_radio() -> tuple[DaemonTuiRadio, FakeApiClient, FakeEventClient]:
 
 
 def test_daemon_tui_radio_streams_authoritative_state_and_connection() -> None:
-    radio, api, events = make_radio()
+    api = FakeApiClient()
+    events = FakeEventClient(
+        event(0, DaemonEventKind.SNAPSHOT, runtime_snapshot())
+    )
+    now = [100.0]
+    radio = DaemonTuiRadio(api, events, clock=lambda: now[0])
     states: list[RadioStateSnapshot] = []
     connections: list[bool] = []
     unsubscribe_state = radio.on_state(states.append)
     unsubscribe_connection = radio.on_connection(connections.append)
+
+    radio.initialize(runtime_snapshot())
+    assert radio.event_link_connected_at is None
 
     with radio.radio_state_push(500) as first:
         assert first.channel == "Initial Dispatch"
@@ -204,6 +212,7 @@ def test_daemon_tui_radio_streams_authoritative_state_and_connection() -> None:
         assert first.rssi == -82.0
         assert radio.connected is True
         assert connections == [True]
+        assert radio.event_link_connected_at == 100.0
 
         events.push(
             event(
@@ -235,7 +244,9 @@ def test_daemon_tui_radio_streams_authoritative_state_and_connection() -> None:
         )
         wait_for(lambda: connections == [True, False])
         assert radio.connected is False
+        assert radio.event_link_connected_at == 100.0
 
+    assert radio.event_link_connected_at is None
     unsubscribe_state()
     unsubscribe_connection()
     assert events.close_calls >= 1
@@ -298,6 +309,7 @@ def test_daemon_tui_radio_reports_event_stream_failure_as_diagnostic() -> None:
         assert "event client closed" in diagnostics[0].message
         assert connections == [True, False]
         assert radio.connected is False
+        assert radio.event_link_connected_at is None
 
 
 def test_remote_daemon_tui_reconnect_requires_fresh_authoritative_snapshot() -> None:
@@ -338,6 +350,7 @@ def test_remote_daemon_tui_reconnect_requires_fresh_authoritative_snapshot() -> 
 
     api = RemoteApiClient()
     events = RemoteEventClient()
+    link_clock = iter((100.0, 200.0))
     radio = DaemonTuiRadio(
         api,
         events,
@@ -346,12 +359,21 @@ def test_remote_daemon_tui_reconnect_requires_fresh_authoritative_snapshot() -> 
             initial_delay=0,
             max_delay=0,
         ),
+        clock=link_clock.__next__,
     )
     states: list[RadioStateSnapshot] = []
     diagnostics: list[TransportDiagnostic] = []
     version_changes: list[str | None] = []
+    link_changes: list[tuple[str, float | None]] = []
     radio.on_state(states.append)
-    radio.on_diagnostic(diagnostics.append)
+    radio.on_diagnostic(
+        lambda diagnostic: (
+            diagnostics.append(diagnostic),
+            link_changes.append(
+                (diagnostic.kind, radio.event_link_connected_at)
+            ),
+        )
+    )
     radio.on_connection(lambda _connected: version_changes.append(radio.application_version))
 
     with radio.radio_state_push() as first:
@@ -371,7 +393,13 @@ def test_remote_daemon_tui_reconnect_requires_fresh_authoritative_snapshot() -> 
     assert "private endpoint detail" not in rendered
     assert "stop after recovered state" not in rendered
     assert version_changes == ["0.31.0", None, "0.31.1", None]
+    assert link_changes == [
+        ("daemon_event_disconnected", None),
+        ("daemon_event_reconnected", 200.0),
+        ("daemon_event_disconnected", None),
+    ]
     assert radio.application_version is None
+    assert radio.event_link_connected_at is None
 
 
 def test_remote_daemon_tui_reports_exhausted_reconnect_as_terminal_failure() -> None:
@@ -555,6 +583,19 @@ def test_daemon_tui_radio_initializes_from_authoritative_api_snapshot() -> None:
     assert initial.connected is True
     assert initial.snapshot.channel == "API Dispatch"
     assert radio.connected is True
+    assert radio.event_link_connected_at is None
+
+
+@pytest.mark.parametrize("bad_clock", [None, True, float("nan"), float("inf")])
+def test_daemon_tui_event_link_refuses_invalid_clock_observations(bad_clock) -> None:
+    api = FakeApiClient()
+    events = FakeEventClient(
+        event(0, DaemonEventKind.SNAPSHOT, runtime_snapshot())
+    )
+    radio = DaemonTuiRadio(api, events, clock=lambda: bad_clock)
+
+    with radio.radio_state_push():
+        assert radio.event_link_connected_at is None
 
 
 def test_daemon_tui_radio_uses_identity_fallbacks_for_older_daemons() -> None:

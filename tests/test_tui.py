@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import replace
 from datetime import datetime
+from math import nextafter
 from pathlib import Path
 
 import pytest
@@ -178,6 +179,7 @@ def test_tui_connection_panel_renders_optional_remote_target() -> None:
             assert "Endpoint: udp://192.168.0.251:50536" in direct_connection
             assert "Target:" not in direct_connection
             assert "Daemon:" not in direct_connection
+            assert "Link for " not in direct_connection
 
         remote_app = ScannerTuiApp(
             ScannerIdentity(
@@ -208,12 +210,15 @@ def test_tui_connection_panel_renders_optional_remote_target() -> None:
 def test_daemon_version_remains_visible_on_both_pi_layouts(tmp_path, size, palette, audio):
     async def exercise() -> None:
         value = ["99.1.2"]
+        clock = [100.0]
+        link_start: list[float | None] = [None]
         app = ScannerTuiApp(
             ScannerIdentity(
                 "sdsctl-remote-daemon", "SDS200", "Version 1.26.01", "192.0.2.18:50443"
             ),
             snapshot_from_scanner_info(ScannerInfoParser().parse("GSI", XML)),
             daemon_version_source=lambda: value[0],
+            daemon_link_since_source=lambda: link_start[0],
             audio_session=(
                 TuiAudioSession(
                     AudioStream(FakeAudioTransport()), RecordingPathPolicy(directory=tmp_path)
@@ -222,10 +227,20 @@ def test_daemon_version_remains_visible_on_both_pi_layouts(tmp_path, size, palet
                 else None
             ),
             palette=palette,
+            clock=lambda: clock[0],
         )
         async with app.run_test(size=size) as pilot:
             await _settle_responsive_layout(app, pilot)
             assert "Daemon: 99.1.2" in _plain(app.query_one("#connection", Static))
+            assert "Link for Unavailable" in _plain(
+                app.query_one("#connection", Static)
+            )
+            link_start[0] = 40.0
+            app._refresh_view()
+            await _settle_responsive_layout(app, pilot)
+            assert "Link for 00:01:00" in _plain(
+                app.query_one("#connection", Static)
+            )
             for reported, expected in [
                 ("99.1.2", "99.1.2"),
                 (None, "Unavailable"),
@@ -239,6 +254,7 @@ def test_daemon_version_remains_visible_on_both_pi_layouts(tmp_path, size, palet
                 connection = app.query_one("#connection", Static)
                 text = _plain(connection)
                 assert f"Daemon: {expected}" in text
+                assert "Link for 00:01:00" in text
                 assert "Target: 192.0.2.18:50443" in text
                 assert connection.content_region.height >= len(text.splitlines())
                 assert all(
@@ -251,6 +267,7 @@ def test_daemon_version_remains_visible_on_both_pi_layouts(tmp_path, size, palet
                 drawer = app._mimic_runtime().plain
                 assert f"Application: sdsctl v{__version__}" in drawer
                 assert f"Daemon: {expected}" in drawer
+                assert "Daemon event link for: 00:01:00" in drawer
                 assert "Firmware: Version 1.26.01" in drawer
                 assert app.title == f"sdsctl v{__version__}"
             resized = (160, 45) if size == (100, 30) else (100, 30)
@@ -274,6 +291,99 @@ def test_daemon_version_remains_visible_on_both_pi_layouts(tmp_path, size, palet
             assert app.query_one("#body").max_scroll_y == 0
 
     asyncio.run(exercise())
+
+
+@pytest.mark.parametrize(
+    ("elapsed", "expected"),
+    [
+        (0.0, "00:00:00"),
+        (59.999, "00:00:59"),
+        (60.0, "00:01:00"),
+        (3_599.999, "00:59:59"),
+        (3_600.0, "01:00:00"),
+        (86_399.999, "23:59:59"),
+        (86_400.0, "1d 00:00:00"),
+        (183_845.0, "2d 03:04:05"),
+        (366 * 86_400 + 1.0, "366d 00:00:01"),
+    ],
+)
+def test_daemon_event_link_duration_uses_exact_monotonic_boundaries(
+    elapsed: float,
+    expected: str,
+) -> None:
+    app = ScannerTuiApp(
+        ScannerIdentity(
+            endpoint="sdsctl-remote-daemon",
+            model="SDS200",
+            firmware="Version 1.26.01",
+        ),
+        snapshot_from_scanner_info(ScannerInfoParser().parse("GSI", XML)),
+        daemon_version_source=lambda: "99.1.2",
+        daemon_link_since_source=lambda: 10.0,
+        clock=lambda: 10.0 + elapsed,
+    )
+
+    assert app._daemon_link_duration_text() == expected
+
+
+def test_daemon_event_link_duration_ignores_wall_clock_and_dst_changes() -> None:
+    monotonic_clock = [70.0]
+    wall_clock = [datetime.fromisoformat("2026-11-01T01:59:59-06:00")]
+    app = ScannerTuiApp(
+        ScannerIdentity("daemon", "SDS200", "Version 1.26.01"),
+        snapshot_from_scanner_info(ScannerInfoParser().parse("GSI", XML)),
+        daemon_link_since_source=lambda: 10.0,
+        clock=lambda: monotonic_clock[0],
+        now=lambda: wall_clock[0],
+    )
+
+    assert app._daemon_link_duration_text() == "00:01:00"
+    wall_clock[0] = datetime.fromisoformat("2026-11-01T01:00:00-07:00")
+    assert app._daemon_link_duration_text() == "00:01:00"
+    monotonic_clock[0] = 71.0
+    assert app._daemon_link_duration_text() == "00:01:01"
+
+
+@pytest.mark.parametrize(
+    ("seconds", "previous"),
+    [(60, "00:00:59"), (3_600, "00:59:59"), (86_400, "23:59:59")],
+)
+def test_daemon_event_link_uses_no_tolerance_at_float_boundaries(
+    seconds: int,
+    previous: str,
+) -> None:
+    started_at = 1_000_000.1
+    observed_at = [started_at + seconds]
+    app = ScannerTuiApp(
+        ScannerIdentity("daemon", "SDS200", "Version 1.26.01"),
+        snapshot_from_scanner_info(ScannerInfoParser().parse("GSI", XML)),
+        daemon_link_since_source=lambda: started_at,
+        clock=lambda: observed_at[0],
+    )
+
+    exact = "1d 00:00:00" if seconds == 86_400 else (
+        "01:00:00" if seconds == 3_600 else "00:01:00"
+    )
+    assert app._daemon_link_duration_text() == exact
+    observed_at[0] = nextafter(started_at + seconds, float("-inf"))
+    assert app._daemon_link_duration_text() == previous
+
+
+@pytest.mark.parametrize(
+    "started_at",
+    [None, True, "10", float("nan"), float("inf"), 11.0],
+)
+def test_daemon_event_link_duration_is_explicitly_unavailable_for_bad_source(
+    started_at: object,
+) -> None:
+    app = ScannerTuiApp(
+        ScannerIdentity("daemon", "SDS200", "Version 1.26.01"),
+        snapshot_from_scanner_info(ScannerInfoParser().parse("GSI", XML)),
+        daemon_link_since_source=lambda: started_at,  # type: ignore[return-value]
+        clock=lambda: 10.0,
+    )
+
+    assert app._daemon_link_duration_text() == "Unavailable"
 
 
 def test_tui_renders_mode_aware_quick_search_and_close_call_details() -> None:

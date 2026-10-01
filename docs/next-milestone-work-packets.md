@@ -96,12 +96,16 @@ These are merged development changes, not a claim that a new release is publishe
    visual/keyboard checks on September 28, 2026; live endpoint-version acceptance
    remains separate from that presentation evidence.
    See the [TUI candidate details](tui.md#unreleased-connected-daemon-version-follow-up).
-2. **Connection duration, if implemented:** first add an explicit owner for the
-   selected link's successful connection/reconnection events. Use monotonic
-   time for elapsed duration and aware wall time for `Connected since`.
-   Separate unavailable transport, stale scanner state and process uptime.
-   Do not reset uptime on a stale/degraded label change, and do not count
-   disconnected time as connected time.
+2. **Connection duration:** implemented in the unreleased local candidate for
+   the TUI-client-to-daemon event stream only. `DaemonTuiRadio` owns the observed
+   monotonic start after the first authoritative stream snapshot and replaces it
+   only after a fresh reconnect snapshot. The preliminary API snapshot remains
+   explicitly unavailable, stream loss clears the value, and scanner-only
+   disconnect, stale PSI or a degraded presentation does not reset it. The
+   Connection panel shares its existing Daemon row with `Link for HH:MM:SS` or
+   `Nd HH:MM:SS`; no `Connected since` wall time is fabricated. Direct scanner
+   sessions stay unchanged. Boundary, reconnect, invalid-source and Pi geometry
+   tests pass; live endpoint and physical display acceptance remain separate.
 
 ### Test contract
 

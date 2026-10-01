@@ -142,20 +142,17 @@ remain unclaimed; this does not broaden front-panel-control authorization.
   scanner model/firmware stay in the Scanner panel. Published-client acceptance
   also passed on both layouts. This is not a measured connection-start or
   socket-uptime feature.
-- **Remaining:** if elapsed connection time is shown, label it `Connected for`
-  only after identifying the actual successful connection events. Use a
-  compact duration such as `2d 04:17:36`, without wrapping at 24 hours or treating
-  variable-length calendar months/years as fixed durations. Derive elapsed time
-  from a monotonic clock, distinguish it from process uptime, and define which
-  connection it measures (client-to-daemon versus daemon-to-scanner). Reset it
-  only for a new connection and do not present disconnected time as connected
-  uptime. Do not relabel an observed status transition as `Connected since` or
-  reset duration merely because a stale/degraded label changes. Apply the
-  accepted local-date presentation to any genuine connection-start timestamp.
-  Verify midnight/day rollover, reconnects, wall-clock/DST adjustments, and
-  header/panel fit on both Pi geometries without wrapping or panel shifts.
-  This is a separate low-priority follow-up, not a change to browser-device
-  acceptance or already-released behavior.
+- An unreleased local candidate now adds `Link for` beside the daemon version.
+  It measures only this TUI client's current daemon event-stream link, beginning
+  after the stream's first authoritative snapshot and resetting after a fresh
+  reconnect snapshot. The initial API snapshot cannot invent an earlier start;
+  stream loss is `Unavailable`; scanner-only disconnect, stale PSI and degraded
+  presentation do not reset the link. Elapsed time uses the local monotonic clock
+  and renders `HH:MM:SS` or `Nd HH:MM:SS`, without a tolerance, calendar-unit
+  approximation or 24-hour wrap. Direct scanner sessions remain unchanged.
+  Exact boundary/reconnect and 100x30/160x45 geometry tests pass. A live endpoint
+  and physical display pass remain separate before this presentation is accepted;
+  this is not part of v0.30.0 or the browser-device qualification.
 
 ### Managed-display enrollment and unattended recovery
 

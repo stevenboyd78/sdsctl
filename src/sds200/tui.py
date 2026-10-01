@@ -5,6 +5,7 @@ from collections.abc import Callable, Iterable, Mapping
 from contextlib import AbstractContextManager, suppress
 from dataclasses import dataclass, replace
 from datetime import datetime
+from math import isfinite
 from threading import Event, Thread, current_thread
 from time import monotonic
 from typing import ClassVar, Protocol
@@ -500,6 +501,7 @@ class ScannerTuiApp(App[None]):
         supplemental_display_source: SupplementalFrameSource | None = None,
         front_panel_inventory: Mapping[str, object] | None = None,
         daemon_version_source: Callable[[], str | None] | None = None,
+        daemon_link_since_source: Callable[[], float | None] | None = None,
         waterfall_client_factory: TuiWaterfallClientFactory | None = None,
         clock: Clock = monotonic,
         now: WallClock = _local_now,
@@ -516,6 +518,12 @@ class ScannerTuiApp(App[None]):
             raise ValueError("Choose one Mimic-SDS display source.")
         if daemon_version_source is not None and not callable(daemon_version_source):
             raise TypeError("Daemon version source must be a non-blocking callable or None.")
+        if daemon_link_since_source is not None and not callable(
+            daemon_link_since_source
+        ):
+            raise TypeError(
+                "Daemon link source must be a non-blocking callable or None."
+            )
         if waterfall_client_factory is not None and not callable(
             waterfall_client_factory
         ):
@@ -536,6 +544,7 @@ class ScannerTuiApp(App[None]):
         self._capabilities = capabilities_for_model(identity.model)
         self._radio = radio
         self._daemon_version_source = daemon_version_source
+        self._daemon_link_since_source = daemon_link_since_source
         self._audio_session = audio_session
         self._tui_audio_session = (
             audio_session if isinstance(audio_session, TuiAudioSession) else None
@@ -748,6 +757,10 @@ class ScannerTuiApp(App[None]):
         self._apply_responsive_panel_layout()
         self._refresh_view()
         self._poll_timers.append(self.set_interval(0.25, self._poll_log_buffer))
+        if self._daemon_link_since_source is not None:
+            self._poll_timers.append(
+                self.set_interval(1.0, self._refresh_daemon_link)
+            )
         if self._terminal_failure_subscribe is not None:
             self._unsubscribers.append(
                 self._terminal_failure_subscribe(
@@ -925,6 +938,11 @@ class ScannerTuiApp(App[None]):
         ]
         if self._daemon_version_source is not None:
             rows.insert(2, f"Daemon: {self._daemon_version_text()}")
+        if self._daemon_link_since_source is not None:
+            rows.insert(
+                3,
+                f"Daemon event link for: {self._daemon_link_duration_text()}",
+            )
         if self._audio_snapshot is not None:
             rows.append(f"Client audio/recording: {self._audio_snapshot.status.value}")
             rows.append(self._audio_message)
@@ -938,6 +956,39 @@ class ScannerTuiApp(App[None]):
         source = self._daemon_version_source
         value = reported_application_version(source()) if source is not None else None
         return value or "Unavailable"
+
+    def _daemon_link_duration_text(self) -> str:
+        """Render elapsed time for this client's current daemon event link."""
+
+        source = self._daemon_link_since_source
+        if source is None:
+            return "Unavailable"
+        try:
+            started_at = source()
+            observed_at = self._clock()
+        except Exception:
+            return "Unavailable"
+        if (
+            isinstance(started_at, bool)
+            or not isinstance(started_at, (int, float))
+            or isinstance(observed_at, bool)
+            or not isinstance(observed_at, (int, float))
+        ):
+            return "Unavailable"
+        start = float(started_at)
+        now = float(observed_at)
+        if not isfinite(start) or not isfinite(now) or now < start:
+            return "Unavailable"
+        whole_seconds = int(now - start)
+        if whole_seconds and now < start + whole_seconds:
+            whole_seconds -= 1
+        elif now >= start + (whole_seconds + 1):
+            whole_seconds += 1
+        days, remainder = divmod(whole_seconds, 86_400)
+        hours, remainder = divmod(remainder, 3_600)
+        minutes, seconds = divmod(remainder, 60)
+        clock_text = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        return f"{days}d {clock_text}" if days else clock_text
 
     def action_toggle_theme(self) -> None:
         """Toggle between the built-in semantic light and dark palettes."""
@@ -1849,6 +1900,22 @@ class ScannerTuiApp(App[None]):
         self._status_message = message
         self._refresh_view()
 
+    def _refresh_daemon_link(self) -> None:
+        if (
+            self._shutdown_started.is_set()
+            or self._mimic_screen is not None
+            or self._details_screen is not None
+            or self._waterfall_screen is not None
+        ):
+            return
+        presentation = present_radio_state(
+            self._snapshot,
+            connected=self._connected,
+            degraded=self._degraded,
+            stale=self._stale,
+        )
+        self._refresh_connection_panel(presentation, theme_roles_for(presentation))
+
     def _refresh_view(self) -> None:
         if (
             self._shutdown_started.is_set()
@@ -1870,47 +1937,8 @@ class ScannerTuiApp(App[None]):
         roles = theme_roles_for(presentation)
         self._apply_theme_class()
 
-        connection = self.query_one_optional("#connection", Static)
-        if connection is None:
+        if not self._refresh_connection_panel(presentation, roles):
             return
-        connection_value = _state_label(presentation.connection.value)
-        connection_stamp = self._transition_stamp("connection", connection_value)
-        connection_rows = [
-            (
-                connection_value if self._uses_short_layout() else "Connection",
-                connection_stamp
-                if self._uses_short_layout() else connection_value,
-                ThemeRole.TEXT_PRIMARY if self._uses_short_layout() else roles.connection,
-            ),
-        ]
-        if not self._uses_short_layout():
-            connection_rows.append(("Status since", connection_stamp, ThemeRole.TEXT_PRIMARY))
-        if self._daemon_version_source is not None:
-            # Keep the same row budget on both Pi displays. The endpoint stays
-            # beside the reported build; direct scanner identities are unchanged.
-            description = Text(f"{self._daemon_version_text()} | {self._identity.endpoint}")
-            description.truncate(
-                max(1, connection.content_region.width - len("Daemon: ")),
-                overflow="ellipsis",
-            )
-            connection_rows.append(("Daemon", description.plain, ThemeRole.TEXT_PRIMARY))
-        else:
-            connection_rows.append(("Endpoint", self._identity.endpoint, ThemeRole.TEXT_PRIMARY))
-        if self._identity.connection_target is not None:
-            connection_rows.append(
-                (
-                    "Target",
-                    self._identity.connection_target,
-                    ThemeRole.TEXT_PRIMARY,
-                )
-            )
-        connection_text = self._panel(*connection_rows)
-        if self._uses_short_layout():
-            # Keep even DISCONNECTED plus the full local timestamp on one row
-            # at 100x30, preserving both the status color and the remote target.
-            connection_text.stylize(rich_style(self._palette.resolve(roles.connection)),
-                                    0, len(connection_value))
-        connection.update(connection_text)
         self.query_one("#identity", Static).update(
             self._panel(
                 ("Model", self._identity.model, ThemeRole.TEXT_PRIMARY),
@@ -1920,6 +1948,7 @@ class ScannerTuiApp(App[None]):
         )
         system_widget = self.query_one("#system", Static)
         channel_widget = self.query_one("#channel", Static)
+
         if self._snapshot.screen_kind is ScannerScreenKind.SEARCH:
             system_widget.border_title = "Screen Mode"
             channel_widget.border_title = "Quick Search"
@@ -1952,6 +1981,77 @@ class ScannerTuiApp(App[None]):
         if audio is not None:
             audio.update(self._audio_panel())
         self._refresh_log_panel()
+
+    def _refresh_connection_panel(
+        self,
+        presentation: ScannerPresentation,
+        roles: PresentationThemeRoles,
+    ) -> bool:
+        connection = self.query_one_optional("#connection", Static)
+        if connection is None:
+            return False
+        connection_value = _state_label(presentation.connection.value)
+        connection_stamp = self._transition_stamp("connection", connection_value)
+        connection_rows = [
+            (
+                connection_value if self._uses_short_layout() else "Connection",
+                connection_stamp
+                if self._uses_short_layout() else connection_value,
+                ThemeRole.TEXT_PRIMARY if self._uses_short_layout() else roles.connection,
+            ),
+        ]
+        if not self._uses_short_layout():
+            connection_rows.append(("Status since", connection_stamp, ThemeRole.TEXT_PRIMARY))
+        if self._daemon_version_source is not None:
+            # Keep the same row budget on both Pi displays. The endpoint stays
+            # beside the reported build; direct scanner identities are unchanged.
+            description_width = max(
+                1,
+                connection.content_region.width - len("Daemon: "),
+            )
+            if self._uses_short_split_layout():
+                # Resize events can arrive before the two-column grid has its
+                # new geometry. Cap against the terminal width as well so an
+                # old wide content region cannot create a transient wrapped row.
+                description_width = min(
+                    description_width,
+                    max(
+                        1,
+                        (self.screen.size.width - 1) // 2
+                        - len("Daemon: ")
+                        - 5,
+                    ),
+                )
+            description = Text(
+                f"{self._daemon_version_text()} | {self._identity.endpoint}"
+            )
+            if self._daemon_link_since_source is not None:
+                link_text = f" | Link for {self._daemon_link_duration_text()}"
+                description.truncate(
+                    max(1, description_width - len(link_text)),
+                    overflow="ellipsis",
+                )
+                description.append(link_text)
+            description.truncate(description_width, overflow="ellipsis")
+            connection_rows.append(("Daemon", description.plain, ThemeRole.TEXT_PRIMARY))
+        else:
+            connection_rows.append(("Endpoint", self._identity.endpoint, ThemeRole.TEXT_PRIMARY))
+        if self._identity.connection_target is not None:
+            connection_rows.append(
+                (
+                    "Target",
+                    self._identity.connection_target,
+                    ThemeRole.TEXT_PRIMARY,
+                )
+            )
+        connection_text = self._panel(*connection_rows)
+        if self._uses_short_layout():
+            # Keep even DISCONNECTED plus the full local timestamp on one row
+            # at 100x30, preserving both the status color and the remote target.
+            connection_text.stylize(rich_style(self._palette.resolve(roles.connection)),
+                                    0, len(connection_value))
+        connection.update(connection_text)
+        return True
 
     def _uses_short_layout(self) -> bool:
         return self.screen.size.height < 32
@@ -2613,6 +2713,7 @@ def run_tui(
     supplemental_display_source: SupplementalFrameSource | None = None,
     front_panel_inventory: Mapping[str, object] | None = None,
     daemon_version_source: Callable[[], str | None] | None = None,
+    daemon_link_since_source: Callable[[], float | None] | None = None,
     waterfall_client_factory: TuiWaterfallClientFactory | None = None,
     log_buffer: TuiLogBuffer | None = None,
 ) -> None:
@@ -2628,6 +2729,7 @@ def run_tui(
         snapshot,
         radio=radio,
         daemon_version_source=daemon_version_source,
+        daemon_link_since_source=daemon_link_since_source,
         audio_session=audio_session,
         log_buffer=log_buffer,
         interval_ms=interval_ms,

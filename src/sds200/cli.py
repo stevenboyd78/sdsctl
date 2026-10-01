@@ -5867,6 +5867,7 @@ def _run_tui(
                 snapshot=initial.snapshot,
                 radio=radio,
                 daemon_version_source=lambda: radio.application_version,
+                daemon_link_since_source=lambda: radio.event_link_connected_at,
                 audio_session=daemon_audio_session,
                 interval_ms=args.interval,
                 stale_after=args.stale_after,

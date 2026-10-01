@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, fields
 from math import isfinite
 from threading import Event, RLock, Thread, current_thread
+from time import monotonic
 from typing import Any, Protocol, Self
 
 from .application_metadata import reported_application_version
@@ -112,6 +113,7 @@ class DaemonTuiRadio:
         *,
         event_thread_join_timeout: float = 2.0,
         reconnect_policy: DaemonRemoteReconnectPolicy | None = None,
+        clock: Callable[[], float] = monotonic,
     ) -> None:
         if isinstance(event_thread_join_timeout, bool) or not isinstance(
             event_thread_join_timeout,
@@ -151,12 +153,15 @@ class DaemonTuiRadio:
                 "Daemon TUI reconnect policy is available only for "
                 "authenticated remote transports."
             )
+        if not callable(clock):
+            raise TypeError("Daemon TUI clock must be callable.")
 
         self.api_client = api_client
         self.event_client = event_client
         self.sanitizes_private_state = api_sanitizes_private_state
         self.reconnect_policy = reconnect_policy
         self.event_thread_join_timeout = normalized_timeout
+        self._clock = clock
         self._events = EventBus()
         self._lock = RLock()
         self._connected = False
@@ -166,6 +171,7 @@ class DaemonTuiRadio:
         self._stream_stop = Event()
         self._event_thread: Thread | None = None
         self._terminal_stream_failure: BaseException | None = None
+        self._event_link_connected_at: float | None = None
 
     @property
     def connected(self) -> bool:
@@ -177,6 +183,13 @@ class DaemonTuiRadio:
         """Reported daemon build, not this client's version; no network I/O."""
         with self._lock:
             return None if self._closed else self._application_version
+
+    @property
+    def event_link_connected_at(self) -> float | None:
+        """Observed monotonic start of the current daemon event-stream link."""
+
+        with self._lock:
+            return None if self._closed else self._event_link_connected_at
 
     @property
     def event_thread_alive(self) -> bool:
@@ -346,10 +359,12 @@ class DaemonTuiRadio:
             try:
                 first_event = self.event_client.receive()
                 first = self._initial_snapshot(first_event)
+                self._mark_event_link_connected()
             except Exception as error:
                 if not self._stream_stop.is_set():
                     with self._lock:
                         self._application_version = None
+                        self._event_link_connected_at = None
                     self._set_connected(False)
                     self._record_terminal_stream_failure(error)
                 raise
@@ -369,12 +384,14 @@ class DaemonTuiRadio:
             with self._lock:
                 self._stream_active = False
                 self._application_version = None
+                self._event_link_connected_at = None
 
     def close(self) -> None:
         with self._lock:
             if self._closed:
                 return
             self._closed = True
+            self._event_link_connected_at = None
 
         self._stream_stop.set()
         self.event_client.close()
@@ -413,6 +430,7 @@ class DaemonTuiRadio:
                     event = self.event_client.receive()
                     if awaiting_snapshot:
                         state = self._initial_snapshot(event)
+                        self._mark_event_link_connected()
                         self._events.emit("state", state)
                         self._events.emit(
                             "diagnostic",
@@ -434,6 +452,7 @@ class DaemonTuiRadio:
                     self.event_client.close()
                     with self._lock:
                         self._application_version = None
+                        self._event_link_connected_at = None
                     self._set_connected(False)
                     policy = self.reconnect_policy
                     if reconnect_attempt == 0:
@@ -529,6 +548,22 @@ class DaemonTuiRadio:
             self._connected = connected
         if changed:
             self._events.emit("connection", connected)
+
+    def _mark_event_link_connected(self) -> None:
+        try:
+            observed_at = self._clock()
+        except Exception:
+            observed_at = None
+        if (
+            isinstance(observed_at, bool)
+            or not isinstance(observed_at, (int, float))
+            or not isfinite(float(observed_at))
+        ):
+            observed_at = None
+        with self._lock:
+            self._event_link_connected_at = (
+                None if observed_at is None else float(observed_at)
+            )
 
     def _join_event_thread(self) -> None:
         with self._lock:

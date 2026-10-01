@@ -81,6 +81,7 @@ def test_tui_cli_uses_replay_radio_and_selected_theme(
     assert captured["connected"] is True
     assert captured.get("connection_target") is None
     assert captured.get("daemon_version_source") is None
+    assert captured.get("daemon_link_since_source") is None
     assert captured["palette"] is DEFAULT_LIGHT_THEME
     assert captured["interval_ms"] == 250
     assert captured["stale_after"] == 1.5
@@ -303,6 +304,8 @@ def test_tui_cli_uses_daemon_without_opening_scanner_or_rtsp(
         captured.update(kwargs)
         version_source = kwargs["daemon_version_source"]
         assert callable(version_source) and version_source() == "99.1.2"
+        link_source = kwargs["daemon_link_since_source"]
+        assert callable(link_source) and link_source() is None
 
     monkeypatch.setattr(cli, "DaemonApiClient", FakeApiClient)
     monkeypatch.setattr(cli, "DaemonEventClient", FakeEventClient)
@@ -511,6 +514,8 @@ def test_tui_cli_remote_profile_builds_independent_authenticated_services(
         captured.update(kwargs)
         version_source = kwargs["daemon_version_source"]
         assert callable(version_source) and version_source() == "99.2.3"
+        link_source = kwargs["daemon_link_since_source"]
+        assert callable(link_source) and link_source() is None
 
     monkeypatch.setattr(cli, "DaemonApiClient", FakeApiClient)
     monkeypatch.setattr(cli, "DaemonEventClient", FakeEventClient)
