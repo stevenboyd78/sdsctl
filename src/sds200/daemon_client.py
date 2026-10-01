@@ -33,6 +33,7 @@ from .exceptions import (
     DaemonRequestError,
     DaemonUnavailableError,
 )
+from .front_panel_keys import FRONT_PANEL_INVENTORY_VERSION, FrontPanelKey
 from .scanner_display_supplemental_transport import (
     decode_context_response,
     decode_demand_response,
@@ -180,6 +181,17 @@ class DaemonApiClient:
                 result,
                 sanitized=self.sanitizes_private_state,
             )
+        except DaemonProtocolError:
+            self.close()
+            raise
+        return result
+
+    def front_panel_inventory(self) -> dict[str, object]:
+        """Return the validated fail-closed front-panel presentation."""
+
+        result = self.request(DaemonApiOperation.SCANNER_FRONT_PANEL_INVENTORY)
+        try:
+            _validate_front_panel_inventory(result)
         except DaemonProtocolError:
             self.close()
             raise
@@ -1038,6 +1050,113 @@ def _validate_runtime_snapshot(
     _non_negative_integer(result["transition_sequence"], "transition_sequence")
     _optional_string(result["last_failure_at"], "last_failure_at")
     _optional_string(result["last_error"], "last_error")
+
+
+def _validate_front_panel_inventory(result: Mapping[str, object]) -> None:
+    expected_fields = {"version", "controls_available", "keys"}
+    if set(result) != expected_fields:
+        raise DaemonProtocolError(
+            "The daemon front-panel inventory fields are invalid."
+        )
+    if type(result["version"]) is not int or (
+        result["version"] != FRONT_PANEL_INVENTORY_VERSION
+    ):
+        raise DaemonProtocolError(
+            "The daemon front-panel inventory version is unsupported."
+        )
+    if type(result["controls_available"]) is not bool:
+        raise DaemonProtocolError(
+            "The daemon front-panel availability must be a boolean."
+        )
+
+    keys = result["keys"]
+    if not isinstance(keys, list):
+        raise DaemonProtocolError(
+            "The daemon front-panel inventory keys must be a list."
+        )
+    expected_codes = [key.value for key in FrontPanelKey]
+    if len(keys) != len(expected_codes):
+        raise DaemonProtocolError(
+            "The daemon front-panel inventory is incomplete."
+        )
+
+    entry_fields = {
+        "code",
+        "label",
+        "context_note",
+        "reference_status",
+        "control_status",
+        "available",
+        "unavailable_reason",
+    }
+    observed_codes: list[str] = []
+    any_available = False
+    for entry in keys:
+        if not isinstance(entry, Mapping) or any(
+            not isinstance(name, str) for name in entry
+        ):
+            raise DaemonProtocolError(
+                "The daemon front-panel inventory entry must be an object."
+            )
+        if set(entry) != entry_fields:
+            raise DaemonProtocolError(
+                "The daemon front-panel inventory entry fields are invalid."
+            )
+        code = entry["code"]
+        if not isinstance(code, str):
+            raise DaemonProtocolError(
+                "The daemon front-panel inventory code must be text."
+            )
+        observed_codes.append(code)
+        for name in ("label", "context_note", "unavailable_reason"):
+            value = entry[name]
+            if (
+                not isinstance(value, str)
+                or not value
+                or len(value) > 256
+                or not value.isascii()
+                or any(ord(character) < 32 for character in value)
+            ):
+                raise DaemonProtocolError(
+                    f"The daemon front-panel inventory {name} is invalid."
+                )
+
+        reference_status = entry["reference_status"]
+        if reference_status not in {
+            "listed",
+            "absent_for_model",
+            "model_not_listed",
+        }:
+            raise DaemonProtocolError(
+                "The daemon front-panel reference status is invalid."
+            )
+        control_status = entry["control_status"]
+        expected_control_status = (
+            "unsupported"
+            if reference_status == "absent_for_model"
+            else "unqualified"
+        )
+        if control_status != expected_control_status:
+            raise DaemonProtocolError(
+                "The daemon front-panel control status is invalid."
+            )
+        available = entry["available"]
+        if type(available) is not bool or available:
+            raise DaemonProtocolError(
+                "The daemon front-panel key availability is invalid."
+            )
+        any_available = any_available or available
+
+    if observed_codes != expected_codes or len(set(observed_codes)) != len(
+        observed_codes
+    ):
+        raise DaemonProtocolError(
+            "The daemon front-panel inventory key order is invalid."
+        )
+    if result["controls_available"] is not any_available:
+        raise DaemonProtocolError(
+            "The daemon front-panel aggregate availability is invalid."
+        )
 
 
 def _validate_remote_result_privacy(value: object) -> None:

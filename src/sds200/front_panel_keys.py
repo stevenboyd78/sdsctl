@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Literal
 
+FRONT_PANEL_INVENTORY_VERSION = 1
+
 
 class FrontPanelKey(StrEnum):
     MENU = "M"
@@ -80,6 +82,7 @@ FRONT_PANEL_KEYS: tuple[KeyDefinition, ...] = (
 )
 
 ReferenceStatus = Literal["listed", "absent_for_model", "model_not_listed"]
+ControlStatus = Literal["unqualified", "unsupported"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +96,27 @@ class KeyPresentation:
     def available(self) -> Literal[False]:
         """Presentation only; never use reference membership as authorization."""
         return False
+
+    @property
+    def control_status(self) -> ControlStatus:
+        """Return an explicit fail-closed control qualification."""
+
+        if self.reference_status == "absent_for_model":
+            return "unsupported"
+        return "unqualified"
+
+    def as_dict(self) -> dict[str, object]:
+        """Return a bounded public projection without model or private inputs."""
+
+        return {
+            "code": self.definition.code.value,
+            "label": self.label,
+            "context_note": self.definition.context_note,
+            "reference_status": self.reference_status,
+            "control_status": self.control_status,
+            "available": self.available,
+            "unavailable_reason": self.unavailable_reason,
+        }
 
 
 def front_panel_inventory(model: str | None = None) -> tuple[KeyPresentation, ...]:
@@ -124,3 +148,21 @@ def front_panel_inventory(model: str | None = None) -> tuple[KeyPresentation, ..
                 label = "Backlight"
         entries.append(KeyPresentation(definition, label, status, reason))
     return tuple(entries)
+
+
+def front_panel_inventory_snapshot(model: str | None = None) -> dict[str, object]:
+    """Describe every requested key without granting or dispatching control.
+
+    The versioned result is safe to expose to observe-only clients.  It never
+    includes the supplied model text, firmware, endpoint, scanner values, or a
+    wire representation.  ``controls_available`` remains false until a future
+    separately reviewed capability and authorization path qualifies at least
+    one general front-panel action.
+    """
+
+    entries = front_panel_inventory(model)
+    return {
+        "version": FRONT_PANEL_INVENTORY_VERSION,
+        "controls_available": any(entry.available for entry in entries),
+        "keys": [entry.as_dict() for entry in entries],
+    }

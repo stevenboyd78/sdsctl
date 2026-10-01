@@ -23,6 +23,7 @@ from .exceptions import (
     UnsupportedScannerFeatureError,
     UnsupportedScannerModelError,
 )
+from .front_panel_keys import front_panel_inventory_snapshot
 from .scanner_display_configuration import ScannerDisplayConfigurationError
 from .scanner_display_profile_storage import DisplayProfileStorageError
 from .scanner_display_supplemental_transport import (
@@ -60,6 +61,7 @@ class DaemonApiOperation(StrEnum):
     DISPLAY_SUPPLEMENTAL_DEMAND = "display.supplemental.demand"
     DISPLAY_PROFILE_RELOAD = "display.profile.reload"
     SCANNER_STATE = "scanner.state"
+    SCANNER_FRONT_PANEL_INVENTORY = "scanner.front_panel.inventory"
     AUDIO_HEALTH = "audio.health"
     RECORDING_STATUS = "recording.status"
     RECORDING_START = "recording.start"
@@ -85,6 +87,7 @@ DAEMON_API_READ_ONLY_OPERATIONS = (
     DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT,
     DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME,
     DaemonApiOperation.SCANNER_STATE,
+    DaemonApiOperation.SCANNER_FRONT_PANEL_INVENTORY,
     DaemonApiOperation.AUDIO_HEALTH,
     DaemonApiOperation.RECORDING_STATUS,
     DaemonApiOperation.RECORDINGS_LIST,
@@ -793,6 +796,11 @@ class DaemonReadOnlyApi:
         snapshot = self.runtime.snapshot().as_dict()
         if operation is DaemonApiOperation.RUNTIME_SNAPSHOT:
             return snapshot
+        if operation is DaemonApiOperation.SCANNER_FRONT_PANEL_INVENTORY:
+            model = snapshot.get("scanner_model")
+            return front_panel_inventory_snapshot(
+                model if type(model) is str else None
+            )
         if operation is DaemonApiOperation.SCANNER_STATE:
             return {
                 "scanner_endpoint": snapshot["scanner_endpoint"],

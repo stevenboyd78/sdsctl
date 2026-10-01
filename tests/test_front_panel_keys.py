@@ -3,7 +3,13 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from sds200.commands import HOLD_KEY_CODES, PressKey
-from sds200.front_panel_keys import FRONT_PANEL_KEYS, FrontPanelKey, front_panel_inventory
+from sds200.front_panel_keys import (
+    FRONT_PANEL_INVENTORY_VERSION,
+    FRONT_PANEL_KEYS,
+    FrontPanelKey,
+    front_panel_inventory,
+    front_panel_inventory_snapshot,
+)
 
 
 def test_complete_reference_inventory_preserves_order_and_unique_codes():
@@ -65,6 +71,41 @@ def test_inventory_is_immutable_and_not_a_wire_command():
         entry.definition.code = FrontPanelKey.ENTER_YES
     assert not hasattr(entry, "wire") and not hasattr(entry.definition, "wire")
     assert front_panel_inventory("SDS200") == inventory
+
+
+def test_snapshot_is_versioned_complete_and_fail_closed():
+    snapshot = front_panel_inventory_snapshot("SDS200")
+    assert snapshot == {
+        "version": FRONT_PANEL_INVENTORY_VERSION,
+        "controls_available": False,
+        "keys": [entry.as_dict() for entry in front_panel_inventory("SDS200")],
+    }
+    assert [entry["code"] for entry in snapshot["keys"]] == list(
+        "MFL1234567890.E><^VQYABCZTR"
+    )
+    assert all(entry["control_status"] == "unqualified" for entry in snapshot["keys"])
+    assert all(entry["available"] is False for entry in snapshot["keys"])
+    assert all("wire" not in entry and "command" not in entry for entry in snapshot["keys"])
+
+
+def test_snapshot_marks_only_reference_absences_unsupported():
+    snapshot = front_panel_inventory_snapshot("SDS100")
+    entries = {entry["code"]: entry for entry in snapshot["keys"]}
+    assert entries["Q"]["control_status"] == "unsupported"
+    assert entries["T"]["control_status"] == "unsupported"
+    assert {
+        code for code, entry in entries.items() if entry["control_status"] == "unsupported"
+    } == {"Q", "T"}
+    assert snapshot["controls_available"] is False
+
+
+def test_snapshot_does_not_reflect_inputs_or_share_mutable_results():
+    private_model = "private://scanner.example.invalid"
+    first = front_panel_inventory_snapshot(private_model)
+    assert private_model not in repr(first)
+    first["keys"][0]["label"] = "Changed"
+    second = front_panel_inventory_snapshot(private_model)
+    assert second["keys"][0]["label"] == "Menu"
 
 
 @pytest.mark.parametrize("model", [True, 1, b"SDS100", [], {}])

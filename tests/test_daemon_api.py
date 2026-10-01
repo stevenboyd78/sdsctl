@@ -22,6 +22,7 @@ from sds200.daemon_api import (
     DaemonApiResponse,
     DaemonReadOnlyApi,
 )
+from sds200.front_panel_keys import FRONT_PANEL_INVENTORY_VERSION, FrontPanelKey
 
 
 class FakeSnapshot:
@@ -331,6 +332,46 @@ def test_scanner_state_returns_only_scanner_and_psi_fields(
         "psi_active": True,
         "radio_state": snapshot_payload["radio_state"],
     }
+
+
+def test_front_panel_inventory_is_complete_read_only_and_private(
+    snapshot_payload: dict[str, object],
+) -> None:
+    runtime = FakeRuntime(snapshot_payload)
+    response = DaemonReadOnlyApi(runtime).handle_payload(
+        request_payload(DaemonApiOperation.SCANNER_FRONT_PANEL_INVENTORY.value)
+    )
+
+    assert response.error is None
+    assert response.result is not None
+    assert response.result["version"] == FRONT_PANEL_INVENTORY_VERSION
+    assert response.result["controls_available"] is False
+    keys = response.result["keys"]
+    assert isinstance(keys, list)
+    assert [entry["code"] for entry in keys] == [key.value for key in FrontPanelKey]
+    assert all(entry["control_status"] == "unqualified" for entry in keys)
+    assert all(entry["available"] is False for entry in keys)
+    assert runtime.snapshot_calls == 1
+    encoded = response.to_json_line().decode("utf-8")
+    assert snapshot_payload["scanner_endpoint"] not in encoded
+    assert snapshot_payload["scanner_firmware"] not in encoded
+    assert snapshot_payload["scanner_model"] not in encoded
+
+
+def test_front_panel_inventory_rejects_parameters_before_runtime_read(
+    snapshot_payload: dict[str, object],
+) -> None:
+    runtime = FakeRuntime(snapshot_payload)
+    response = DaemonReadOnlyApi(runtime).handle_payload(
+        request_payload(
+            DaemonApiOperation.SCANNER_FRONT_PANEL_INVENTORY.value,
+            params={"key": "M"},
+        )
+    )
+
+    assert response.error is not None
+    assert response.error.code is DaemonApiErrorCode.INVALID_PARAMETERS
+    assert runtime.snapshot_calls == 0
 
 
 def test_audio_health_returns_audio_and_router_fields(

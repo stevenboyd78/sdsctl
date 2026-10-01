@@ -59,6 +59,7 @@ DAEMON_REMOTE_OBSERVE_OPERATIONS = (
     # absent unless the API was constructed with an explicit bounded owner.
     DaemonApiOperation.DISPLAY_SUPPLEMENTAL_DEMAND,
     DaemonApiOperation.SCANNER_STATE,
+    DaemonApiOperation.SCANNER_FRONT_PANEL_INVENTORY,
     DaemonApiOperation.AUDIO_HEALTH,
 )
 DAEMON_REMOTE_CONTROL_OPERATIONS = DAEMON_API_CONTROL_OPERATIONS

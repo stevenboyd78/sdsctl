@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import socket
 import threading
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,7 @@ from sds200 import (
     DaemonSocketSource,
     DaemonUnavailableError,
 )
+from sds200.front_panel_keys import front_panel_inventory_snapshot
 
 
 class FakeSnapshot:
@@ -266,6 +268,66 @@ def test_client_negotiates_and_reuses_one_real_socket(tmp_path: Path) -> None:
     assert server_snapshot.accepted_clients == 1
     assert server_snapshot.requests == 2
     assert server_snapshot.responses == 2
+
+
+def test_client_validates_fail_closed_front_panel_inventory(tmp_path: Path) -> None:
+    server, path = make_server(tmp_path)
+    location = DaemonSocketLocation(path, DaemonSocketSource.EXPLICIT)
+
+    with server, DaemonApiClient(location) as client:
+        inventory = client.front_panel_inventory()
+
+        assert inventory["controls_available"] is False
+        keys = inventory["keys"]
+        assert isinstance(keys, list)
+        assert len(keys) == 27
+        assert all(entry["available"] is False for entry in keys)
+        assert client.connected is True
+
+    server_snapshot = server.snapshot()
+    assert server_snapshot.accepted_clients == 1
+    assert server_snapshot.requests == 1
+    assert server_snapshot.responses == 1
+
+
+@pytest.mark.parametrize("malformation", ["missing", "reordered", "enabled"])
+def test_client_rejects_malformed_front_panel_inventory(
+    tmp_path: Path,
+    malformation: str,
+) -> None:
+    path = tmp_path / f"front-panel-{malformation}.sock"
+    inventory = deepcopy(front_panel_inventory_snapshot("SDS200"))
+    keys = inventory["keys"]
+    assert isinstance(keys, list)
+    if malformation == "missing":
+        keys.pop()
+    elif malformation == "reordered":
+        keys[0], keys[1] = keys[1], keys[0]
+    else:
+        keys[0]["available"] = True
+        inventory["controls_available"] = True
+    response = (
+        json.dumps(
+            {
+                "protocol": DAEMON_API_PROTOCOL,
+                "version": DAEMON_API_VERSION,
+                "request_id": "sdsctl-1",
+                "ok": True,
+                "result": inventory,
+            }
+        )
+        + "\n"
+    ).encode("utf-8")
+    thread = start_scripted_server(path, response)
+    client = DaemonApiClient(
+        DaemonSocketLocation(path, DaemonSocketSource.EXPLICIT)
+    )
+
+    with pytest.raises(DaemonProtocolError, match="front-panel"):
+        client.front_panel_inventory()
+
+    thread.join(timeout=1.0)
+    assert client.connected is False
 
 
 def test_client_hello_cache_isolated_from_caller_mutation(

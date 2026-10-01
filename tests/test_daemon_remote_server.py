@@ -417,7 +417,11 @@ def test_observe_peer_advertises_only_safe_read_only_operations() -> None:
 
 @pytest.mark.parametrize(
     "operation",
-    [DaemonApiOperation.RUNTIME_SNAPSHOT, DaemonApiOperation.SCANNER_STATE],
+    [
+        DaemonApiOperation.RUNTIME_SNAPSHOT,
+        DaemonApiOperation.SCANNER_STATE,
+        DaemonApiOperation.SCANNER_FRONT_PANEL_INVENTORY,
+    ],
 )
 def test_remote_state_removes_private_scanner_endpoint(
     operation: DaemonApiOperation,
