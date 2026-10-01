@@ -2097,7 +2097,7 @@ def build_parser(
         default=None,
         metavar="SECONDS",
         help=(
-            "Daemon API, event, and PCMU connection timeout "
+            "Daemon API, event, PCMU, and waterfall connection timeout "
             f"(default: {DAEMON_API_CLIENT_DEFAULT_TIMEOUT})"
         ),
     )
@@ -2131,6 +2131,15 @@ def build_parser(
         ),
     )
     tui.add_argument(
+        "--daemon-waterfall-socket-path",
+        type=Path,
+        metavar="PATH",
+        help=(
+            "Explicit daemon waterfall socket path used with --daemon-client; "
+            "otherwise use XDG_RUNTIME_DIR or the user state directory"
+        ),
+    )
+    tui.add_argument(
         "--daemon-pcmu-max-endpoint-bytes",
         type=_positive_integer,
         default=None,
@@ -2148,6 +2157,16 @@ def build_parser(
         help=(
             "Maximum accepted daemon PCMU frame size "
             f"(default: {PCMU_STREAM_DEFAULT_MAX_FRAME_BYTES})"
+        ),
+    )
+    tui.add_argument(
+        "--daemon-waterfall-max-record-bytes",
+        type=_positive_integer,
+        default=None,
+        metavar="BYTES",
+        help=(
+            "Maximum accepted daemon waterfall record size "
+            f"(default: {DAEMON_WATERFALL_DEFAULT_MAX_RECORD_BYTES})"
         ),
     )
     tui.add_argument(
@@ -5132,6 +5151,8 @@ def _reject_standalone_tui_daemon_options(
             args.daemon_pcmu_socket_path,
             args.daemon_pcmu_max_endpoint_bytes,
             args.daemon_pcmu_max_frame_bytes,
+            args.daemon_waterfall_socket_path,
+            args.daemon_waterfall_max_record_bytes,
             args.remote_profile,
         )
     ):
@@ -5637,6 +5658,7 @@ def _run_tui(
             args.daemon_socket_path,
             args.daemon_event_socket_path,
             args.daemon_pcmu_socket_path,
+            args.daemon_waterfall_socket_path,
         )
         api_endpoint = (
             DaemonRemoteClientTransport(
@@ -5674,6 +5696,18 @@ def _run_tui(
                 configuration_paths=configuration_paths,
             )
         )
+        waterfall_endpoint = (
+            DaemonRemoteClientTransport(
+                remote_configuration,
+                DaemonRemoteService.WATERFALL,
+            )
+            if remote_configuration is not None
+            else resolve_daemon_waterfall_socket_location(
+                args.daemon_waterfall_socket_path,
+                environ=environ,
+                configuration_paths=configuration_paths,
+            )
+        )
         api_client = DaemonApiClient(
             api_endpoint,
             timeout=timeout,
@@ -5706,6 +5740,24 @@ def _run_tui(
                 else args.daemon_pcmu_max_frame_bytes
             ),
         )
+        max_waterfall_record_bytes = (
+            DAEMON_WATERFALL_DEFAULT_MAX_RECORD_BYTES
+            if args.daemon_waterfall_max_record_bytes is None
+            else args.daemon_waterfall_max_record_bytes
+        )
+        if max_waterfall_record_bytes > DAEMON_WATERFALL_DEFAULT_MAX_RECORD_BYTES:
+            raise ValueError(
+                "--daemon-waterfall-max-record-bytes must not exceed the TUI "
+                "waterfall protocol limit of "
+                f"{DAEMON_WATERFALL_DEFAULT_MAX_RECORD_BYTES}."
+            )
+
+        def waterfall_client_factory() -> DaemonWaterfallClient:
+            return DaemonWaterfallClient(
+                waterfall_endpoint,
+                timeout=timeout,
+                max_record_bytes=max_waterfall_record_bytes,
+            )
 
         remote_reconnect_policy = (
             DaemonRemoteReconnectPolicy()
@@ -5824,6 +5876,7 @@ def _run_tui(
                 connected=initial.connected,
                 display_source=display_source,
                 front_panel_inventory=front_panel_inventory,
+                waterfall_client_factory=waterfall_client_factory,
                 palette=palette,
                 screen_class=theme_asset.manifest.screen_class,
                 managed_stylesheet=managed_stylesheet,
@@ -5894,20 +5947,20 @@ def _run_tui(
             scanner="SDS200",
         )
 
-    with selected_radio(args) as radio:
+    with selected_radio(args) as direct_radio:
         run_tui(
-            endpoint=radio.endpoint,
-            model=str(radio.get_model()),
-            firmware=str(radio.get_firmware()),
-            snapshot=snapshot_from_scanner_info(radio.get_scanner_info()),
-            radio=radio,
+            endpoint=direct_radio.endpoint,
+            model=str(direct_radio.get_model()),
+            firmware=str(direct_radio.get_firmware()),
+            snapshot=snapshot_from_scanner_info(direct_radio.get_scanner_info()),
+            radio=direct_radio,
             audio_session=audio_session,
             interval_ms=args.interval,
             stale_after=args.stale_after,
             psi_auto_recover=args.psi_auto_recover,
             psi_recover_after=args.psi_recover_after,
             psi_recovery_cooldown=args.psi_recovery_cooldown,
-            connected=radio.connected,
+            connected=direct_radio.connected,
             palette=palette,
             screen_class=theme_asset.manifest.screen_class,
             managed_stylesheet=managed_stylesheet,

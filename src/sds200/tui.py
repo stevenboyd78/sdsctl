@@ -58,6 +58,7 @@ from .tui_logging import (
     TuiLogBuffer,
 )
 from .tui_themes import built_in_tui_theme_stylesheets
+from .tui_waterfall import TuiWaterfallClientFactory, WaterfallScreen
 
 Unsubscribe = Callable[[], None]
 Clock = Callable[[], float]
@@ -418,6 +419,7 @@ class ScannerTuiApp(App[None]):
         Binding("q", "quit", "Quit"),
         Binding("t", "toggle_theme", "Theme"),
         Binding("m", "mimic", "Mimic-SDS", show=False),
+        Binding("w", "waterfall", "Waterfall", show=False),
         Binding("x", "scanner_details", "Scanner details", show=False),
         Binding(
             "ctrl+p",
@@ -498,6 +500,7 @@ class ScannerTuiApp(App[None]):
         supplemental_display_source: SupplementalFrameSource | None = None,
         front_panel_inventory: Mapping[str, object] | None = None,
         daemon_version_source: Callable[[], str | None] | None = None,
+        waterfall_client_factory: TuiWaterfallClientFactory | None = None,
         clock: Clock = monotonic,
         now: WallClock = _local_now,
     ) -> None:
@@ -513,6 +516,10 @@ class ScannerTuiApp(App[None]):
             raise ValueError("Choose one Mimic-SDS display source.")
         if daemon_version_source is not None and not callable(daemon_version_source):
             raise TypeError("Daemon version source must be a non-blocking callable or None.")
+        if waterfall_client_factory is not None and not callable(
+            waterfall_client_factory
+        ):
+            raise TypeError("Waterfall client factory must be callable or None.")
 
         if managed_stylesheet is not None:
             object.__setattr__(
@@ -578,6 +585,8 @@ class ScannerTuiApp(App[None]):
         self._mimic_screen: MimicScreen | None = None
         self._front_panel_inventory = front_panel_inventory
         self._details_screen: ScannerDetailsScreen | None = None
+        self._waterfall_client_factory = waterfall_client_factory
+        self._waterfall_screen: WaterfallScreen | None = None
         self._details_current = connected is True
         self._mimic_style = "preferred"
         self._mimic_treatment = "strips"
@@ -648,6 +657,12 @@ class ScannerTuiApp(App[None]):
         return self._audio_session is not None
 
     @property
+    def waterfall_available(self) -> bool:
+        """Return whether this daemon-backed TUI can open a waterfall lease."""
+
+        return self._waterfall_client_factory is not None
+
+    @property
     def key_help_visible(self) -> bool:
         """Return whether the in-app keyboard reference is visible."""
 
@@ -668,6 +683,11 @@ class ScannerTuiApp(App[None]):
                 content=(
                     (KEY_HELP_TEXT if self.audio_controls_available else NO_AUDIO_KEY_HELP_TEXT)
                     + ("M        Open Mimic-SDS (read-only)\n" if self._mimic_reader else "")
+                    + (
+                        "W        Open relative waterfall (read-only)\n"
+                        if self.waterfall_available
+                        else ""
+                    )
                 ),
             )
             yield _titled_panel("Connection", widget_id="connection")
@@ -694,8 +714,12 @@ class ScannerTuiApp(App[None]):
         """Isolate read-only screens and hide unavailable audio commands."""
 
         del parameters
+        if self._waterfall_screen is not None:
+            return action in {"quit", "command_palette"}
         if self._details_screen is not None:
             return action in {"quit", "command_palette"}
+        if action == "waterfall":
+            return self.waterfall_available
         if action == "mimic":
             return self._mimic_reader is not None and self._mimic_screen is None
         if self._mimic_screen is not None:
@@ -751,7 +775,11 @@ class ScannerTuiApp(App[None]):
         """Refresh size-dependent summaries after terminal resizing."""
 
         del event
-        if self._mimic_screen is not None or self._details_screen is not None:
+        if (
+            self._mimic_screen is not None
+            or self._details_screen is not None
+            or self._waterfall_screen is not None
+        ):
             return
         self.call_after_refresh(self._refresh_responsive_view)
 
@@ -767,6 +795,19 @@ class ScannerTuiApp(App[None]):
         self.stop_controls()
 
     def get_system_commands(self, screen: Screen[None]) -> Iterable[SystemCommand]:
+        if self._waterfall_screen is not None:
+            waterfall = self._waterfall_screen
+            yield SystemCommand(
+                "Back to dashboard", "Close relative waterfall", waterfall.action_back
+            )
+            yield SystemCommand(
+                "Pause waterfall", "Pause or resume local history", waterfall.action_pause
+            )
+            yield SystemCommand(
+                "Clear waterfall", "Clear local history", waterfall.action_clear
+            )
+            yield SystemCommand("Quit", "Quit the TUI", self.action_quit)
+            return
         if self._details_screen is not None:
             yield SystemCommand(
                 "Back to dashboard", "Close scanner details", self._details_screen.action_back
@@ -791,12 +832,19 @@ class ScannerTuiApp(App[None]):
             yield SystemCommand(
                 "Mimic-SDS", "Open the read-only scanner display (M)", self.action_mimic
             )
+        if self.waterfall_available:
+            yield SystemCommand(
+                "Relative waterfall",
+                "Open the read-only daemon waterfall (W)",
+                self.action_waterfall,
+            )
 
     def action_mimic(self) -> None:
         if (
             self._mimic_reader is None
             or self._mimic_screen is not None
             or self._details_screen is not None
+            or self._waterfall_screen is not None
         ):
             return
         mimic = MimicScreen(
@@ -816,13 +864,38 @@ class ScannerTuiApp(App[None]):
         )
 
     def action_scanner_details(self) -> None:
-        if self._details_screen is not None or self._mimic_screen is not None:
+        if (
+            self._details_screen is not None
+            or self._mimic_screen is not None
+            or self._waterfall_screen is not None
+        ):
             return
         details = ScannerDetailsScreen(
             self._scanner_details, screen_class=self._theme_screen_class
         )
         self._details_screen = details
         self.push_screen(details, self._details_closed)
+
+    def action_waterfall(self) -> None:
+        if (
+            self._waterfall_client_factory is None
+            or self._waterfall_screen is not None
+            or self._mimic_screen is not None
+            or self._details_screen is not None
+        ):
+            return
+        waterfall = WaterfallScreen(
+            self._waterfall_client_factory,
+            screen_class=self._theme_screen_class,
+        )
+        self._waterfall_screen = waterfall
+        self.push_screen(waterfall, self._waterfall_closed)
+
+    def _waterfall_closed(self, result: None) -> None:
+        del result
+        self._waterfall_screen = None
+        self._pi_dashboard_layout = None
+        self._refresh_view()
 
     def _details_closed(self, result: None) -> None:
         del result
@@ -917,7 +990,11 @@ class ScannerTuiApp(App[None]):
             self.screen.remove_class("show-logs")
 
     def _refresh_responsive_view(self) -> None:
-        if self._mimic_screen is not None or self._details_screen is not None:
+        if (
+            self._mimic_screen is not None
+            or self._details_screen is not None
+            or self._waterfall_screen is not None
+        ):
             return
         self._apply_responsive_panel_layout()
         self._refresh_view()
@@ -1773,7 +1850,11 @@ class ScannerTuiApp(App[None]):
         self._refresh_view()
 
     def _refresh_view(self) -> None:
-        if self._shutdown_started.is_set() or self._mimic_screen is not None:
+        if (
+            self._shutdown_started.is_set()
+            or self._mimic_screen is not None
+            or self._waterfall_screen is not None
+        ):
             return
         if self._details_screen is not None:
             if self._details_screen.is_mounted:
@@ -2532,6 +2613,7 @@ def run_tui(
     supplemental_display_source: SupplementalFrameSource | None = None,
     front_panel_inventory: Mapping[str, object] | None = None,
     daemon_version_source: Callable[[], str | None] | None = None,
+    waterfall_client_factory: TuiWaterfallClientFactory | None = None,
     log_buffer: TuiLogBuffer | None = None,
 ) -> None:
     """Launch the Textual interface from one renderer-neutral initial snapshot."""
@@ -2561,6 +2643,7 @@ def run_tui(
         display_source=display_source,
         supplemental_display_source=supplemental_display_source,
         front_panel_inventory=front_panel_inventory,
+        waterfall_client_factory=waterfall_client_factory,
     )
     try:
         app.run()
@@ -2571,6 +2654,8 @@ def run_tui(
         app.stop_controls()
         if app._mimic_reader is not None:
             app._mimic_reader.close(wait=True)
+        if app._waterfall_screen is not None:
+            app._waterfall_screen.reader.close(wait=True)
 
 
 def _display(value: object | None) -> str:

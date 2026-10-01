@@ -13,6 +13,7 @@ from sds200 import (
     DaemonRemoteReconnectPolicy,
     DaemonRemoteService,
     DaemonTuiRadio,
+    DaemonWaterfallClient,
     cli,
     resolve_configuration_paths,
 )
@@ -146,6 +147,10 @@ def test_tui_parser_accepts_explicit_daemon_client_options() -> None:
             "2048",
             "--daemon-pcmu-max-frame-bytes",
             "16384",
+            "--daemon-waterfall-socket-path",
+            "/tmp/sdsctl-waterfall.sock",
+            "--daemon-waterfall-max-record-bytes",
+            "32768",
         ]
     )
 
@@ -158,6 +163,8 @@ def test_tui_parser_accepts_explicit_daemon_client_options() -> None:
     assert args.daemon_pcmu_socket_path == Path("/tmp/sdsctl-pcmu.sock")
     assert args.daemon_pcmu_max_endpoint_bytes == 2048
     assert args.daemon_pcmu_max_frame_bytes == 16384
+    assert args.daemon_waterfall_socket_path == Path("/tmp/sdsctl-waterfall.sock")
+    assert args.daemon_waterfall_max_record_bytes == 32768
 
 
 @pytest.mark.parametrize("display_capable", [False, True])
@@ -329,6 +336,10 @@ def test_tui_cli_uses_daemon_without_opening_scanner_or_rtsp(
                 "2048",
                 "--daemon-pcmu-max-frame-bytes",
                 "16384",
+                "--daemon-waterfall-socket-path",
+                "/tmp/sdsctl-waterfall.sock",
+                "--daemon-waterfall-max-record-bytes",
+                "32768",
                 "--audio-output",
                 str(output),
                 "--audio-playback",
@@ -407,6 +418,16 @@ def test_tui_cli_uses_daemon_without_opening_scanner_or_rtsp(
     assert pcmu_client.max_frame_bytes == 16384
     assert pcmu_client.connected is False
     assert pcmu_client.close_calls == 0
+
+    waterfall_factory = captured["waterfall_client_factory"]
+    assert callable(waterfall_factory)
+    waterfall_client = waterfall_factory()
+    assert isinstance(waterfall_client, DaemonWaterfallClient)
+    assert waterfall_client.location is not None
+    assert waterfall_client.location.path == Path("/tmp/sdsctl-waterfall.sock")
+    assert waterfall_client.timeout == 1.5
+    assert waterfall_client.max_record_bytes == 32768
+    assert not waterfall_client.connected
 
 
 def test_tui_cli_remote_profile_builds_independent_authenticated_services(
@@ -529,6 +550,13 @@ def test_tui_cli_remote_profile_builds_independent_authenticated_services(
     assert event_transport.service is DaemonRemoteService.EVENTS
     assert audio_transport.client.transport.service is DaemonRemoteService.AUDIO
     assert isinstance(audio_transport.reconnect_policy, DaemonRemoteReconnectPolicy)
+    waterfall_factory = captured["waterfall_client_factory"]
+    assert callable(waterfall_factory)
+    waterfall_client = waterfall_factory()
+    assert isinstance(waterfall_client, DaemonWaterfallClient)
+    assert isinstance(waterfall_client.transport, DaemonRemoteClientTransport)
+    assert waterfall_client.transport.service is DaemonRemoteService.WATERFALL
+    assert waterfall_client.sanitizes_private_state
 
 
 @pytest.mark.parametrize(
@@ -553,6 +581,7 @@ def test_tui_daemon_client_rejects_scanner_selectors(
         "--daemon-socket-path",
         "--daemon-event-socket-path",
         "--daemon-pcmu-socket-path",
+        "--daemon-waterfall-socket-path",
         "--remote-profile",
     ],
 )
@@ -572,6 +601,24 @@ def test_tui_daemon_options_require_explicit_mode(
         == 2
     )
     assert "require --daemon-client" in capsys.readouterr().err
+
+
+def test_tui_waterfall_record_limit_is_bounded(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert (
+        cli.main(
+            [
+                "tui",
+                "--daemon-client",
+                "--daemon-waterfall-max-record-bytes",
+                "65537",
+            ],
+            environ={},
+        )
+        == 2
+    )
+    assert "must not exceed the TUI waterfall protocol limit" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(

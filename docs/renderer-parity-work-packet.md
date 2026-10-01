@@ -78,8 +78,10 @@ TUI layout or physical-evidence boundary.
   [validating waterfall client](../src/sds200/daemon_waterfall_client.py) accepts
   a transport abstraction as well as a local socket. Its older local-only
   descriptive text is not evidence that the remote service is absent.
-  A future TUI renderer should consume that stream, not expose another port or
-  bypass the shared daemon owner. No TUI waterfall pane exists at this baseline.
+  The later unreleased TUI candidate now consumes that stream without exposing
+  another port or bypassing the shared daemon owner. It adds a bounded relative
+  pane only for daemon-backed sessions; the baseline statement that no pane
+  existed remains historical. Physical scanner-mode acceptance is still open.
 
 ## Fixture and layout contract before implementing the four rows
 
@@ -116,7 +118,7 @@ TUI layout or physical-evidence boundary.
 | [Daemon TUI](../tests/test_daemon_tui.py) | Authoritative snapshots, typed decoding, battery validation and reconnect behavior | Per-field decoder-to-panel checks with populated and cleared values |
 | [Web field parity](../tests/test_web_dashboard_field_parity.py) | All 35 fields have unique targets; complete projection and group hooks; zero/false-like formatting | Browser visibility depends on selected group; these source-contract tests are not screenshots or physical evidence |
 | [TUI](../tests/test_tui.py) | Current adaptive panels, Weather labels, recording distinction and USB audio omission | New rows, stable dimensions, long/raw values, mode changes and both Pi layouts |
-| [Remote observation](../tests/test_daemon_remote_observation.py), [transport](../tests/test_daemon_remote_transport.py), [reconnect](../tests/test_daemon_remote_reconnect.py) | Shared waterfall demand, existing routed record protocol and fresh-checkpoint reconnect | Future TUI consumer lifecycle, rendering/history bounds and physical mode acceptance |
+| [Remote observation](../tests/test_daemon_remote_observation.py), [transport](../tests/test_daemon_remote_transport.py), [reconnect](../tests/test_daemon_remote_reconnect.py), [TUI waterfall](../tests/test_tui_waterfall.py) | Shared waterfall demand, routed record protocol, fresh-checkpoint reconnect, strict relative normalization, bounded local history, responsive rendering and one-screen cleanup | Exact installed-candidate live scanner-mode appearance and exit-cleanup acceptance |
 
 Run these unchanged baselines before editing; report their exact candidate and
 scope separately from any newly added tests. This packet itself adds no parser,

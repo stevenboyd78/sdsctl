@@ -112,6 +112,57 @@ theme inheritance, return navigation and inactive action keys. Those fictional
 values do not qualify new physical scanner fields, models or live audio behavior;
 the candidate remains unreleased.
 
+## Unreleased read-only relative waterfall candidate
+
+A daemon-backed TUI can open the existing shared waterfall stream with **W**
+or **Relative waterfall** in the command palette. The direct scanner and replay
+TUIs do not advertise this action. Opening the view creates one local-socket or
+authenticated-remote waterfall client; it does not issue `PWF` or `GWF`
+commands, open scanner hardware, or create a second acquisition owner. Closing
+the view releases that consumer lease while the daemon remains responsible for
+the demand-driven scanner session and last-consumer cleanup.
+
+The view validates exactly 240 hexadecimal source strings, converts them to a
+per-frame relative 0-to-1 range, and renders a bounded 256-row terminal history.
+A constant frame uses the neutral midpoint. This is an uncalibrated relative
+display: it does not label values as dB, signal strength, spectrum power, FFT
+magnitude, or a higher acquisition rate. Lower, center and upper frequency
+fields are shown literally as raw scanner metadata without inferred units.
+
+Inside the waterfall view:
+
+- **Space** pauses or resumes only this client's local display history; the
+  daemon stream continues so lifecycle and loss counters stay current.
+- **C** clears only this client's local latest frame and history. It does not
+  clear daemon state or send a scanner command.
+- **W** or **Esc** closes the view and returns to the ordinary dashboard.
+- **Q** quits the TUI, and **Ctrl+P** opens the limited waterfall command
+  palette. Ordinary scanner, audio and recording actions remain inactive until
+  returning to the dashboard.
+
+History is resampled to available terminal columns and clipped to the visible
+rows on each redraw; source acquisition is unchanged. Automated layout checks
+cover 100×30 and 160×45 terminals plus live resize. A transport failure clears
+the unconfirmed frame, history and session metadata before obtaining a fresh
+client whose first record must be a new checkpoint. Invalid payload content
+fails closed without a retry loop. Closing or quitting interrupts the pending
+receive by closing its dedicated client and uses a bounded worker join.
+
+The daemon-client CLI accepts optional
+`--daemon-waterfall-socket-path` and
+`--daemon-waterfall-max-record-bytes` settings. An authenticated
+`--remote-profile` selects its existing authorized `waterfall` service; local
+socket overrides remain mutually exclusive with that profile. The record bound
+cannot exceed the protocol's 64 KiB limit. These options are inert until the
+view is opened.
+
+Synthetic tests establish validation, bounds, pause/clear, reconnect,
+responsive rendering, direct-session absence and cleanup. They do not establish
+physical scanner-mode appearance, terminal color quality, frequency semantics,
+or another model/firmware. A separately frozen candidate still needs a concise
+live daemon/scanner visual and exit-cleanup pass before this support is claimed
+as physically accepted or released.
+
 ## Unreleased Mimic-SDS candidate
 
 Mimic-SDS is a separate, read-only screen in the local development candidate.
@@ -423,6 +474,9 @@ Keyboard shortcuts:
 - `G`: show or hide the operational log panel without discarding buffered records
 - `X`: open read-only Scanner details from the ordinary dashboard (development
   candidate); inside Mimic-SDS it retains the runtime/help meaning
+- `W`: open the read-only relative waterfall in a daemon-backed TUI
+  (development candidate); inside that view, `Space` pauses local history,
+  `C` clears local history, and `W` or `Esc` returns
 - `Up` / `Down`: select a saved recording
 - `Enter`: play the selected recording and temporarily suspend live playback
 - `Space`: pause or resume saved playback
