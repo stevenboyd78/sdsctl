@@ -312,13 +312,14 @@ components, all seven bounded scanner controls, Lovelace/configuration acceptanc
 recording and audio regression validation, and single-owner behavior physically
 validated through the repository-managed HAOS App.
 
-Current Home Assistant Discovery contains twenty-four fixed components:
-seventeen daemon/scanner/radio/audio/recording state and diagnostic components,
+Current Home Assistant Discovery contains twenty-eight fixed components:
+twenty-one daemon/scanner/radio/audio/recording state and diagnostic components,
 including fixed Screen Kind and optional Site, Frequency, Modulation, Service
-Type, and configured Tone-Out Tone A and Tone B sensors, plus the seven bounded
-scanner controls. Broader mode-specific entity growth, destination health,
-richer scanner events, and GUI implementation remain separate future
-considerations. Milestone 32.1 established the first authenticated remote
+Type, configured Tone-Out Tone A and Tone B, literal Talkgroup ID and Unit ID,
+reported P25 status, and raw battery sensors, plus the seven bounded scanner
+controls. Broader mode-specific entity growth, destination health, richer
+scanner events, and GUI implementation remain separate future considerations.
+Milestone 32.1 established the first authenticated remote
 daemon-client transport and shared-service construction boundary. Milestone 32.2
 packages ordinary-host daemon startup and explicit CLI/TUI client profiles.
 Milestone 32.3 completed isolated native-Linux Docker Engine publication and one

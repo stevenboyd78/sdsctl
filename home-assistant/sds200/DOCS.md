@@ -127,7 +127,7 @@ inventory.
 
 ## MQTT entities
 
-The discovered SDS200 device contains twenty-four components.
+The discovered SDS200 device contains twenty-eight components.
 
 State and diagnostic entities:
 
@@ -143,6 +143,10 @@ State and diagnostic entities:
 - Service Type
 - Tone-Out Tone A
 - Tone-Out Tone B
+- Talkgroup ID
+- Unit ID
+- P25 Status (Reported)
+- Battery (Raw)
 - Signal
 - RSSI
 - Audio
@@ -150,10 +154,13 @@ State and diagnostic entities:
 - Recording Status
 
 Screen Kind remains available and reports `unknown` when its normalized value is
-missing, null, or empty. Site, Frequency, Modulation, Service Type, and configured
-Tone-Out Tone A and
-Tone B are unavailable when the current scanner mode does not supply a non-empty
-value. Their fixed entities recover on the next applicable radio state. A zero
+missing, null, or empty. Site, Frequency, Modulation, Service Type, configured
+Tone-Out Tone A and Tone B, Talkgroup ID, Unit ID, P25 Status (Reported), and
+Battery (Raw) are unavailable when the current scanner mode does not supply a
+non-empty value. Their fixed entities recover on the next applicable radio
+state. Talkgroup and unit prefixes and leading zeroes remain literal. P25 and
+battery values remain raw; the App assigns no undocumented P25 meaning, battery
+unit, percentage, range, or charging state. A zero
 Tone-Out value remains unchanged in the entity and appears as `Detect` in the
 bundled cards because zero configures tone-frequency detection.
 
@@ -294,6 +301,10 @@ entities:
   service_type: sensor.REPLACE_ME
   tone_out_tone_a: sensor.REPLACE_ME
   tone_out_tone_b: sensor.REPLACE_ME
+  talkgroup_id: sensor.REPLACE_ME
+  unit_id: sensor.REPLACE_ME
+  p25_status: sensor.REPLACE_ME
+  battery: sensor.REPLACE_ME
   signal: sensor.REPLACE_ME
   rssi: sensor.REPLACE_ME
   audio_running: binary_sensor.REPLACE_ME
@@ -307,7 +318,7 @@ remains deliberately read-only. Scanner controls are separate standard Home
 Assistant switch and button entities and do not add a transport to the card.
 
 For the scanner-style presentation, add **SDS200 Display** from the picker,
-select the same sixteen display entities, and choose a layout, palette, and fit
+select the same twenty display entities, and choose a layout, palette, and fit
 mode. To use automatic presentation, also select Screen Kind and choose the
 Simple or Detail scanning fallback. The corresponding YAML begins with:
 
@@ -330,6 +341,10 @@ entities:
   service_type: sensor.REPLACE_ME
   tone_out_tone_a: sensor.REPLACE_ME
   tone_out_tone_b: sensor.REPLACE_ME
+  talkgroup_id: sensor.REPLACE_ME
+  unit_id: sensor.REPLACE_ME
+  p25_status: sensor.REPLACE_ME
+  battery: sensor.REPLACE_ME
   signal: sensor.REPLACE_ME
   rssi: sensor.REPLACE_ME
   audio_running: binary_sensor.REPLACE_ME

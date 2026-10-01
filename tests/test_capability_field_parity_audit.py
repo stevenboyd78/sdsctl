@@ -59,8 +59,8 @@ def test_audit_matrix_preserves_reviewed_renderer_distinctions() -> None:
     assert rows["service_type"][7] == "R*"
     for field in ("talkgroup_id", "unit_id", "battery", "p25_status"):
         assert rows[field][2:7] == ("R", "R", "R*", "R", "J")
-        assert rows[field][7] == "—"
-        assert "Home Assistant" in rows[field][8]
+        assert rows[field][7] == "R*"
+        assert rows[field][8] == "Covered when available/raw"
     assert "do not add scanner requests or infer P25/battery semantics" in " ".join(
         inventory.split()
     )

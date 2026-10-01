@@ -141,14 +141,14 @@ requests or infer P25/battery semantics.
 | `weather_mode` | Weather node; `P200`, `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
 | `weather_same` | Weather node; `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
 | `service_type` | Mode-selected node; `P200`, `F` | R | R | R* | R | J | R* | Covered when available |
-| `talkgroup_id` | GSI/PSI; `F` | R | R | R* | R | J | — | R1: Home Assistant |
-| `unit_id` | GSI/PSI; `F` | R | R | R* | R | J | — | R1: Home Assistant |
+| `talkgroup_id` | GSI/PSI; `F` | R | R | R* | R | J | R* | Covered when available/raw |
+| `unit_id` | GSI/PSI; `F` | R | R | R* | R | J | R* | Covered when available/raw |
 | `volume` | GSI/PSI; `P200`, `F` | — | R | R+C | R | J | — | R1: direct and daemon-owned UDP mutation physically accepted; Home Assistant remains |
 | `squelch` | GSI/PSI; `P200`, `F` | — | R | R+C | R | J | — | R1: direct and daemon-owned UDP mutation physically accepted; Home Assistant remains |
 | `signal` | GSI/PSI; `P200`, `F` | R | R | R | R | J | R | Covered |
 | `rssi` | GSI/PSI; `P200`, `F` | R | R | R* | R | J | R | R1: generic TUI panel |
-| `battery` | Optional GSI/PSI Property; `S`, `F`; `P100` absence | R | R | R* | R | J | — | R1: Home Assistant; raw value only |
-| `p25_status` | GSI/PSI; `F` | R | R | R* | R | J | — | R1: Home Assistant; reported value only |
+| `battery` | Optional GSI/PSI Property; `S`, `F`; `P100` absence | R | R | R* | R | J | R* | Covered when available/raw |
+| `p25_status` | GSI/PSI; `F` | R | R | R* | R | J | R* | Covered when available/raw |
 | `mute` | GSI/PSI; `P200`, `F` | R | R | R | R | J | — | R1: Home Assistant |
 | `recording` | Scanner GSI/PSI flag; `P200`, `F` | R | R | R | R | J | — | R1: Home Assistant; distinct from application recording |
 
@@ -165,9 +165,9 @@ new protocol semantics:
   new scanner state;
 - Milestone 26.9 adds fixed configured Tone-Out Tone A and Tone B sensors plus
   optional compact and display-card fields without new scanner polling or state;
-- For these four values only Home Assistant gaps remain; other Rich, monitor,
-  TUI, and Home Assistant gaps remain surface-specific rather than losses from
-  the shared state; and
+- the later Home Assistant telemetry closeout adds fixed Talkgroup ID, Unit ID,
+  reported P25 status, and raw battery sensors plus optional compact and
+  display-card fields without new polling or inferred semantics; and
 - Home Assistant Discovery intentionally exposes a small stable core even though
   the generic MQTT topic carries the complete snapshot.
 

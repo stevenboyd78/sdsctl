@@ -74,9 +74,9 @@ def test_built_in_home_assistant_theme_registry_is_ordered_and_immutable() -> No
     )
     assert tuple(theme.resource_url for theme in registry.themes) == (
         "/local/sds200/sds200-card.js?v="
-        "beb1c6f22d62655caf4fc541a0cabfa4ed273b8fe22d6b3fe4324f5dc88ab9d8",
+        "263439642bea86b5f006d68e90ae3e938d4e2ddff9d49fb2be73168d9732a62d",
         "/local/sds200/sds200-display-card.js?v="
-        "b2d47c2b7abd19a92b2ee61b6b3de00362366f8df828d7786c54ae35aa0ada72",
+        "31e62f3d67b4d3a8577fbf69f3a5552a2880fb90984d1d15642a81ec58b15d1d",
         "/local/sds200/sds200-waterfall-card.js?v="
         + hashlib.sha256(
             read_built_in_home_assistant_theme_module(registry.require("waterfall"))
@@ -102,8 +102,8 @@ def test_mqtt_modules_preserve_pre_extraction_bytes() -> None:
     }
 
     assert hashes == {
-        "compact": "beb1c6f22d62655caf4fc541a0cabfa4ed273b8fe22d6b3fe4324f5dc88ab9d8",
-        "sds200-display": "b2d47c2b7abd19a92b2ee61b6b3de00362366f8df828d7786c54ae35aa0ada72",
+        "compact": "263439642bea86b5f006d68e90ae3e938d4e2ddff9d49fb2be73168d9732a62d",
+        "sds200-display": "31e62f3d67b4d3a8577fbf69f3a5552a2880fb90984d1d15642a81ec58b15d1d",
     }
 
 

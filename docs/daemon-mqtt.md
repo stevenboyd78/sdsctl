@@ -246,7 +246,7 @@ MQTT state contract rather than a second state system. Enable it with:
 enabled = true
 ```
 
-Without Home Assistant controls, the device document contains seventeen fixed
+Without Home Assistant controls, the device document contains twenty-one fixed
 state/diagnostic components:
 
 | Component | Platform | Source |
@@ -263,6 +263,10 @@ state/diagnostic components:
 | Service Type | sensor | `<prefix>/state/radio` |
 | Tone-Out Tone A | sensor | `<prefix>/state/radio` |
 | Tone-Out Tone B | sensor | `<prefix>/state/radio` |
+| Talkgroup ID | sensor | `<prefix>/state/radio` |
+| Unit ID | sensor | `<prefix>/state/radio` |
+| P25 Status (Reported) | sensor | `<prefix>/state/radio` |
+| Battery (Raw) | sensor | `<prefix>/state/radio` |
 | Signal | sensor | `<prefix>/state/radio` |
 | RSSI | sensor | `<prefix>/state/radio` |
 | Audio running | binary sensor | `<prefix>/state/audio` |
@@ -274,12 +278,15 @@ firmware when available in the authoritative snapshot, and daemon availability.
 Screen Kind is fixed and read-only. It reports the normalized radio-state value
 and falls back to `unknown` when that value is missing, null, or empty; it does
 not become unavailable as scanner modes change.
-Site, Frequency, Modulation, Service Type, and configured Tone-Out Tone A and
-Tone B combine daemon availability with field availability from the radio-state
-topic. A missing, null, or empty value makes only that optional sensor
-unavailable; the fixed discovery inventory does not change with scanner mode.
-Tone-Out values preserve scanner text and are distinct from detected search or
-Close Call `SAD` values.
+Site, Frequency, Modulation, Service Type, configured Tone-Out Tone A and Tone
+B, Talkgroup ID, Unit ID, P25 Status (Reported), and Battery (Raw) combine
+daemon availability with field availability from the radio-state topic. A
+missing, null, or empty value makes only that optional sensor unavailable; the
+fixed discovery inventory does not change with scanner mode. Tone-Out values
+preserve scanner text and are distinct from detected search or Close Call `SAD`
+values. Talkgroup and unit prefixes and leading zeroes remain literal. P25 and
+battery values remain raw: Discovery assigns no undocumented P25 meaning,
+battery unit, percentage, range, or charging state.
 The discovery document remains non-retained and is republished after an
 authoritative snapshot, broker reconnect, event-stream resynchronization, or an
 exact configured Home Assistant birth message.

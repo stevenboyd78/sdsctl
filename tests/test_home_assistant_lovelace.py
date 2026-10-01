@@ -30,6 +30,10 @@ EXPECTED_ENTITY_FIELDS = {
     "service_type",
     "tone_out_tone_a",
     "tone_out_tone_b",
+    "talkgroup_id",
+    "unit_id",
+    "p25_status",
+    "battery",
     "signal",
     "rssi",
     "audio_running",
@@ -75,7 +79,7 @@ global.window = {{}};
 def test_lovelace_card_resource_url_uses_home_assistant_local_path() -> None:
     assert HOME_ASSISTANT_LOVELACE_CARD_RESOURCE_URL == (
         "/local/sds200/sds200-card.js?v="
-        "beb1c6f22d62655caf4fc541a0cabfa4ed273b8fe22d6b3fe4324f5dc88ab9d8"
+        "263439642bea86b5f006d68e90ae3e938d4e2ddff9d49fb2be73168d9732a62d"
     )
 
 
@@ -88,7 +92,7 @@ def test_lovelace_card_packaged_asset_is_importable() -> None:
 def test_lovelace_card_covers_all_discovery_entity_fields() -> None:
     fields = set(
         re.findall(
-            r'key: "([a-z_]+)"',
+            r'key: "([a-z0-9_]+)"',
             card_text(),
         )
     )
@@ -168,8 +172,63 @@ def test_lovelace_card_preserves_old_layout_when_new_details_are_unselected() ->
         "service_type",
         "tone_out_tone_a",
         "tone_out_tone_b",
+        "talkgroup_id",
+        "unit_id",
+        "p25_status",
+        "battery",
     ):
         assert f'"{field}",' in text
+
+
+def test_lovelace_card_preserves_raw_telemetry_and_clears_missing_values() -> None:
+    result = run_card_javascript(
+        """
+const card = Object.create(Sds200Card.prototype);
+card._config = requireCardConfig({entities: {
+  talkgroup_id: "sensor.sds200_talkgroup_id",
+  unit_id: "sensor.sds200_unit_id",
+  p25_status: "sensor.sds200_p25_status",
+  battery: "sensor.sds200_battery",
+}});
+card._states = {
+  "sensor.sds200_talkgroup_id": {state: "TGID:000123"},
+  "sensor.sds200_unit_id": {state: "UID:000045"},
+  "sensor.sds200_p25_status": {state: "unrecognized status"},
+  "sensor.sds200_battery": {state: "0"},
+};
+const present = Object.fromEntries(
+  ["talkgroup_id", "unit_id", "p25_status", "battery"].map(
+    (field) => [field, card._stateText(field)],
+  ),
+);
+card._states = {
+  "sensor.sds200_talkgroup_id": {state: "unknown"},
+  "sensor.sds200_unit_id": {state: "unavailable"},
+  "sensor.sds200_p25_status": {state: ""},
+};
+const cleared = Object.fromEntries(
+  ["talkgroup_id", "unit_id", "p25_status", "battery"].map(
+    (field) => [field, card._stateText(field)],
+  ),
+);
+process.stdout.write(JSON.stringify({present, cleared}));
+"""
+    )
+
+    assert result == {
+        "present": {
+            "talkgroup_id": "TGID:000123",
+            "unit_id": "UID:000045",
+            "p25_status": "unrecognized status",
+            "battery": "0",
+        },
+        "cleared": {
+            "talkgroup_id": "—",
+            "unit_id": "—",
+            "p25_status": "—",
+            "battery": "—",
+        },
+    }
 
 
 def test_lovelace_card_presents_zero_tone_out_configuration_as_detect() -> None:
