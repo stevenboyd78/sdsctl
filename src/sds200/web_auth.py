@@ -63,7 +63,7 @@ _SESSION_TOKEN_CHARACTERS = frozenset(
 _DISPLAY_READ_PATHS = frozenset({
     *WEB_TYPOGRAPHY_READ_PATHS,
     "/", "/healthz", "/api/v1/status", "/api/v1/snapshot",
-    "/api/v1/display-frame",
+    "/api/v1/display-frame", "/api/v1/scanner/front-panel",
     "/api/v1/display-supplemental/context", "/api/v1/display-supplemental/frame",
     "/assets/mimic-sds.css", "/assets/mimic-sds.js",
     "/assets/lcars-v2.css", "/assets/lcars-v2.js",

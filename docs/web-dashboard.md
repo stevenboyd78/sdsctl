@@ -1001,6 +1001,7 @@ shutdown continues.
 | `GET` | `/api/v1/events` | Snapshot-first ordered daemon Server-Sent Events |
 | `GET` | `/api/v1/audio` | Validated daemon-owned PCMU v1 binary frame stream |
 | `GET` | `/api/v1/waterfall` | Validated ordered daemon waterfall NDJSON or negotiated SSE stream |
+| `GET` | `/api/v1/scanner/front-panel` | Complete fail-closed front-panel inventory; no key dispatch |
 | `POST` | `/api/v1/scanner/hold/{scope}` | Set desired system, department, site, or channel hold state |
 | `POST` | `/api/v1/scanner/next` | Compatibility alias for the next current channel selection |
 | `POST` | `/api/v1/scanner/next/{scope}` | Move to the next current system, department, site, or channel selection |
@@ -1015,6 +1016,15 @@ shutdown continues.
 | `GET` | `/api/v1/openapi.json` | Machine-readable API schema |
 | `GET` | `/api/v1/docs` | Self-hosted interactive Swagger UI |
 | `GET` | `/api/v1/redoc` | Self-hosted ReDoc API reference |
+
+The Controls workspace renders the versioned 27-key front-panel inventory from
+the daemon as an authoritative drawer. Every key is deliberately disabled and
+shows its unavailable reason; the browser rejects incomplete, reordered,
+unexpectedly enabled, or otherwise malformed inventories. Labels are built as
+text nodes, and opening the drawer installs no key handler or scanner command.
+This is a presentation milestone only: it does not qualify a model/firmware
+combination, grant control permission, widen the four-key hold path, or add a
+general front-panel wire operation.
 
 Swagger UI and ReDoc are served entirely from version-pinned assets packaged
 with `sds200`. Loading either documentation page does not contact the scanner

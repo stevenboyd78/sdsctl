@@ -272,6 +272,9 @@ class DaemonApiClientLike(Protocol):
     def runtime_snapshot(self) -> Mapping[str, object]:
         """Return one authoritative daemon runtime snapshot."""
 
+    def front_panel_inventory(self) -> Mapping[str, object]:
+        """Return the daemon's validated fail-closed front-panel inventory."""
+
     def display_frame(self) -> Mapping[str, object]:
         """Return the configured daemon's read-only Mimic-SDS presentations."""
 
@@ -932,6 +935,7 @@ def create_web_dashboard_app(
             "scanner_previous": "/api/v1/scanner/previous",
             "scanner_previous_scope": "/api/v1/scanner/previous/{scope}",
             "scanner_reconnect": "/api/v1/scanner/reconnect",
+            "scanner_front_panel": "/api/v1/scanner/front-panel",
             "snapshot": "/api/v1/snapshot",
             "display_frame": "/api/v1/display-frame",
             "status": "/api/v1/status",
@@ -1124,6 +1128,25 @@ def create_web_dashboard_app(
         return {
             **_api_envelope(),
             "snapshot": _query_daemon(api_client_factory, _daemon_snapshot),
+        }
+
+    @app.get("/api/v1/scanner/front-panel")
+    def scanner_front_panel(
+        request: Request,
+        response: Response,
+    ) -> dict[str, object]:
+        response.headers["Cache-Control"] = "no-store"
+        if request.query_params:
+            raise HTTPException(
+                status_code=422,
+                detail="Front-panel inventory does not accept parameters.",
+            )
+        return {
+            **_api_envelope(),
+            "front_panel": _query_daemon(
+                api_client_factory,
+                _daemon_front_panel_inventory,
+            ),
         }
 
     @app.get("/api/v1/display-frame")
@@ -2572,6 +2595,13 @@ def _daemon_status(client: DaemonApiClientLike) -> Mapping[str, object]:
 def _daemon_snapshot(client: DaemonApiClientLike) -> Mapping[str, object]:
     client.hello()
     return client.runtime_snapshot()
+
+
+def _daemon_front_panel_inventory(
+    client: DaemonApiClientLike,
+) -> Mapping[str, object]:
+    client.hello()
+    return client.front_panel_inventory()
 
 
 def _daemon_display_frame(client: DaemonApiClientLike) -> Mapping[str, object]:

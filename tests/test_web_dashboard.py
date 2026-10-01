@@ -14,6 +14,7 @@ from textual.theme import BUILTIN_THEMES
 
 import sds200.web_dashboard as web_dashboard
 from sds200 import __version__
+from sds200.daemon_api import DaemonApiOperation
 from sds200.daemon_events import DaemonEvent, DaemonEventKind
 from sds200.daemon_recording_file_client import DaemonRecordingFileRequestError
 from sds200.daemon_recording_file_protocol import RecordingFileResponseStatus
@@ -26,6 +27,7 @@ from sds200.exceptions import (
     DaemonRequestError,
     DaemonUnavailableError,
 )
+from sds200.front_panel_keys import front_panel_inventory_snapshot
 from sds200.pcmu import PcmuPacket
 from sds200.pcmu_protocol import encode_pcmu_delivery
 from sds200.pcmu_subscriptions import PcmuPacketDelivery, PcmuPublication
@@ -50,16 +52,21 @@ class FakeDaemonApiClient:
         error: BaseException | None = None,
         recording_error: BaseException | None = None,
         control_error: BaseException | None = None,
+        front_panel: Mapping[str, object] | None = None,
     ) -> None:
         self.hello_result = dict(hello or {})
         self.snapshot_result = dict(snapshot or {})
         self.error = error
         self.recording_error = recording_error
         self.control_error = control_error
+        self.front_panel_result = dict(
+            front_panel or front_panel_inventory_snapshot("SDS200")
+        )
         self.entered = False
         self.closed = False
         self.hello_calls = 0
         self.snapshot_calls = 0
+        self.front_panel_calls = 0
         self.recording_status_calls = 0
         self.recording_start_calls = 0
         self.recording_stop_calls = 0
@@ -90,6 +97,12 @@ class FakeDaemonApiClient:
         if self.error is not None:
             raise self.error
         return dict(self.snapshot_result)
+
+    def front_panel_inventory(self) -> dict[str, object]:
+        self.front_panel_calls += 1
+        if self.error is not None:
+            raise self.error
+        return dict(self.front_panel_result)
 
     def recording_status(self) -> dict[str, object]:
         self.recording_status_calls += 1
@@ -568,6 +581,11 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
     assert 'id="saved-recording-player"' in response.text
     assert 'id="scanner-control-status"' in response.text
     assert "<h3>Hold / release</h3>" in response.text
+    assert 'id="front-panel-title"' in response.text
+    assert '<details class="scanner-control-group front-panel-group">' in response.text
+    assert 'id="front-panel-status"' in response.text
+    assert 'id="front-panel-key-grid"' in response.text
+    assert 'aria-label="Scanner front-panel key inventory"' in response.text
     assert 'id="scanner-hold-channel"' in response.text
     assert 'id="scanner-hold-system-state"' in response.text
     assert 'id="scanner-hold-department-state"' in response.text
@@ -930,6 +948,17 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert "PCMU stream gap does not match daemon queue-loss counters" in script.text
     assert 'dashboardFetch(webUrl("api/v1/recording")' in script.text
     assert 'dashboardFetch(webUrl("api/v1/recordings")' in script.text
+    assert 'dashboardFetch(webUrl("api/v1/scanner/front-panel")' in script.text
+    assert "decodeFrontPanelInventory" in script.text
+    assert "FRONT_PANEL_CODES" in script.text
+    assert (
+        'clearFrontPanelInventory("Front-panel controls are hidden in display-only mode.")'
+        in script.text
+    )
+    assert "button.disabled = true" in script.text
+    assert 'button.setAttribute("aria-describedby", "front-panel-status")' in script.text
+    assert "label.textContent = entry.label" in script.text
+    assert 'performScannerControl("front-panel"' not in script.text
     assert 'performRecordingAction("start")' in script.text
     assert 'performRecordingAction("stop")' in script.text
     assert 'performScannerHoldState("channel")' in script.text
@@ -1053,9 +1082,42 @@ def test_web_dashboard_api_index_advertises_endpoints() -> None:
         "scanner_previous": "/api/v1/scanner/previous",
         "scanner_previous_scope": "/api/v1/scanner/previous/{scope}",
         "scanner_reconnect": "/api/v1/scanner/reconnect",
+        "scanner_front_panel": "/api/v1/scanner/front-panel",
         "snapshot": "/api/v1/snapshot",
         "status": "/api/v1/status",
         "waterfall": "/api/v1/waterfall",
+    }
+
+
+def test_web_dashboard_front_panel_is_read_only_and_parameterless() -> None:
+    daemon_client = FakeDaemonApiClient(
+        hello={
+            "operations": [
+                DaemonApiOperation.SCANNER_FRONT_PANEL_INVENTORY.value,
+            ]
+        },
+        snapshot={"scanner_model": "private model value"},
+    )
+    app = create_web_dashboard_app(lambda: daemon_client)
+
+    with TestClient(app) as client:
+        response = client.get("/api/v1/scanner/front-panel")
+        rejected = client.get("/api/v1/scanner/front-panel?key=M")
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.json() == {
+        "protocol": WEB_DASHBOARD_API_PROTOCOL,
+        "version": WEB_DASHBOARD_API_VERSION,
+        "front_panel": front_panel_inventory_snapshot("SDS200"),
+    }
+    assert daemon_client.hello_calls == 1
+    assert daemon_client.front_panel_calls == 1
+    assert daemon_client.snapshot_calls == 0
+    assert "private model value" not in response.text
+    assert rejected.status_code == 422
+    assert rejected.json() == {
+        "detail": "Front-panel inventory does not accept parameters."
     }
 
 
@@ -2070,6 +2132,7 @@ def test_web_dashboard_serves_local_interactive_docs_without_daemon() -> None:
         in openapi_response.json()["paths"]
     )
     assert "/api/v1/scanner/reconnect" in openapi_response.json()["paths"]
+    assert "/api/v1/scanner/front-panel" in openapi_response.json()["paths"]
     assert "/api/v1/recordings" in openapi_response.json()["paths"]
     assert (
         "/api/v1/recordings/file/{identifier}"
@@ -2105,6 +2168,9 @@ def test_dashboard_layout_uses_dedicated_recording_library_panel() -> None:
     assert 'id="scanner-reconnect"' not in diagnostics_pane
     assert 'id="radio-activity-panel"' in scanner_pane
     assert 'id="scanner-reconnect"' in controls_pane
+    assert 'id="front-panel-title"' in controls_pane
+    assert 'id="front-panel-status"' in controls_pane
+    assert 'id="front-panel-key-grid"' in controls_pane
     assert 'id="runtime-title"' not in controls_pane
     assert 'class="recordings-layout"' in recordings_pane
     assert 'class="panel recording-capture-panel"' in recordings_pane

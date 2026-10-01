@@ -27,6 +27,13 @@ const WATERFALL_MAX_LINE_CHARACTERS = 64 * 1024;
 const WATERFALL_HISTORY_CAPACITY = 240;
 const WATERFALL_HISTORY_DURATIONS_SECONDS = Object.freeze([15, 30, 60]);
 const WATERFALL_RECONNECT_DELAY_MS = 2000;
+const WEB_PROTOCOL = "sdsctl.web";
+const WEB_VERSION = 1;
+const FRONT_PANEL_VERSION = 1;
+const FRONT_PANEL_CODES = Object.freeze([
+  "M", "F", "L", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0",
+  ".", "E", ">", "<", "^", "V", "Q", "Y", "A", "B", "C", "Z", "T", "R",
+]);
 const WORKSPACE_PANES = Object.freeze([
   "scanner",
   "controls",
@@ -66,6 +73,9 @@ let recordingRefreshInProgress = false;
 let recordingsRefreshInProgress = false;
 let recordingMutationInProgress = false;
 let scannerControlMutationInProgress = false;
+let frontPanelInventoryIdentity = null;
+let frontPanelInventoryReady = false;
+let frontPanelInventoryInProgress = false;
 let activeWorkspacePane = "scanner";
 let radioScanFallback = "detail";
 let radioInspectionView = "auto";
@@ -155,6 +165,7 @@ function stopNativeSessionActivity(waterfallStatus) {
   stopAudioPlayback();
   stopSavedRecording();
   currentDaemonHello = {};
+  clearFrontPanelInventory("Front-panel inventory is unavailable.");
   setScannerControls();
 }
 
@@ -1434,6 +1445,144 @@ function record(value) {
   return {};
 }
 
+function hasExactFields(value, expected) {
+  if (record(value) !== value) return false;
+  const actual = Object.keys(value).sort();
+  const wanted = [...expected].sort();
+  return actual.length === wanted.length &&
+    actual.every((name, index) => name === wanted[index]);
+}
+
+function boundedAsciiText(value) {
+  if (typeof value !== "string" || value.length === 0 || value.length > 256) {
+    return false;
+  }
+  return [...value].every(character => {
+    const codePoint = character.codePointAt(0);
+    return codePoint >= 32 && codePoint <= 126;
+  });
+}
+
+function decodeFrontPanelInventory(value) {
+  const failure = () => {
+    throw new Error("Invalid front-panel inventory.");
+  };
+  if (!hasExactFields(value, ["version", "controls_available", "keys"]) ||
+      value.version !== FRONT_PANEL_VERSION ||
+      value.controls_available !== false ||
+      !Array.isArray(value.keys) ||
+      value.keys.length !== FRONT_PANEL_CODES.length) {
+    return failure();
+  }
+
+  const entryFields = [
+    "code", "label", "context_note", "reference_status", "control_status",
+    "available", "unavailable_reason",
+  ];
+  return value.keys.map((entry, index) => {
+    if (!hasExactFields(entry, entryFields) ||
+        entry.code !== FRONT_PANEL_CODES[index] ||
+        !boundedAsciiText(entry.label) ||
+        !boundedAsciiText(entry.context_note) ||
+        !boundedAsciiText(entry.unavailable_reason) ||
+        !["listed", "absent_for_model", "model_not_listed"].includes(
+          entry.reference_status,
+        ) ||
+        entry.control_status !== (
+          entry.reference_status === "absent_for_model"
+            ? "unsupported"
+            : "unqualified"
+        ) ||
+        entry.available !== false) {
+      return failure();
+    }
+    return entry;
+  });
+}
+
+function clearFrontPanelInventory(message) {
+  element("front-panel-key-grid").replaceChildren();
+  element("front-panel-status").textContent = message;
+  frontPanelInventoryIdentity = null;
+  frontPanelInventoryReady = false;
+}
+
+function renderFrontPanelInventory(entries) {
+  const unsupported = entries.filter(
+    entry => entry.control_status === "unsupported",
+  ).length;
+  const buttons = entries.map(entry => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "front-panel-key";
+    button.disabled = true;
+    button.dataset.controlStatus = entry.control_status;
+    button.setAttribute("aria-describedby", "front-panel-status");
+    button.title = entry.unavailable_reason;
+
+    const code = document.createElement("span");
+    code.className = "front-panel-key-code";
+    code.textContent = entry.code;
+    const label = document.createElement("span");
+    label.className = "front-panel-key-label";
+    label.textContent = entry.label;
+    button.append(code, label);
+    return button;
+  });
+  element("front-panel-key-grid").replaceChildren(...buttons);
+  element("front-panel-status").textContent =
+    `${entries.length} keys shown; all controls remain unavailable` +
+    (unsupported > 0 ? ` (${unsupported} unsupported for this model).` : ".");
+}
+
+async function refreshFrontPanelInventory({force = false} = {}) {
+  if (displayOnly) {
+    clearFrontPanelInventory("Front-panel controls are hidden in display-only mode.");
+    return;
+  }
+  if (authenticationRequired || document.hidden || frontPanelInventoryInProgress) {
+    return;
+  }
+  const identity = currentSnapshot.scanner_model ?? null;
+  if (!force && frontPanelInventoryReady &&
+      Object.is(frontPanelInventoryIdentity, identity)) {
+    return;
+  }
+
+  frontPanelInventoryInProgress = true;
+  try {
+    const response = await dashboardFetch(webUrl("api/v1/scanner/front-panel"), {
+      method: "GET",
+      headers: {Accept: "application/json"},
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+    let payload = {};
+    try {
+      payload = await response.json();
+    } catch {
+      payload = {};
+    }
+    if (!response.ok || payload.protocol !== WEB_PROTOCOL ||
+        payload.version !== WEB_VERSION) {
+      throw new Error("Front-panel inventory is unavailable.");
+    }
+    const entries = decodeFrontPanelInventory(payload.front_panel);
+    if (!Object.is(identity, currentSnapshot.scanner_model ?? null)) {
+      return;
+    }
+    renderFrontPanelInventory(entries);
+    frontPanelInventoryIdentity = identity;
+    frontPanelInventoryReady = true;
+  } catch {
+    clearFrontPanelInventory(
+      "Front-panel inventory is unavailable; retrying automatically.",
+    );
+  } finally {
+    frontPanelInventoryInProgress = false;
+  }
+}
+
 function displayValue(value, fallback = "Unavailable") {
   if (value === null || value === undefined || value === "") {
     return fallback;
@@ -2430,6 +2579,7 @@ function renderStatus(payload) {
     element("scanner-control-status").textContent =
       scannerControlAvailabilityMessage();
   }
+  void refreshFrontPanelInventory();
 }
 
 function eventSequence(envelope, message) {
@@ -2595,6 +2745,9 @@ async function refreshStatus() {
     setText("router-state", "Unavailable");
     currentDaemonHello = {};
     reconcileMimicDisplay();
+    clearFrontPanelInventory(
+      "Front-panel inventory is unavailable while daemon status is unavailable.",
+    );
     setScannerControls();
     if (!scannerControlMutationInProgress) {
       element("scanner-control-status").textContent =

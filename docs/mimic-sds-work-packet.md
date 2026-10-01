@@ -987,8 +987,10 @@ Soft keys remain generically numbered until current scanner context supplies
 their labels. All general-key presentations remain unavailable: being listed
 in the specification is not command qualification or authorization. The pure
 inventory layer performs no I/O and constructs no wire command. Regression
-tests retain the existing four-key hold-only allowlist. Typed dispatch,
-permission checks and the actual control drawer remain subsequent work.
+tests retain the existing four-key hold-only allowlist. Typed dispatch and
+permission checks remain subsequent work. The Web dashboard now renders the
+full inventory as a fail-closed control drawer, but every key is disabled and
+no click handler, general key request, queue or scanner I/O exists.
 
 The read-only foundation now exposes that same complete inventory through the
 versioned `scanner.front_panel.inventory` daemon operation and typed client
@@ -998,8 +1000,9 @@ firmware or scanner values, and is available to authenticated observe-only
 clients. Every key remains explicitly `unqualified` or `unsupported`, every
 `available` value and the aggregate `controls_available` value remain false,
 and the client rejects incomplete, reordered or unexpectedly enabled results.
-This projection still adds no general key command, permission grant, retry,
-queue, UI control or scanner I/O; those remain separate reviewed work.
+The projection and its Web drawer still add no general key command, permission
+grant, retry, queue, enabled UI control or scanner I/O; those remain separate
+reviewed work.
 
 Extend typed command validation, the single-owner daemon control transaction,
 authenticated API/remote permission checks and renderer affordances together.

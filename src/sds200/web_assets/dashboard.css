@@ -472,6 +472,71 @@ select:focus-visible,
 .scanner-hold-group {
   grid-column: 1 / -1;
 }
+.front-panel-group {
+  flex: 0 1 auto;
+}
+.front-panel-group > summary {
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.front-panel-group:not([open]) > :not(summary) {
+  display: none;
+}
+.front-panel-group[open] {
+  position: absolute;
+  z-index: 4;
+  inset: var(--space-4);
+  overflow: auto;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.front-panel-group[open] > summary {
+  margin-bottom: var(--space-3);
+}
+.front-panel-status {
+  min-height: 1.5em;
+  margin: 0 0 var(--space-3);
+  color: var(--muted);
+  font-weight: 750;
+}
+.front-panel-key-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 5rem), 1fr));
+  gap: var(--space-2);
+}
+.front-panel-key {
+  display: grid;
+  min-width: 0;
+  min-height: 3.25rem;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  color: var(--text);
+  background: var(--surface-emphasis);
+  font: inherit;
+  line-height: 1.1;
+  text-align: center;
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+.front-panel-key-code {
+  overflow-wrap: anywhere;
+  font-weight: 900;
+}
+.front-panel-key-label {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.front-panel-key[data-control-status="unsupported"] {
+  border-style: dashed;
+  opacity: 0.5;
+}
 .scanner-hold-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1491,6 +1556,7 @@ body {
 
 /* Controls, audio, recordings, and diagnostics */
 .scanner-controls-panel {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-rows: auto auto auto minmax(0, 1fr);
@@ -1537,6 +1603,36 @@ body {
 .scanner-control-group h3 {
   margin-bottom: clamp(0.3rem, 0.75vmin, 0.6rem);
   font-size: clamp(0.76rem, 1.6vmin, 0.95rem);
+}
+
+.front-panel-group > summary {
+  font-size: clamp(0.76rem, 1.6vmin, 0.95rem);
+}
+
+.front-panel-status {
+  min-height: 1.2em;
+  margin-bottom: clamp(0.25rem, 0.65vmin, 0.5rem);
+  overflow: visible;
+  font-size: clamp(0.62rem, 1.25vmin, 0.76rem);
+  line-height: 1.15;
+  white-space: normal;
+}
+
+.front-panel-key-grid {
+  gap: clamp(0.18rem, 0.45vmin, 0.4rem);
+}
+
+.front-panel-key {
+  min-height: clamp(2rem, 5.3vmin, 2.75rem);
+  padding: clamp(0.18rem, 0.45vmin, 0.35rem);
+}
+
+.front-panel-key-code {
+  font-size: clamp(0.7rem, 1.45vmin, 0.9rem);
+}
+
+.front-panel-key-label {
+  font-size: clamp(0.52rem, 1.05vmin, 0.66rem);
 }
 
 .audio-controls button,
@@ -2561,6 +2657,7 @@ body {
   .radio-summary,
   .radio-field-group,
   .scanner-control-group,
+  .front-panel-key,
   .recording-item {
     border: 1px solid CanvasText;
     background: Canvas;

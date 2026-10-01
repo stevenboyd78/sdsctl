@@ -1422,6 +1422,56 @@ export function browserAuditLibrary() {
         }
       }
     }
+    const frontPanelStatus = document.querySelector("#front-panel-status");
+    const frontPanelDrawer = document.querySelector(".front-panel-group");
+    const frontPanelKeys = Array.from(
+      document.querySelectorAll("#front-panel-key-grid .front-panel-key"),
+    );
+    const expectedCodes = [
+      "M", "F", "L", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0",
+      ".", "E", ">", "<", "^", "V", "Q", "Y", "A", "B", "C", "Z", "T", "R",
+    ];
+    if (frontPanelKeys.length !== expectedCodes.length) {
+      failures.push(`front-panel inventory exposes ${frontPanelKeys.length} keys, expected 27`);
+    }
+    if (!frontPanelStatus?.textContent?.includes("all controls remain unavailable")) {
+      failures.push("front-panel status does not state that all controls are unavailable");
+    }
+    for (const [index, button] of frontPanelKeys.entries()) {
+      const code = button.querySelector(".front-panel-key-code")?.textContent;
+      const label = button.querySelector(".front-panel-key-label")?.textContent;
+      if (!(button instanceof HTMLButtonElement) || !button.disabled) {
+        failures.push(`front-panel key ${index} is not a disabled button`);
+      }
+      if (code !== expectedCodes[index]) {
+        failures.push(`front-panel key ${index} code is ${JSON.stringify(code)}`);
+      }
+      if (!label || !button.title || button.getAttribute("aria-describedby") !== "front-panel-status") {
+        failures.push(`front-panel key ${index} lacks its safe label, reason, or description`);
+      }
+    }
+    if (!(frontPanelDrawer instanceof HTMLDetailsElement)) {
+      failures.push("front-panel drawer is not a native details element");
+    } else {
+      frontPanelDrawer.open = true;
+      const drawer = frontPanelDrawer.getBoundingClientRect();
+      const panel = document.querySelector(".scanner-controls-panel")?.getBoundingClientRect();
+      if (!panel || drawer.left < panel.left - 1 || drawer.right > panel.right + 1 ||
+          drawer.top < panel.top - 1 || drawer.bottom > panel.bottom + 1) {
+        failures.push("open front-panel drawer is not bounded by the Controls panel");
+      }
+      if (!(frontPanelStatus instanceof HTMLElement) ||
+          frontPanelStatus.scrollWidth > frontPanelStatus.clientWidth + 1) {
+        failures.push("open front-panel status overflows horizontally");
+      }
+      if (frontPanelKeys.some(button => {
+        const key = button.getBoundingClientRect();
+        return key.left < drawer.left - 1 || key.right > drawer.right + 1;
+      })) {
+        failures.push("open front-panel key grid overflows horizontally");
+      }
+      frontPanelDrawer.open = false;
+    }
     return {failures};
   }
 
