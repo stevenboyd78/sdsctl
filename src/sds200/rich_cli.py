@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 from collections.abc import Mapping
+from math import isfinite
 from typing import Literal, TextIO
 
 from rich.console import Console
@@ -11,6 +12,7 @@ from rich.text import Text
 
 from .models import ScannerInfo
 from .presentation import present_scanner_info
+from .terminal_text import bounded_terminal_value
 from .theme import (
     DEFAULT_DARK_THEME,
     ThemePalette,
@@ -102,21 +104,31 @@ class RichCliRenderer:
             ("Frequency", info.frequency, primary),
             ("Modulation", info.modulation, primary),
             ("Service", info.service_type, primary),
+            ("Talkgroup ID", info.talkgroup_id, primary),
+            ("Unit ID", info.unit_id, primary),
+            ("P25 status", info.p25_status, primary),
             ("Signal", info.signal, roles.signal),
             ("RSSI", _number_or_dash(info.rssi), primary),
             ("Battery", _number_or_dash(info.battery), primary),
             (
                 "Recording",
-                info.recording or "-",
+                info.recording,
                 roles.recording or muted,
             ),
-            ("Mute", info.mute or "-", roles.muted or primary),
+            ("Mute", info.mute, roles.muted or primary),
         )
 
         for label, value, role in rows:
             line = Text()
-            line.append(f"{label + ':':12s}", style=self.style_for(muted))
-            line.append(str(value), style=self.style_for(role))
+            label_text = label + ":"
+            line.append(
+                label_text + " " * max(1, 12 - len(label_text)),
+                style=self.style_for(muted),
+            )
+            line.append(
+                bounded_terminal_value(value, unavailable="-"),
+                style=self.style_for(role),
+            )
             self._console.print(line, soft_wrap=True)
 
 
@@ -156,9 +168,7 @@ def palette_for_name(
         if theme.identifier == normalized:
             return theme.palette
     choices = ", ".join(selected_registry.identifiers)
-    raise ValueError(
-        f"unknown terminal theme {name!r}; available themes: {choices}"
-    )
+    raise ValueError(f"unknown terminal theme {name!r}; available themes: {choices}")
 
 
 def rich_style(style: ThemeStyle) -> Style:
@@ -174,4 +184,4 @@ def rich_style(style: ThemeStyle) -> Style:
 
 
 def _number_or_dash(value: float | None) -> str:
-    return f"{value:g}" if value is not None else "-"
+    return f"{value:g}" if value is not None and isfinite(value) else "-"

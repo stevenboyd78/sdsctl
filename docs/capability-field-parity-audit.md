@@ -107,6 +107,13 @@ the Home Assistant column, `R+C* / —` means an
 optional discovered switch presents and controls the value while the first-party
 Lovelace card remains read-only.
 
+The later read-only renderer closeout presents talkgroup ID, unit ID and raw
+reported P25 status in `scanner-info`, presents raw P25 status and battery in
+`monitor`, and presents all four values in the fail-closed Textual Scanner
+Details drawer. These surfaces preserve prefixes and leading zeroes, bound and
+neutralize terminal controls, clear unavailable values, and do not add scanner
+requests or infer P25/battery semantics.
+
 | Field | Source/evidence | Rich | Monitor | Textual TUI | Web UI | API/SSE/MQTT | HA discovery/card | Finding |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `mode` | GSI/PSI; `P200`, `F` | R | R | U/R* | R | J | — | R1: Home Assistant |
@@ -134,14 +141,14 @@ Lovelace card remains read-only.
 | `weather_mode` | Weather node; `P200`, `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
 | `weather_same` | Weather node; `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
 | `service_type` | Mode-selected node; `P200`, `F` | R | R | R* | R | J | R* | Covered when available |
-| `talkgroup_id` | GSI/PSI; `F` | — | R | — | R | J | — | R1: Rich, TUI, and Home Assistant |
-| `unit_id` | GSI/PSI; `F` | — | R | — | R | J | — | R1: Rich, TUI, and Home Assistant |
+| `talkgroup_id` | GSI/PSI; `F` | R | R | R* | R | J | — | R1: Home Assistant |
+| `unit_id` | GSI/PSI; `F` | R | R | R* | R | J | — | R1: Home Assistant |
 | `volume` | GSI/PSI; `P200`, `F` | — | R | R+C | R | J | — | R1: direct and daemon-owned UDP mutation physically accepted; Home Assistant remains |
 | `squelch` | GSI/PSI; `P200`, `F` | — | R | R+C | R | J | — | R1: direct and daemon-owned UDP mutation physically accepted; Home Assistant remains |
 | `signal` | GSI/PSI; `P200`, `F` | R | R | R | R | J | R | Covered |
 | `rssi` | GSI/PSI; `P200`, `F` | R | R | R* | R | J | R | R1: generic TUI panel |
-| `battery` | Optional GSI/PSI Property; `S`, `F`; `P100` absence | R | — | — | R | J | — | R1: monitor, TUI, and Home Assistant; raw value only |
-| `p25_status` | GSI/PSI; `F` | — | — | — | R | J | — | R1: CLI/TUI and Home Assistant |
+| `battery` | Optional GSI/PSI Property; `S`, `F`; `P100` absence | R | R | R* | R | J | — | R1: Home Assistant; raw value only |
+| `p25_status` | GSI/PSI; `F` | R | R | R* | R | J | — | R1: Home Assistant; reported value only |
 | `mute` | GSI/PSI; `P200`, `F` | R | R | R | R | J | — | R1: Home Assistant |
 | `recording` | Scanner GSI/PSI flag; `P200`, `F` | R | R | R | R | J | — | R1: Home Assistant; distinct from application recording |
 
@@ -158,8 +165,9 @@ new protocol semantics:
   new scanner state;
 - Milestone 26.9 adds fixed configured Tone-Out Tone A and Tone B sensors plus
   optional compact and display-card fields without new scanner polling or state;
-- Rich, monitor, TUI, and Home Assistant gaps remain surface-specific rather
-  than losses from the shared state; and
+- For these four values only Home Assistant gaps remain; other Rich, monitor,
+  TUI, and Home Assistant gaps remain surface-specific rather than losses from
+  the shared state; and
 - Home Assistant Discovery intentionally exposes a small stable core even though
   the generic MQTT topic carries the complete snapshot.
 

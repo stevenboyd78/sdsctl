@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-import unicodedata
 from collections.abc import Callable
 from typing import ClassVar
 
@@ -15,20 +14,13 @@ from textual.screen import ModalScreen
 from textual.widgets import Static
 
 from .state import RadioStateSnapshot
+from .terminal_text import bounded_terminal_value
 
 
 def _literal(value: str | None) -> str:
-    if not isinstance(value, str) or not value.strip():
+    if not isinstance(value, str):
         return "Unavailable"
-    # Bound presentation only. Preserve prefixes, zeroes and ordinary Unicode;
-    # terminal controls, bidi formatting and line breaks cannot create rows.
-    value = "".join(
-        "?" if unicodedata.category(char).startswith("C") or char in "\u2028\u2029" else char
-        for char in value[:256]
-    )
-    text = Text(value)
-    text.truncate(128, overflow="ellipsis")
-    return text.plain
+    return bounded_terminal_value(value, unavailable="Unavailable")
 
 
 def scanner_details(

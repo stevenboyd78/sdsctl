@@ -1,9 +1,10 @@
+from dataclasses import replace
 from io import StringIO
 
 import pytest
 from rich.console import Console
 
-from sds200.models import ScannerInfo
+from sds200.models import ScannerInfo, ScannerNode
 from sds200.rich_cli import RichCliRenderer, rich_style
 from sds200.theme import DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME, ThemeRole, ThemeStyle
 from sds200.xml_protocol import ScannerInfoParser
@@ -15,7 +16,8 @@ XML = """<?xml version="1.0" encoding="utf-8"?>
 <Site Name="Utah County Simulcast" Mod="NFM" />
 <TGID Name="Patch 65132" TGID="TGID:65132" SvcType="Interop" U_Id="UID:9190014" />
 <SiteFrequency Freq="769.431250MHz" />
-<Property VOL="10" SQL="2" Sig="5" Rssi="-42" Rec="On" Mute="Unmute" />
+<Property VOL="10" SQL="2" Sig="5" Rssi="-42" Battery="0"
+ P25Status="unrecognized status" Rec="On" Mute="Unmute" />
 </ScannerInfo>"""
 
 
@@ -71,9 +73,12 @@ def test_scanner_info_plain_output_preserves_legacy_layout() -> None:
         "Frequency:  769.431250MHz",
         "Modulation: NFM",
         "Service:    Interop",
+        "Talkgroup ID: TGID:65132",
+        "Unit ID:    UID:9190014",
+        "P25 status: unrecognized status",
         "Signal:     5",
         "RSSI:       -42",
-        "Battery:    -",
+        "Battery:    0",
         "Recording:  On",
         "Mute:       Unmute",
     ]
@@ -98,6 +103,57 @@ def test_terminal_output_contains_ansi_styles() -> None:
     assert "\x1b[" in rendered
     assert "Signal:" in rendered
     assert "Recording:" in rendered
+
+
+def test_scanner_info_preserves_literal_ids_and_bounds_reported_text() -> None:
+    raw = "[red]TGID:000123[/red] Ω\x1b\n\r\t\u202e\u2028" + "界" * 500
+    info = _scanner_info()
+    tgid = ScannerNode.create(
+        "TGID",
+        {
+            **dict(info.node("TGID").attributes),
+            "TGID": raw,
+            "U_Id": "UID:000045",
+        },
+    )
+    info = replace(info, nodes={**info.nodes, "TGID": tgid})
+    output = StringIO()
+    renderer = RichCliRenderer(
+        console=Console(
+            file=output,
+            force_terminal=False,
+            color_system=None,
+            highlight=False,
+            markup=False,
+            width=200,
+        )
+    )
+
+    renderer.print_scanner_info(info)
+
+    lines = output.getvalue().splitlines()
+    talkgroup = next(line for line in lines if line.startswith("Talkgroup ID:"))
+    assert "[red]TGID:000123[/red] Ω??????" in talkgroup
+    assert talkgroup.endswith("…")
+    assert "Unit ID:    UID:000045" in lines
+    assert "\x1b" not in output.getvalue() and "\u202e" not in output.getvalue()
+
+
+def test_scanner_info_clears_missing_read_only_telemetry() -> None:
+    info = ScannerInfoParser().parse(
+        "GSI",
+        '<ScannerInfo Mode="Scan" V_Screen="trunk_scan"><Property /></ScannerInfo>',
+    )
+    output = StringIO()
+    renderer = RichCliRenderer(file=output, color="never")
+
+    renderer.print_scanner_info(info)
+
+    lines = output.getvalue().splitlines()
+    assert "Talkgroup ID: -" in lines
+    assert "Unit ID:    -" in lines
+    assert "P25 status: -" in lines
+    assert "Battery:    -" in lines
 
 
 def test_renderer_accepts_light_palette() -> None:
