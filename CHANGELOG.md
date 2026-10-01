@@ -31,6 +31,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Fixed
 
+- Keep Home Assistant Waterfall cards at a stable density-based height when an
+  external theme applies generic percentage heights to an automatic grid row.
+  Account for the history canvas border when sizing its bitmap, and fill the
+  assigned Sections slot for default or explicitly fixed grid rows. Existing
+  duration/history YAML and palettes remain unchanged.
 - Preserve phone recording-library title width across system fonts, keeping the
   Play and Download buttons inside their rows. Give the current recording's
   filename a full-width telemetry row so its label does not stack vertically.

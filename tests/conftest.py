@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import logging
 import time
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -31,6 +32,34 @@ def pytest_runtest_makereport(item, call):
         locations = failure_locations(call.excinfo.value)
         if locations:
             report.sections.append(("Supplemental refusal locations (no values)", locations))
+
+
+@pytest.fixture(autouse=True)
+def isolate_package_logging() -> Iterator[None]:
+    """Do not carry CLI handlers bound to a test's captured stderr into the next.
+
+    Detach existing handlers before configure_logging can close them; restore
+    them afterwards without disturbing pytest's root/caplog handlers.
+    """
+    logger = logging.getLogger("sds200")
+    handlers = tuple(logger.handlers)
+    filters = tuple(logger.filters)
+    level, propagate, disabled = logger.level, logger.propagate, logger.disabled
+    for handler in handlers:
+        logger.removeHandler(handler)
+    try:
+        yield
+    finally:
+        for handler in tuple(logger.handlers):
+            logger.removeHandler(handler)
+            if handler not in handlers:
+                handler.close()
+        for handler in handlers:
+            logger.addHandler(handler)
+        logger.filters[:] = filters
+        logger.setLevel(level)
+        logger.propagate = propagate
+        logger.disabled = disabled
 
 
 @pytest.fixture

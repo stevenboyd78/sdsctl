@@ -161,6 +161,37 @@ process.stdout.write(JSON.stringify({
     assert 'history " 60" is not supported' in result["rejected"][5]
 
 
+def test_waterfall_sizing_tracks_layout_and_auto_row_configuration() -> None:
+    result = run_waterfall_card_javascript(
+        """
+const card = Object.create(Sds200WaterfallCard.prototype);
+card._card = {dataset: {}};
+card._history = [];
+card._render = () => card._updateSizing();
+card._schedulePaint = () => {};
+const sizing = [];
+const remember = () => sizing.push(card._card.dataset.sizing);
+card.setConfig({}); remember();
+card.layout = "grid"; remember();
+card.setConfig({grid_options: {rows: "auto", columns: "full"}}); remember();
+card.setConfig({grid_options: {rows: 4}}); remember();
+card.layout = "masonry"; remember();
+card.setConfig({density: "tall"}); remember();
+card.layout = "grid"; remember();
+card.layout = undefined; remember();
+process.stdout.write(JSON.stringify({sizing, options: card.getGridOptions()}));
+"""
+    )
+
+    assert result["sizing"] == [
+        "density", "grid", "density", "grid",
+        "density", "density", "grid", "density",
+    ]
+    assert result["options"] == {
+        "rows": 9, "columns": 12, "min_rows": 4, "min_columns": 3,
+    }
+
+
 def test_waterfall_history_and_pointer_models_are_bounded() -> None:
     result = run_waterfall_card_javascript(
         """
