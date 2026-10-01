@@ -84,8 +84,8 @@ class Plan:
                 clock(v) for v in (self.prepared_at, self.start_by, self.stop_at, self.finish_by)
             ]
             require(times[0] < times[1] < times[2] < times[3])
-            require(times[1] - times[0] <= 10 and times[3] - times[2] <= 10)
-            require(times[3] - times[0] <= MAX_RECORDING_SECONDS)
+            require(times[1] <= times[0] + 10 and times[3] <= times[2] + 10)
+            require(times[3] <= times[0] + MAX_RECORDING_SECONDS)
         except Exception:
             raise UnconfirmedOwner(MESSAGE) from None
 

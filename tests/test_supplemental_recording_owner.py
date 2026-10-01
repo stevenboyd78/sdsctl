@@ -3,6 +3,7 @@
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import stat
 import subprocess
@@ -149,6 +150,23 @@ def test_plan_is_frozen_and_total_window_capped(native):
     with pytest.raises(FrozenInstanceError):
         native.plan.stop_at = 400
     refused(lambda: replace(native.plan, stop_at=280, finish_by=281))
+
+
+def test_plan_exact_absolute_deadline_does_not_gain_subtraction_time(native):
+    prepared = 2.1
+    start = prepared + 3
+    stop = start + 1
+    finish = stop + 10
+    assert finish - stop > 10
+    plan = replace(
+        native.plan,
+        prepared_at=prepared,
+        start_by=start,
+        stop_at=stop,
+        finish_by=finish,
+    )
+    assert plan.finish_by == plan.stop_at + 10
+    refused(lambda: replace(plan, finish_by=math.nextafter(finish, math.inf)))
 
 
 @pytest.mark.parametrize("fault", ["file", "symlink", "fifo", "directory"])
