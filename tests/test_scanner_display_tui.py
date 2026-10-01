@@ -11,6 +11,7 @@ import pytest
 from rich.console import Console
 from textual.widgets import Static
 
+from sds200.front_panel_keys import front_panel_inventory_snapshot
 from sds200.scanner_display_reader import (
     DisplayFrameReader,
     DisplayFrameSource,
@@ -21,6 +22,7 @@ from sds200.scanner_display_reader import (
 from sds200.scanner_display_tui import (
     MimicRuntimeScreen,
     MimicScreen,
+    render_front_panel_inventory_terminal,
     render_mimic_terminal,
     safe_terminal_text,
 )
@@ -290,6 +292,30 @@ def test_renderer_wide_unicode_and_markup_are_literal(packets):
     assert safe_terminal_text("one\n\x1b[31m\u200b") == "one\n?[31m?"
 
 
+def test_front_panel_inventory_renderer_is_complete_disabled_and_fail_closed():
+    inventory = front_panel_inventory_snapshot("SDS200")
+    rendered = render_front_panel_inventory_terminal(inventory).plain
+
+    assert "Inventory v1 | 27 codes | controls enabled: no" in rendered
+    assert "not TUI shortcuts" in rendered
+    assert rendered.count("— unavailable (") == 27
+    for entry in inventory["keys"]:
+        assert f"\n{entry['code']}  {entry['label']} — unavailable" in rendered
+        assert entry["context_note"] in rendered
+        assert entry["unavailable_reason"] in rendered
+
+    malformed = copy.deepcopy(inventory)
+    malformed["keys"][0]["label"] = "secret /private/path \x1b[31m"
+    refused = render_front_panel_inventory_terminal(malformed).plain
+    assert "Inventory unavailable" in refused
+    assert "secret" not in refused and "/private/path" not in refused
+
+    enabled = copy.deepcopy(inventory)
+    enabled["controls_available"] = True
+    enabled["keys"][0]["available"] = True
+    assert "Inventory unavailable" in render_front_panel_inventory_terminal(enabled).plain
+
+
 @pytest.mark.parametrize("held", [True, False, None])
 def test_renderer_site_hold_is_independent_and_uses_profile_color(packets, held):
     packet = copy.deepcopy(packets["held_trunk"])
@@ -396,6 +422,7 @@ def test_actual_tui_screen_drawer_palette_and_return(packets, size):
             ScannerIdentity("sdsctl-remote-daemon", "SDS200", "fixture", "scanner.example:50443"),
             baseline._snapshot,
             display_source=DisplayFrameSource(read, lambda: closes.append(1)),
+            front_panel_inventory=front_panel_inventory_snapshot("SDS200"),
         )
         try:
             async with app.run_test(size=size) as pilot:
@@ -425,6 +452,10 @@ def test_actual_tui_screen_drawer_palette_and_return(packets, size):
                 assert "New log while Mimic is open" in _plain(
                     app.screen.query_one("#mimic-runtime", Static)
                 )
+                runtime = _plain(app.screen.query_one("#mimic-runtime", Static))
+                assert "Inventory v1 | 27 codes | controls enabled: no" in runtime
+                assert runtime.count("— unavailable (") == 27
+                assert "No scanner-key dispatch is installed" in runtime
                 assert closes and app._mimic_reader.view()[0] is None
                 paused = len(reads)
                 await pilot.pause(0.3)

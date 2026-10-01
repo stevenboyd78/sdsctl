@@ -132,7 +132,13 @@ Inside Mimic-SDS:
 - **X** or **?** opens the runtime/help drawer; **Esc** or **X** returns from it.
   It shows profile qualification at drawer-open time, current TUI connection and
   scanner identity, available client audio/recording state, and the latest 20
-  operational log lines. This is not an additional daemon recording-status feed.
+  operational log lines. When the daemon advertises the versioned front-panel
+  inventory, the drawer also lists all 27 codes with their model-reference and
+  unavailable reasons. The snapshot is validated once before the TUI starts;
+  opening or refreshing the drawer performs no API request. These labels are not
+  keyboard shortcuts: every entry remains disabled and the TUI installs no
+  general scanner-key dispatch. An older daemon shows inventory unavailable.
+  This is not an additional daemon recording-status feed.
 - **M** or **Esc** returns from Mimic-SDS to the ordinary TUI. **Q** quits the
   application. **Ctrl+P** opens the command palette. Scanner/audio control keys
   are inactive inside Mimic-SDS and its drawer; return to the ordinary TUI to

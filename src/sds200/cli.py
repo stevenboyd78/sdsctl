@@ -5769,7 +5769,21 @@ def _run_tui(
                 metadata=args.audio_metadata,
                 scanner=initial.model,
             )
-            display_operations = hello.get("operations")
+            daemon_operations = hello.get("operations")
+            display_capable = (
+                isinstance(daemon_operations, list)
+                and DaemonApiOperation.DISPLAY_FRAME.value in daemon_operations
+            )
+            front_panel_capable = (
+                isinstance(daemon_operations, list)
+                and DaemonApiOperation.SCANNER_FRONT_PANEL_INVENTORY.value
+                in daemon_operations
+            )
+            front_panel_inventory = (
+                api_client.front_panel_inventory()
+                if display_capable and front_panel_capable
+                else None
+            )
             display_source = (
                 daemon_display_source(DaemonApiClient(
                     api_endpoint,
@@ -5781,7 +5795,7 @@ def _run_tui(
                         else args.daemon_max_response_bytes,
                     ),
                 ))
-                if isinstance(display_operations, list) and "display.frame" in display_operations
+                if display_capable
                 else None
             )
             run_tui(
@@ -5809,6 +5823,7 @@ def _run_tui(
                 psi_recovery_cooldown=args.psi_recovery_cooldown,
                 connected=initial.connected,
                 display_source=display_source,
+                front_panel_inventory=front_panel_inventory,
                 palette=palette,
                 screen_class=theme_asset.manifest.screen_class,
                 managed_stylesheet=managed_stylesheet,

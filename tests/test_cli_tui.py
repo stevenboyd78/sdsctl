@@ -16,6 +16,7 @@ from sds200 import (
     cli,
     resolve_configuration_paths,
 )
+from sds200.front_panel_keys import front_panel_inventory_snapshot
 from sds200.models import ScannerInfo
 from sds200.radio import SDSScanner
 from sds200.state import RadioStateSnapshot
@@ -184,13 +185,22 @@ def test_tui_cli_uses_daemon_without_opening_scanner_or_rtsp(
             self.closed = False
             self.hello_calls = 0
             self.snapshot_calls = 0
+            self.front_panel_calls = 0
             self.instances.append(self)
 
         def hello(self) -> dict[str, object]:
             self.hello_calls += 1
             return {
-                "operations": ["runtime.snapshot"] + (["display.frame"] if display_capable else [])
+                "operations": [
+                    "runtime.snapshot",
+                    "scanner.front_panel.inventory",
+                ]
+                + (["display.frame"] if display_capable else [])
             }
+
+        def front_panel_inventory(self) -> dict[str, object]:
+            self.front_panel_calls += 1
+            return front_panel_inventory_snapshot("SDS200")
 
         def display_frame(self) -> dict[str, object]:
             return {"test_frame": True}
@@ -337,6 +347,9 @@ def test_tui_cli_uses_daemon_without_opening_scanner_or_rtsp(
     assert captured["firmware"] == "Version 1.26.01"
     assert captured["connected"] is True
     assert captured["connection_target"] is None
+    assert captured["front_panel_inventory"] == (
+        front_panel_inventory_snapshot("SDS200") if display_capable else None
+    )
     assert isinstance(captured["radio"], DaemonTuiRadio)
 
     snapshot = captured["snapshot"]
@@ -361,6 +374,7 @@ def test_tui_cli_uses_daemon_without_opening_scanner_or_rtsp(
     assert api_client.max_response_bytes == 8192
     assert api_client.hello_calls == 1
     assert api_client.snapshot_calls == 1
+    assert api_client.front_panel_calls == int(display_capable)
     assert api_client.closed is True
 
     if display_capable:
@@ -501,6 +515,7 @@ def test_tui_cli_remote_profile_builds_independent_authenticated_services(
     assert callable(terminal_failure_subscribe)
     assert captured["endpoint"] == DAEMON_REMOTE_CLIENT_ENDPOINT
     assert captured["connection_target"] == "192.168.20.41:50443"
+    assert captured["front_panel_inventory"] is None
     assert captured["snapshot"].channel == "Remote Dispatch"
 
     api_transport = radio.api_client.location

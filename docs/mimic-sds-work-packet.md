@@ -992,6 +992,13 @@ permission checks remain subsequent work. The Web dashboard now renders the
 full inventory as a fail-closed control drawer, but every key is disabled and
 no click handler, general key request, queue or scanner I/O exists.
 
+The daemon-backed Mimic-SDS TUI runtime/help drawer now renders the same
+validated inventory snapshot as read-only text. It is fetched once during
+daemon-client startup when the operation is advertised, never on drawer refresh,
+and older daemons fail closed with an unavailable message. All 27 codes are
+explicitly labels rather than TUI shortcuts; there are no new bindings, command
+palette actions, enabled controls, general key requests or scanner I/O.
+
 The read-only foundation now exposes that same complete inventory through the
 versioned `scanner.front_panel.inventory` daemon operation and typed client
 method. It takes no parameters, reads one authoritative runtime snapshot only

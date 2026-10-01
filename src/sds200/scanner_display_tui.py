@@ -18,6 +18,7 @@ from textual.timer import Timer
 from textual.widgets import Static
 
 from . import __version__
+from .front_panel_keys import FRONT_PANEL_INVENTORY_VERSION, FrontPanelKey
 from .scanner_display_presentation import present_indicator
 from .scanner_display_reader import DisplayFrameReader
 from .scanner_display_supplemental_reader import SupplementalFrameReader
@@ -42,6 +43,93 @@ def safe_terminal_text(value: str) -> str:
         char if char == "\n" or not unicodedata.category(char).startswith("C") else "?"
         for char in value
     )
+
+
+_FRONT_PANEL_ENTRY_FIELDS = {
+    "code",
+    "label",
+    "context_note",
+    "reference_status",
+    "control_status",
+    "available",
+    "unavailable_reason",
+}
+
+
+def _front_panel_text(value: object) -> str | None:
+    if (
+        type(value) is str
+        and 0 < len(value) <= 256
+        and value.isascii()
+        and all(ord(character) >= 32 for character in value)
+    ):
+        return value
+    return None
+
+
+def render_front_panel_inventory_terminal(
+    inventory: Mapping[str, object] | None,
+) -> Text:
+    """Render one already-fetched fail-closed inventory without adding controls."""
+
+    unavailable = Text(
+        "Front-panel keys — read-only inventory\n"
+        "Inventory unavailable for this TUI connection. "
+        "No scanner-key controls are enabled.\n"
+    )
+    if inventory is None or set(inventory) != {
+        "version",
+        "controls_available",
+        "keys",
+    }:
+        return unavailable
+    if (
+        type(inventory["version"]) is not int
+        or inventory["version"] != FRONT_PANEL_INVENTORY_VERSION
+        or inventory["controls_available"] is not False
+    ):
+        return unavailable
+    keys = inventory["keys"]
+    expected_codes = tuple(key.value for key in FrontPanelKey)
+    if not isinstance(keys, list) or len(keys) != len(expected_codes):
+        return unavailable
+
+    rows: list[tuple[str, str, str, str, str, str]] = []
+    for expected_code, entry in zip(expected_codes, keys, strict=True):
+        if not isinstance(entry, Mapping) or set(entry) != _FRONT_PANEL_ENTRY_FIELDS:
+            return unavailable
+        code = _front_panel_text(entry["code"])
+        label = _front_panel_text(entry["label"])
+        context_note = _front_panel_text(entry["context_note"])
+        reason = _front_panel_text(entry["unavailable_reason"])
+        reference_status = entry["reference_status"]
+        control_status = entry["control_status"]
+        if (
+            code != expected_code
+            or label is None
+            or context_note is None
+            or reason is None
+            or reference_status not in {"listed", "absent_for_model", "model_not_listed"}
+            or control_status
+            != ("unsupported" if reference_status == "absent_for_model" else "unqualified")
+            or entry["available"] is not False
+        ):
+            return unavailable
+        rows.append((code, label, context_note, str(reference_status), str(control_status), reason))
+
+    output = Text(
+        "Front-panel keys — read-only inventory\n"
+        f"Inventory v{FRONT_PANEL_INVENTORY_VERSION} | {len(rows)} codes | "
+        "controls enabled: no\n"
+        "These codes are labels, not TUI shortcuts. No scanner-key dispatch is installed.\n"
+    )
+    for code, label, context_note, reference_status, control_status, reason in rows:
+        output.append(
+            f"\n{code}  {label} — unavailable "
+            f"({reference_status.replace('_', ' ')}; {control_status}).\n"
+            f"   {context_note} {reason}\n"
+        )
+    return output
 
 
 def _value(region: Mapping[str, Any]) -> str:
@@ -216,10 +304,12 @@ class MimicScreen(ModalScreen[None]):
         reader: DisplayFrameReader | SupplementalFrameReader,
         runtime: Callable[[], Text],
         now: Callable[[], datetime],
+        front_panel_inventory: Mapping[str, object] | None = None,
     ):
         super().__init__()
         self.reader, self._runtime = reader, runtime
         self._now = now
+        self._front_panel_inventory = render_front_panel_inventory_terminal(front_panel_inventory)
         self.style = "preferred"
         self.treatment = "strips"
         self._timer: Timer | None = None
@@ -361,4 +451,8 @@ class MimicScreen(ModalScreen[None]):
                 details.append("No current display metadata available.\n")
             details.append("\n")
             details.append(supplemental_details)
-            self.app.push_screen(MimicRuntimeScreen(lambda: details + self.runtime_text()))
+            self.app.push_screen(
+                MimicRuntimeScreen(
+                    lambda: details + self.runtime_text() + Text("\n") + self._front_panel_inventory
+                )
+            )

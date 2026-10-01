@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from contextlib import AbstractContextManager, suppress
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -496,6 +496,7 @@ class ScannerTuiApp(App[None]):
         terminal_failure_subscribe: TerminalFailureSubscribe | None = None,
         display_source: DisplayFrameSource | None = None,
         supplemental_display_source: SupplementalFrameSource | None = None,
+        front_panel_inventory: Mapping[str, object] | None = None,
         daemon_version_source: Callable[[], str | None] | None = None,
         clock: Clock = monotonic,
         now: WallClock = _local_now,
@@ -575,6 +576,7 @@ class ScannerTuiApp(App[None]):
             else None
         )
         self._mimic_screen: MimicScreen | None = None
+        self._front_panel_inventory = front_panel_inventory
         self._details_screen: ScannerDetailsScreen | None = None
         self._details_current = connected is True
         self._mimic_style = "preferred"
@@ -797,7 +799,12 @@ class ScannerTuiApp(App[None]):
             or self._details_screen is not None
         ):
             return
-        mimic = MimicScreen(self._mimic_reader, self._mimic_runtime, self._now)
+        mimic = MimicScreen(
+            self._mimic_reader,
+            self._mimic_runtime,
+            self._now,
+            self._front_panel_inventory,
+        )
         mimic.style, mimic.treatment = self._mimic_style, self._mimic_treatment
         self._mimic_screen = mimic
         self.push_screen(mimic, self._mimic_closed)
@@ -2523,6 +2530,7 @@ def run_tui(
     terminal_failure_subscribe: TerminalFailureSubscribe | None = None,
     display_source: DisplayFrameSource | None = None,
     supplemental_display_source: SupplementalFrameSource | None = None,
+    front_panel_inventory: Mapping[str, object] | None = None,
     daemon_version_source: Callable[[], str | None] | None = None,
     log_buffer: TuiLogBuffer | None = None,
 ) -> None:
@@ -2552,6 +2560,7 @@ def run_tui(
         terminal_failure_subscribe=terminal_failure_subscribe,
         display_source=display_source,
         supplemental_display_source=supplemental_display_source,
+        front_panel_inventory=front_panel_inventory,
     )
     try:
         app.run()
