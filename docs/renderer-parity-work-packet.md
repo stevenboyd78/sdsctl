@@ -55,9 +55,11 @@ Source locations:
 The web inventory maps all 35 shared fields to unique HTML targets. Adaptive
 profiles deliberately select field groups; a mapped field is not necessarily
 visible in every current mode or collapsed view. Preserve that distinction when
-comparing photographs. This packet does not update the historical audit's Home
-Assistant columns: discovery templates and each card need their own current
-review before any new entity or card-support claim.
+comparing photographs. The later independent Home Assistant review added fixed
+field-available Talkgroup ID, Unit ID, reported P25 status and raw battery
+sensors plus optional compact and Display-card selectors. That separate work
+reuses the existing generic radio topic and does not alter this packet's parser,
+TUI layout or physical-evidence boundary.
 
 ## Completed foundations to reuse
 
