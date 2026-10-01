@@ -292,8 +292,9 @@ def test_renderer_wide_unicode_and_markup_are_literal(packets):
     assert safe_terminal_text("one\n\x1b[31m\u200b") == "one\n?[31m?"
 
 
-def test_front_panel_inventory_renderer_is_complete_disabled_and_fail_closed():
-    inventory = front_panel_inventory_snapshot("SDS200")
+@pytest.mark.parametrize("model", [None, "SDS200", "SDS100", "BCD536HP"])
+def test_front_panel_inventory_renderer_is_complete_disabled_and_fail_closed(model):
+    inventory = front_panel_inventory_snapshot(model)
     rendered = render_front_panel_inventory_terminal(inventory).plain
 
     assert "Inventory v1 | 27 codes | controls enabled: no" in rendered
@@ -301,8 +302,17 @@ def test_front_panel_inventory_renderer_is_complete_disabled_and_fail_closed():
     assert rendered.count("— unavailable (") == 27
     for entry in inventory["keys"]:
         assert f"\n{entry['code']}  {entry['label']} — unavailable" in rendered
+        assert entry["reference_status"].replace("_", " ") in rendered
+        assert entry["control_status"] in rendered
         assert entry["context_note"] in rendered
         assert entry["unavailable_reason"] in rendered
+
+    if model == "SDS100":
+        assert "\nV  Backlight — unavailable" in rendered
+        assert rendered.count("; unsupported).") == 2
+    else:
+        assert "\nV  Volume-knob push — unavailable" in rendered
+        assert "; unsupported)." not in rendered
 
     malformed = copy.deepcopy(inventory)
     malformed["keys"][0]["label"] = "secret /private/path \x1b[31m"

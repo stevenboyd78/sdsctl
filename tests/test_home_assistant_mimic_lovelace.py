@@ -130,6 +130,7 @@ def test_mimic_installer_refuses_symlinks(tmp_path, part):
         "fetch_timeout",
         "instance_options",
         "front_panel",
+        "front_panel_models",
         "front_panel_invalid",
         "front_panel_lifecycle",
     ],
@@ -147,6 +148,12 @@ def test_mimic_browser_lifecycle(case):
                 "waterfall": module("waterfall"),
                 "scenarios": scenarios,
                 "front_panel": front_panel_inventory_snapshot("SDS200"),
+                "front_panels": {
+                    "unlisted": front_panel_inventory_snapshot(None),
+                    "sds200": front_panel_inventory_snapshot("SDS200"),
+                    "sds100": front_panel_inventory_snapshot("SDS100"),
+                    "bcd536hp": front_panel_inventory_snapshot("BCD536HP"),
+                },
                 "case": case,
             }
         ),

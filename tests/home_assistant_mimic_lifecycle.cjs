@@ -91,23 +91,48 @@ function harness() {
 }
 const clockShown=c=>nodes(c._surround).some(node=>node.textContent==='21:26');
 const frontPanelButtons=c=>c._frontPanelGrid===null?[]:c._frontPanelGrid.children;
+function assertFrontPanel(c,inventory){
+  const buttons=frontPanelButtons(c);assert.equal(buttons.length,27);
+  assert.deepEqual(buttons.map(button=>button.children[0].textContent),inventory.keys.map(entry=>entry.code));
+  buttons.forEach((button,index)=>{
+    const entry=inventory.keys[index];
+    assert.equal(button.tag,'button');assert.equal(button.type,'button');assert.equal(button.disabled,true);
+    assert.deepEqual(button.listeners,{});assert.equal(button.dataset.referenceStatus,entry.reference_status);
+    assert.equal(button.dataset.controlStatus,entry.control_status);assert.equal(button.title,entry.unavailable_reason);
+    assert.equal(button['aria-describedby'],'front-panel-status');
+    assert.deepEqual(button.children.map(node=>node.textContent),[entry.code,entry.label,
+      `reference: ${entry.reference_status}; control: ${entry.control_status}`,entry.context_note,entry.unavailable_reason]);
+  });
+  assert.ok(c._frontPanelStatus.textContent.includes('all controls remain unavailable'));
+  const unsupported=inventory.keys.filter(entry=>entry.control_status==='unsupported').length;
+  if(unsupported===0)assert.ok(!c._frontPanelStatus.textContent.includes('unsupported for this model'));
+  else assert.ok(c._frontPanelStatus.textContent.includes(`(${unsupported} unsupported for this model)`));
+}
 const cases={
   async front_panel(h){
     const c=h.card();await h.start(c);assert.ok(h.raw(c).length);assert.equal(h.frontPanelCalls,1);
-    const buttons=frontPanelButtons(c);assert.equal(buttons.length,27);
-    assert.deepEqual(buttons.map(button=>button.children[0].textContent),input.front_panel.keys.map(entry=>entry.code));
-    buttons.forEach((button,index)=>{
-      const entry=input.front_panel.keys[index];
-      assert.equal(button.tag,'button');assert.equal(button.type,'button');assert.equal(button.disabled,true);
-      assert.deepEqual(button.listeners,{});assert.equal(button.dataset.referenceStatus,entry.reference_status);
-      assert.equal(button.dataset.controlStatus,entry.control_status);assert.equal(button.title,entry.unavailable_reason);
-      assert.equal(button['aria-describedby'],'front-panel-status');
-      assert.deepEqual(button.children.map(node=>node.textContent),[entry.code,entry.label,
-        `reference: ${entry.reference_status}; control: ${entry.control_status}`,entry.context_note,entry.unavailable_reason]);
-    });
-    assert.ok(c._frontPanelStatus.textContent.includes('all controls remain unavailable'));
+    assertFrontPanel(c,input.front_panel);
     c._frontPanel.open=true;const requests=h.frontPanelCalls;await h.tick(1000);assert.equal(h.frontPanelCalls,requests);
     c.disconnectedCallback();assert.equal(frontPanelButtons(c).length,0);assert.equal(h.timers.size,0);
+  },
+  async front_panel_models(h){
+    for(const [model,inventory] of Object.entries(input.front_panels)){
+      let inventoryRequests=0;
+      h.request=(url,options)=>{
+        if(!url.endsWith('/api/v1/scanner/front-panel'))return h.defaultRequest(url,options);
+        assert.equal(url,(input.origin??'https://ha.example.test')+'/api/hassio_ingress/example_key/api/v1/scanner/front-panel');
+        assert.equal(options.credentials,'same-origin');assert.equal(options.redirect,'error');assert.equal(options.cache,'no-store');
+        assert.equal(options.method,undefined);inventoryRequests++;
+        return h.response({protocol:'sdsctl.web',version:1,front_panel:structuredClone(inventory)});
+      };
+      const c=h.card();await h.start(c);assert.ok(h.raw(c).length);assert.equal(inventoryRequests,1);
+      assertFrontPanel(c,inventory);
+      const buttons=frontPanelButtons(c);
+      const volume=buttons.find(button=>button.children[0].textContent==='V');
+      assert.equal(volume.children[1].textContent,model==='sds100'?'Backlight':'Volume-knob push');
+      assert.equal(buttons.filter(button=>button.dataset.controlStatus==='unsupported').length,model==='sds100'?2:0);
+      c.disconnectedCallback();assert.equal(frontPanelButtons(c).length,0);assert.equal(h.timers.size,0);
+    }
   },
   async front_panel_invalid(h){
     const malformed=[];

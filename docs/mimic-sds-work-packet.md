@@ -1011,6 +1011,16 @@ The projection and its Web drawer still add no general key command, permission
 grant, retry, queue, enabled UI control or scanner I/O; those remain separate
 reviewed work.
 
+The cross-surface regression gate now carries the authoritative snapshots for
+an unlisted model, SDS200, SDS100 and BCD536HP through the Web projection, TUI
+renderer and actual Home Assistant card controller. It requires all 27 codes in
+the same order, preserves the SDS100 `V` Backlight label and exactly its absent
+`Q`/`T` statuses, and requires every rendered entry to remain disabled with no
+listener. The Web application exposes only the parameterless read-only `GET`
+route for this inventory; there is still no general front-panel control route.
+These are model-sensitive negative-capability checks, not additional model or
+transport qualification.
+
 Extend typed command validation, the single-owner daemon control transaction,
 authenticated API/remote permission checks and renderer affordances together.
 Do not simply widen the existing hold-only `PressKey` allowlist and inherit
