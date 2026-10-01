@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Literal, Protocol, TypeVar
 
 from .exceptions import (
@@ -13,6 +14,7 @@ from .models import (
     AnalysisMode,
     AnalysisResponse,
     ChargeStatus,
+    DepartmentQuickKeys,
     FavoritesQuickKeys,
     FavoritesQuickKeyState,
     FirmwareResponse,
@@ -21,14 +23,63 @@ from .models import (
     ModelResponse,
     MsiResponse,
     Packet,
+    ScannerDateTime,
     ScannerInfo,
     ScannerRecordingStatus,
     ScannerRecordingStatusResponse,
     StatusResponse,
+    SystemQuickKeys,
     ValueResponse,
 )
 
 T = TypeVar("T", covariant=True)
+
+
+@dataclass(frozen=True, slots=True)
+class GetDateTime:
+    """V1.02 p.9 GET only; no clock-setting command is provided here."""
+
+    @property
+    def wire(self) -> str:
+        return "DTM"
+
+    @property
+    def response_command(self) -> str:
+        return "DTM"
+
+    def parse_response(self, response: object) -> ScannerDateTime:
+        if not isinstance(response, Packet) or response.command != "DTM":
+            raise ProtocolError("DTM read returned an unexpected response.")
+        if response.fields in (("NG",), ("ERR",), ("ERROR",)):
+            raise CommandRejectedError("DTM read was rejected.")
+        if len(response.fields) != 8:
+            raise ProtocolError("DTM read requires exactly eight fields.")
+        daylight, *components, rtc = response.fields
+        # SDS200 1.26.01 reports unpadded decimal components (captured GET:
+        # DTM,1,2026,9,17,3,38,10,1). Retain the four-digit year and bounded
+        # numeric/calendar validation; padding is not evidence of validity.
+        widths = ((4, 4), (1, 2), (1, 2), (1, 2), (1, 2), (1, 2))
+        if (
+            not 1 <= len(daylight) <= 16
+            or not daylight.isascii()
+            or not all(c.isalnum() or c in "_-" for c in daylight)
+            or rtc not in ("0", "1")
+            or any(
+                not minimum <= len(value) <= maximum or not value.isascii() or not value.isdecimal()
+                for value, (minimum, maximum) in zip(components, widths, strict=True)
+            )
+        ):
+            raise ProtocolError("DTM read returned invalid clock fields.")
+        local_time = None
+        if rtc == "1":
+            try:
+                year, month, day, hour, minute, second = (int(value) for value in components)
+                local_time = datetime(year, month, day, hour, minute, second)
+            except ValueError:
+                raise ProtocolError("DTM read returned an invalid calendar date or time.") from None
+        # RTC NG can contain unset date components (including year/month/day 0).
+        # Preserve the packet for diagnostics but never expose them as valid time.
+        return ScannerDateTime(local_time, daylight, rtc == "1", response)
 
 
 class Command(Protocol[T]):
@@ -579,6 +630,79 @@ class GetFavoritesQuickKeys:
             states=tuple(FavoritesQuickKeyState(int(field)) for field in response.fields),
             packet=response,
         )
+
+
+def _require_quick_key(value: int) -> None:
+    if type(value) is not int or not 0 <= value <= 99:
+        raise ValueError("A quick key must be an integer from 0 to 99.")
+
+
+def _parse_quick_key(value: str) -> int:
+    if not 1 <= len(value) <= 2 or not value.isascii() or not value.isdecimal():
+        raise ProtocolError("Quick-key read returned an invalid selector.")
+    return int(value)
+
+
+def _quick_key_read_fields(
+    response: object, command: str
+) -> tuple[Packet, int, int, tuple[FavoritesQuickKeyState, ...]]:
+    # V1.02 p.6 specifies two selectors followed by exactly 100 states for
+    # BOTH SQK and DQK. Do not silently shift/truncate a differing reply.
+    if not isinstance(response, Packet) or response.command != command:
+        raise ProtocolError("Quick-key read returned an unexpected response.")
+    if len(response.fields) != 102:
+        raise ProtocolError("Quick-key read requires two selectors and exactly 100 states.")
+    favorites, system = map(_parse_quick_key, response.fields[:2])
+    fields = response.fields[2:]
+    if any(field not in {"0", "1", "2"} for field in fields):
+        raise ProtocolError("Quick-key read returned an invalid status field.")
+    return response, favorites, system, tuple(FavoritesQuickKeyState(int(f)) for f in fields)
+
+
+@dataclass(frozen=True, slots=True)
+class GetSystemQuickKeys:
+    favorites_quick_key: int
+
+    def __post_init__(self) -> None:
+        _require_quick_key(self.favorites_quick_key)
+
+    @property
+    def wire(self) -> str:
+        return f"SQK,{self.favorites_quick_key}"
+
+    @property
+    def response_command(self) -> str:
+        return "SQK"
+
+    def parse_response(self, response: object) -> SystemQuickKeys:
+        packet, favorites, reported_system, states = _quick_key_read_fields(response, "SQK")
+        if favorites != self.favorites_quick_key:
+            raise ProtocolError("SQK read returned a different Favorites quick key.")
+        return SystemQuickKeys(favorites, reported_system, states, packet)
+
+
+@dataclass(frozen=True, slots=True)
+class GetDepartmentQuickKeys:
+    favorites_quick_key: int
+    system_quick_key: int
+
+    def __post_init__(self) -> None:
+        _require_quick_key(self.favorites_quick_key)
+        _require_quick_key(self.system_quick_key)
+
+    @property
+    def wire(self) -> str:
+        return f"DQK,{self.favorites_quick_key},{self.system_quick_key}"
+
+    @property
+    def response_command(self) -> str:
+        return "DQK"
+
+    def parse_response(self, response: object) -> DepartmentQuickKeys:
+        packet, favorites, system, states = _quick_key_read_fields(response, "DQK")
+        if (favorites, system) != (self.favorites_quick_key, self.system_quick_key):
+            raise ProtocolError("DQK read returned different quick-key selectors.")
+        return DepartmentQuickKeys(favorites, system, states, packet)
 
 
 @dataclass(frozen=True, slots=True, init=False)

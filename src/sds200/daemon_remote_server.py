@@ -51,6 +51,13 @@ DAEMON_REMOTE_OBSERVE_OPERATIONS = (
     DaemonApiOperation.CAPABILITIES,
     DaemonApiOperation.PING,
     DaemonApiOperation.RUNTIME_SNAPSHOT,
+    DaemonApiOperation.DISPLAY_PROFILE,
+    DaemonApiOperation.DISPLAY_FRAME,
+    DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT,
+    DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME,
+    # Observational acquisition lease, not a scanner-control grant. It remains
+    # absent unless the API was constructed with an explicit bounded owner.
+    DaemonApiOperation.DISPLAY_SUPPLEMENTAL_DEMAND,
     DaemonApiOperation.SCANNER_STATE,
     DaemonApiOperation.AUDIO_HEALTH,
 )

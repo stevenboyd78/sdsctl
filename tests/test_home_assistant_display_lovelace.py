@@ -113,6 +113,7 @@ def test_install_cards_installs_all_packaged_assets(
         compact,
         display,
         waterfall,
+        tmp_path / "sds200-mimic-card.js",
         aggregate,
     )
     assert compact.read_text(encoding="utf-8") == compact_card_text()

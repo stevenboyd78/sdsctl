@@ -52,18 +52,26 @@ from .home_assistant_integration_ingress import (
 )
 from .pcmu_protocol import encode_pcmu_delivery
 from .pcmu_subscriptions import PcmuPacketDelivery
+from .scanner_display_http_trace import MimicRequestTimingMiddleware, mark_display_handler
+from .scanner_display_ingress import (
+    DISPLAY_PROFILE_ADMIN_PATH,
+    ScannerDisplayIngress,
+    ScannerDisplayIngressMiddleware,
+)
 from .state import RadioStateSnapshot
 from .tui_controls import HoldScope, hold_selection
 from .web_auth import (
     WebDashboardAuthentication,
     WebDashboardAuthenticationMiddleware,
 )
+from .web_supplemental import attach_supplemental_routes
 from .web_theme_runtime import (
     WebThemeRuntimeRegistry,
     build_web_theme_runtime,
     read_web_theme_stylesheet,
 )
 from .web_themes import WebThemeError
+from .web_typography import WEB_TYPOGRAPHY_FONTS
 
 WEB_DASHBOARD_API_PROTOCOL = "sdsctl.web"
 WEB_DASHBOARD_API_VERSION = 1
@@ -264,6 +272,20 @@ class DaemonApiClientLike(Protocol):
     def runtime_snapshot(self) -> Mapping[str, object]:
         """Return one authoritative daemon runtime snapshot."""
 
+    def display_frame(self) -> Mapping[str, object]:
+        """Return the configured daemon's read-only Mimic-SDS presentations."""
+
+    def display_supplemental_context(self) -> Mapping[str, object]:
+        """Negotiate an explicitly enabled supplemental owner context."""
+
+    def display_supplemental_frame(self, context: object) -> Mapping[str, object]:
+        """Read one cached supplemental bundle bound to that context."""
+
+    def display_supplemental_demand(
+        self, context: object, renewal_id: str
+    ) -> Mapping[str, object]:
+        """Renew only an explicitly enabled bounded observational lease."""
+
     def remote_clients(self) -> Mapping[str, object]:
         """Return the local operator's remote-connection inventory."""
 
@@ -462,7 +484,11 @@ def create_web_dashboard_app(
     lan_authentication: WebDashboardAuthentication | None = None,
     browser_device_sessions: BrowserDeviceSessions | None = None,
     browser_device_admin_ingress: BrowserDeviceIngress | None = None,
+    scanner_display_admin_ingress: ScannerDisplayIngress | None = None,
     managed_theme_root: Path | None = None,
+    supplemental_delivery: bool = False,
+    supplemental_demand: bool = False,
+    supplemental_consumer: bool = False,
 ) -> FastAPI:
     """Create the daemon-backed web application without scanner ownership."""
 
@@ -490,6 +516,18 @@ def create_web_dashboard_app(
         raise TypeError(
             "Home Assistant Ingress setting must be boolean."
         )
+    if type(supplemental_delivery) is not bool:
+        raise TypeError("Supplemental delivery opt-in must be boolean.")
+    if type(supplemental_demand) is not bool:
+        raise TypeError("Supplemental demand opt-in must be boolean.")
+    if supplemental_demand and not supplemental_delivery:
+        raise ValueError("Supplemental demand requires explicit supplemental delivery.")
+    if type(supplemental_consumer) is not bool:
+        raise TypeError("Supplemental consumer opt-in must be boolean.")
+    if supplemental_consumer and not supplemental_delivery:
+        raise ValueError("Supplemental consumer requires explicit supplemental delivery.")
+    if supplemental_delivery and not (home_assistant_ingress or lan_authentication is not None):
+        raise ValueError("Supplemental delivery requires authenticated dashboard admission.")
     if lan_authentication is not None and not isinstance(
         lan_authentication,
         WebDashboardAuthentication,
@@ -526,7 +564,17 @@ def create_web_dashboard_app(
         redoc_url=None,
         openapi_url="/api/v1/openapi.json",
     )
+    # Added first so authentication/Ingress middleware wraps this diagnostic.
+    app.add_middleware(MimicRequestTimingMiddleware)
+    if scanner_display_admin_ingress is not None and (
+        not home_assistant_ingress
+        or not isinstance(scanner_display_admin_ingress, ScannerDisplayIngress)
+    ):
+        raise ValueError("Profile administration requires explicit private Ingress configuration.")
     if home_assistant_ingress:
+        if scanner_display_admin_ingress is not None:
+            app.add_middleware(ScannerDisplayIngressMiddleware,
+                               configuration=scanner_display_admin_ingress)
         if browser_device_admin_ingress is not None:
             app.add_middleware(BrowserDeviceIngressMiddleware,
                                configuration=browser_device_admin_ingress)
@@ -535,14 +583,21 @@ def create_web_dashboard_app(
         display_theme_paths = frozenset(
             "/" + asset.manifest.stylesheet_url for asset in web_theme_runtime.assets
         )
+        if supplemental_consumer:
+            display_theme_paths |= {"/assets/mimic-supplemental.js"}
         if browser_device_sessions is not None:
             app.add_middleware(BrowserDeviceHTTP, devices=browser_device_sessions,
                                authentication=lan_authentication,
-                               display_theme_paths=display_theme_paths)
+                               display_theme_paths=display_theme_paths,
+                               supplemental_demand=supplemental_demand)
         else:
             app.add_middleware(WebDashboardAuthenticationMiddleware,
                                authentication=lan_authentication,
-                               display_theme_paths=display_theme_paths)
+                               display_theme_paths=display_theme_paths,
+                               supplemental_demand=supplemental_demand)
+
+    if supplemental_delivery:
+        attach_supplemental_routes(app, api_client_factory, demand=supplemental_demand)
 
     @app.get(
         "/",
@@ -551,11 +606,21 @@ def create_web_dashboard_app(
     )
     def index(request: Request) -> HTMLResponse:
         shell = _dashboard_shell(web_theme_runtime, home_assistant_ingress)
+        if supplemental_consumer:
+            mode = "demand" if supplemental_demand else "cached"
+            shell = shell.replace(
+                '<html lang="en"', f'<html data-sdsctl-supplemental="{mode}" lang="en"', 1,
+            ).replace(
+                '  <script src="assets/mimic-sds.js" defer></script>',
+                '  <script src="assets/mimic-supplemental.js" defer></script>\n'
+                '  <script src="assets/mimic-sds.js" defer></script>',
+                1,
+            )
         if lan_authentication is not None:
             display_only = request.scope.get("state", {}).get("sdsctl_display_only") is True
             mode = "display" if display_only else "operator"
             shell = shell.replace(
-                '<html lang="en"', f'<html data-access-mode="{mode}" lang="en"', 1,
+                '<html ', f'<html data-access-mode="{mode}" ', 1,
             )
         return HTMLResponse(
             content=shell,
@@ -593,6 +658,64 @@ def create_web_dashboard_app(
     )
     def viewport_stylesheet() -> Response:
         return _asset_response("dashboard-viewport.css", media_type="text/css")
+
+    @app.get("/assets/lcars-v2.css", include_in_schema=False, response_class=Response)
+    def lcars_v2_stylesheet() -> Response:
+        return _asset_response("lcars-v2.css", media_type="text/css")
+
+    @app.get("/assets/lcars-v2.js", include_in_schema=False, response_class=Response)
+    def lcars_v2_script() -> Response:
+        return _asset_response("lcars-v2.js", media_type="application/javascript")
+
+    @app.get("/assets/fonts/antonio-variable.ttf", include_in_schema=False)
+    def lcars_v2_font() -> Response:
+        return Response(
+            content=files(_WEB_ASSET_PACKAGE).joinpath("fonts/antonio-variable.ttf").read_bytes(),
+            media_type="font/ttf", headers=dict(_WEB_RESPONSE_HEADERS),
+        )
+
+    @app.get("/assets/fonts/antonio-OFL.txt", include_in_schema=False)
+    def lcars_v2_font_license() -> Response:
+        return _asset_response("fonts/antonio-OFL.txt", media_type="text/plain")
+
+    @app.get("/assets/theme-typography.css", include_in_schema=False)
+    def theme_typography_stylesheet() -> Response:
+        return _asset_response("theme-typography.css", media_type="text/css")
+
+    @app.get("/assets/theme-typography.js", include_in_schema=False)
+    def theme_typography_script() -> Response:
+        return _asset_response("theme-typography.js", media_type="application/javascript")
+
+    @app.get("/assets/fonts/{name}", include_in_schema=False)
+    def theme_typography_font(name: str) -> Response:
+        if name not in WEB_TYPOGRAPHY_FONTS:
+            raise HTTPException(status_code=404, detail="Font asset not found.")
+        return Response(
+            content=files(_WEB_ASSET_PACKAGE).joinpath(f"fonts/{name}").read_bytes(),
+            media_type="font/ttf" if name.endswith(".ttf") else "text/plain",
+            headers=dict(_WEB_RESPONSE_HEADERS),
+        )
+
+    @app.get("/assets/mimic-sds.css", include_in_schema=False, response_class=Response)
+    def mimic_stylesheet() -> Response:
+        return _asset_response("mimic-sds.css", media_type="text/css")
+
+    @app.get("/assets/mimic-sds.js", include_in_schema=False, response_class=Response)
+    def mimic_script() -> Response:
+        from .scanner_display_web import scanner_display_browser_contract
+
+        return Response(
+            content=_read_web_asset("mimic-sds.js").replace(
+                "__SDSCTL_MIMIC_CONTRACT__", json.dumps(scanner_display_browser_contract())
+            ),
+            media_type="application/javascript", headers=dict(_WEB_RESPONSE_HEADERS),
+        )
+
+    if supplemental_consumer:
+
+        @app.get("/assets/mimic-supplemental.js", include_in_schema=False)
+        def supplemental_script() -> Response:
+            return _asset_response("mimic-supplemental.js", media_type="application/javascript")
 
     @app.get(
         "/assets/system-palettes.css",
@@ -810,6 +933,7 @@ def create_web_dashboard_app(
             "scanner_previous_scope": "/api/v1/scanner/previous/{scope}",
             "scanner_reconnect": "/api/v1/scanner/reconnect",
             "snapshot": "/api/v1/snapshot",
+            "display_frame": "/api/v1/display-frame",
             "status": "/api/v1/status",
             "waterfall": "/api/v1/waterfall",
         }
@@ -822,6 +946,8 @@ def create_web_dashboard_app(
             )
             if browser_device_admin_ingress is not None:
                 links["home_assistant_browser_devices"] = BROWSER_ADMIN_PATH
+            if scanner_display_admin_ingress is not None:
+                links["home_assistant_scanner_display_profile"] = DISPLAY_PROFILE_ADMIN_PATH
         return {
             "service": _service_metadata(),
             "links": links,
@@ -998,6 +1124,17 @@ def create_web_dashboard_app(
         return {
             **_api_envelope(),
             "snapshot": _query_daemon(api_client_factory, _daemon_snapshot),
+        }
+
+    @app.get("/api/v1/display-frame")
+    def display_frame(request: Request, response: Response) -> dict[str, object]:
+        mark_display_handler(request.scope)
+        response.headers["Cache-Control"] = "no-store"
+        if request.query_params:
+            raise HTTPException(status_code=422, detail="Display frames do not accept parameters.")
+        return {
+            **_api_envelope(),
+            "display": _query_daemon(api_client_factory, _daemon_display_frame),
         }
 
     @app.post("/api/v1/scanner/hold/{scope}")
@@ -2435,6 +2572,11 @@ def _daemon_status(client: DaemonApiClientLike) -> Mapping[str, object]:
 def _daemon_snapshot(client: DaemonApiClientLike) -> Mapping[str, object]:
     client.hello()
     return client.runtime_snapshot()
+
+
+def _daemon_display_frame(client: DaemonApiClientLike) -> Mapping[str, object]:
+    client.hello()
+    return client.display_frame()
 
 
 __all__ = [

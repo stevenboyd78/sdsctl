@@ -32,6 +32,12 @@
   let activeSystemPalette = "auto";
 
   function normalizeTheme(value) {
+    // The v2 preview became the canonical LCARS theme. Normalize before the
+    // allowlist check so existing selections never fall back to System.
+    // readStoredTheme repairs the saved ID without changing appearance prefs.
+    if (value === "lcars-v2") {
+      value = "lcars";
+    }
     if (!THEMES.includes(value)) {
       return "system";
     }

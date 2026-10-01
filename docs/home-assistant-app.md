@@ -370,8 +370,13 @@ identity rules, automation syntax, target limitations, and test workflow.
 
 ## Bundled Lovelace cards
 
-The Home Assistant App installs three first-party SDS200 cards and one
+The **published 0.30.0** Home Assistant App installs three first-party SDS200 cards and one
 declarative aggregate entry point:
+
+The unreleased Mimic-SDS candidate adds a fourth card and a shared Ingress session
+manager. Its changed resources must ship together with the candidate runtime;
+see the [candidate card guide](home-assistant-mimic-card.md). The published URLs
+below are not candidate resource URLs.
 
 ```text
 /homeassistant/www/sds200/sds200-card.js
@@ -1381,7 +1386,7 @@ scanner-control, PSI, and RTSP/RTP owner.
 
 The acceptance run confirmed:
 
-- System, LCARS-inspired, Matrix-inspired, First Responder, Amateur Radio, and
+- System, LCARS, Matrix-inspired, First Responder, Amateur Radio, and
   Pip-Boy-inspired appeared in deterministic order over the shared Scanner,
   Controls, Audio, Recordings, and Diagnostics panes. System and
   Pip-Boy-inspired were visually inspected through live Ingress; theme, pane,

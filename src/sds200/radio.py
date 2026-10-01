@@ -20,6 +20,8 @@ from .analysis_subscriptions import (
 from .commands import (
     Command,
     GetChargeStatus,
+    GetDateTime,
+    GetDepartmentQuickKeys,
     GetFavoritesQuickKeys,
     GetFirmware,
     GetGltFavorites,
@@ -29,6 +31,7 @@ from .commands import (
     GetScannerRecordingStatus,
     GetSquelch,
     GetStatus,
+    GetSystemQuickKeys,
     GetVolume,
     GetWaterfallStatus,
     HoldSelection,
@@ -68,6 +71,7 @@ from .models import (
     AnalysisMode,
     AnalysisResponse,
     ChargeStatus,
+    DepartmentQuickKeys,
     FavoritesQuickKeys,
     FavoritesQuickKeyState,
     FirmwareResponse,
@@ -81,10 +85,12 @@ from .models import (
     PwfResponse,
     RadioEvent,
     RadioHealth,
+    ScannerDateTime,
     ScannerInfo,
     ScannerRecordingStatus,
     ScannerRecordingStatusResponse,
     StatusResponse,
+    SystemQuickKeys,
 )
 from .network import (
     DEFAULT_UDP_PORT,
@@ -768,6 +774,95 @@ class SDSScanner:
     def get_firmware(self, *, timeout: float = 2.0) -> str:
         return self.execute(GetFirmware(), timeout=timeout)
 
+    def get_date_time(self, *, timeout: float = 2.0) -> ScannerDateTime:
+        """Read the scanner's own clock without setting it or converting timezone."""
+        return self.execute(GetDateTime(), timeout=timeout)
+
+    def read_clock_if_idle(self, *, timeout: float = 0.25) -> ScannerDateTime | None:
+        """One GET on the existing owner; busy/disconnected returns None.
+
+        No connect, worker, retry or cache is created. Like quick-key GETs,
+        callers must quarantine uncertain reads until a real reconnect. Never
+        call from a PSI callback. The deadline bounds response waiting, not a
+        blocking transport write; a shared worker must also enforce pacing.
+        """
+        timeout = _require_positive_timeout(timeout, label="Background clock timeout")
+        if timeout > 0.5:
+            raise ValueError("Background clock timeout must not exceed 0.5 seconds.")
+        if not self._command_lock.acquire(blocking=False):
+            return None
+        try:
+            if not self.connected:
+                return None
+            return self.execute(GetDateTime(), timeout=timeout)
+        finally:
+            self._command_lock.release()
+
+    def _read_bounded_supplemental_if_idle(
+        self, command: GetDateTime | GetFavoritesQuickKeys, *, timeout: float = 0.25
+    ) -> ScannerDateTime | FavoritesQuickKeys | None:
+        """Internal opt-in candidate; normal startup/reader do not select it.
+
+        One exact DTM/FQK GET on directly owned native POSIX UDP only. Admission
+        and transport contention yield without a queued write; the same
+        absolute budget covers dispatch, reply waiting and parsing. An expired
+        or uncertain dispatched read must quarantine the optional reader.
+
+        No synchronous TX trace/logger or capture-wrapper bypass: file tracing
+        and wrapped/custom transports are refused. No socket timeout mutation,
+        detached work, reconnect or retry. This is not a real-time OS guarantee;
+        normal response-registry cleanup still uses its short metadata lock.
+        """
+        if type(command) not in (GetDateTime, GetFavoritesQuickKeys):
+            raise ValueError("Bounded supplemental reads require an exact DTM or FQK GET.")
+        timeout = _require_positive_timeout(timeout, label="Bounded supplemental timeout")
+        if timeout > 0.5:
+            raise ValueError("Bounded supplemental timeout must not exceed 0.5 seconds.")
+        deadline = monotonic() + timeout
+        if (
+            type(self.transport) is not UdpTransport
+            or type(self.trace) is not TrafficTrace
+            or self.trace.path is not None
+        ):
+            raise UnsupportedScannerFeatureError(
+                "Bounded supplemental reads require direct UDP without file tracing."
+            )
+        if not self._command_lock.acquire(blocking=False):
+            return None
+        try:
+            response_queue: queue.Queue[object] = queue.Queue(maxsize=1)
+            pending = _PendingResponse(command=command.response_command, queue=response_queue)
+            if not self._response_lock.acquire(blocking=False):
+                return None
+            try:
+                if self._responses:
+                    return None
+                self._responses[command.response_command] = pending
+            finally:
+                self._response_lock.release()
+            try:
+                if not self.transport.try_write_supplemental_get(command.wire, deadline=deadline):
+                    return None
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    raise CommandTimeoutError("Bounded supplemental read expired after dispatch.")
+                try:
+                    response = response_queue.get(timeout=remaining)
+                except queue.Empty as exc:
+                    raise CommandTimeoutError("Bounded supplemental response timed out.") from exc
+                if isinstance(response, CommandRejectedError):
+                    raise response
+                result = command.parse_response(response)
+                if monotonic() >= deadline:
+                    raise CommandTimeoutError("Bounded supplemental response arrived too late.")
+                return result
+            finally:
+                with self._response_lock:
+                    if self._responses.get(command.response_command) is pending:
+                        self._responses.pop(command.response_command)
+        finally:
+            self._command_lock.release()
+
     def get_volume(self, *, timeout: float = 2.0) -> int:
         value = self.execute(GetVolume(), timeout=timeout)
         self._publish_level_state("volume", value)
@@ -1125,6 +1220,39 @@ class SDSScanner:
     ) -> None:
         self.execute(StartSystemStatusAnalysis(site_index), timeout=timeout)
 
+    @contextmanager
+    def _system_status_research_scope(self, *, timeout: float) -> Iterator[None]:
+        with self._direct_udp_research_scope(timeout=timeout, label="System Status"):
+            yield
+
+    @contextmanager
+    def _display_read_research_scope(self, *, timeout: float) -> Iterator[None]:
+        with self._direct_udp_research_scope(timeout=timeout, label="Display read"):
+            yield
+
+    @contextmanager
+    def _direct_udp_research_scope(self, *, timeout: float, label: str) -> Iterator[None]:
+        """Serialize the internal research transaction on an existing UDP owner.
+
+        No fallback/custom transport, connect, reconnect or automatic retry.
+        This is not a public analysis lifecycle or a daemon API operation.
+        """
+        normalized = _require_positive_timeout(timeout, label=f"{label} research timeout")
+        if type(self.transport) is not UdpTransport:
+            raise UnsupportedScannerFeatureError(
+                f"{label} research requires a directly owned UDP transport."
+            )
+        if not self._command_lock.acquire(timeout=normalized):
+            raise CommandTimeoutError(f"{label} research command scope timed out.")
+        try:
+            if not self.connected:
+                raise UnsupportedScannerFeatureError(
+                    f"{label} research requires an existing connection."
+                )
+            yield
+        finally:
+            self._command_lock.release()
+
     def start_rf_power_plot_analysis(
         self,
         frequency: int,
@@ -1193,6 +1321,46 @@ class SDSScanner:
         timeout: float = 2.0,
     ) -> None:
         self.execute(SetFavoritesQuickKeys(states), timeout=timeout)
+
+    def get_system_quick_keys(
+        self, favorites_quick_key: int, *, timeout: float = 2.0
+    ) -> SystemQuickKeys:
+        return self.execute(GetSystemQuickKeys(favorites_quick_key), timeout=timeout)
+
+    def get_department_quick_keys(
+        self, favorites_quick_key: int, system_quick_key: int, *, timeout: float = 2.0
+    ) -> DepartmentQuickKeys:
+        return self.execute(
+            GetDepartmentQuickKeys(favorites_quick_key, system_quick_key), timeout=timeout
+        )
+
+    def read_quick_keys_if_idle(
+        self,
+        command: GetFavoritesQuickKeys | GetSystemQuickKeys | GetDepartmentQuickKeys,
+        *,
+        timeout: float = 0.25,
+    ) -> FavoritesQuickKeys | SystemQuickKeys | DepartmentQuickKeys | None:
+        """Bounded background GET on this owner; None means busy/disconnected.
+
+        Never queues behind an existing control operation or opens a connection.
+        Once dispatched, it occupies the shared command lane until completion;
+        the response wait has the supplied budget, but does not preempt a
+        transport write. Call from a worker, never a PSI callback.
+        """
+        if type(command) not in (GetFavoritesQuickKeys, GetSystemQuickKeys, GetDepartmentQuickKeys):
+            raise ValueError("Background quick-key reads require an exact GET command.")
+        timeout = _require_positive_timeout(timeout, label="Background quick-key timeout")
+        if timeout > 0.5:
+            raise ValueError("Background quick-key timeout must not exceed 0.5 seconds.")
+        if not self._command_lock.acquire(blocking=False):
+            return None
+        try:
+            if not self.connected:
+                return None
+            response = self._wait_for_response(command.response_command, command.wire, timeout)
+            return command.parse_response(response)
+        finally:
+            self._command_lock.release()
 
     def get_scanner_recording_status(
         self, *, timeout: float = 2.0

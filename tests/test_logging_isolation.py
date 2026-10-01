@@ -11,10 +11,13 @@ from pathlib import Path
 
 def test_package_logging_is_isolated_across_capture_lifetimes(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]
-    shutil.copyfile(root / "tests" / "conftest.py", tmp_path / "conftest.py")
-    test_file = tmp_path / "test_capture_lifecycle.py"
+    isolated_tests = tmp_path / "tests"
+    isolated_tests.mkdir()
+    for filename in ("__init__.py", "conftest.py", "_supplemental_failure_diagnostics.py"):
+        shutil.copyfile(root / "tests" / filename, isolated_tests / filename)
+    test_file = isolated_tests / "test_capture_lifecycle.py"
     test_file.write_text(
-        '''import io
+        """import io
 import logging
 from sds200.logging_config import configure_logging
 
@@ -56,7 +59,7 @@ def teardown_module():
     logger.setLevel(level)
     logger.propagate = propagate
     logger.disabled = disabled
-''',
+""",
         encoding="utf-8",
     )
     environment = dict(os.environ, PYTHONPATH=str(root / "src"))

@@ -1,0 +1,13 @@
+{
+  "observed": "2026-09-28",
+  "guide": "https://www.thelcars.com/colors.php",
+  "note": "Exact palette values from publicly served original theme stylesheets; downloadable ZIP contents were not inspected. No template CSS/assets are redistributed here.",
+  "themes": {
+    "classic": {"url": "https://www.thelcars.com/assets/classic-26101.css", "sha256": "a45697e36bd5c9e1ef434770c1865ad21ad3c8b33d4d28afe26aca4f55df3ce4"},
+    "nemesis-blue": {"url": "https://www.thelcars.com/themes/assets/nemesis-blue.css", "sha256": "473714fe78c04d0e517ff52784f6643d28068cfa088710f6e994081a619944d6"},
+    "lower-decks": {"url": "https://www.thelcars.com/themes/assets/lower-decks.css", "sha256": "fe5153da0fcae51e2c7eefee92766fa853e7ca3f8a6965946222ada21fc94446"},
+    "lower-decks-padd": {"url": "https://www.thelcars.com/themes/assets/lower-decks-padd.css", "sha256": "92b3c017203a970d92a6ccf85eed80aa99eea8eb2db2d722a3c1bc9882628190"},
+    "voyager": {"url": "https://www.thelcars.com/themes/assets/voyager.css", "sha256": "db2882288ac8247f9c61ba5a40121a5b27bdb07e4934cd943d3f5ece02226831"},
+    "picard": {"url": "https://www.thelcars.com/themes/assets/picard.css", "sha256": "059fd1fdab247861c3f3678e0e7757c0430fdcdbd0687cb68838fdc253059870"}
+  }
+}

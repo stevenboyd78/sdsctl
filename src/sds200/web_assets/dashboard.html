@@ -9,7 +9,13 @@
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/dashboard.css">
   <!-- SDSCTL_THEME_STYLES -->
+  <link rel="stylesheet" href="assets/mimic-sds.css">
+  <link rel="stylesheet" href="assets/lcars-v2.css">
+  <link rel="stylesheet" href="assets/theme-typography.css">
   <script src="assets/theme-bootstrap.js"></script>
+  <script src="assets/lcars-v2.js"></script>
+  <script src="assets/theme-typography.js"></script>
+  <script src="assets/mimic-sds.js" defer></script>
   <script src="assets/dashboard.js" defer></script>
 </head>
 <body>
@@ -67,6 +73,43 @@
           <option value="auto">Follow device</option>
           <!-- SDSCTL_SYSTEM_PALETTE_OPTIONS -->
         </select>
+      </div>
+
+      <div id="lcars-v2-appearance-pickers" hidden>
+        <div class="system-palette-picker">
+          <label for="lcars-v2-palette-select">LCARS palette</label>
+          <select id="lcars-v2-palette-select">
+            <option value="classic">Classic</option>
+            <option value="nemesis-blue">Nemesis Blue</option>
+            <option value="lower-decks">Lower Decks</option>
+            <option value="lower-decks-padd">Lower Decks PADD</option>
+            <option value="voyager">Voyager</option>
+            <option value="picard">Picard</option>
+          </select>
+        </div>
+        <div class="system-palette-picker">
+          <label for="lcars-v2-type-select">Typography</label>
+          <select id="lcars-v2-type-select">
+            <option value="antonio">LCARS / Antonio</option>
+            <option value="mixed">Readable mix</option>
+            <option value="system">System</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="theme-typography-pickers" hidden>
+        <div id="theme-font-picker" class="system-palette-picker">
+          <label for="theme-font-select">Font pairing</label>
+          <select id="theme-font-select"></select>
+        </div>
+        <div class="system-palette-picker">
+          <label for="theme-typography-select">Typography</label>
+          <select id="theme-typography-select">
+            <option value="theme">Theme fonts</option>
+            <option value="mixed">Readable mix</option>
+            <option value="system">System fonts</option>
+          </select>
+        </div>
       </div>
 
       <p id="dashboard-message" class="dashboard-message" role="status">
@@ -794,7 +837,7 @@
             <dt>Discontinuities</dt>
             <dd id="recording-discontinuities">0</dd>
           </div>
-          <div>
+          <div class="recording-file-status">
             <dt>File</dt>
             <dd id="recording-file" class="technical-value">None</dd>
           </div>
@@ -853,6 +896,14 @@
               controls
               preload="none"
             ></audio>
+            <div class="audio-controls" role="group" aria-label="Saved recording playback">
+              <button id="saved-playback-toggle" type="button" disabled>
+                Resume saved recording
+              </button>
+              <button id="saved-playback-stop" type="button" disabled>
+                Stop saved recording
+              </button>
+            </div>
           </div>
         </div>
       </section>

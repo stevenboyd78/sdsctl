@@ -274,12 +274,24 @@ def test_capabilities_preserve_reads_and_advertise_controls() -> None:
             operation.value
             for operation in DaemonApiOperation
             if operation not in DAEMON_API_RECORDING_OPERATIONS
+            and operation not in (
+                DaemonApiOperation.DISPLAY_PROFILE, DaemonApiOperation.DISPLAY_PROFILE_RELOAD,
+                DaemonApiOperation.DISPLAY_FRAME,
+                DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT,
+                DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME,
+                DaemonApiOperation.DISPLAY_SUPPLEMENTAL_DEMAND,
+            )
         ],
         "read_only": False,
         "read_only_operations": [
             operation.value
             for operation in DAEMON_API_READ_ONLY_OPERATIONS
             if operation not in DAEMON_API_RECORDING_OPERATIONS
+            and operation not in (
+                DaemonApiOperation.DISPLAY_PROFILE, DaemonApiOperation.DISPLAY_FRAME,
+                DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT,
+                DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME,
+            )
         ],
         "control_operations": [
             operation.value

@@ -23,6 +23,10 @@ BUILT_IN_WEB_THEME_IDS = (
     "pip-boy-inspired",
 )
 
+# Retired built-in identities stay reserved for saved-preference migration.
+# Keep these in sync with normalizeTheme in web_assets/theme-bootstrap.js.
+LEGACY_WEB_THEME_IDS = ("lcars-v2",)
+
 _IDENTIFIER_PATTERN = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 _COLOR_PATTERN = re.compile(r"#[0-9a-fA-F]{6}\Z")
 _MANIFEST_FIELDS = frozenset(

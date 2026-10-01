@@ -155,8 +155,7 @@ def test_tui_preserves_network_audio_at_physical_pi_size(tmp_path: Path) -> None
         log_buffer = TuiLogBuffer(limit=10)
         for index in range(6):
             log_buffer.append(
-                f"2026-09-03 WARNING sds200.test: event {index} "
-                + "long diagnostic context " * 8
+                f"2026-09-03 WARNING sds200.test: event {index} " + "long diagnostic context " * 8
             )
         app = _app(session, log_buffer=log_buffer)
 
@@ -368,8 +367,10 @@ def test_tui_rejects_repeated_record_requests_while_starting(
     asyncio.run(exercise())
 
 
+@pytest.mark.parametrize("setup_delay", [0.0, 1.05])
 def test_tui_shutdown_coordinates_with_audio_start_in_progress(
     tmp_path: Path,
+    setup_delay: float,
 ) -> None:
     async def exercise() -> None:
         transport = BlockingStartAudioTransport()
@@ -399,20 +400,30 @@ def test_tui_shutdown_coordinates_with_audio_start_in_progress(
             try:
                 if not shutdown_entered.wait(1.0):
                     raise TimeoutError("TUI shutdown did not begin")
-                transport.release_start.set()
             except Exception as error:
                 release_errors.append(error)
+            finally:
+                transport.release_start.set()
 
         release_thread = threading.Thread(target=release_start)
-        release_thread.start()
         app.stop_audio = stop_audio
         app.call_from_thread = call_from_thread
 
-        async with app.run_test(size=(100, 46)) as pilot:
-            await pilot.press("r")
-            assert await asyncio.to_thread(transport.start_entered.wait, 1.0)
-
-        release_thread.join(timeout=1.0)
+        try:
+            async with app.run_test(size=(100, 46)) as pilot:
+                try:
+                    # Setup time is not part of the shutdown coordination deadline.
+                    await asyncio.sleep(setup_delay)
+                    await pilot.press("r")
+                    assert await asyncio.to_thread(transport.start_entered.wait, 1.0)
+                    release_thread.start()
+                except BaseException:
+                    transport.release_start.set()
+                    raise
+        finally:
+            transport.release_start.set()
+            if release_thread.ident is not None:
+                release_thread.join(timeout=1.0)
         assert not release_thread.is_alive()
         assert release_errors == []
         assert not dispatch_after_shutdown.is_set()

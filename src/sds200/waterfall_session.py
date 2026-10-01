@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import logging
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -19,6 +20,10 @@ from .waterfall_subscriptions import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class WaterfallIdleReservationError(RuntimeError):
+    """Expected busy/non-idle refusal, distinct from a reservation implementation fault."""
 
 
 class WaterfallSessionState(StrEnum):
@@ -331,6 +336,7 @@ class WaterfallSession:
         initial = now()
         self._state = WaterfallSessionState.IDLE
         self._leases: set[WaterfallSessionLease] = set()
+        self._idle_reserved = False
         self._transition_sequence = 0
         self._started_at: datetime | None = None
         self._stopped_at: datetime | None = None
@@ -397,6 +403,8 @@ class WaterfallSession:
 
     def subscribe(self) -> WaterfallSessionLease:
         with self._lock:
+            if self._idle_reserved:
+                raise RuntimeError("Waterfall session is reserved for scanner research.")
             if self._state is WaterfallSessionState.CLOSED:
                 raise RuntimeError("Waterfall session is closed.")
 
@@ -425,6 +433,28 @@ class WaterfallSession:
             self._record_gst_success_locked(status)
             self._transition_locked(WaterfallSessionState.RUNNING)
             return lease
+
+    @contextmanager
+    def reserve_idle_for_research(self) -> Iterator[None]:
+        """Exclude new consumers without holding a lock across scanner I/O.
+
+        This never stops a running waterfall or changes scanner mode. Refuse
+        promptly if session work is already in progress. Disconnect callbacks
+        and shutdown remain free to acquire the session lock while reserved.
+        """
+        if not self._lock.acquire(blocking=False):
+            raise WaterfallIdleReservationError("Waterfall session is busy.")
+        try:
+            if self._idle_reserved or self._leases or self._state is not WaterfallSessionState.IDLE:
+                raise WaterfallIdleReservationError("Waterfall session is not idle.")
+            self._idle_reserved = True
+        finally:
+            self._lock.release()
+        try:
+            yield
+        finally:
+            with self._lock:
+                self._idle_reserved = False
 
     def poll(self) -> bool:
         """Request one due GWF frame for the shared daemon-owned session."""

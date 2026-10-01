@@ -1,0 +1,107 @@
+/* Scoped geometry: profile colors remain inline validated RGB, never theme tokens. */
+@layer sdsctl-viewport-contract {
+  #pane-scanner[data-mimic-available="true"]:not([hidden]) {
+    display: flex !important; flex-direction: column !important; gap: 8px !important;
+  }
+  #pane-scanner[data-mimic-available="true"] > #radio-activity-panel {
+    flex: 1 1 0 !important; height: auto !important;
+  }
+  #pane-scanner .mimic-toolbar {
+    display: flex !important; flex: 0 0 auto !important; flex-wrap: wrap !important;
+    gap: 6px 14px !important; min-width: 0 !important; padding: 6px 8px !important;
+  }
+  #pane-scanner .mimic-toolbar label {
+    display: flex !important; flex-direction: column !important;
+    gap: 3px !important; min-width: 0 !important; font: 12px system-ui !important;
+  }
+  #pane-scanner .mimic-toolbar select {
+    min-height: 36px !important; max-width: 100% !important;
+    font: 14px system-ui !important; padding: 4px 8px !important;
+  }
+  #pane-scanner .mimic-display {
+    flex: 1 1 0 !important; min-height: 0 !important; min-width: 0 !important;
+    overflow: auto !important; display: grid !important;
+    grid-template-rows: auto auto minmax(280px, 1fr) auto auto !important;
+    gap: 5px !important; padding: 8px !important; background: #0c121c !important;
+    color: #edf4fc !important; border: 1px solid #55687f !important;
+    border-radius: 8px !important; font: 14px system-ui, sans-serif !important;
+  }
+  #pane-scanner .mimic-display :is(p, ul) { margin: 0 !important; }
+  #pane-scanner .mimic-status {
+    padding: 6px 10px !important; border-left: 4px solid #ffacb4 !important;
+    background: #4a252d !important; font-weight: 700 !important;
+  }
+  #pane-scanner .mimic-display[data-state="current"] .mimic-status {
+    border-color: #62ddbd !important; background: #163e36 !important;
+  }
+  #pane-scanner :is(.mimic-basis, .mimic-note, .mimic-details) {
+    font: 12px/1.3 system-ui !important; color: #c6d2e2 !important;
+    overflow-wrap: anywhere !important;
+  }
+  #pane-scanner .mimic-surround {
+    --mimic-led: #3b4654;
+    --mimic-led-width: 3cqmin;
+    --mimic-screen-min-height: 280px;
+    position: relative !important; border: 0 !important; padding: 0 !important;
+    min-height: var(--mimic-screen-min-height) !important; min-width: 0 !important; background: #000 !important;
+    container-type: size !important;
+  }
+  #pane-scanner [data-led-treatment="border"] .mimic-grid { border-color: var(--mimic-led) !important; }
+  #pane-scanner .mimic-grid {
+    display: grid !important; grid-template-columns: repeat(30,minmax(0,1fr)) !important;
+    grid-template-rows: repeat(20,minmax(0,1fr)) !important;
+    /* The child queries the surrounding panel, not the viewport or itself.
+       Keep the LED inside that fixed box; cell fonts query the remaining space. */
+    position: absolute !important; inset: 0 !important;
+    width: 100% !important; height: 100% !important; min-height: 0 !important;
+    box-sizing: border-box !important; container-type: size !important;
+    border: var(--mimic-led-width) solid transparent !important;
+    border-top-color: var(--mimic-led) !important;
+    border-bottom-color: var(--mimic-led) !important;
+    background: #000 !important; overflow: hidden !important;
+  }
+  #pane-scanner .mimic-cell {
+    min-width: 0 !important; min-height: 0 !important; padding: 0 3px !important;
+    display: flex !important; align-items: center !important; overflow: hidden !important;
+    font: clamp(11px, min(1.7cqw, 4.5cqh), 24px)/1 monospace !important;
+  }
+  #pane-scanner .mimic-cell[data-alignment="center"] { justify-content: center !important; text-align: center !important; }
+  #pane-scanner .mimic-cell[data-alignment="left"] { justify-content: start !important; text-align: left !important; }
+  #pane-scanner .mimic-cell span {
+    overflow: hidden !important; white-space: nowrap !important; text-overflow: ellipsis !important;
+    min-width: 0 !important;
+  }
+  #pane-scanner .mimic-cell[data-kind="name"] span {
+    width: 100% !important; font: clamp(20px, min(3.7cqw, 9cqh), 48px)/1 monospace !important;
+  }
+  #pane-scanner .mimic-cell[data-kind="name"][data-lines="2"] span {
+    display: -webkit-box !important; -webkit-box-orient: vertical !important;
+    -webkit-line-clamp: 2 !important; white-space: normal !important; overflow-wrap: anywhere !important;
+  }
+  #pane-scanner .mimic-empty { display: flex !important; align-items: center !important; justify-content: center !important; padding: 20px !important; }
+  #pane-scanner .mimic-details summary { cursor: pointer !important; min-height: 24px !important; }
+  #pane-scanner .mimic-details ul { columns: 3 180px !important; padding-left: 20px !important; }
+  #pane-scanner #mimic-favorites-states {
+    white-space: pre-wrap !important; overflow-wrap: anywhere !important; max-width: 100% !important;
+  }
+  #pane-scanner .mimic-cell { color: #cbd5e1; background-color: #18212d; }
+  /* Fit five bars in the two-column slot; never ellipsize into a lower level. */
+  #pane-scanner .mimic-cell[data-region="signal"][data-indicator^="level_"] {
+    padding: 0 !important; font-size: clamp(6px, min(1.2cqw, 4.5cqh), 24px) !important;
+  }
+  #pane-scanner[hidden],
+  #pane-scanner > #radio-activity-panel[hidden] { display: none !important; }
+  #pane-scanner [hidden] { display: none !important; }
+  @media (max-height: 600px) {
+    /* Keep the complete 20-row screen visible on short Pi displays. Extra
+       qualifications remain accessible in the disclosure, not over the cells. */
+    #pane-scanner .mimic-display {
+      grid-template-rows: auto minmax(220px, 1fr) auto !important;
+      padding: 4px !important; gap: 3px !important;
+    }
+    #pane-scanner :is(.mimic-basis, .mimic-note) { display: none !important; }
+    #pane-scanner .mimic-status { padding: 3px 8px !important; font-size: 12px !important; }
+    #pane-scanner .mimic-surround { --mimic-screen-min-height: 220px; }
+    #pane-scanner .mimic-cell { font-size: clamp(10px, min(1.7cqw, 4.5cqh), 24px) !important; }
+  }
+}

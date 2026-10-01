@@ -21,6 +21,7 @@ from sds200.daemon_recording_file_protocol import (
     RecordingFileResponseStatus,
     encode_recording_file_response,
 )
+from sds200.daemon_transport import UnixDaemonClientTransport
 
 
 def start_scripted_server(
@@ -81,6 +82,105 @@ def test_recording_file_client_requires_socket_location() -> None:
         DaemonRecordingFileClient(object())  # type: ignore[arg-type]
 
 
+def test_recording_file_client_accepts_explicit_unix_transport(tmp_path):
+    location = DaemonSocketLocation(tmp_path / "files.sock", DaemonSocketSource.EXPLICIT)
+    transport = UnixDaemonClientTransport(location, service_label="Daemon recording-file")
+    payload = b"synthetic saved audio"
+    thread = start_scripted_server(
+        location.path,
+        encode_recording_file_response(RecordingFileResponseStatus.OK, content_length=len(payload))
+        + payload,
+    )
+    client = DaemonRecordingFileClient(transport)
+    assert client.location is location and client.transport is transport
+    with client.open("test.wav") as download:
+        assert download.read() == payload
+    thread.join(1)
+    assert not thread.is_alive()
+
+
+def test_recording_file_transport_revalidates_every_connection():
+    requests, timeouts, peers, threads = [], [], [], []
+
+    class Transport:
+        def connect(self, *, timeout):
+            timeouts.append(timeout)
+            client, server = socket.socketpair()
+            peers.append(client)
+
+            def serve():
+                with server:
+                    requests.append(server.recv(8192))
+                    server.sendall(
+                        encode_recording_file_response(
+                            RecordingFileResponseStatus.OK, content_length=4
+                        )
+                        + b"RIFF"
+                    )
+
+            thread = threading.Thread(target=serve)
+            threads.append(thread)
+            thread.start()
+            return client
+
+    transport = Transport()
+    client = DaemonRecordingFileClient(transport, timeout=0.75)
+    assert client.location is None and client.transport is transport and timeouts == []
+    with pytest.raises(ValueError):
+        client.open("")
+    # Protocol validation precedes connect. Inventory/path admission remains a
+    # separate native server responsibility, unchanged by the transport.
+    assert timeouts == []
+    for _ in range(2):
+        with client.open("test.wav") as download:
+            assert download.read() == b"RIFF"
+    for thread in threads:
+        thread.join(1)
+        assert not thread.is_alive()
+    assert timeouts == [0.75, 0.75] and len(requests) == 2
+    assert all(peer.fileno() == -1 for peer in peers)
+
+
+def test_recording_file_transport_refusal_is_not_retried_or_replaced():
+    class Transport:
+        calls = 0
+
+        def connect(self, *, timeout):
+            self.calls += 1
+            raise DaemonUnavailableError("Original peer is unavailable.")
+
+    transport = Transport()
+    with pytest.raises(DaemonUnavailableError, match="Original peer"):
+        DaemonRecordingFileClient(transport).open("test.wav")
+    assert transport.calls == 1
+
+
+def test_recording_file_transport_sanitizes_unexpected_connection_error():
+    class Transport:
+        def connect(self, *, timeout):
+            raise OSError("private location must not appear in the message")
+
+    with pytest.raises(DaemonUnavailableError) as result:
+        DaemonRecordingFileClient(Transport()).open("test.wav")
+    assert str(result.value) == "Could not establish daemon recording-file transport."
+
+
+def test_recording_file_transport_closes_returned_socket_if_timeout_setup_fails():
+    class ClosedSocket(socket.socket):
+        def settimeout(self, value):
+            raise OSError("private timeout failure")
+
+    peer = ClosedSocket()
+
+    class Transport:
+        def connect(self, *, timeout):
+            return peer
+
+    with pytest.raises(DaemonUnavailableError):
+        DaemonRecordingFileClient(Transport()).open("test.wav")
+    assert peer.fileno() == -1
+
+
 def test_recording_file_client_reads_exact_content(
     tmp_path: Path,
 ) -> None:
@@ -94,9 +194,7 @@ def test_recording_file_client_reads_exact_content(
         + payload
     )
     thread = start_scripted_server(path, response)
-    client = DaemonRecordingFileClient(
-        DaemonSocketLocation(path, DaemonSocketSource.EXPLICIT)
-    )
+    client = DaemonRecordingFileClient(DaemonSocketLocation(path, DaemonSocketSource.EXPLICIT))
 
     download = client.open("2026/test.wav")
     assert download.content_length == len(payload)
@@ -128,9 +226,7 @@ def test_recording_file_client_classifies_failed_status_without_identifier(
         path,
         encode_recording_file_response(status),
     )
-    client = DaemonRecordingFileClient(
-        DaemonSocketLocation(path, DaemonSocketSource.EXPLICIT)
-    )
+    client = DaemonRecordingFileClient(DaemonSocketLocation(path, DaemonSocketSource.EXPLICIT))
     identifier = "secret/path/test.wav"
 
     with pytest.raises(DaemonRecordingFileRequestError) as raised:
@@ -146,9 +242,7 @@ def test_recording_file_client_rejects_truncated_header(
 ) -> None:
     path = tmp_path / "truncated-header.sock"
     thread = start_scripted_server(path, b"SDSR")
-    client = DaemonRecordingFileClient(
-        DaemonSocketLocation(path, DaemonSocketSource.EXPLICIT)
-    )
+    client = DaemonRecordingFileClient(DaemonSocketLocation(path, DaemonSocketSource.EXPLICIT))
 
     with pytest.raises(DaemonProtocolError, match="header was truncated"):
         client.open("test.wav")
@@ -168,9 +262,7 @@ def test_recording_file_client_rejects_truncated_content(
         + b"1234"
     )
     thread = start_scripted_server(path, response)
-    client = DaemonRecordingFileClient(
-        DaemonSocketLocation(path, DaemonSocketSource.EXPLICIT)
-    )
+    client = DaemonRecordingFileClient(DaemonSocketLocation(path, DaemonSocketSource.EXPLICIT))
 
     download = client.open("test.wav")
     with pytest.raises(DaemonProtocolError, match="truncated"):
@@ -214,9 +306,7 @@ def test_recording_file_client_rejects_extra_content(
         + b"12345"
     )
     thread = start_scripted_server(path, response)
-    client = DaemonRecordingFileClient(
-        DaemonSocketLocation(path, DaemonSocketSource.EXPLICIT)
-    )
+    client = DaemonRecordingFileClient(DaemonSocketLocation(path, DaemonSocketSource.EXPLICIT))
 
     download = client.open("test.wav")
     with pytest.raises(DaemonProtocolError, match="exceeded"):
@@ -230,9 +320,7 @@ def test_recording_file_client_reports_missing_socket(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "missing.sock"
-    client = DaemonRecordingFileClient(
-        DaemonSocketLocation(path, DaemonSocketSource.EXPLICIT)
-    )
+    client = DaemonRecordingFileClient(DaemonSocketLocation(path, DaemonSocketSource.EXPLICIT))
 
     with pytest.raises(
         DaemonUnavailableError,
@@ -246,9 +334,7 @@ def test_recording_file_client_reports_clean_disconnect(
 ) -> None:
     path = tmp_path / "disconnect.sock"
     thread = start_scripted_server(path, b"")
-    client = DaemonRecordingFileClient(
-        DaemonSocketLocation(path, DaemonSocketSource.EXPLICIT)
-    )
+    client = DaemonRecordingFileClient(DaemonSocketLocation(path, DaemonSocketSource.EXPLICIT))
 
     with pytest.raises(DaemonDisconnectedError, match="disconnected"):
         client.open("test.wav")

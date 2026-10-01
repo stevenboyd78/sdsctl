@@ -9,9 +9,9 @@ Milestone 19.10 adds explicit daemon-backed operation while preserving
 standalone scanner ownership as the default. Textual and PortAudio remain
 optional so the core installation stays lightweight.
 
-## Unreleased local date/time follow-up
+## Local date and time (v0.30.0)
 
-The development candidate replaces the header's time-only clock with the full
+Version 0.30.0 replaces the header's time-only clock with the full
 local date and 24-hour time, for example `Fri, 11 Sep 2026 06:26:10 -0600`.
 This is RFC 2822-style formatting: English weekday/month names, a four-digit
 year and an explicit numeric UTC offset. Each display uses its own operating
@@ -46,15 +46,133 @@ computer. No console font change is involved.
 An unavailable timestamp stays unavailable for that status observation, even
 if the clock later recovers; the TUI does not invent the missing start time.
 A new status uses the new clock reading. This does not add an elapsed-duration
-counter or remote-daemon version field, alter console fonts or change managed-
-display startup. The previews below record the earlier accepted layout; the
-date/time candidate still needs physical checks on both Pi displays before
-release acceptance.
+counter, alter console fonts or change managed-display startup. The date/time
+layout passed physical checks on both Pi displays, including published-client
+acceptance; see the [v0.30.0 release record](release-0.30.0.md). The previews below
+record an earlier layout. The separate, unreleased connected-daemon version
+follow-up is described below.
 
 The wide layout also reserves room for every Connection and Scanner State row,
 including the remote target and scanner-reported recording status beside the
 taller Network Audio panel. These fields must not be present only in hidden,
 clipped panel content.
+
+## Unreleased connected-daemon version follow-up
+
+Daemon-backed sessions show the endpoint's reported application version in the
+Connection panel, for example `Daemon: 0.30.0 | sdsctl-remote-daemon`. This shares
+the former Endpoint row to preserve room at both 100×30 and 160×45; the Target
+row is retained. The local TUI version remains in the header and physical scanner
+firmware remains in the Scanner panel. Direct scanner sessions are unchanged.
+
+The value comes from the existing daemon snapshot, not an assumption that client
+and daemon were upgraded together. Older daemons or malformed/missing metadata
+show `Daemon: Unavailable`. Losing the daemon event connection clears the cached
+version; a fresh reconnect snapshot supplies the replacement. A scanner outage
+alone does not erase the version of a still-connected daemon. No additional
+scanner command, polling request, credential, or capability is added.
+
+Long versions/endpoints are ellipsized to the Connection panel width, not wrapped
+into a hidden row. The Mimic-SDS runtime drawer retains the full bounded daemon
+version and endpoint alongside the separate client and scanner identities.
+Local geometry tests cover both Pi sizes and themes, audio/no-audio, metadata
+changes and resizing. On September 28, 2026, the installed development wheel at
+`824c417` passed user-observed readability and keyboard checks on the 100×30 and
+160×45 bench Pis using a fictional, offline endpoint. Both original displays were
+restored with their configuration and fonts unchanged. This verifies physical
+presentation, not a real daemon's reported version or live transport behavior.
+
+## Unreleased read-only scanner details
+
+From the ordinary dashboard, press **X** or choose **Scanner details** in the
+command palette. This opens a separate scrollable view of the existing shared
+scanner snapshot: mode, channel, talkgroup ID, unit ID, reported P25 status and
+raw battery telemetry. **Esc** or **X** returns to the dashboard without adding
+rows to its compact layout. Inside Mimic-SDS, **X** keeps its existing runtime/help
+meaning; it does not open this drawer.
+
+These values require no additional scanner command, daemon request or connection.
+IDs retain their reported prefixes and leading zeroes. Missing fields show
+`Unavailable`; battery values have no inferred volts/percent label, and unknown
+P25 text does not imply encryption or reception quality. Controls/formatting
+characters are replaced and long text is ellipsized at 128 terminal cells without
+changing the underlying snapshot. This is raw reported telemetry, not new
+model/firmware support.
+
+The drawer clears values during disconnection, stale data or a degraded
+connection. Reconnection alone does not restore the preceding channel's values:
+it waits for a fresh snapshot. Normal incoming updates continue while it is open.
+Scanner and audio action keys are inactive in this read-only view; existing audio
+and recording sessions continue unchanged. Return to the dashboard for controls.
+Quit remains available. The command palette contains only Back and Quit here.
+Automated checks cover direct/shared-daemon fields, both Pi sizes, the narrower
+fallback, light/dark, resizing and clearing. The same September 28 offline Pi
+checks passed for drawer readability, changing values and unavailable fields,
+theme inheritance, return navigation and inactive action keys. Those fictional
+values do not qualify new physical scanner fields, models or live audio behavior;
+the candidate remains unreleased.
+
+## Unreleased Mimic-SDS candidate
+
+Mimic-SDS is a separate, read-only screen in the local development candidate.
+The ordinary TUI remains the startup view. When a configured daemon advertises
+the shared display-frame service, press **M** or choose **Mimic-SDS** in the
+command palette to open it. The existing daemon client profile, identity and
+permissions are reused; there is no new scanner connection or credential.
+Older daemons and direct-USB sessions keep their existing interface without this
+action. Direct-USB profile configuration remains a separate delivery item.
+
+Inside Mimic-SDS:
+
+- **V** cycles imported profile preference, Simple and Detail. This changes only
+  this client's presentation, not the physical scanner's manual display toggle.
+- **B** switches the reported alert color between top/bottom strips and a border.
+  Blink timing is not inferred from the color. Configured alert-pattern matching
+  remains separate work.
+- **X** or **?** opens the runtime/help drawer; **Esc** or **X** returns from it.
+  It shows profile qualification at drawer-open time, current TUI connection and
+  scanner identity, available client audio/recording state, and the latest 20
+  operational log lines. This is not an additional daemon recording-status feed.
+- **M** or **Esc** returns from Mimic-SDS to the ordinary TUI. **Q** quits the
+  application. **Ctrl+P** opens the command palette. Scanner/audio control keys
+  are inactive inside Mimic-SDS and its drawer; return to the ordinary TUI to
+  operate the scanner.
+
+Layout and LED choices survive closing/reopening the screen in the same TUI
+process, but are not saved across restarts. The app/version and local RFC 2822
+clock remain in the header. Profile colors, alignment and individual name-hold
+inversion use the shared frame mapping; no generic labels are added to name
+bands. Simple/Detail selection applies to Conventional and Trunk families; the
+special screen family remains shared. Waterfall is separate.
+
+The scanner grid needs at least 60 columns and 22 rows of content space (26
+terminal rows including the current header/footer). Below that, a resize/back
+message replaces the grid. At 100×30 and 160×45, synthetic Textual tests show the
+complete grid without dashboard scrolling. Wider/taller windows scale the grid
+in terminal cells, with bounded rendering up to 500×160 content cells; text
+wraps only in the supported Simple name bands and otherwise clips with an
+ellipsis. No console font is changed. Terminal capabilities determine color
+approximation; `NO_COLOR` is respected. Missing/unqualified fields and
+BLACK/WHITE profile transformations are not invented.
+
+Only a visible Mimic-SDS screen requests frames. Opening a drawer or palette,
+returning to the ordinary TUI, or exiting clears live values and stops requests.
+A pending finite read may finish in the background, but its result is discarded
+and its dedicated API connection is closed by the worker. Resuming requires a
+new read. Stale, disconnected, malformed or failed responses never leave old
+values looking current. See the [frame API guide](scanner-display-frame-api.md#candidate-tui-presentation)
+for timeout, freshness and compatibility details. This remains development
+candidate support, not a published release.
+
+On September 28, 2026, the installed development wheel at `824c417` passed
+user-observed Mimic-SDS visual and keyboard checks on both bench Pis: 100×30
+and 160×45 Linux consoles. The isolated, offline fixture used fictional profile
+colors and scanner data to exercise the grid, layout/LED choices, runtime drawer,
+hold/release and stale/recovery presentations. Both original display services
+were restored, with their published installations, saved profiles and console
+fonts unchanged. This qualifies physical presentation of those fixtures, not
+live scanner field accuracy, supplemental-reader admission, audio, or release
+readiness.
 
 ## Interface previews
 
@@ -88,7 +206,9 @@ their space-saving, mutually exclusive drawers.
 ![sdsctl TUI recording library populated with fictional demonstration WAV files](assets/screenshots/tui-recordings.svg)
 
 The recording library presents compatible WAV recordings newest first and
-supports selection, playback, pause, resume, and return to live audio.
+supports selection, playback, pause, resume, and return to live audio. This
+100-by-50 capture is scrolled to Network Audio so all three demonstration files
+are visible; the application header and keyboard shortcuts remain in place.
 
 ### Compact layout
 
@@ -295,6 +415,8 @@ Keyboard shortcuts:
 - `A`: toggle live scanner playback without stopping the RTSP/RTP stream
 - `L`: show or hide the newest compatible recordings
 - `G`: show or hide the operational log panel without discarding buffered records
+- `X`: open read-only Scanner details from the ordinary dashboard (development
+  candidate); inside Mimic-SDS it retains the runtime/help meaning
 - `Up` / `Down`: select a saved recording
 - `Enter`: play the selected recording and temporarily suspend live playback
 - `Space`: pause or resume saved playback

@@ -1,0 +1,165 @@
+"""Real radio/UDP framing on fake sockets, never a network scanner."""
+
+import threading
+
+import pytest
+
+from sds200.daemon_display_read_research import (
+    DisplayReadKind,
+    DisplayReadRefused,
+    DisplayReadResearchAttempt,
+    DisplayReadResearchPolicy,
+)
+from sds200.exceptions import UnsupportedScannerFeatureError
+from sds200.radio import SDS200
+
+from .fakes import FakeDatagramSocket, FakeDatagramSocketFactory, FakeTransport
+from .test_clock_reads import CAPTURED_FIELDS
+from .test_daemon_display_read_research import FIRMWARE, STATES
+
+
+class ReplySocket(FakeDatagramSocket):
+    def __init__(self, *, timeout=False, initial_psi=True):
+        super().__init__()
+        self.no_reply = timeout
+        self.initial_psi = initial_psi
+        self.clock_fields = ("0", "2026", "09", "17", "09", "45", "02", "1")
+        self.quit = threading.Event()
+        self.producer = None
+
+    def feed_psi(self):
+        self.feed(
+            b'PSI,<XML>,<ScannerInfo Mode="Trunk Scan" V_Screen="trunk_scan">'
+            b'<MonitorList Index="700" Q_Key="01"/><System Index="120" Q_Key="23"/>'
+            b'<Site Index="240"/><Footer No="1" EOT="1"/></ScannerInfo>'
+        )
+
+    def send(self, data):
+        size = super().send(data)
+        if data == b"MDL\r":
+            # The real UDP reader decodes these FIFO packets. Establish the
+            # selected-read precondition before releasing the model reply;
+            # starting a periodic producer is not that precondition.
+            if self.initial_psi:
+                self.feed_psi()
+            self.feed(b"MDL,SDS200\r")
+
+            def publish():
+                while not self.quit.wait(0.003):
+                    self.feed_psi()
+
+            # Only successful replies need subsequent continuity frames. The
+            # no-reply test must reach the GET without a scheduled PSI thread.
+            if not self.no_reply:
+                self.producer = threading.Thread(target=publish, daemon=True)
+                self.producer.start()
+        elif data == b"VER\r":
+            self.feed(f"VER,{FIRMWARE}\r".encode())
+        elif not self.no_reply:
+            name = data.decode().split(",")[0].strip()
+            fields = (
+                self.clock_fields
+                if name == "DTM"
+                else STATES
+                if name == "FQK"
+                else ("1", "23", *STATES)
+            )
+            self.feed((name + "," + ",".join(fields) + "\r").encode())
+        return size
+
+    def close(self):
+        self.quit.set()
+        if self.producer is not None:
+            self.producer.join(timeout=1)
+            assert not self.producer.is_alive()
+        super().close()
+
+
+@pytest.mark.parametrize(
+    "kind,wire",
+    [
+        (DisplayReadKind.CLOCK, b"DTM\r"),
+        (DisplayReadKind.FAVORITES, b"FQK\r"),
+        (DisplayReadKind.SYSTEM, b"SQK,1\r"),
+        (DisplayReadKind.DEPARTMENT, b"DQK,1,23\r"),
+    ],
+)
+@pytest.mark.parametrize("timeout", [False, True])
+def test_one_selected_get_uses_only_existing_udp_socket_and_never_retries(kind, wire, timeout):
+    socket = ReplySocket(timeout=timeout)
+    factory = FakeDatagramSocketFactory(socket)
+    radio = SDS200.network("192.0.2.10", reconnect=False, socket_factory=factory)
+    with radio:
+        probe = DisplayReadResearchAttempt(DisplayReadResearchPolicy(FIRMWARE, kind))
+        result = probe.run(radio, operator_ready=True, timeout=0.15)
+        assert result.status == ("read_unconfirmed" if timeout else "reply_and_psi_observed")
+        assert result.response_validated is not timeout
+        assert result.read_reserved
+        assert socket.sent == [b"MDL\r", b"VER\r", wire]
+        assert len(factory.calls) == 1
+        assert (socket.producer is None) is timeout
+        for event in ("psi", "packet", "connection"):
+            assert len(radio.events._callbacks[event]) == 0
+    assert socket.closed
+
+
+@pytest.mark.parametrize("initial_psi", [False, True])
+def test_pre_read_expiry_and_selected_timeout_without_periodic_psi_are_distinct(initial_psi):
+    socket = ReplySocket(timeout=True, initial_psi=initial_psi)
+    factory = FakeDatagramSocketFactory(socket)
+    with SDS200.network("192.0.2.10", reconnect=False, socket_factory=factory) as radio:
+        probe = DisplayReadResearchAttempt(
+            DisplayReadResearchPolicy(FIRMWARE, DisplayReadKind.FAVORITES)
+        )
+        result = probe.run(radio, operator_ready=True, timeout=0.15)
+        assert result.status == ("read_unconfirmed" if initial_psi else "not_started")
+        assert result.read_reserved is initial_psi
+        assert not result.response_validated and result.failure == "timeout"
+        assert result.sample is None and result.normal_psi_after_response == 0
+        assert socket.sent == [b"MDL\r", b"VER\r"] + ([b"FQK\r"] if initial_psi else [])
+        assert socket.producer is None and len(factory.calls) == 1
+        for event in ("psi", "packet", "connection"):
+            assert len(radio.events._callbacks[event]) == 0
+        with pytest.raises(DisplayReadRefused, match="already attempted"):
+            probe.run(radio, operator_ready=True, timeout=0.15)
+        assert socket.sent == [b"MDL\r", b"VER\r"] + ([b"FQK\r"] if initial_psi else [])
+    assert socket.closed
+
+
+def test_read_scope_does_not_implicitly_connect_udp():
+    factory = FakeDatagramSocketFactory()
+    radio = SDS200.network("192.0.2.10", socket_factory=factory)
+    with (
+        pytest.raises(UnsupportedScannerFeatureError, match="existing connection"),
+        radio._display_read_research_scope(timeout=0.1),
+    ):
+        pytest.fail("Unexpected scope")
+    assert factory.calls == [] and factory.socket.sent == []
+
+
+def test_captured_clock_reply_replays_through_real_decoder_on_one_fake_socket():
+    socket = ReplySocket()
+    socket.clock_fields = CAPTURED_FIELDS
+    factory = FakeDatagramSocketFactory(socket)
+    with SDS200.network("192.0.2.10", reconnect=False, socket_factory=factory) as radio:
+        probe = DisplayReadResearchAttempt(
+            DisplayReadResearchPolicy(FIRMWARE, DisplayReadKind.CLOCK)
+        )
+        result = probe.run(radio, operator_ready=True, timeout=0.15)
+        assert result.status == "reply_and_psi_observed"
+        assert result.sample["scanner_local_time"] == "2026-09-17T03:38:10"
+        assert result.sample["timezone_known"] is False
+        assert socket.sent == [b"MDL\r", b"VER\r", b"DTM\r"]
+        assert len(factory.calls) == 1
+    assert socket.closed
+
+
+def test_read_scope_refuses_custom_transport_even_with_udp_name():
+    transport = FakeTransport("udp://192.0.2.10:50536")
+    radio = SDS200.from_transport(transport)
+    with (
+        pytest.raises(UnsupportedScannerFeatureError, match="directly owned UDP"),
+        radio._display_read_research_scope(timeout=0.1),
+    ):
+        pytest.fail("Unexpected scope")
+    assert transport.writes == []

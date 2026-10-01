@@ -7,6 +7,7 @@ from math import isfinite
 from threading import Event, RLock, Thread, current_thread
 from typing import Any, Protocol, Self
 
+from .application_metadata import reported_application_version
 from .commands import NavigationTarget
 from .daemon_events import DaemonEvent, DaemonEventKind
 from .daemon_remote_client import DAEMON_REMOTE_CLIENT_ENDPOINT
@@ -98,6 +99,7 @@ class DaemonTuiBootstrap:
     firmware: str
     connected: bool
     snapshot: RadioStateSnapshot
+    application_version: str | None = None
 
 
 class DaemonTuiRadio:
@@ -158,6 +160,7 @@ class DaemonTuiRadio:
         self._events = EventBus()
         self._lock = RLock()
         self._connected = False
+        self._application_version: str | None = None
         self._closed = False
         self._stream_active = False
         self._stream_stop = Event()
@@ -168,6 +171,12 @@ class DaemonTuiRadio:
     def connected(self) -> bool:
         with self._lock:
             return self._connected
+
+    @property
+    def application_version(self) -> str | None:
+        """Reported daemon build, not this client's version; no network I/O."""
+        with self._lock:
+            return None if self._closed else self._application_version
 
     @property
     def event_thread_alive(self) -> bool:
@@ -192,6 +201,8 @@ class DaemonTuiRadio:
             snapshot,
             sanitized=self.sanitizes_private_state,
         )
+        with self._lock:
+            self._application_version = initial.application_version
         self._set_connected(initial.connected)
         return initial
 
@@ -337,6 +348,8 @@ class DaemonTuiRadio:
                 first = self._initial_snapshot(first_event)
             except Exception as error:
                 if not self._stream_stop.is_set():
+                    with self._lock:
+                        self._application_version = None
                     self._set_connected(False)
                     self._record_terminal_stream_failure(error)
                 raise
@@ -355,6 +368,7 @@ class DaemonTuiRadio:
             self._join_event_thread()
             with self._lock:
                 self._stream_active = False
+                self._application_version = None
 
     def close(self) -> None:
         with self._lock:
@@ -418,6 +432,8 @@ class DaemonTuiRadio:
                     if self._stream_stop.is_set():
                         return
                     self.event_client.close()
+                    with self._lock:
+                        self._application_version = None
                     self._set_connected(False)
                     policy = self.reconnect_policy
                     if reconnect_attempt == 0:
@@ -695,4 +711,5 @@ def daemon_tui_bootstrap(
         ),
         connected=connected,
         snapshot=_radio_state_snapshot(state),
+        application_version=reported_application_version(payload.get("application_version")),
     )

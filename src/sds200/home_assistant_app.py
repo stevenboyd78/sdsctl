@@ -222,6 +222,7 @@ class HomeAssistantAppOptions:
     advanced_access_host_address: str = ""
     experimental_browser_devices_enabled: bool = False
     browser_device_server_config: str = ""
+    scanner_display_config: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -296,6 +297,19 @@ class HomeAssistantAppOptions:
             )
         if self.experimental_browser_devices_enabled and not self.native_dashboard_enabled:
             raise ValueError("Experimental browser devices require the native HTTPS dashboard.")
+        display_config = self.scanner_display_config
+        if (
+            type(display_config) is not str
+            or display_config.strip() != display_config
+            or len(display_config) > 4096
+            or any(ord(char) < 32 or ord(char) == 127 for char in display_config)
+            or (display_config and (
+                not Path(display_config).is_absolute()
+                or Path(display_config) == Path("/")
+                or ".." in Path(display_config).parts
+            ))
+        ):
+            raise ValueError("Scanner display deployment must be an absolute path or empty.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -464,6 +478,7 @@ def load_home_assistant_app_options(
         "advanced_access_host_address",
         "experimental_browser_devices_enabled",
         "browser_device_server_config",
+        "scanner_display_config",
     }
     unexpected = sorted(str(key) for key in payload if key not in allowed)
     if unexpected:
@@ -502,6 +517,7 @@ def load_home_assistant_app_options(
                 "experimental_browser_devices_enabled", False,
             ),
             browser_device_server_config=payload.get("browser_device_server_config", ""),
+            scanner_display_config=payload.get("scanner_display_config", ""),
         )
     except (TypeError, ValueError) as error:
         raise ConfigurationError(

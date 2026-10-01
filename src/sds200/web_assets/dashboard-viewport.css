@@ -298,16 +298,6 @@
     padding: clamp(0.35rem, 1.2vh, 0.85rem) !important;
   }
 
-  /* Keep compact content inside the built-in LCARS decorative edges. */
-  :root[data-theme="lcars"] .site-header {
-    padding-left: 2.2rem !important;
-  }
-
-  :root[data-theme="lcars"] .panel-header {
-    /* Compact recordings otherwise reset this to zero beneath the end caps. */
-    margin-right: 4.2rem !important;
-  }
-
   .brand,
   .overview > div,
   .workspace-tabs,
@@ -990,7 +980,7 @@
     }
 
     .recording-item-details strong {
-      grid-column: 1 / -1 !important;
+      grid-column: 1 !important;
       grid-row: 1 !important;
     }
 
@@ -1003,7 +993,8 @@
 
     .recording-item-actions {
       grid-column: 2 !important;
-      grid-row: 2 !important;
+      /* Share the full name/meta height, not an extra action-height row. */
+      grid-row: 1 / 3 !important;
       width: auto !important;
       flex-wrap: nowrap !important;
     }
@@ -1070,7 +1061,8 @@
 
     .recordings-layout {
       grid-template-columns: 1fr !important;
-      grid-template-rows: minmax(0, 0.7fr) minmax(0, 1.3fr) !important;
+      /* Keep saved playback and row controls inside the library at phone width. */
+      grid-template-rows: auto minmax(0, 1fr) !important;
     }
 
     .recordings-layout > .panel {
@@ -1083,15 +1075,36 @@
     }
 
     .recording-library-header {
+      display: grid !important;
+      grid-template-columns: minmax(0, 1fr) auto !important;
       align-items: center !important;
-      flex-direction: row !important;
+      row-gap: 0 !important;
     }
 
-    .recording-capture-panel .panel-header,
-    .recording-library-header > div {
+    .recording-capture-panel .panel-header {
       display: flex !important;
       align-items: baseline !important;
       gap: 0.4rem !important;
+    }
+
+    .recording-library-header > div {
+      /* Preserve title width and recording-row height across system fonts. */
+      display: contents !important;
+    }
+
+    .recording-library-header .panel-kicker {
+      grid-column: 1 !important;
+      grid-row: 1 !important;
+    }
+
+    .recording-library-header h2 {
+      grid-column: 1 / -1 !important;
+      grid-row: 2 !important;
+    }
+
+    #recordings-refresh {
+      grid-column: 2 !important;
+      grid-row: 1 !important;
     }
 
     .recording-capture-panel .panel-kicker,
@@ -1114,6 +1127,11 @@
     .recording-telemetry dd {
       font-size: 0.6rem !important;
       line-height: 1 !important;
+    }
+
+    .recording-telemetry > .recording-file-status {
+      grid-column: 1 / -1 !important;
+      grid-template-columns: max-content minmax(0, 1fr) !important;
     }
 
     .recording-status,
@@ -1407,6 +1425,7 @@
 
     .waterfall-telemetry > div {
       grid-template-columns: max-content minmax(0, 1fr) !important;
+      padding-block: 0.1rem !important;
     }
 
     .waterfall-telemetry dt,

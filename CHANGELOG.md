@@ -6,6 +6,29 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Added
+
+- Bundle offline, licensed typography for First Responder, Amateur Radio,
+  Pip-Boy-inspired and Matrix, with per-theme font pairing and readable/system
+  fallback choices. Keep Mimic-SDS, System and terminal fonts independent;
+  exclude Rapid Response and OCR-A from shipped assets.
+- Add a read-only TUI Scanner details drawer (X / command palette) for existing
+  talkgroup/unit IDs, reported P25 status and raw battery telemetry, without
+  adding compact dashboard rows or issuing scanner commands. Clear unconfirmed
+  values through stale/disconnected states and wait for new data after reconnect.
+- Show the connected daemon's reported application version in the TUI Connection
+  panel, separately from the local client version and scanner firmware. Reuse
+  existing authenticated snapshots, show unavailable for older daemons, and
+  clear stale metadata on daemon disconnection without adding a Pi layout row.
+
+### Changed
+
+- Replace the original WebUI LCARS theme with the reviewed v2 design: six
+  palettes, bundled offline Antonio typography options, segmented rails, and
+  Site beneath System. Keep the stable `lcars` theme ID and migrate saved
+  `lcars-v2` preview selections without resetting palette or font preferences.
+  System remains the default; no live installation is updated by this change.
+
 ### Fixed
 
 - Keep Home Assistant Waterfall cards at a stable density-based height when an
@@ -13,6 +36,18 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   Account for the history canvas border when sizing its bitmap, and fill the
   assigned Sections slot for default or explicitly fixed grid rows. Existing
   duration/history YAML and palettes remain unchanged.
+- Preserve phone recording-library title width across system fonts, keeping the
+  Play and Download buttons inside their rows. Give the current recording's
+  filename a full-width telemetry row so its label does not stack vertically.
+- Let phone-width recording capture panels size to their content so LCARS saved
+  recording Play and Download actions remain visible alongside the player controls.
+- Make the browser palette-focus audit select and verify a visible, enabled
+  control instead of mistakenly trying to focus hidden Mimic diagnostic controls.
+
+- Keep finalized recording reliability counters aligned with their saved
+  metadata when shared browser audio continues. Later transport faults no longer
+  change a stopped recording's status; starting another recording resumes live
+  cumulative counters without changing older files.
 
 ## [0.30.0] - 2026-09-14
 

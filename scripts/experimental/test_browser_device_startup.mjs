@@ -187,19 +187,27 @@ for(const invalid of ["http://192.0.2.1","https://example.com/path","https://use
 const dashboard = await readFile(new URL("../../src/sds200/web_assets/dashboard.js",import.meta.url),"utf8");
 const functions = dashboard.slice(dashboard.indexOf("function requireNativeLogin()"),
   dashboard.indexOf("function syncDisplayNavigation()"));
+const savedRecordingStop = dashboard.slice(dashboard.indexOf("function stopSavedRecording()"),
+  dashboard.indexOf("function recordingsPageCount("));
 function dashboardFixture(managed, reply) {
   const node=tag=>({tagName:tag.toUpperCase(),children:[],hidden:true,
     append(...children){this.children.push(...children);},prepend(...children){this.children.unshift(...children);},
     setAttribute(){}});
-  const f={timers:[],navigations:[],requests:[],listeners:[],cleared:[],stops:[],closed:0}, banner=node('div');
+  const f={timers:[],navigations:[],requests:[],listeners:[],cleared:[],stops:[],closed:0,mimicStops:0,
+    savedSource:'fixture.wav',savedLoads:0,savedSyncs:0}, banner=node('div');
+  const savedPlayer={pause(){f.stops.push('recording');},
+    getAttribute(name){assert.equal(name,'src');return f.savedSource;},
+    removeAttribute(name){assert.equal(name,'src');f.savedSource=null;},load(){f.savedLoads++;}};
   const scope={managedDeviceEntry:managed,nativeAccessMode:"display",displayOnly:true,
-    authenticationRequired:false,nativeSessionTimer:null,currentDaemonHello:{},
+    authenticationRequired:false,nativeSessionTimer:null,currentDaemonHello:{},savedPlaybackGeneration:0,
+    mimicDisplay:{stop(){f.mimicStops++;}},
     document:{documentElement:{dataset:{}},getElementById:id=>id==='native-menu'?{close(){f.closed++;}}:null,
       createElement:node},
     window:{setTimeout:(fn,ms)=>{f.timers.push({fn,ms});return 1;},clearTimeout:id=>f.cleared.push(id),
       addEventListener:(type,listener,capture)=>f.listeners.push({type,listener,capture}),
       location:{replace:url=>f.navigations.push(url)}},
-    webUrl:path=>origin+"/"+path, element:id=>id==="saved-recording-player"?{pause(){f.stops.push('recording');}}:banner,
+    webUrl:path=>origin+"/"+path, element:id=>id==="saved-recording-player"?savedPlayer:banner,
+    syncSavedPlaybackControls(){f.savedSyncs++;},
     stopEventStream(){f.stops.push('events');},stopWaterfallStream(){f.stops.push('waterfall');},
     stopAudioPlayback(){f.stops.push('audio');},setScannerControls(){f.stops.push('controls');},
     initializeDisplayNavigation:form=>{f.form=form;},setOverallStatus(){},AbortSignal,
@@ -216,8 +224,18 @@ function dashboardFixture(managed, reply) {
   f.transportIntent=(target=scope.window)=>{
     for(const {type,listener} of f.listeners)if(type==='sdsctl-device-signout-intent')listener({target});
   };
-  f.scope=scope;vm.createContext(scope);vm.runInContext(functions,scope);return f;
+  f.scope=scope;vm.createContext(scope);vm.runInContext(functions+savedRecordingStop,scope);return f;
 }
+test('session expiry retires the saved source and invalidates pending playback once',()=>{
+  const f=dashboardFixture(true,{});
+  const generation=f.scope.savedPlaybackGeneration;
+  f.scope.requireNativeLogin();
+  assert.equal(f.scope.savedPlaybackGeneration,generation+1);
+  assert.equal(f.savedSource,null);assert.equal(f.savedLoads,1);assert.equal(f.savedSyncs,1);
+  assert.deepEqual(f.stops,['events','waterfall','audio','recording','controls']);
+  f.scope.requireNativeLogin();
+  assert.equal(f.savedLoads,1);assert.equal(f.scope.savedPlaybackGeneration,generation+1);
+});
 test("managed renewal checks current session and does not replay login or stale expiry",async()=>{
   const f=dashboardFixture(true,{device_enrolled:true,display_only:true,remaining_seconds:150});
   await f.scope.refreshManagedNativeSession();
@@ -233,6 +251,15 @@ for(const reply of [{status:401},{device_enrolled:false,display_only:true,remain
     assert.deepEqual(f.navigations,[origin+"/device-display"]);assert.equal(f.timers.length,0);
   });
 }
+test('session expiry stops Mimic rendering, including when no renderer is mounted',()=>{
+  for(const mounted of [false,true]) {
+    const f=dashboardFixture(true,{});
+    if(!mounted)f.scope.mimicDisplay=null;
+    f.scope.requireNativeLogin();
+    assert.equal(f.mimicStops,mounted?1:0);
+    assert.deepEqual(f.navigations,[origin+'/device-display']);
+  }
+});
 for(const reply of [{status:503},new Error("private-do-not-echo")]) {
   test("managed transient read retries finitely without authentication",async()=>{
     const f=dashboardFixture(true,reply);await f.scope.refreshManagedNativeSession();
@@ -263,8 +290,10 @@ for(const status of [401,500,202]) {
     assert.equal(f.scope.document.documentElement.dataset.sessionState,'signing-out');
     assert.equal(f.scope.nativeSessionTimer,null);assert.equal(f.closed,0);
     assert.deepEqual(f.stops,['events','waterfall','audio','recording','controls']);
+    assert.equal(f.mimicStops,1);
     assert.equal(f.requests.length,2); // Two GETs only; no POST, native call or cookie operation.
     f.transportIntent();assert.equal(f.stops.length,5);
+    assert.equal(f.mimicStops,1);
   });
 }
 test('transport UI hint cannot quiesce manual login or unrelated event targets',async()=>{
@@ -284,6 +313,7 @@ for(const phase of ['complete','pending','unconfirmed']) {
     assert.equal(f.scope.authenticationRequired,true);
     assert.equal(f.scope.document.documentElement.dataset.sessionState,'signing-out');
     assert.deepEqual(f.stops,['events','waterfall','audio','recording','controls']);
+    assert.equal(f.mimicStops,1);
     assert.deepEqual(f.cleared,[1]);
     assert.equal(f.scope.nativeSessionTimer,null);
     assert.equal(f.requests.length,1); // Session read only; no dashboard-owned POST.
@@ -291,6 +321,7 @@ for(const phase of ['complete','pending','unconfirmed']) {
     const before=f.timers.length;await f.scope.refreshManagedNativeSession();
     assert.equal(f.timers.length,before);assert.equal(f.requests.length,1);
     f.submit();assert.equal(f.stops.length,5); // Repeated UI intent is not another operation.
+    assert.equal(f.mimicStops,1);
   });
 }
 for(const change of [e=>{e.isTrusted=false;},e=>{e.target={...e.target};},

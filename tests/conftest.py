@@ -17,6 +17,22 @@ from sds200.configuration import (
     resolve_configuration_paths,
 )
 
+from ._supplemental_failure_diagnostics import failure_locations
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+    if (
+        report.failed
+        and call.excinfo is not None
+        and item.path.name.startswith("test_supplemental_")
+    ):
+        locations = failure_locations(call.excinfo.value)
+        if locations:
+            report.sections.append(("Supplemental refusal locations (no values)", locations))
+
 
 @pytest.fixture(autouse=True)
 def isolate_package_logging() -> Iterator[None]:

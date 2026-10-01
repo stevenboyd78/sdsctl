@@ -15,7 +15,7 @@ from sds200.theme import DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME
 from sds200.tui import ScannerIdentity, ScannerTuiApp
 from sds200.xml_protocol import ScannerInfoParser
 
-from .test_tui import XML, _plain
+from .test_tui import XML, _plain, _settle_responsive_layout
 
 pytestmark = pytest.mark.usefixtures("local_timezone_utc")
 
@@ -103,7 +103,9 @@ def test_local_status_row_fits_and_repeated_frames_do_not_move_panels(size, remo
         now = [datetime(2026, 12, 31, 23, 59, 59, tzinfo=UTC)]
         app = app_at(lambda: now[0], remote=remote, palette=palette)
         async with app.run_test(size=size) as pilot:
-            await pilot.pause()
+            # Capture the baseline only AFTER the resize callback's redraw;
+            # a single queue drain may still include a temporary scrollbar.
+            await _settle_responsive_layout(app, pilot)
             connection = app.query_one("#connection", Static)
             short = size[1] < 32
             prefix = "CONNECTED: " if short else "Status since: "

@@ -40,6 +40,7 @@ class EventSource:
         self.publisher = DaemonEventPublisher(
             lambda: {
                 "state": "running",
+                "application_version": "99.2.3",
                 "scanner_endpoint": "udp://192.168.20.25:50536",
                 "recording": {"filename": "private.wav"},
                 "nested": {
@@ -226,6 +227,7 @@ def test_event_lease_filters_recording_and_redacts_private_fields() -> None:
     assert snapshot.kind == DaemonEventKind.SNAPSHOT
     assert snapshot.payload == {
         "state": "running",
+        "application_version": "99.2.3",
         "nested": {"safe": "visible"},
         "items": ({"safe": 1},),
     }

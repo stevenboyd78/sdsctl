@@ -52,6 +52,8 @@ const RADIO_FIELD_GROUPS = Object.freeze([
 
 let currentSnapshot = {};
 let currentDaemonHello = {};
+let mimicDisplay = null;
+let mimicPageSuspended = false;
 let eventSource = null;
 let eventStreamRestartTimer = null;
 let eventStreamConnected = false;
@@ -73,6 +75,7 @@ let recordingTotalEntries = 0;
 let recordingPageIndex = 0;
 let recordingInventorySignature = "";
 let recordingPaginationFocusId = null;
+let savedPlaybackGeneration = 0;
 let homeAssistantIntegrationBusy = false;
 let homeAssistantIntegrationStatus = {};
 let homeAssistantBridgeKeyClearTimer = null;
@@ -144,12 +147,13 @@ function requireNativeLogin() {
 }
 
 function stopNativeSessionActivity(waterfallStatus) {
+  mimicDisplay?.stop();
   if (nativeSessionTimer !== null) window.clearTimeout(nativeSessionTimer);
   nativeSessionTimer = null;
   stopEventStream();
   stopWaterfallStream({status: waterfallStatus});
   stopAudioPlayback();
-  element("saved-recording-player").pause();
+  stopSavedRecording();
   currentDaemonHello = {};
   setScannerControls();
 }
@@ -355,13 +359,15 @@ function initializeDisplayNavigation(logout) {
   // Remember exact original positions: resizing restores desktop DOM order,
   // IDs, listeners, theme selection, field inspection and current stream state.
   const relocations = [];
-  const relocate = (node, destination) => {
+  const relocate = (node, destination, narrowAppearance = false) => {
     const anchor = document.createComment("native compact control position");
     node.before(anchor);
-    relocations.push({node, destination, anchor});
+    relocations.push({node, destination, anchor, narrowAppearance});
   };
   relocate(document.querySelector(".theme-picker"), appearance);
   relocate(element("system-palette-picker"), appearance);
+  relocate(element("lcars-v2-appearance-pickers"), appearance);
+  relocate(element("theme-typography-pickers"), appearance, true);
   const details = (parent, id, selectors) => {
     const disclosure = make("details", null, "native-details");
     disclosure.id = id;
@@ -398,20 +404,25 @@ function initializeDisplayNavigation(logout) {
   scannerDetails.before(summary("native-scanner-summary", [["Frequency", "radio-frequency"], ["Modulation", "radio-modulation"], ["Signal", "radio-signal"], ["RSSI", "radio-rssi"]]));
   waterfallDetails.before(summary("native-waterfall-summary", [["Lower", "waterfall-frequency-lower"], ["Center", "waterfall-frequency-center"], ["Upper", "waterfall-frequency-upper"], ["Frame rate", "waterfall-frame-rate"]]));
   const compact = window.matchMedia("(max-width: 60rem) and (max-height: 40rem)");
+  // Tall phones keep their ordinary pane layout, but a second overview row of
+  // typography controls steals plot space. Reuse the same menu/controls rather
+  // than shrinking touch targets or removing the user's font preferences.
+  const narrowAppearance = window.matchMedia("(max-width: 65rem)");
   const update = () => {
     const focused = document.activeElement;
     dialog.close();
     document.documentElement.dataset.kioskCompact = String(compact.matches);
     views.hidden = !compact.matches;
-    appearance.hidden = !compact.matches;
-    for (const {node, destination, anchor} of relocations) {
-      if (compact.matches) destination.append(node);
+    appearance.hidden = !compact.matches && !narrowAppearance.matches;
+    for (const {node, destination, anchor, narrowAppearance: narrow} of relocations) {
+      if (compact.matches || (narrow && narrowAppearance.matches)) destination.append(node);
       else anchor.after(node);
     }
     if (focused instanceof HTMLElement && focused !== document.body && focused.getClientRects().length === 0) trigger.focus();
     syncDisplayNavigation();
   };
   compact.addEventListener("change", update);
+  narrowAppearance.addEventListener("change", update);
   update();
 }
 
@@ -464,6 +475,14 @@ function normalizedWorkspacePane(value) {
     : "scanner";
 }
 
+function reconcileMimicDisplay() {
+  mimicDisplay?.context({
+    available: Array.isArray(currentDaemonHello.operations) && currentDaemonHello.operations.includes("display.frame"),
+    active: activeWorkspacePane === "scanner" && !mimicPageSuspended,
+    stopped: authenticationRequired,
+  });
+}
+
 function activateWorkspacePane(value, {focus = false, persist = true} = {}) {
   const pane = normalizedWorkspacePane(value);
   activeWorkspacePane = pane;
@@ -488,6 +507,7 @@ function activateWorkspacePane(value, {focus = false, persist = true} = {}) {
     element(`pane-tab-${pane}`).focus();
   }
   reconcileWaterfallDemand();
+  reconcileMimicDisplay();
   if (pane === "diagnostics") {
     void refreshConnectedClients();
   }
@@ -1758,16 +1778,69 @@ function makeRecordingActionLink(label, identifier, download = false) {
 }
 
 function playSavedRecording(identifier) {
+  if (authenticationRequired || displayOnly) return;
   const player = element("saved-recording-player");
   const name = recordingName(identifier);
+  savedPlaybackGeneration++;
   player.src = recordingFileUrl(identifier);
   player.load();
   element("saved-playback-status").textContent = `Loading ${name}.`;
-  void player.play().catch((error) => {
-    const message =
-      error instanceof Error ? error.message : "Saved recording playback failed.";
-    element("saved-playback-status").textContent = message;
+  resumeSavedRecording();
+}
+
+function syncSavedPlaybackControls() {
+  const player = element("saved-recording-player");
+  const available = Boolean(player.getAttribute("src")) &&
+    !authenticationRequired && !displayOnly;
+  const toggle = element("saved-playback-toggle");
+  toggle.disabled = !available || Boolean(player.error);
+  toggle.textContent = player.ended ? "Replay saved recording" :
+    player.paused ? "Resume saved recording" : "Pause saved recording";
+  element("saved-playback-stop").disabled = !available;
+}
+
+function renderSavedPlaybackState() {
+  const player = element("saved-recording-player");
+  syncSavedPlaybackControls();
+  // Events from an earlier source can still be queued after load()/Stop.
+  // Inspect current element state rather than trusting an old event's name.
+  if (!player.getAttribute("src")) return;
+  element("saved-playback-status").textContent = player.error
+    ? "Saved recording playback failed."
+    : player.ended ? "Saved recording playback finished."
+    : player.paused ? "Saved recording playback paused."
+    : "Playing finalized recording.";
+}
+
+function resumeSavedRecording() {
+  const player = element("saved-recording-player");
+  if (authenticationRequired || displayOnly || !player.getAttribute("src")) return;
+  const generation = ++savedPlaybackGeneration;
+  void player.play().catch(() => {
+    // A replaced source, explicit pause/stop or ended session owns the newer
+    // status. An old play() rejection must not overwrite it or restart media.
+    if (generation !== savedPlaybackGeneration) return;
+    element("saved-playback-status").textContent = "Saved recording playback failed.";
+    syncSavedPlaybackControls();
   });
+  syncSavedPlaybackControls();
+}
+
+function pauseSavedRecording() {
+  savedPlaybackGeneration++;
+  element("saved-recording-player").pause();
+  renderSavedPlaybackState();
+}
+
+function stopSavedRecording() {
+  savedPlaybackGeneration++;
+  const player = element("saved-recording-player");
+  const selected = Boolean(player.getAttribute("src"));
+  player.pause();
+  player.removeAttribute("src");
+  player.load();
+  if (selected) element("saved-playback-status").textContent = "Saved recording playback stopped.";
+  syncSavedPlaybackControls();
 }
 
 function recordingsPageCount(entries = recordingEntries) {
@@ -2351,6 +2424,7 @@ function renderStatus(payload) {
   const daemon = record(payload.daemon);
   currentDaemonHello = record(daemon.hello);
   currentSnapshot = record(daemon.snapshot);
+  reconcileMimicDisplay();
   renderSnapshot(currentSnapshot);
   if (!scannerControlMutationInProgress) {
     element("scanner-control-status").textContent =
@@ -2520,6 +2594,7 @@ async function refreshStatus() {
     setText("audio-state", "Unavailable");
     setText("router-state", "Unavailable");
     currentDaemonHello = {};
+    reconcileMimicDisplay();
     setScannerControls();
     if (!scannerControlMutationInProgress) {
       element("scanner-control-status").textContent =
@@ -4262,6 +4337,7 @@ async function refreshConnectedClients() {
 }
 
 document.addEventListener("visibilitychange", () => {
+  reconcileMimicDisplay();
   if (document.hidden) {
     clearHomeAssistantBridgeKey();
     clearHomeAssistantAdvancedSecrets();
@@ -4278,12 +4354,19 @@ document.addEventListener("visibilitychange", () => {
 });
 
 window.addEventListener("pagehide", () => {
+  mimicPageSuspended = true;
+  reconcileMimicDisplay();
   clearHomeAssistantBridgeKey();
   clearHomeAssistantAdvancedSecrets();
   stopEventStream();
   stopWaterfallStream({status: "Waterfall stream closed."});
   stopAudioPlayback();
-  element("saved-recording-player").pause();
+  stopSavedRecording();
+});
+
+window.addEventListener("pageshow", () => {
+  mimicPageSuspended = false;
+  reconcileMimicDisplay();
 });
 
 element("audio-play").addEventListener("click", () => {
@@ -4346,18 +4429,18 @@ element("scanner-reconnect").addEventListener("click", () => {
 });
 
 const savedRecordingPlayer = element("saved-recording-player");
-savedRecordingPlayer.addEventListener("play", () => {
-  element("saved-playback-status").textContent =
-    "Playing finalized recording.";
+for (const event of ["play", "pause", "ended", "error", "emptied"]) {
+  savedRecordingPlayer.addEventListener(event, () => {
+    if (event === "pause" && savedRecordingPlayer.paused) savedPlaybackGeneration++;
+    renderSavedPlaybackState();
+  });
+}
+element("saved-playback-toggle").addEventListener("click", () => {
+  if (savedRecordingPlayer.paused || savedRecordingPlayer.ended) resumeSavedRecording();
+  else pauseSavedRecording();
 });
-savedRecordingPlayer.addEventListener("ended", () => {
-  element("saved-playback-status").textContent =
-    "Saved recording playback finished.";
-});
-savedRecordingPlayer.addEventListener("error", () => {
-  element("saved-playback-status").textContent =
-    "Saved recording playback failed.";
-});
+element("saved-playback-stop").addEventListener("click", stopSavedRecording);
+syncSavedPlaybackControls();
 
 
 window.setInterval(() => {
@@ -4366,6 +4449,33 @@ window.setInterval(() => {
   }
 }, 5000);
 
+function initializeMimicDisplay() {
+  // Server-selected internal candidate only. No storage/query/config shortcut.
+  const mode = document.documentElement.dataset.sdsctlSupplemental;
+  const supplemental = mode !== undefined;
+  const unavailable = () => {
+    const notice = document.createElement("p");
+    notice.className = "notice notice-error";
+    notice.setAttribute("role", "alert");
+    notice.textContent = "Supplemental Mimic-SDS could not start. No supplemental reader was selected; administrator review is required.";
+    element("pane-scanner").prepend(notice);
+  };
+  if (supplemental && (!["cached", "demand"].includes(mode) ||
+      !window.sdsctlSupplemental || !window.sdsctlMimic)) { unavailable(); return; }
+  if (!window.sdsctlMimic) return;
+  const options = {
+    host: element("pane-scanner"), standard: element("radio-activity-panel"),
+    url: webUrl("api/v1/display-frame"), request: dashboardFetch,
+  };
+  if (supplemental) {
+    options.supplementalRoot = webRootUrl.href;
+    options.supplementalDemand = mode === "demand";
+  }
+  try { mimicDisplay = window.sdsctlMimic.create(options); }
+  catch (error) { if (!supplemental) throw error; unavailable(); }
+}
+
+initializeMimicDisplay();
 void initializeNativeSession();
 initializeWaterfallWorkspace();
 initializeWorkspace();

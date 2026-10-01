@@ -22,6 +22,7 @@ from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .exceptions import ConfigurationError
+from .web_typography import WEB_TYPOGRAPHY_READ_PATHS
 
 WEB_DASHBOARD_AUTH_COOKIE = "__Host-sdsctl-session"
 WEB_DASHBOARD_LOGIN_PATH = "/auth/login"
@@ -60,12 +61,23 @@ _SESSION_TOKEN_CHARACTERS = frozenset(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 )
 _DISPLAY_READ_PATHS = frozenset({
+    *WEB_TYPOGRAPHY_READ_PATHS,
     "/", "/healthz", "/api/v1/status", "/api/v1/snapshot",
+    "/api/v1/display-frame",
+    "/api/v1/display-supplemental/context", "/api/v1/display-supplemental/frame",
+    "/assets/mimic-sds.css", "/assets/mimic-sds.js",
+    "/assets/lcars-v2.css", "/assets/lcars-v2.js",
+    "/assets/fonts/antonio-variable.ttf", "/assets/fonts/antonio-OFL.txt",
     "/api/v1/events", "/api/v1/waterfall", WEB_DASHBOARD_SESSION_PATH,
     "/assets/dashboard.css", "/assets/dashboard-viewport.css",
     "/assets/system-palettes.css", "/assets/theme-bootstrap.js",
     "/assets/dashboard.js", "/assets/favicon.svg",
 })
+
+
+def _display_demand_allowed(method: str, path: str, enabled: bool) -> bool:
+    # One observational lease mutation. Never grant generic display POST access.
+    return enabled and method == "POST" and path == "/api/v1/display-supplemental/demand"
 
 
 @dataclass(frozen=True, slots=True)
@@ -505,12 +517,16 @@ class WebDashboardAuthenticationMiddleware:
         *,
         authentication: WebDashboardAuthentication,
         display_theme_paths: frozenset[str] = frozenset(),
+        supplemental_demand: bool = False,
     ) -> None:
         if not isinstance(authentication, WebDashboardAuthentication):
             raise TypeError("Web dashboard authentication middleware requires a valid policy.")
         self._app = app
         self._authentication = authentication
         self._display_paths = _DISPLAY_READ_PATHS | display_theme_paths
+        if type(supplemental_demand) is not bool:
+            raise TypeError("Supplemental demand opt-in must be boolean.")
+        self._supplemental_demand = supplemental_demand
 
     async def __call__(
         self,
@@ -622,7 +638,10 @@ class WebDashboardAuthenticationMiddleware:
             await unauthorized_response(scope, receive, send)
             return
 
-        if lease.display_only and (method != "GET" or path not in self._display_paths):
+        if lease.display_only and not (
+            method == "GET" and path in self._display_paths
+            or _display_demand_allowed(method, path, self._supplemental_demand)
+        ):
             lease.release()
             await _json_error(
                 "Display-only access does not permit this operation.", status_code=403,

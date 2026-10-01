@@ -165,6 +165,13 @@ def test_display_allowlist_denies_every_other_route_before_daemon_work() -> None
         assert 'data-access-mode="display"' in client.get("/").text
         assert client.get("/auth/session").json()["display_only"] is True
         assert client.get("/assets/themes/system/theme.css").status_code == 200
+        for path in (
+            "/assets/themes/lcars/theme.css", "/assets/lcars-v2.css",
+            "/assets/lcars-v2.js", "/assets/fonts/antonio-variable.ttf",
+            "/assets/fonts/antonio-OFL.txt",
+            *web_auth.WEB_TYPOGRAPHY_READ_PATHS,
+        ):
+            assert client.get(path).status_code == 200
         assert client.get("/assets/dashboard.css?sdsctl_source=1").status_code == 200
         for route in app.routes:
             path = route.path  # type: ignore[attr-defined]
@@ -175,6 +182,7 @@ def test_display_allowlist_denies_every_other_route_before_daemon_work() -> None
                 assert client.request(method, path, headers={"Origin": ORIGIN}).status_code == 403
         for path in (
             "/api/v1/future", "/assets/future.js", "/api/v1/home-assistant/advanced-access",
+            "/assets/fonts/unknown.ttf", "/assets/fonts/rapid-response.ttf",
             "/api/v1/home-assistant/advanced-access/display-password/rotate",
         ):
             assert client.get(path).status_code == 403
@@ -635,6 +643,8 @@ def test_logout_revokes_only_current_session() -> None:
     finally:
         first.close()
         second.close()
+        # These clients bypass ASGI lifespan; close their shared password worker.
+        authentication.close()
 
 
 def test_login_attempts_are_bounded_per_peer_without_leaking_secret(

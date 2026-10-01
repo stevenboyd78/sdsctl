@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -68,10 +69,10 @@ global.window = {{
 
 
 def test_waterfall_card_resource_url_uses_home_assistant_local_path() -> None:
-    assert HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_RESOURCE_URL == (
+    assert (
         "/local/sds200/sds200-waterfall-card.js?v="
-        "9e696a9ed370a2b3c1aa1efa0422514658f98fccbbb2f3e0faf402e0edff672f"
-    )
+        + hashlib.sha256(waterfall_card_text().encode()).hexdigest()
+    ) == HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_RESOURCE_URL
 
 
 def test_waterfall_card_packaged_asset_is_importable() -> None:

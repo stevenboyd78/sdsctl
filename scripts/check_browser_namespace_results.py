@@ -1,4 +1,4 @@
-"""Reject absent or skipped browser process-isolation tests in pytest's JUnit report.
+"""Reject absent or skipped required process-isolation tests in pytest's JUnit report.
 
 This checks execution evidence, not real Chromium acceptance or a coverage target.
 Run after a successful pytest invocation of all modules; a missing prerequisite must not
@@ -17,17 +17,28 @@ REQUIRED_MODULES = (
     "tests.test_browser_device_continuation_intent",
     "tests.test_browser_device_continuation_history",
 )
+REQUIRED_RECORDING_MODULES = (
+    "tests.test_supplemental_recording_app_native_preflight",
+    "tests.test_supplemental_recording_app_fixed_operator",
+    "tests.test_supplemental_recording_app_actual_ready",
+    "tests.test_supplemental_recording_app_actual_service",
+    "tests.test_supplemental_recording_app_actual_recovery",
+    "tests.test_supplemental_recording_app_actual_dispatch",
+)
+PROFILES = {"browser": REQUIRED_MODULES, "native-recording": REQUIRED_RECORDING_MODULES}
 
 
-def check_report(path: Path) -> dict[str, int]:
+def check_report(
+    path: Path, *, required_modules: tuple[str, ...] = REQUIRED_MODULES
+) -> dict[str, int]:
     root = ET.parse(path).getroot()
     if root.tag not in {"testsuites", "testsuite"}:
         raise ValueError("Expected a JUnit testsuites or testsuite report")
-    counts = dict.fromkeys(REQUIRED_MODULES, 0)
+    counts = dict.fromkeys(required_modules, 0)
     seen: set[tuple[str, str]] = set()
     for case in root.iter("testcase"):
         classname = case.get("classname", "")
-        module = next((name for name in REQUIRED_MODULES
+        module = next((name for name in required_modules
                        if classname == name or classname.startswith(name + ".")), None)
         if module is None:
             continue
@@ -48,13 +59,14 @@ def check_report(path: Path) -> dict[str, int]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("report", type=Path, help="JUnit XML containing all namespace modules")
+    parser.add_argument("--profile", choices=PROFILES, default="browser")
     args = parser.parse_args(argv)
     try:
-        counts = check_report(args.report)
+        counts = check_report(args.report, required_modules=PROFILES[args.profile])
     except (OSError, ET.ParseError, ValueError) as exc:
-        print(f"Browser namespace gate failed: {exc}", file=sys.stderr)
+        print(f"{args.profile} namespace gate failed: {exc}", file=sys.stderr)
         return 1
-    print(f"Browser namespace gate passed: {sum(counts.values())} tests; "
+    print(f"{args.profile} namespace gate passed: {sum(counts.values())} tests; "
           "none skipped, failed, or errored.")
     for module, count in counts.items():
         print(f"  {module}: {count} passed")

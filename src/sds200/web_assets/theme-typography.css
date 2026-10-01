@@ -1,0 +1,134 @@
+/* Original unmodified OFL fonts, served locally. Fonts load only when used. */
+@font-face { font-family: "Share Tech Mono"; src: url("fonts/share-tech-mono.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("fonts/ibm-plex-mono-regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("fonts/ibm-plex-mono-medium.ttf") format("truetype"); font-weight: 500; font-display: swap; }
+@font-face { font-family: "Barlow Condensed"; src: url("fonts/barlow-condensed-regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Barlow Condensed"; src: url("fonts/barlow-condensed-medium.ttf") format("truetype"); font-weight: 500; font-display: swap; }
+@font-face { font-family: "Orbitron"; src: url("fonts/orbitron-variable.ttf") format("truetype"); font-weight: 400 900; font-display: swap; }
+@font-face { font-family: "Audiowide"; src: url("fonts/audiowide.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Atkinson Hyperlegible Next"; src: url("fonts/atkinson-next-variable.ttf") format("truetype"); font-weight: 200 800; font-display: swap; }
+@font-face { font-family: "Atkinson Hyperlegible Mono"; src: url("fonts/atkinson-mono-variable.ttf") format("truetype"); font-weight: 200 800; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("fonts/jetbrains-mono-variable.ttf") format("truetype"); font-weight: 100 800; font-display: swap; }
+@font-face { font-family: "Source Code Pro"; src: url("fonts/source-code-pro-variable.ttf") format("truetype"); font-weight: 200 900; font-display: swap; }
+
+:root[data-theme-typography] {
+  --type-native: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --type-native-mono: ui-monospace, "Liberation Mono", monospace;
+  --type-body: var(--type-native);
+  --type-heading: var(--type-native);
+  --type-ui: var(--type-native);
+  --type-identity: var(--type-native);
+  --type-data: var(--type-native-mono);
+  --type-heading-weight: 500;
+  font-family: var(--type-body);
+}
+:root[data-theme-font="barlow"][data-theme-typography="theme"] {
+  --type-heading: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --type-ui: var(--type-heading);
+  --type-identity: var(--type-heading);
+  --type-data: "IBM Plex Mono", monospace;
+}
+:root[data-theme-font="orbitron"][data-theme-typography="theme"],
+:root[data-theme-font="audiowide"][data-theme-typography="theme"],
+:root[data-theme-font="atkinson"][data-theme-typography="theme"] {
+  --type-body: "Atkinson Hyperlegible Next", sans-serif;
+  --type-identity: var(--type-body);
+  --type-data: "Atkinson Hyperlegible Mono", monospace;
+}
+:root[data-theme-font="orbitron"][data-theme-typography="theme"] {
+  --type-heading: "Orbitron", sans-serif;
+  --type-ui: var(--type-heading);
+}
+:root[data-theme-font="audiowide"][data-theme-typography="theme"] {
+  --type-heading: "Audiowide", sans-serif;
+  --type-ui: var(--type-heading);
+  --type-heading-weight: 400;
+}
+:root[data-theme-font="atkinson"][data-theme-typography="theme"] {
+  --type-heading: var(--type-body);
+  --type-ui: var(--type-body);
+}
+:root[data-theme-font="share-tech"] { --type-selected-mono: "Share Tech Mono", monospace; }
+:root[data-theme-font="plex"] { --type-selected-mono: "IBM Plex Mono", monospace; }
+:root[data-theme-font="jetbrains"] { --type-selected-mono: "JetBrains Mono", monospace; }
+:root[data-theme-font="source-code"] { --type-selected-mono: "Source Code Pro", monospace; }
+:root:is([data-theme="matrix"], [data-theme="pip-boy-inspired"])[data-theme-typography="theme"] {
+  --type-body: var(--type-selected-mono);
+  --type-heading: var(--type-selected-mono);
+  --type-ui: var(--type-selected-mono);
+  --type-identity: var(--type-selected-mono);
+  --type-data: var(--type-selected-mono);
+}
+:root[data-theme-font="share-tech"] { --type-heading-weight: 400; }
+:root[data-theme-font="barlow"][data-theme-typography="mixed"] { --type-heading: "Barlow Condensed", sans-serif; }
+:root[data-theme-font="orbitron"][data-theme-typography="mixed"] { --type-heading: "Orbitron", sans-serif; }
+:root[data-theme-font="audiowide"][data-theme-typography="mixed"] { --type-heading: "Audiowide", sans-serif; --type-heading-weight: 400; }
+:root[data-theme-font="atkinson"][data-theme-typography="mixed"] { --type-heading: "Atkinson Hyperlegible Next", sans-serif; }
+:root:is([data-theme="matrix"], [data-theme="pip-boy-inspired"])[data-theme-typography="mixed"] { --type-heading: var(--type-selected-mono); }
+
+/* Only font roles override legacy ID-specific built-in theme declarations.
+   No blanket descendant override: Mimic-SDS keeps its own field fonts, and
+   viewport sizes/line heights remain owned by the layout contract. */
+:root[data-theme-typography] body { font-family: var(--type-body) !important; font-weight: 400 !important; }
+:root[data-theme-typography] :is(button, select, input, textarea, .label, dt, .status-badge) { font-family: var(--type-ui) !important; font-weight: 400 !important; }
+:root[data-theme-typography] :is(h1, h2, h3, .eyebrow, .panel-kicker) { font-family: var(--type-heading) !important; font-weight: var(--type-heading-weight) !important; }
+:root[data-theme-typography] :is(.primary-value, .secondary-value, .scanner-display-hierarchy dd) { font-family: var(--type-identity) !important; font-weight: 400 !important; }
+:root[data-theme-typography] :is(.technical-value, .radio-field-list dd, .radio-summary dd, .status-list dd, .native-summary dd, code, pre) { font-family: var(--type-data) !important; font-variant-numeric: tabular-nums slashed-zero; font-weight: 400 !important; }
+:root[data-theme="matrix"][data-theme-typography] :is(body, h1, h2, h3, button, select, input, textarea, dt, dd, .primary-value, .secondary-value, .technical-value) { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; text-shadow: none; }
+
+/* Center appearance controls between the overview title and status, like LCARS.
+   Preserve the viewport contract's compact menu and enlarged-text fallbacks. */
+@layer sdsctl-viewport-contract {
+  /* Important layer rules outrank unlayered [hidden] rules. Keep this in the
+     same layer as the child display rule so an unavailable font stays hidden. */
+  #theme-typography-pickers[hidden], #theme-font-picker[hidden] { display: none !important; }
+  :root[data-theme-typography] #main-content > .overview {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important;
+  }
+  :root[data-theme-typography] #dashboard-message {
+    grid-column: 3 !important; grid-row: 1 !important;
+  }
+  #theme-typography-pickers:not([hidden]) {
+    display: flex !important; flex-wrap: wrap !important; gap: 0.5rem !important;
+    align-items: end !important; justify-content: center !important;
+    justify-self: center !important; margin-inline: auto !important;
+    grid-column: 2 !important; grid-row: 1 !important;
+    width: max-content !important; max-width: 100% !important; min-width: 0 !important;
+  }
+  #theme-typography-pickers > div {
+    display: grid !important; grid-template-columns: minmax(0, 1fr) !important;
+    grid-column: auto !important; grid-row: auto !important;
+    min-width: 0 !important; max-width: 100% !important;
+  }
+  #theme-typography-pickers :is(label, select) {
+    font-family: system-ui, sans-serif !important; font-size: 0.85rem !important;
+    letter-spacing: normal !important; text-transform: none !important;
+    max-width: 100% !important; min-width: 0 !important;
+  }
+  #theme-typography-pickers select { width: auto !important; }
+  @media (max-width: 65rem) {
+    :root[data-theme-typography] #main-content > .overview {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+    #theme-typography-pickers:not([hidden]) {
+      grid-column: 1 / -1 !important; grid-row: 2 !important; width: 100% !important;
+    }
+    :root[data-theme-typography] #dashboard-message { grid-column: 2 !important; }
+  }
+  /* Small landscape dashboards need their fixed-height pane space. Keep the
+     centered appearance row but put each label beside its original selector;
+     do not shrink fonts/controls or alter the display-only menu arrangement. */
+  @media (min-width: 44.01rem) and (max-width: 65rem) and (max-height: 38rem) {
+    .overview #theme-typography-pickers > div:not([hidden]) {
+      grid-template-columns: auto minmax(0, 1fr) !important;
+      align-items: center !important;
+      gap: 0.35rem !important;
+    }
+    .overview #theme-typography-pickers label { margin: 0 !important; }
+  }
+  #native-menu #theme-typography-pickers:not([hidden]) {
+    flex-direction: column !important; align-items: stretch !important;
+    grid-column: auto !important; grid-row: auto !important;
+    width: 100% !important; margin-inline: 0 !important;
+  }
+}

@@ -635,7 +635,7 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
         'id="status-badge"'
     ) < response.text.index('class="header-actions"')
     assert '<option value="system">System</option>' in response.text
-    assert '<option value="lcars">LCARS-inspired</option>' in response.text
+    assert '<option value="lcars">LCARS</option>' in response.text
     assert '<option value="matrix">Matrix-inspired</option>' in response.text
     assert '<option value="first-responder">First Responder</option>' in response.text
     assert '<option value="amateur-radio">Amateur Radio</option>' in response.text
@@ -772,6 +772,21 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
         stylesheet_source.text
     )
     assert "grid-template-rows: auto minmax(0, 1fr)" in stylesheet_source.text
+    # A fixed phone capture/library split clips LCARS row actions when the
+    # library header wraps above the native and explicit saved-player controls.
+    # Keep the shared rule and the higher-priority viewport override aligned;
+    # the real-browser acceptance matrix verifies actual control containment.
+    for text in (stylesheet_source.text, viewport_stylesheet.text):
+        assert "minmax(0, 0.7fr) minmax(0, 1.3fr)" not in text
+    assert "grid-template-rows: auto minmax(0, 1fr) !important" in viewport_stylesheet.text
+    # Give the phone title its own full-width row below the kicker/Refresh row.
+    # This must not depend on the developer host's system-ui font metrics.
+    for text in (stylesheet_source.text, viewport_stylesheet.text):
+        assert ".recording-library-header > div {" in text
+        assert ".recording-library-header h2 {" in text
+        assert ".recording-library-header .panel-kicker {" in text
+        assert ".recording-telemetry > .recording-file-status {" in text
+        assert "grid-template-columns: minmax(0, 1fr) auto" in text
     assert "minmax(19rem, 0.42fr)" in viewport_stylesheet.text
     assert "grid-template-columns: max-content minmax(0, 1fr)" in (
         viewport_stylesheet.text
@@ -858,7 +873,7 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     )
     assert "color: var(--background);" in stylesheet_source.text
     assert "color: var(--background);" in theme_text["system"]
-    assert "--lcars-panel:" in theme_text["lcars"]
+    assert "--lcars-v2-rail:" in theme_text["lcars"]
     assert "--term-accent:" in theme_text["matrix"]
     assert "--dispatch-accent:" in theme_text["first-responder"]
     assert "--radio-accent:" in theme_text["amateur-radio"]
@@ -1023,6 +1038,7 @@ def test_web_dashboard_api_index_advertises_endpoints() -> None:
     assert response.json()["links"] == {
         "audio": "/api/v1/audio",
         "dashboard": "/",
+        "display_frame": "/api/v1/display-frame",
         "docs": "/api/v1/docs",
         "events": "/api/v1/events",
         "health": "/healthz",

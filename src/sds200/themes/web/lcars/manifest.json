@@ -2,12 +2,12 @@
   "schema_version": 1,
   "interface": "web",
   "id": "lcars",
-  "label": "LCARS-inspired",
+  "label": "LCARS",
   "order": 10,
   "stylesheet": "theme.css",
   "color_scheme": "dark",
   "theme_colors": {
-    "light": "#0b0910",
-    "dark": "#0b0910"
+    "light": "#000000",
+    "dark": "#000000"
   }
 }

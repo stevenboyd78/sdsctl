@@ -20,9 +20,19 @@ merging this development does not publish it or qualify unattended production us
 
 ## Dependency map
 
+September 14, 2026 addition: the v0.30.0 release closure is complete. The immediate
+maintenance priority is the separately reported Home Assistant Waterfall-card
+height issue. The requested [Mimic-SDS work packet](mimic-sds-work-packet.md)
+adds profile-driven TUI/WebUI layouts, an additional Home Assistant card, a TUI
+runtime drawer and the full documented front-panel key inventory. Keep its
+feature slices separate from that maintenance correction and from browser-device
+authorization. Older baseline/publication wording elsewhere in this packet is
+historical; consult the [release record](release-0.30.0.md) for current status.
+
 | Work packet | Can start without browser continuation? | Safe preparation now | Gate before claiming support |
 | --- | --- | --- | --- |
 | TUI endpoint identity and connection duration | Yes | Build on the accepted local-date presentation; trace actual endpoint metadata and link ownership | Exact endpoint semantics and both Pi layouts |
+| Mimic-SDS and full front-panel controls | Yes for offline foundations | Read-only profile parser, shared slot/color/live-data map and typed key inventory | Profile acquisition, all three renderers and model-specific supervised control acceptance |
 | Renderer field parity | Yes | Reconcile the existing audit against current models and synthetic fixtures | Per-field provenance and targeted physical observations |
 | TUI waterfall | Yes, but use the existing daemon data plane | Read-only renderer design, bounded history and fake-stream tests | Subscription cleanup, resizing and scanner-mode acceptance |
 | Weather/alert presentation and recording | Partly | Define unknown/unavailable states and sanitized fixture requirements | Genuine alert evidence and reviewed recording lifecycle |
@@ -78,12 +88,14 @@ These are merged development changes, not a claim that a new release is publishe
 
 ### Remaining implementation slices
 
-1. **Endpoint version:** introduce optional, bounded application-version
-   metadata on an authenticated daemon response, with compatibility tests for
-   old clients and old daemons. Render it only for a remote daemon, with an
-   explicit unavailable value when missing. Refresh or invalidate it when the
-   selected connection changes; do not retain an old daemon version after an
-   upgrade or use a second scanner connection to discover it.
+1. **Endpoint version:** implemented in the local development candidate through
+   optional bounded `application_version` metadata on the existing authenticated
+   snapshot. The Connection panel shares its Endpoint row with the daemon build;
+   direct scanner sessions stay unchanged. Compatibility, loss/reconnect and
+   Pi geometry tests pass. Both bench Pis passed installed, fictional offline
+   visual/keyboard checks on September 28, 2026; live endpoint-version acceptance
+   remains separate from that presentation evidence.
+   See the [TUI candidate details](tui.md#unreleased-connected-daemon-version-follow-up).
 2. **Connection duration, if implemented:** first add an explicit owner for the
    selected link's successful connection/reconnection events. Use monotonic
    time for elapsed duration and aware wall time for `Connected since`.

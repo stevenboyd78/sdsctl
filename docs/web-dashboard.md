@@ -1,5 +1,8 @@
 # Web dashboard
 
+See [built-in theme typography](theme-typography.md) for offline font pairings,
+readable/system fallbacks, per-theme preferences and font attribution.
+
 Milestone 20.1 established the optional daemon-backed HTTP service and
 loopback-only command. Milestone 20.2 added the first accessible responsive,
 read-only browser shell. Milestone 20.3 added live ordered browser updates over
@@ -8,7 +11,7 @@ PCMU audio. Milestone 20.5 added daemon-owned recording workflows, finalized
 recording inventory, and safe saved-WAV playback and download. Milestone 20.6
 added capability-negotiated scanner hold, previous/next navigation, and bounded
 reconnect controls without changing daemon scanner ownership. Milestone 20.7
-adds browser-local system-adaptive, LCARS-inspired, Matrix-inspired,
+adds browser-local system-adaptive, LCARS, Matrix-inspired,
 First Responder, and Amateur Radio themes over the same accessible dashboard
 structure, including immersive full-screen desktop compositions and compact
 responsive fallbacks for the four custom environments. Milestone 20.11 adds an
@@ -339,7 +342,7 @@ http://127.0.0.1:8000/
 ```
 
 Theme selection is presentation-only and browser-local. The deterministic
-built-in picker order is **System**, **LCARS-inspired**, **Matrix-inspired**,
+built-in picker order is **System**, **LCARS**, **Matrix-inspired**,
 **First Responder**, **Amateur Radio**, and **Pip-Boy-inspired**. System follows
 the browser or operating-system light/dark preference and remains the stable
 default and safe fallback. It now frames the shared workspace and prominent
@@ -367,9 +370,12 @@ accent-filled controls receive the higher-contrast black or white label. On
 phone-sized viewports the selector moves below the overview title and connection
 message rather than compressing either one.
 
-- **LCARS-inspired** connects the six operational panels with asymmetric rails,
-  segmented console bands, luminous command-deck surfaces, and layered display
-  depth.
+- **LCARS** uses the v2 redesign with exact TheLCARS palette colors,
+  segmented rails, a wide-screen navigation column, Site beneath System, and
+  local Antonio / readable-mix / system typography. Its palette and typography
+  preferences are saved independently. Existing `lcars` selections use this
+  design; preview `lcars-v2` selections migrate to `lcars` without losing palette
+  or font preferences. See [LCARS design and migration](lcars-v2.md).
 - **Matrix-inspired** turns the shared dashboard into a cinematic terminal
   workstation with varied terminal panes, technical grids, scan illumination,
   data-field staging, and perspective depth.
@@ -385,7 +391,7 @@ message rather than compressing either one.
   screenshots, sounds, proprietary fonts, copied hardware geometry, or remote
   resources.
 
-The six choices are built-in packages under the installed
+The seven choices are built-in packages under the installed
 `sds200/themes/web/<theme-name>/` resource hierarchy. Each directory contains
 only a versioned `manifest.json` and its declared `theme.css`. The manifest
 records schema version 1, the `web` interface, stable theme ID, human label,
@@ -581,6 +587,22 @@ subtitle and visible `Theme` label are omitted from that narrow presentation
 while the selector retains its accessible name, so long theme names remain
 complete and more height stays available to the working pane.
 
+The captures use each theme's [default typography](theme-typography.md),
+including the locally bundled theme fonts.
+Appearance controls are centered above the workspace, wrapping onto a centered
+row when needed. LCARS shows the replacement v2 design with its Classic palette,
+Antonio font, segmented frame, and Site field beneath System. At compact
+landscape sizes its pane content can scroll internally to keep full-size fields
+and controls reachable; see [LCARS responsive acceptance](lcars-v2.md#responsive-acceptance).
+
+The unreleased phone Recordings layout places the small library label and
+Refresh button above a full-width title. The current recording's filename also
+uses a full-width telemetry row. This keeps wider system fonts from wrapping
+the title into the space needed by saved-recording Play/Download controls. The
+browser audit exercises two alternative font stacks for this pane in every
+theme, in addition to the ordinary host-font and enlarged-text checks; it does
+not install fonts, change production font preferences, or replace the gallery.
+
 ### System
 
 ![System theme at 1920x1080](assets/web-dashboard/theme-system-1920x1080.png)
@@ -591,15 +613,15 @@ complete and more height stays available to the working pane.
 
 ![System theme at a 390x844 CSS viewport and DPR2](assets/web-dashboard/theme-system-390x844-dpr2.png)
 
-### LCARS-inspired
+### LCARS
 
-![LCARS-inspired theme at 1920x1080](assets/web-dashboard/theme-lcars-1920x1080.png)
+![LCARS theme at 1920x1080](assets/web-dashboard/theme-lcars-1920x1080.png)
 
-![LCARS-inspired theme at 1366x768](assets/web-dashboard/theme-lcars-1366x768.png)
+![LCARS theme at 1366x768](assets/web-dashboard/theme-lcars-1366x768.png)
 
-![LCARS-inspired theme at 800x480](assets/web-dashboard/theme-lcars-800x480.png)
+![LCARS theme at 800x480](assets/web-dashboard/theme-lcars-800x480.png)
 
-![LCARS-inspired theme at a 390x844 CSS viewport and DPR2](assets/web-dashboard/theme-lcars-390x844-dpr2.png)
+![LCARS theme at a 390x844 CSS viewport and DPR2](assets/web-dashboard/theme-lcars-390x844-dpr2.png)
 
 ### Matrix-inspired
 
@@ -655,9 +677,12 @@ spectrum and rolling history, relative-data labeling, lifecycle telemetry, and
 theme tokens without including live scanner frequencies or programming.
 
 Regenerate the checked-in gallery from a repository checkout with Chrome or
-Chromium and the web dependencies available:
+Chromium and the web dependencies available. The active environment must have
+this checkout installed, because the child demo server does not inherit
+`PYTHONPATH`:
 
 ```bash
+python -m pip install -e ".[dev]"
 python scripts/generate_web_dashboard_screenshots.py
 ```
 
@@ -908,6 +933,48 @@ recording-file route to a native `<audio>` element. **Download** uses that same
 route with a browser download filename derived from the inventory identifier.
 Neither action creates a browser PCMU client or changes live scanner-audio
 ownership.
+
+The saved player has explicit **Pause saved recording**, **Resume saved
+recording** (or **Replay saved recording** after completion), and **Stop saved
+recording** controls alongside the browser's native seek/volume controls. Pause
+retains the current position. Stop clears the selected media source and resets
+the player; choose a library entry's **Play** action to load it again. These
+controls affect only local playback, not daemon-owned recording or live audio.
+Status follows the current media state, including native pause events. Replaced
+or interrupted playback promises cannot overwrite the newer status. Page exit
+and session termination stop saved playback and clear its source.
+
+### Saved-player browser qualification
+
+On 2026-09-22, the actual dashboard and finalized-file HTTP route were exercised
+on loopback with generated silent WAVs, without a scanner, daemon connection,
+Home Assistant, or real recordings. Explicit Pause/Resume/Stop, natural completion,
+Replay, replacement of a playing file, and subsequent dashboard navigation all
+passed. Stop was independently observed with a paused player, no source and
+zero current time. Lifecycle regressions additionally cover stale events,
+rejected playback promises, authorization guards and page/session teardown.
+
+An automated click on the browser's **native** Pause control timed out in a
+separate tab, which subsequently reported a page crash. This reproduces the
+earlier control-path symptom without live scanner traffic; it does not establish
+the root cause or demonstrate that the explicit controls repair a browser crash.
+In a fresh local fixture later that day, the user manually tested native Pause
+and the explicit saved controls and reported **"native pause and saved controls
+passed"**. The page remained responsive; subsequent inspection confirmed Stopped,
+disabled controls, a paused player, no source and zero current time. Manual
+interaction therefore passed for this fixture; the earlier automated-control
+failure remains unresolved.
+
+A separate audible check later on 2026-09-22 used the same actual dashboard and
+finalized-file route with a private copy of an existing finalized recording.
+The user reported **"audible playback, native pause, and saved controls passed"**.
+Independent inspection then confirmed Stopped, disabled saved controls, a paused
+player, no source and zero current time. The temporary tab was closed, the
+loopback server exited, and its listener was confirmed absent. No new recording,
+scanner connection, or Home Assistant/Pi service change was involved. This
+qualifies manual audible saved-file playback and controls for that fixture;
+it does not resolve the automated native-control crash or qualify concurrent
+recording/finalization through the finite shared-reader handoff.
 
 `GET /api/v1/recordings/file/{identifier}` never reads a caller-selected
 filesystem path. The web service sends the identifier to the daemon's private
@@ -1160,7 +1227,7 @@ The dashboard now includes:
   daemon-shutdown finalization before audio runtime teardown;
 - idle disconnected daemon event-client reaping;
 - restrictive static-, event-, audio-, and recording-file response headers;
-- browser-local System, LCARS-inspired, Matrix-inspired, First Responder,
+- browser-local System, LCARS, Matrix-inspired, First Responder,
   Amateur Radio, and original asset-free Pip-Boy-inspired themes in deterministic
   order over one shared accessible workspace, with managed-theme compatibility,
   reduced-motion and forced-color handling, CSP-safe pre-paint restoration, and

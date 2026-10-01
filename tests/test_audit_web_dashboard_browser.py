@@ -17,7 +17,35 @@ def test_browser_startup_diagnostics_contract() -> None:
         pytest.skip("Node.js is unavailable")
     completed = subprocess.run(
         [_NODE, "--test", "scripts/test_browser_audit_startup.mjs"],
-        capture_output=True, text=True, timeout=15,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stderr == ""
+
+
+def test_browser_palette_focus_probe_contract() -> None:
+    if _NODE is None:
+        pytest.skip("Node.js is unavailable")
+    completed = subprocess.run(
+        [_NODE, "--test", "scripts/test_browser_audit_focus.mjs"],
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stderr == ""
+
+
+def test_browser_lcars_reachability_contract() -> None:
+    if _NODE is None:
+        pytest.skip("Node.js is unavailable")
+    completed = subprocess.run(
+        [_NODE, "--test", "scripts/test_browser_audit_lcars.mjs"],
+        capture_output=True,
+        text=True,
+        timeout=15,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert completed.stderr == ""
@@ -63,6 +91,7 @@ def test_browser_audit_help_documents_scope_and_dependencies() -> None:
         "trusted Tab/Shift+Tab",
         "WCAG AA",
         "adaptive-presentation",
+        "alternative system-font metrics",
         "DPR-transition",
         "prefixed-URL",
         "Ingress Diagnostics layout",
@@ -141,6 +170,8 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         "semanticInteractiveSelector",
         "control.tabIndex < 0",
         "auditTrustedTabDirection",
+        "auditPhoneRecordingFonts",
+        "phone-recording-font",
         "modifiers: reverse ? 8 : 0",
         "minimumTextContrast = 4.5",
         "minimumLargeTextContrast = 3",
@@ -152,6 +183,12 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         "Home Assistant integration panel does not fill its workspace",
         "Advanced Home Assistant panel does not fill its workspace",
         "subpanelButtonGeometry",
+        "const expectedColumns = centered ? 3 : 2",
+        "(contentLeft + contentRight)",
+        "desktop typography controls are not centered in their own non-overlapping column",
+        "Hidden typography control is rendered",
+        "Narrow typography menu controls are inaccessible or too small",
+        "export async function runMatrix",
         "Advanced Home Assistant guidance is unreachable at the end of the workspace",
         "System palette controller, document, and selector disagree",
         "System palette selector is exposed for ${expectedTheme}",
@@ -173,7 +210,7 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         "auditWebWaterfallHistoryAndPointer",
         "assertHomeAssistantWaterfallGeometry",
         'history_mode: "duration"',
-        'show_pointer: true',
+        "show_pointer: true",
         'pointerType: "touch"',
         "state.fixture.sessionCreates !== 1",
         "state.fixture.streamsAborted !== state.fixture.streamsStarted",
@@ -208,7 +245,7 @@ def test_internal_capture_bridge_documents_and_enforces_exact_cdp_viewports() ->
         "__sdsctlScreenshotEventSource",
         "__sdsctlScreenshotMessageStability",
         "waitForWaterfallCanvasStability",
-        'context.getImageData(0, 0, canvas.width, canvas.height).data',
+        "context.getImageData(0, 0, canvas.width, canvas.height).data",
         'crypto.subtle.digest("SHA-256", pixels)',
         "captureStableScreenshot",
         'cdp.send("Emulation.setDeviceMetricsOverride"',

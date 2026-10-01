@@ -1069,15 +1069,18 @@ def test_supervisor_rejects_daemon_exit_before_readiness(
 
 
 @pytest.mark.parametrize(
-    ("failed_child", "message"),
+    ("failed_child", "returncode", "message"),
     [
-        ("daemon", "daemon exited unexpectedly with status 3"),
-        ("web", "web process exited unexpectedly with status 4"),
+        ("daemon", 0, "daemon exited unexpectedly with status 0"),
+        ("daemon", 3, "daemon exited unexpectedly with status 3"),
+        ("web", 0, "web process exited unexpectedly with status 0"),
+        ("web", 4, "web process exited unexpectedly with status 4"),
     ],
 )
 def test_supervisor_stops_sibling_when_child_exits(
     tmp_path: Path,
     failed_child: str,
+    returncode: int,
     message: str,
 ) -> None:
     events: list[str] = []
@@ -1085,7 +1088,7 @@ def test_supervisor_stops_sibling_when_child_exits(
     web = FakeProcess(
         "web",
         events,
-        returncode=4 if failed_child == "web" else None,
+        returncode=returncode if failed_child == "web" else None,
     )
     processes = iter((daemon, web))
 
@@ -1096,7 +1099,7 @@ def test_supervisor_stops_sibling_when_child_exits(
         del command, environment
         child = next(processes)
         if child is web and failed_child == "daemon":
-            daemon.returncode = 3
+            daemon.returncode = returncode
         return child
 
     supervisor = HomeAssistantAppSupervisor(
@@ -1115,6 +1118,42 @@ def test_supervisor_stops_sibling_when_child_exits(
     else:
         assert web.terminate_calls == 0
         assert daemon.terminate_calls == 1
+
+
+def test_clean_finite_daemon_exit_is_not_normal_app_shutdown(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A finite acceptance child needs its own shutdown integration.
+
+    Do not turn every clean child exit into App success: the normal daemon and
+    web server must remain long-lived until the App receives a stop request.
+    """
+    from sds200 import home_assistant_app_supervisor as app
+
+    events: list[str] = []
+    daemon = FakeProcess("daemon", events)
+    web = FakeProcess("web", events)
+    processes = iter((daemon, web))
+
+    def factory(command: Sequence[str], environment: Mapping[str, str]) -> FakeProcess:
+        del command, environment
+        child = next(processes)
+        if child is web:
+            daemon.returncode = 0
+        return child
+
+    supervisor = HomeAssistantAppSupervisor(
+        launch_plan(tmp_path),
+        process_factory=factory,
+        daemon_ready_probe=lambda path, timeout: True,
+        signals=FakeSignals(),
+    )
+    monkeypatch.setattr(app, "run_home_assistant_app", supervisor.run)
+
+    assert app.main() == 2
+    assert "daemon exited unexpectedly with status 0" in capsys.readouterr().err
+    assert web.terminate_calls == 1
+    assert daemon.terminate_calls == 0
 
 
 def test_supervisor_forces_child_after_bounded_graceful_stop(

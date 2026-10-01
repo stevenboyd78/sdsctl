@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import struct
 import threading
 import time
@@ -10,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from sds200 import events as event_module
 from sds200.audio import AudioChunk, AudioChunkHandler, AudioStream
 from sds200.audio_recording import PCM_SAMPLE_WIDTH, PCMU_SAMPLE_RATE, PcmuWavRecorder
 from sds200.audio_sinks import (
@@ -574,7 +576,17 @@ def test_pcm_router_startup_failure_does_not_abort_other_subscribers() -> None:
     assert healthy.stop_calls == 1
 
 
-def test_pcm_router_tracks_submit_health_and_isolates_listeners() -> None:
+def test_pcm_router_tracks_submit_health_and_isolates_listeners(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    request: pytest.FixtureRequest,
+) -> None:
+    # Earlier CLI tests may leave a handler bound to their closed capture stream.
+    # Keep expected listener faults observable in this test's own live handler,
+    # including asynchronous router callbacks and finalization.
+    logger = logging.Logger("test.pcm-router-listeners", logging.ERROR)
+    logger.addHandler(caplog.handler)
+    monkeypatch.setattr(event_module, "logger", logger)
     initial = datetime(2026, 8, 3, 22, 30, tzinfo=UTC)
     current = initial
 
@@ -585,6 +597,7 @@ def test_pcm_router_tracks_submit_health_and_isolates_listeners() -> None:
         return value
 
     router = PcmSinkRouter(now=now)
+    request.addfinalizer(router.stop)
     failing = HealthTestSink("failing", fail_submit=True)
     healthy = HealthTestSink("healthy")
     observed: list[PcmSubscriberTransition] = []
@@ -631,8 +644,7 @@ def test_pcm_router_tracks_submit_health_and_isolates_listeners() -> None:
 
     assert _wait_until(
         lambda: any(
-            transition.snapshot.name == "failing"
-            and transition.state == "failed"
+            transition.snapshot.name == "failing" and transition.state == "failed"
             for transition in observed
         )
     )
@@ -640,9 +652,7 @@ def test_pcm_router_tracks_submit_health_and_isolates_listeners() -> None:
     assert sequences == sorted(sequences)
     assert len(sequences) == len(set(sequences))
     failing_transitions = [
-        transition
-        for transition in observed
-        if transition.snapshot.name == "failing"
+        transition for transition in observed if transition.snapshot.name == "failing"
     ]
     assert failing_transitions[-1].state == "failed"
     assert failing_transitions[-1].health == "failed"
@@ -659,6 +669,10 @@ def test_pcm_router_tracks_submit_health_and_isolates_listeners() -> None:
     assert stopped_snapshot.state == "detached"
     assert stopped_snapshot.last_error == "RuntimeError"
     assert stopped_snapshot.submit_failures == 1
+    assert any(
+        record.getMessage() == "Unhandled exception in transition callback"
+        for record in caplog.records
+    )
 
 
 def test_pcm_router_shutdown_failure_isolated_and_recorded() -> None:

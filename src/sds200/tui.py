@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from contextlib import AbstractContextManager, suppress
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -10,14 +10,16 @@ from time import monotonic
 from typing import ClassVar, Protocol
 
 from rich.text import Text
-from textual.app import App, ComposeResult
+from textual.app import App, ComposeResult, SystemCommand
 from textual.binding import Binding, BindingType
 from textual.containers import VerticalScroll
 from textual.events import Resize
+from textual.screen import Screen
 from textual.timer import Timer
 from textual.widgets import Footer, Static
 
 from . import __version__
+from .application_metadata import reported_application_version
 from .audio_session import (
     AudioRecordingSession,
     AudioSessionSnapshot,
@@ -27,6 +29,9 @@ from .commands import NavigationTarget
 from .presentation import ScannerPresentation, present_radio_state
 from .rich_cli import rich_style
 from .scanner import capabilities_for_model
+from .scanner_display_reader import DisplayFrameReader, DisplayFrameSource
+from .scanner_display_supplemental_reader import SupplementalFrameReader, SupplementalFrameSource
+from .scanner_display_tui import MimicScreen, safe_terminal_text
 from .state import RadioStateSnapshot, ScannerScreenKind
 from .theme import (
     DEFAULT_DARK_THEME,
@@ -45,6 +50,7 @@ from .tui_controls import (
     HoldScope,
     channel_navigation,
 )
+from .tui_details import ScannerDetailsScreen, scanner_details
 from .tui_logging import (
     TUI_LOG_VISIBLE_LINES,
     TUI_SHORT_LOG_DRAWER_VISIBLE_LINES,
@@ -76,6 +82,7 @@ R        Start / stop audio recording
 A        Toggle live scanner playback
 L        Show or hide saved recordings
 G        Show or hide operational logs
+X        Open read-only scanner details
 ↑ / ↓    Select a saved recording
 Enter    Play the selected recording
 Space    Pause / resume saved playback
@@ -96,6 +103,7 @@ Q        Quit
 T        Toggle dark/light theme
 C        Reconnect scanner
 G        Show or hide operational logs
+X        Open read-only scanner details
 H        Hold current channel
 S / D    Hold current system / department
 I        Hold current site
@@ -409,6 +417,8 @@ class ScannerTuiApp(App[None]):
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("q", "quit", "Quit"),
         Binding("t", "toggle_theme", "Theme"),
+        Binding("m", "mimic", "Mimic-SDS", show=False),
+        Binding("x", "scanner_details", "Scanner details", show=False),
         Binding(
             "ctrl+p",
             "command_palette",
@@ -484,6 +494,9 @@ class ScannerTuiApp(App[None]):
         screen_class: str | None = None,
         managed_stylesheet: str | None = None,
         terminal_failure_subscribe: TerminalFailureSubscribe | None = None,
+        display_source: DisplayFrameSource | None = None,
+        supplemental_display_source: SupplementalFrameSource | None = None,
+        daemon_version_source: Callable[[], str | None] | None = None,
         clock: Clock = monotonic,
         now: WallClock = _local_now,
     ) -> None:
@@ -495,6 +508,10 @@ class ScannerTuiApp(App[None]):
             raise ValueError("PSI recovery threshold must be greater than zero")
         if psi_recovery_cooldown < 0:
             raise ValueError("PSI recovery cooldown must not be negative")
+        if display_source is not None and supplemental_display_source is not None:
+            raise ValueError("Choose one Mimic-SDS display source.")
+        if daemon_version_source is not None and not callable(daemon_version_source):
+            raise TypeError("Daemon version source must be a non-blocking callable or None.")
 
         if managed_stylesheet is not None:
             object.__setattr__(
@@ -510,6 +527,7 @@ class ScannerTuiApp(App[None]):
         self._snapshot = snapshot
         self._capabilities = capabilities_for_model(identity.model)
         self._radio = radio
+        self._daemon_version_source = daemon_version_source
         self._audio_session = audio_session
         self._tui_audio_session = (
             audio_session if isinstance(audio_session, TuiAudioSession) else None
@@ -549,6 +567,18 @@ class ScannerTuiApp(App[None]):
         )
         self._applied_theme_screen_class: str | None = None
         self._terminal_failure_subscribe = terminal_failure_subscribe
+        self._mimic_reader: DisplayFrameReader | SupplementalFrameReader | None = (
+            SupplementalFrameReader(supplemental_display_source, clock=clock)
+            if supplemental_display_source is not None
+            else DisplayFrameReader(display_source, clock=clock)
+            if display_source
+            else None
+        )
+        self._mimic_screen: MimicScreen | None = None
+        self._details_screen: ScannerDetailsScreen | None = None
+        self._details_current = connected is True
+        self._mimic_style = "preferred"
+        self._mimic_treatment = "strips"
         self._clock = clock
         self._now = now
         self._transition_values: dict[str, str] = {}
@@ -634,7 +664,8 @@ class ScannerTuiApp(App[None]):
                 "Keyboard Reference",
                 widget_id="keys",
                 content=(
-                    KEY_HELP_TEXT if self.audio_controls_available else NO_AUDIO_KEY_HELP_TEXT
+                    (KEY_HELP_TEXT if self.audio_controls_available else NO_AUDIO_KEY_HELP_TEXT)
+                    + ("M        Open Mimic-SDS (read-only)\n" if self._mimic_reader else "")
                 ),
             )
             yield _titled_panel("Connection", widget_id="connection")
@@ -658,9 +689,15 @@ class ScannerTuiApp(App[None]):
         )
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
-        """Hide audio-only commands when this transport exposes no audio service."""
+        """Isolate read-only screens and hide unavailable audio commands."""
 
         del parameters
+        if self._details_screen is not None:
+            return action in {"quit", "command_palette"}
+        if action == "mimic":
+            return self._mimic_reader is not None and self._mimic_screen is None
+        if self._mimic_screen is not None:
+            return action in {"quit", "command_palette"}
         return self.audio_controls_available or action not in {
             "toggle_audio_recording",
             "toggle_audio_playback",
@@ -712,16 +749,115 @@ class ScannerTuiApp(App[None]):
         """Refresh size-dependent summaries after terminal resizing."""
 
         del event
+        if self._mimic_screen is not None or self._details_screen is not None:
+            return
         self.call_after_refresh(self._refresh_responsive_view)
 
     def on_unmount(self) -> None:
         self._shutdown_started.set()
+        if self._mimic_reader is not None:
+            self._mimic_reader.close()
         for timer in self._poll_timers:
             timer.stop()
         self._poll_timers.clear()
         self.stop_audio()
         self.stop_live_updates()
         self.stop_controls()
+
+    def get_system_commands(self, screen: Screen[None]) -> Iterable[SystemCommand]:
+        if self._details_screen is not None:
+            yield SystemCommand(
+                "Back to dashboard", "Close scanner details", self._details_screen.action_back
+            )
+            yield SystemCommand("Quit", "Quit the TUI", self.action_quit)
+            return
+        if self._mimic_screen is not None:
+            mimic = self._mimic_screen
+            yield SystemCommand(
+                "Mimic layout", "Cycle profile / Simple / Detail", mimic.action_layout
+            )
+            yield SystemCommand("Mimic LED", "Switch strips / border", mimic.action_led)
+            yield SystemCommand("Mimic runtime", "Show runtime and key help", mimic.action_runtime)
+            yield SystemCommand("Quit", "Quit the TUI", self.action_quit)
+            return
+        yield from super().get_system_commands(screen)
+        yield SystemCommand(
+            "Scanner details", "Read-only IDs, P25 status and raw battery telemetry (X)",
+            self.action_scanner_details,
+        )
+        if self._mimic_reader is not None:
+            yield SystemCommand(
+                "Mimic-SDS", "Open the read-only scanner display (M)", self.action_mimic
+            )
+
+    def action_mimic(self) -> None:
+        if (
+            self._mimic_reader is None
+            or self._mimic_screen is not None
+            or self._details_screen is not None
+        ):
+            return
+        mimic = MimicScreen(self._mimic_reader, self._mimic_runtime, self._now)
+        mimic.style, mimic.treatment = self._mimic_style, self._mimic_treatment
+        self._mimic_screen = mimic
+        self.push_screen(mimic, self._mimic_closed)
+
+    def _scanner_details(self) -> Text:
+        return scanner_details(
+            self._snapshot, connected=self._connected, current=self._details_current,
+            stale=self._stale, degraded=self._degraded,
+        )
+
+    def action_scanner_details(self) -> None:
+        if self._details_screen is not None or self._mimic_screen is not None:
+            return
+        details = ScannerDetailsScreen(
+            self._scanner_details, screen_class=self._theme_screen_class
+        )
+        self._details_screen = details
+        self.push_screen(details, self._details_closed)
+
+    def _details_closed(self, result: None) -> None:
+        del result
+        self._details_screen = None
+        self._pi_dashboard_layout = None
+        self._refresh_view()
+
+    def _mimic_closed(self, result: None) -> None:
+        del result
+        if self._mimic_screen is not None:
+            self._mimic_style = self._mimic_screen.style
+            self._mimic_treatment = self._mimic_screen.treatment
+        self._mimic_screen = None
+        self._pi_dashboard_layout = None
+        self._refresh_view()
+
+    def _mimic_runtime(self) -> Text:
+        rows = [
+            "Daemon / TUI runtime — separate from the scanner screen",
+            f"Application: sdsctl v{__version__}",
+            f"Local time: {local_timestamp(self._now)}",
+            f"Endpoint: {self._identity.endpoint}",
+            f"Target: {self._identity.connection_target or 'local daemon'}",
+            f"Scanner: {self._identity.model} | Firmware: {self._identity.firmware}",
+            f"Connected: {self._connected} | TUI state stale: {self._stale}",
+            f"Stream: {self._stream_mode} | Status: {self._status_message}",
+        ]
+        if self._daemon_version_source is not None:
+            rows.insert(2, f"Daemon: {self._daemon_version_text()}")
+        if self._audio_snapshot is not None:
+            rows.append(f"Client audio/recording: {self._audio_snapshot.status.value}")
+            rows.append(self._audio_message)
+        rows.append("\nOperational logs — latest 20 lines, newest last")
+        rows.extend(line[:512] for line in self._log_buffer.snapshot().lines[-20:])
+        return Text(safe_terminal_text("\n".join(rows)))
+
+    def _daemon_version_text(self) -> str:
+        # The explicit source is an in-memory, lock-protected daemon snapshot
+        # getter. Never fetch a hello/snapshot on the Textual rendering thread.
+        source = self._daemon_version_source
+        value = reported_application_version(source()) if source is not None else None
+        return value or "Unavailable"
 
     def action_toggle_theme(self) -> None:
         """Toggle between the built-in semantic light and dark palettes."""
@@ -774,6 +910,8 @@ class ScannerTuiApp(App[None]):
             self.screen.remove_class("show-logs")
 
     def _refresh_responsive_view(self) -> None:
+        if self._mimic_screen is not None or self._details_screen is not None:
+            return
         self._apply_responsive_panel_layout()
         self._refresh_view()
 
@@ -1156,6 +1294,7 @@ class ScannerTuiApp(App[None]):
         self._psi_recovery_started_at = None
         self._psi_recovery_in_progress = False
         self._snapshot = snapshot
+        self._details_current = connected is True
         if self._tui_audio_session is not None:
             self._tui_audio_session.update_radio_state(snapshot)
         self._connected = connected
@@ -1597,6 +1736,7 @@ class ScannerTuiApp(App[None]):
         self._submit_audio(ControlRequest("Start live playback", session.start_live_playback))
 
     def _apply_connection(self, connected: bool) -> None:
+        self._details_current = False
         self._connected = connected
         self._degraded = False
         self._stale = False
@@ -1626,7 +1766,11 @@ class ScannerTuiApp(App[None]):
         self._refresh_view()
 
     def _refresh_view(self) -> None:
-        if self._shutdown_started.is_set():
+        if self._shutdown_started.is_set() or self._mimic_screen is not None:
+            return
+        if self._details_screen is not None:
+            if self._details_screen.is_mounted:
+                self._details_screen.update_details(self._scanner_details())
             return
         self._apply_responsive_panel_layout()
         presentation = present_radio_state(
@@ -1653,7 +1797,17 @@ class ScannerTuiApp(App[None]):
         ]
         if not self._uses_short_layout():
             connection_rows.append(("Status since", connection_stamp, ThemeRole.TEXT_PRIMARY))
-        connection_rows.append(("Endpoint", self._identity.endpoint, ThemeRole.TEXT_PRIMARY))
+        if self._daemon_version_source is not None:
+            # Keep the same row budget on both Pi displays. The endpoint stays
+            # beside the reported build; direct scanner identities are unchanged.
+            description = Text(f"{self._daemon_version_text()} | {self._identity.endpoint}")
+            description.truncate(
+                max(1, connection.content_region.width - len("Daemon: ")),
+                overflow="ellipsis",
+            )
+            connection_rows.append(("Daemon", description.plain, ThemeRole.TEXT_PRIMARY))
+        else:
+            connection_rows.append(("Endpoint", self._identity.endpoint, ThemeRole.TEXT_PRIMARY))
         if self._identity.connection_target is not None:
             connection_rows.append(
                 (
@@ -2367,6 +2521,9 @@ def run_tui(
     screen_class: str | None = None,
     managed_stylesheet: str | None = None,
     terminal_failure_subscribe: TerminalFailureSubscribe | None = None,
+    display_source: DisplayFrameSource | None = None,
+    supplemental_display_source: SupplementalFrameSource | None = None,
+    daemon_version_source: Callable[[], str | None] | None = None,
     log_buffer: TuiLogBuffer | None = None,
 ) -> None:
     """Launch the Textual interface from one renderer-neutral initial snapshot."""
@@ -2380,6 +2537,7 @@ def run_tui(
         ),
         snapshot,
         radio=radio,
+        daemon_version_source=daemon_version_source,
         audio_session=audio_session,
         log_buffer=log_buffer,
         interval_ms=interval_ms,
@@ -2392,6 +2550,8 @@ def run_tui(
         screen_class=screen_class,
         managed_stylesheet=managed_stylesheet,
         terminal_failure_subscribe=terminal_failure_subscribe,
+        display_source=display_source,
+        supplemental_display_source=supplemental_display_source,
     )
     try:
         app.run()
@@ -2400,6 +2560,8 @@ def run_tui(
         app.stop_audio()
         app.stop_live_updates()
         app.stop_controls()
+        if app._mimic_reader is not None:
+            app._mimic_reader.close(wait=True)
 
 
 def _display(value: object | None) -> str:
