@@ -1231,6 +1231,11 @@ class SDSScanner:
             yield
 
     @contextmanager
+    def _front_panel_research_scope(self, *, timeout: float) -> Iterator[None]:
+        with self._direct_udp_research_scope(timeout=timeout, label="Front panel"):
+            yield
+
+    @contextmanager
     def _direct_udp_research_scope(self, *, timeout: float, label: str) -> Iterator[None]:
         """Serialize the internal research transaction on an existing UDP owner.
 

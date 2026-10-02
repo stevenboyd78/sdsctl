@@ -8,6 +8,12 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add a disabled-by-default, internal SDS200 front-panel qualification harness.
+  It accepts one typed inventory key only after exact firmware and two stable
+  visible-context preflights on the existing direct-UDP owner, requires a fresh
+  local operator signal, excludes active Waterfall and other research modes,
+  and records bounded post-acknowledgement display evidence. It adds no public
+  control/API, permission, sequence, retry, inferred key mode or enabled UI.
 - Add a redundant green/yellow/red relative-intensity treatment to the
   daemon-backed TUI Waterfall while retaining its monochrome glyph ramp. Label
   the bands as per-frame and uncalibrated, and keep raw scanner span fields

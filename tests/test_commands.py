@@ -13,6 +13,7 @@ from sds200.commands import (
     NextSelection,
     OpenIndexedMenu,
     PauseResumeAnalysis,
+    PressFrontPanelKey,
     PressKey,
     PreviousSelection,
     SetFavoritesQuickKeys,
@@ -32,6 +33,7 @@ from sds200.exceptions import (
     ProtocolError,
     ScannerRecordingControlError,
 )
+from sds200.front_panel_keys import FrontPanelKey
 from sds200.models import (
     AnalysisMode,
     AnalysisResponse,
@@ -701,6 +703,46 @@ def test_hold_related_key_press_acknowledgement() -> None:
         command.parse_response(
             Packet(command="KEY", fields=("NG",), raw="KEY,NG")
         )
+
+
+@pytest.mark.parametrize("key", list(FrontPanelKey))
+def test_typed_front_panel_press_exact_contract(key: FrontPanelKey) -> None:
+    command = PressFrontPanelKey(key)
+    assert command.wire == f"KEY,{key.value},P"
+    assert command.response_command == "KEY"
+    assert command.parse_response(
+        Packet(command="KEY", fields=("OK",), raw="KEY,OK")
+    ) is None
+
+
+@pytest.mark.parametrize("value", ["M", "A", 1, None, True])
+def test_typed_front_panel_press_rejects_untyped_values(value: object) -> None:
+    with pytest.raises(TypeError, match="exact typed key"):
+        PressFrontPanelKey(value)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("status", ["NG", "ERR", "ERROR"])
+def test_typed_front_panel_press_rejects_negative_ack(status: str) -> None:
+    command = PressFrontPanelKey(FrontPanelKey.MENU)
+    with pytest.raises(CommandRejectedError, match="rejected KEY"):
+        command.parse_response(
+            Packet(command="KEY", fields=(status,), raw=f"KEY,{status}")
+        )
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        object(),
+        Packet(command="OTHER", fields=("OK",), raw="OTHER,OK"),
+        Packet(command="KEY", fields=(), raw="KEY"),
+        Packet(command="KEY", fields=(" OK",), raw="KEY, OK"),
+        Packet(command="KEY", fields=("OK", "EXTRA"), raw="KEY,OK,EXTRA"),
+    ],
+)
+def test_typed_front_panel_press_requires_exact_ack(response: object) -> None:
+    with pytest.raises(ProtocolError, match="KEY qualification"):
+        PressFrontPanelKey(FrontPanelKey.MENU).parse_response(response)
 
 
 def test_navigation_command_wires() -> None:

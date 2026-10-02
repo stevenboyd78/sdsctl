@@ -166,6 +166,12 @@ def test_bounded_writes_require_explicit_transition_case_before_source_read(valu
         {"research_firmware": "Version 1.26.01"},
         {"display_read_firmware": "Version 1.26.01", "display_read_kind": "clock"},
         {"display_read_kind": "favorites"},
+        {
+            "front_panel_firmware": "Version 1.26.01",
+            "front_panel_key": "M",
+            "front_panel_mode": "Trunk Scan",
+            "front_panel_screen": "trunk_scan",
+        },
     ],
 )
 def test_supplemental_research_cannot_combine_modes(snapshot, kwargs):
@@ -242,6 +248,76 @@ def test_display_read_staging_pins_one_kind_and_preserves_normal_runtime(snapsho
     assert report["purpose"] == "local-mimic-display-read-research-only"
     for name, digest in report["files"].items():
         assert hashlib.sha256(research[name]).hexdigest() == digest
+
+
+def test_front_panel_staging_pins_one_press_context_and_preserves_normal_runtime(snapshot):
+    runtime_name = "src/sds200/home_assistant_app_runtime.py"
+    for name in (
+        runtime_name,
+        "scripts/research_system_status_daemon.py",
+        "scripts/research_front_panel_daemon.py",
+    ):
+        snapshot[name] = (ROOT / name).read_bytes()
+    normal = stager.render(snapshot, REVISION)
+    research = stager.render(
+        snapshot,
+        REVISION,
+        front_panel_firmware="Version 1.26.01",
+        front_panel_key="M",
+        front_panel_mode="Trunk Scan",
+        front_panel_screen="trunk_scan",
+    )
+    assert "research-entry.py" not in normal
+    assert normal[runtime_name] == snapshot[runtime_name]
+    assert "-menu-key-research" in research["config.yaml"].decode()
+    assert "boot: manual" in research["config.yaml"].decode()
+    assert "50000/udp: null" in research["config.yaml"].decode()
+    entry = research["research-entry.py"].decode()
+    assert "'--key-code', 'M'" in entry
+    assert "'--expected-mode', 'Trunk Scan'" in entry
+    assert "'--expected-screen', 'trunk_scan'" in entry
+    rewritten = research[runtime_name].decode()
+    assert rewritten.count('"/usr/local/bin/sdsctl-front-panel-research"') == 1
+    boundary = "def build_home_assistant_web_command("
+    assert rewritten.partition(boundary)[2] == normal[runtime_name].decode().partition(boundary)[2]
+    for name in (
+        "research-entry.py",
+        "research_system_status_daemon.py",
+        "research_front_panel_daemon.py",
+    ):
+        compile(research[name], name, "exec")
+    report = json.loads(research["candidate-source.json"])
+    assert report["purpose"] == "local-mimic-front-panel-research-only"
+    assert report["research_firmware_pin"] == "Version 1.26.01"
+    assert report["research_key_code"] == "M"
+    assert report["research_expected_mode"] == "Trunk Scan"
+    assert report["research_expected_screen"] == "trunk_scan"
+    assert report["research_automatic_start"] is False
+    for name, digest in report["files"].items():
+        assert hashlib.sha256(research[name]).hexdigest() == digest
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"front_panel_firmware": "Version 1.26.01"},
+        {
+            "front_panel_firmware": "Version 1.26.01",
+            "front_panel_key": "A,P",
+            "front_panel_mode": "Trunk Scan",
+            "front_panel_screen": "trunk_scan",
+        },
+        {
+            "front_panel_firmware": "Version 1.26.01",
+            "front_panel_key": "M",
+            "front_panel_mode": "Trunk Scan",
+            "front_panel_screen": "private,screen",
+        },
+    ],
+)
+def test_front_panel_staging_requires_complete_safe_exact_pins(snapshot, kwargs):
+    with pytest.raises(ValueError, match="Front-panel|front-panel"):
+        stager.render(snapshot, REVISION, **kwargs)
 
 
 @pytest.mark.parametrize(

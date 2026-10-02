@@ -164,6 +164,7 @@ class DaemonSupplementalAcquisition:
                 and runtime._scanner_firmware == self._policy.expected_firmware
                 and runtime._system_status_research is None
                 and runtime._display_read_research is None
+                and runtime._front_panel_research is None
             )
         finally:
             runtime._state_lock.release()

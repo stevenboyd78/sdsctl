@@ -11,11 +11,13 @@ from sds200 import daemon_quick_keys
 from sds200.daemon_display_frames import DaemonDisplayFrames
 from sds200.daemon_display_profile import DaemonDisplayProfile
 from sds200.daemon_display_read_research import DisplayReadKind, DisplayReadResearchPolicy
+from sds200.daemon_front_panel_research import FrontPanelResearchPolicy
 from sds200.daemon_quick_keys import DaemonQuickKeyCache
 from sds200.daemon_runtime import DaemonRuntimeState
 from sds200.daemon_system_status_research import SystemStatusResearchPolicy
 from sds200.events import EventBus
 from sds200.exceptions import CommandTimeoutError, DaemonControlBusyError
+from sds200.front_panel_keys import FrontPanelKey
 from sds200.scanner_quick_keys import QuickKeySelection
 from sds200.waterfall_session import WaterfallSession, WaterfallSessionState
 
@@ -216,11 +218,18 @@ def test_busy_reserved_or_subscribed_waterfall_yields_without_stopping_it(base):
     assert len(scanner.waterfall_radio.stop_calls) == 1  # Test lease's cleanup only.
 
 
-@pytest.mark.parametrize("policy", ["clock", "favorites", "system_status"])
+@pytest.mark.parametrize("policy", ["clock", "favorites", "system_status", "front_panel"])
 def test_research_policy_excludes_periodic_reader_even_when_not_currently_executing(policy):
     scanner = Scanner()
     if policy == "system_status":
         runtime = runtime_for(scanner, system_status_research=SystemStatusResearchPolicy(FIRMWARE))
+    elif policy == "front_panel":
+        runtime = runtime_for(
+            scanner,
+            front_panel_research=FrontPanelResearchPolicy(
+                FIRMWARE, FrontPanelKey.MENU, "Trunk Scan", "trunk_scan"
+            ),
+        )
     else:
         runtime = runtime_for(
             scanner,

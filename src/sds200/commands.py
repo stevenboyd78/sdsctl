@@ -10,6 +10,7 @@ from .exceptions import (
     ProtocolError,
     ScannerRecordingControlError,
 )
+from .front_panel_keys import FrontPanelKey
 from .models import (
     AnalysisMode,
     AnalysisResponse,
@@ -932,6 +933,41 @@ class PressKey:
 
     def parse_response(self, response: object) -> None:
         _parse_acknowledgement(response, "KEY")
+
+
+@dataclass(frozen=True, slots=True)
+class PressFrontPanelKey:
+    """One typed front-panel press for the internal qualification boundary.
+
+    This command deliberately accepts the inventory enum itself rather than a
+    string.  Its existence does not qualify a model, firmware, transport,
+    scanner context, permission, or UI action; the opt-in daemon research
+    harness owns those gates.  The established hold-related ``PressKey``
+    allowlist remains unchanged.
+    """
+
+    key: FrontPanelKey
+
+    def __post_init__(self) -> None:
+        if type(self.key) is not FrontPanelKey:
+            raise TypeError("Front-panel qualification requires an exact typed key.")
+
+    @property
+    def wire(self) -> str:
+        return f"KEY,{self.key.value},P"
+
+    @property
+    def response_command(self) -> str:
+        return "KEY"
+
+    def parse_response(self, response: object) -> None:
+        if not isinstance(response, Packet) or response.command != "KEY":
+            raise ProtocolError("KEY qualification returned an unexpected response.")
+        if response.fields == ("OK",):
+            return
+        if response.fields in (("NG",), ("ERR",), ("ERROR",)):
+            raise CommandRejectedError("Scanner rejected KEY qualification command.")
+        raise ProtocolError("KEY qualification acknowledgement must be exactly KEY,OK.")
 
 
 @dataclass(frozen=True, slots=True)

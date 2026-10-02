@@ -488,6 +488,7 @@ class ReadWindow:
                 or type(self.runtime.scanner.transport) is not UdpTransport
                 or self.runtime._system_status_research is not None
                 or self.runtime._display_read_research is not None
+                or getattr(self.runtime, "_front_panel_research", None) is not None
                 or self.cache is None
                 or self.feed is None
                 or (

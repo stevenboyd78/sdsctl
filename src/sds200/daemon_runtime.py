@@ -27,6 +27,13 @@ from .daemon_display_read_research import (
     _DisplayResearchScanner,
     display_read_timeout,
 )
+from .daemon_front_panel_research import (
+    FrontPanelResearchAttempt,
+    FrontPanelResearchPolicy,
+    FrontPanelResearchResult,
+    _FrontPanelResearchScanner,
+    front_panel_research_timeout,
+)
 from .daemon_system_status_research import (
     SystemStatusResearchAttempt,
     SystemStatusResearchPolicy,
@@ -364,6 +371,7 @@ class DaemonRuntime:
         psi_recovery_cooldown: float = 60.0,
         system_status_research: SystemStatusResearchPolicy | None = None,
         display_read_research: DisplayReadResearchPolicy | None = None,
+        front_panel_research: FrontPanelResearchPolicy | None = None,
         clock: Callable[[], float] = monotonic,
         now: Callable[[], datetime] = _utc_now,
     ) -> None:
@@ -439,11 +447,26 @@ class DaemonRuntime:
             display_read_research, DisplayReadResearchPolicy
         ):
             raise TypeError("Display-read research requires an explicit policy.")
-        if display_read_research is not None and system_status_research is not None:
+        if front_panel_research is not None and not isinstance(
+            front_panel_research, FrontPanelResearchPolicy
+        ):
+            raise TypeError("Front-panel research requires an explicit policy.")
+        if sum(
+            policy is not None
+            for policy in (
+                system_status_research,
+                display_read_research,
+                front_panel_research,
+            )
+        ) > 1:
             raise ValueError("Only one research policy may be enabled per runtime.")
         self._display_read_research = (
             None if display_read_research is None
             else DisplayReadResearchAttempt(display_read_research)
+        )
+        self._front_panel_research = (
+            None if front_panel_research is None
+            else FrontPanelResearchAttempt(front_panel_research)
         )
 
     @property
@@ -1232,6 +1255,20 @@ class DaemonRuntime:
         with self._control_scope(normalized) as remaining:
             return self._display_read_research.run(
                 cast(_DisplayResearchScanner, self.scanner),
+                operator_ready=operator_ready,
+                timeout=remaining,
+            )
+
+    def run_front_panel_research(
+        self, *, operator_ready: bool, timeout: float = 6.0
+    ) -> FrontPanelResearchResult:
+        """One opt-in key qualification; never a public daemon control."""
+        if self._front_panel_research is None:
+            raise UnsupportedScannerFeatureError("Front-panel research is disabled.")
+        normalized = front_panel_research_timeout(timeout)
+        with self._control_scope(normalized) as remaining:
+            return self._front_panel_research.run(
+                cast(_FrontPanelResearchScanner, self.scanner),
                 operator_ready=operator_ready,
                 timeout=remaining,
             )

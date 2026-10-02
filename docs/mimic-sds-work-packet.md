@@ -992,6 +992,22 @@ permission checks remain subsequent work. The Web dashboard now renders the
 full inventory as a fail-closed control drawer, but every key is disabled and
 no click handler, general key request, queue or scanner I/O exists.
 
+The next offline foundation adds a separate internal one-press qualification
+boundary without widening that hold allowlist or enabling these presentations.
+It accepts only the exact `FrontPanelKey` enum and always emits one documented
+`KEY,<code>,P` packet. An ordinary runtime has the feature disabled. A temporary
+same-owner launcher must instead pin SDS200, exact firmware, key, visible mode
+and visible screen; hold an idle-Waterfall/direct-UDP command scope; observe two
+matching overlay-free preflight frames; and receive one fresh administrator
+signal while an operator is physically present. One runtime consumes at most
+one attempt, including refused and uncertain sends. It never retries, queues a
+sequence, infers another key mode, exposes an API route or treats `KEY,OK` as
+state confirmation. A bounded post-ACK PSI frame records only sanitized
+mode/screen transition evidence. System Status, display-read, supplemental-read
+and front-panel research policies are mutually exclusive. The source-pinned
+manual Home Assistant staging adapter can prepare this exact research image,
+but no image is installed or triggered by implementation or tests.
+
 The daemon-backed Mimic-SDS TUI runtime/help drawer now renders the same
 validated inventory snapshot as read-only text. It is fetched once during
 daemon-client startup when the operation is advertised, never on drawer refresh,
@@ -1103,10 +1119,12 @@ programming, power-off, mass-storage switching or speculative key sequences.
    already-mounted USB and any supported network path. Test wrong endpoint,
    changed file during read, partial/failed sync, missing profile, source conflict
    and atomic last-good retention. Keep scanner write contracts unchanged.
-5. **Front-panel controls:** implement the complete typed inventory with
-   server-side capability/permission refusal, state-aware UI, interleaving,
-   failure/retry and focus tests. Physically qualify documented actions on SDS100
-   USB and SDS200 network sessions in bounded operator-supervised groups.
+5. **Front-panel controls:** use the internal typed, same-owner, one-press
+   qualification boundary to gather exact supervised model/firmware/context
+   evidence first. Then implement server-side capability/permission refusal,
+   state-aware UI, interleaving, failure/no-retry and focus tests. Physically
+   qualify documented actions on SDS100 USB and SDS200 network sessions in
+   bounded operator-supervised groups; do not infer support from the harness.
 6. **Acceptance and release:** compare selected actual scanner screens with
    both Pis, WebUI and the new card; change a display setting, re-acquire the
    profile, and verify all consumers update consistently without a new scanner

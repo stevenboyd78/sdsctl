@@ -109,9 +109,14 @@ are now implemented as unreleased candidates; paired installed/live acceptance
 remains separate. Both Pi TUI geometries and the
 [HA card layout](docs/home-assistant-mimic-card.md#offline-visual-acceptance--september-28-2026)
 passed offline fictional-data visual checks. The complete front-panel key
-inventory is implemented read-only; new
-key dispatch and control UI remain pending. No milestone/release number is
-assigned. Waterfall-screen fidelity remains a separate slice. The later exact
+inventory is implemented read-only. An internal, disabled-by-default SDS200
+qualification harness now provides exactly one typed press behind pinned
+firmware, two exact visible-context preflights, the existing daemon owner, an
+idle Waterfall and a fresh local operator signal. It has no public API/UI,
+sequence or retry and does not qualify any key merely by existing. Supervised
+physical key evidence, server permissions and the control UI remain pending. No
+milestone/release number is assigned. Waterfall-screen fidelity remains a
+separate slice. The later exact
 `85042e6` daemon-backed TUI waterfall passed authenticated live 240-bin
 streaming and user-reported visual/interaction acceptance on the 100x30 small
 Pi, followed by successful guarded restoration and no stale consumer. A later

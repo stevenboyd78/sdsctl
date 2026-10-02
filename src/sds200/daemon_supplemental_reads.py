@@ -30,6 +30,7 @@ def _reserve(runtime: DaemonRuntime, scanner: object, stack: ExitStack) -> bool:
             runtime._state is DaemonRuntimeState.RUNNING
             and runtime._system_status_research is None
             and runtime._display_read_research is None
+            and runtime._front_panel_research is None
         )
     finally:
         runtime._state_lock.release()

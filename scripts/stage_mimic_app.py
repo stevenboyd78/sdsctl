@@ -36,6 +36,41 @@ CONFIGURATION_NOTE = """  scanner_display_config:
       Otherwise select an already provisioned private deployment TOML for
       this scanner. This does not initialize, import or repair profile state.
 """
+FRONT_PANEL_KEY_NAMES = dict(
+    zip(
+        "MFL1234567890.E><^VQYABCZTR",
+        (
+            "menu",
+            "function",
+            "avoid",
+            "digit-1",
+            "digit-2",
+            "digit-3",
+            "digit-4",
+            "digit-5",
+            "digit-6",
+            "digit-7",
+            "digit-8",
+            "digit-9",
+            "digit-0",
+            "dot-no",
+            "enter-yes",
+            "rotary-right",
+            "rotary-left",
+            "rotary-push",
+            "volume-push",
+            "squelch-push",
+            "replay",
+            "soft-1",
+            "soft-2",
+            "soft-3",
+            "zip",
+            "service-type",
+            "range",
+        ),
+        strict=True,
+    )
+)
 
 
 def git(*args: str) -> bytes:
@@ -57,6 +92,10 @@ def render(
     research_firmware: str | None = None,
     display_read_firmware: str | None = None,
     display_read_kind: str | None = None,
+    front_panel_firmware: str | None = None,
+    front_panel_key: str | None = None,
+    front_panel_mode: str | None = None,
+    front_panel_screen: str | None = None,
     supplemental_firmware: str | None = None,
     supplemental_continuity: bool = False,
     supplemental_timing: bool = False,
@@ -67,6 +106,10 @@ def render(
         research_firmware,
         display_read_firmware,
         display_read_kind,
+        front_panel_firmware,
+        front_panel_key,
+        front_panel_mode,
+        front_panel_screen,
         supplemental_firmware,
         supplemental_continuity,
         supplemental_timing,
@@ -274,6 +317,75 @@ def render(
                 },
             }
         )
+    if front_panel_firmware is not None:
+        assert front_panel_key is not None
+        assert front_panel_mode is not None
+        assert front_panel_screen is not None
+        runtime_name = "src/sds200/home_assistant_app_runtime.py"
+        before, delimiter, after = (
+            result[runtime_name].decode().partition("def build_home_assistant_daemon_command(")
+        )
+        signature, end, body = after.partition(") -> tuple[str, ...]:")
+        if not delimiter or not end:
+            raise ValueError("Review the daemon launcher boundary.")
+        signature = replace_once(
+            signature,
+            "executable: str = HOME_ASSISTANT_APP_EXECUTABLE",
+            'executable: str = "/usr/local/bin/sdsctl-front-panel-research"',
+        )
+        result[runtime_name] = (before + delimiter + signature + end + body).encode()
+        for name in ("research_system_status_daemon.py", "research_front_panel_daemon.py"):
+            result[name] = snapshot["scripts/" + name]
+        result["research-entry.py"] = (
+            "#!/usr/local/bin/python\nimport os, sys, uuid\n"
+            "sys.path.insert(0, '/opt/sdsctl-research')\n"
+            "from research_front_panel_daemon import main\n"
+            "directory = ('/run/sdsctl/front-panel-research-' "
+            "+ str(os.getpid()) + '-' + uuid.uuid4().hex)\n"
+            f"raise SystemExit(main(['--expected-firmware', {front_panel_firmware!r}, "
+            f"'--key-code', {front_panel_key!r}, "
+            f"'--expected-mode', {front_panel_mode!r}, "
+            f"'--expected-screen', {front_panel_screen!r}, "
+            "'--evidence-directory', directory, '--', *sys.argv[1:]]))\n"
+        ).encode()
+        result["Dockerfile"] += (
+            b"\n# Explicit one-press front-panel research; no automatic KEY command.\n"
+            b"COPY research_system_status_daemon.py research_front_panel_daemon.py "
+            b"/opt/sdsctl-research/\n"
+            b"COPY --chmod=0555 research-entry.py /usr/local/bin/sdsctl-front-panel-research\n"
+        )
+        result["config.yaml"] = replace_once(
+            result["config.yaml"].decode(),
+            f'version: "{version}-mimic-{revision[:12]}"',
+            f'version: "{version}-mimic-{revision[:12]}-'
+            f'{FRONT_PANEL_KEY_NAMES[front_panel_key]}-key-research"',
+        ).encode()
+        result["DOCS.md"] += (
+            "\n## Temporary front-panel key qualification\n\n"
+            f"This image pins firmware {front_panel_firmware}, key code "
+            f"{front_panel_key}, mode {front_panel_mode} and screen {front_panel_screen}. "
+            "It requires the direct-UDP scanner owner, an idle Waterfall and two exact "
+            "preflight display frames. No KEY command runs on startup. Verify fresh "
+            "private ready.json, PID and process start ticks while physically at the "
+            "scanner before one administrator SIGUSR1 trigger. The trigger sends at "
+            "most one typed KEY press; it provides no sequence, held press, API route "
+            "or retry. An acknowledgement is not state confirmation. Preserve every "
+            "result, especially an unconfirmed press, and restore the normal candidate "
+            "after the bounded supervised check.\n"
+        ).encode()
+        report.update(
+            {
+                "purpose": "local-mimic-front-panel-research-only",
+                "research_firmware_pin": front_panel_firmware,
+                "research_key_code": front_panel_key,
+                "research_expected_mode": front_panel_mode,
+                "research_expected_screen": front_panel_screen,
+                "research_automatic_start": False,
+                "files": {
+                    name: hashlib.sha256(data).hexdigest() for name, data in sorted(result.items())
+                },
+            }
+        )
     if supplemental_firmware is not None:
         read_kind = (
             "shared-clock-favorites-bounded-write"
@@ -405,12 +517,35 @@ def validate_research_choice(
     ast_firmware: str | None,
     read_firmware: str | None,
     read_kind: str | None,
+    front_panel_firmware: str | None = None,
+    front_panel_key: str | None = None,
+    front_panel_mode: str | None = None,
+    front_panel_screen: str | None = None,
     supplemental_firmware: str | None = None,
     supplemental_continuity: bool = False,
     supplemental_timing: bool = False,
     supplemental_transition_wait: bool = False,
     supplemental_bounded_writes: bool = False,
 ) -> None:
+    front_values = (
+        front_panel_firmware,
+        front_panel_key,
+        front_panel_mode,
+        front_panel_screen,
+    )
+    front_selected = any(value is not None for value in front_values)
+    if front_selected and not all(value is not None for value in front_values):
+        raise ValueError("Front-panel research requires firmware, key, mode and screen pins.")
+    selected_modes = sum(
+        (
+            ast_firmware is not None,
+            read_firmware is not None or read_kind is not None,
+            front_selected,
+            supplemental_firmware is not None,
+        )
+    )
+    if selected_modes > 1:
+        raise ValueError("Only one research mode can be staged.")
     if type(supplemental_bounded_writes) is not bool or (
         supplemental_bounded_writes and not supplemental_transition_wait
     ):
@@ -427,16 +562,11 @@ def validate_research_choice(
         supplemental_continuity and supplemental_firmware is None
     ):
         raise ValueError("Continuity research requires an explicit shared-reader firmware pin.")
-    if supplemental_firmware is not None:
-        if any(value is not None for value in (ast_firmware, read_firmware, read_kind)):
-            raise ValueError("Only one research mode can be staged.")
-        if (
-            re.fullmatch(r"[A-Za-z0-9._ -]{1,64}", supplemental_firmware) is None
-            or supplemental_firmware != supplemental_firmware.strip()
-        ):
-            raise ValueError("Review the exact supplemental firmware pin.")
-    if ast_firmware is not None and (read_firmware is not None or read_kind is not None):
-        raise ValueError("Only one research mode can be staged.")
+    if supplemental_firmware is not None and (
+        re.fullmatch(r"[A-Za-z0-9._ -]{1,64}", supplemental_firmware) is None
+        or supplemental_firmware != supplemental_firmware.strip()
+    ):
+        raise ValueError("Review the exact supplemental firmware pin.")
     if (read_firmware is None) != (read_kind is None):
         raise ValueError("Display-read research requires both firmware and GET kind.")
     if read_firmware is not None and (
@@ -445,6 +575,18 @@ def validate_research_choice(
         or read_kind not in {"clock", "favorites", "system", "department"}
     ):
         raise ValueError("Review the exact display-read firmware pin and GET kind.")
+    if front_panel_firmware is not None and (
+        re.fullmatch(r"[A-Za-z0-9._ -]{1,64}", front_panel_firmware) is None
+        or front_panel_firmware != front_panel_firmware.strip()
+        or front_panel_key not in FRONT_PANEL_KEY_NAMES
+        or not isinstance(front_panel_mode, str)
+        or re.fullmatch(r"[A-Za-z0-9._ /-]{1,64}", front_panel_mode) is None
+        or front_panel_mode != front_panel_mode.strip()
+        or not isinstance(front_panel_screen, str)
+        or re.fullmatch(r"[A-Za-z0-9._ /-]{1,64}", front_panel_screen) is None
+        or front_panel_screen != front_panel_screen.strip()
+    ):
+        raise ValueError("Review the exact front-panel firmware, key, mode and screen pins.")
 
 
 def from_revision(
@@ -453,6 +595,10 @@ def from_revision(
     research_firmware: str | None = None,
     display_read_firmware: str | None = None,
     display_read_kind: str | None = None,
+    front_panel_firmware: str | None = None,
+    front_panel_key: str | None = None,
+    front_panel_mode: str | None = None,
+    front_panel_screen: str | None = None,
     supplemental_firmware: str | None = None,
     supplemental_continuity: bool = False,
     supplemental_timing: bool = False,
@@ -463,6 +609,10 @@ def from_revision(
         research_firmware,
         display_read_firmware,
         display_read_kind,
+        front_panel_firmware,
+        front_panel_key,
+        front_panel_mode,
+        front_panel_screen,
         supplemental_firmware,
         supplemental_continuity,
         supplemental_timing,
@@ -485,11 +635,17 @@ def from_revision(
             ["scripts/research_system_status_daemon.py"]
             if any(
                 value is not None
-                for value in (research_firmware, display_read_firmware, supplemental_firmware)
+                for value in (
+                    research_firmware,
+                    display_read_firmware,
+                    front_panel_firmware,
+                    supplemental_firmware,
+                )
             )
             else []
         ),
         *(["scripts/research_display_read_daemon.py"] if display_read_firmware is not None else []),
+        *(["scripts/research_front_panel_daemon.py"] if front_panel_firmware is not None else []),
         *(["scripts/research_supplemental_daemon.py"] if supplemental_firmware is not None else []),
     )
     snapshot = {}
@@ -512,6 +668,10 @@ def from_revision(
         research_firmware=research_firmware,
         display_read_firmware=display_read_firmware,
         display_read_kind=display_read_kind,
+        front_panel_firmware=front_panel_firmware,
+        front_panel_key=front_panel_key,
+        front_panel_mode=front_panel_mode,
+        front_panel_screen=front_panel_screen,
         supplemental_firmware=supplemental_firmware,
         supplemental_continuity=supplemental_continuity,
         supplemental_timing=supplemental_timing,
@@ -573,6 +733,10 @@ def main() -> None:
         help="Explicit temporary same-owner research launcher with this exact firmware pin.",
     )
     parser.add_argument("--display-read-research-firmware")
+    parser.add_argument("--front-panel-research-firmware")
+    parser.add_argument("--front-panel-key", choices=tuple(FRONT_PANEL_KEY_NAMES))
+    parser.add_argument("--front-panel-mode")
+    parser.add_argument("--front-panel-screen")
     parser.add_argument("--supplemental-research-firmware")
     parser.add_argument("--supplemental-continuity", action="store_true")
     parser.add_argument("--supplemental-timing", action="store_true")
@@ -587,6 +751,10 @@ def main() -> None:
         research_firmware=args.system_status_research_firmware,
         display_read_firmware=args.display_read_research_firmware,
         display_read_kind=args.display_read_kind,
+        front_panel_firmware=args.front_panel_research_firmware,
+        front_panel_key=args.front_panel_key,
+        front_panel_mode=args.front_panel_mode,
+        front_panel_screen=args.front_panel_screen,
         supplemental_firmware=args.supplemental_research_firmware,
         supplemental_continuity=args.supplemental_continuity,
         supplemental_timing=args.supplemental_timing,
