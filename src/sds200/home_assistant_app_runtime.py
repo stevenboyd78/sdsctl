@@ -227,6 +227,8 @@ def build_home_assistant_daemon_command(
         "--live-audio-socket-path",
         os.fspath(paths.live_audio_socket),
     )
+    if options.qualified_sds200_menu_control_enabled:
+        command += ("--enable-qualified-sds200-menu-control",)
     if scanner_display_profile_config is not None:
         command += (
             "--scanner-display-profile-config",

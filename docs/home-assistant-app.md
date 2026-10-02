@@ -72,6 +72,17 @@ The App exposes these options:
 | `advanced_access_server_name` | advanced only | empty | Private certificate identity used by both advanced services |
 | `advanced_access_host_address` | remote daemon only | empty | Literal private Home Assistant host address placed in downloaded daemon-client profiles |
 
+The published v0.30.0 catalog intentionally retains this seven-field contract.
+The source runtime also recognizes
+`qualified_sds200_menu_control_enabled`, defaulting to `false`, but only the
+source-pinned manual acceptance App may add that option to its matching private
+manifest. It must not be added to the published catalog while that catalog can
+select an older strict-parser image. When explicitly enabled in the matching
+candidate, it adds only the already qualified SDS200 `Version 1.26.01` one-press
+Menu boundary to the daemon. Every request still requires fresh `Trunk Scan` /
+`trunk_scan` evidence; it does not enable another key, a held gesture, a
+sequence, a retry, or a post-acknowledgement state claim.
+
 Home Assistant writes these values to `/data/options.json`. The App reads that
 file at startup and converts the Supervisor MQTT service response into the
 existing strict daemon MQTT configuration.

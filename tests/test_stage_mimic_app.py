@@ -361,12 +361,14 @@ def test_candidate_is_paired_manual_and_disabled_by_default(snapshot):
     assert 'recording_directory: "sdsctl-mimic-acceptance/recordings"' in manifest
     assert "remote_daemon_enabled: false" in manifest
     assert "native_dashboard_enabled: false" in manifest
+    assert "qualified_sds200_menu_control_enabled: false" in manifest
     options, _, schema = manifest.partition("options:\n")[2].partition("schema:\n")
-    expected = stager.PUBLIC_OPTIONS | {"scanner_display_config"}
+    expected = stager.PUBLIC_OPTIONS | stager.ACCEPTANCE_OPTIONS
     assert keys(schema) == expected
     assert keys(options) == expected - {"scanner_host"}
     assert 'scanner_display_config: ""' in options
     assert 'scanner_display_config: "str?"' in schema
+    assert "qualified_sds200_menu_control_enabled: bool" in schema
     assert keys(output["translations/en.yaml"].decode()) == expected
     assert output["Dockerfile"] == snapshot["home-assistant/sds200/Dockerfile"]
     assert (
@@ -374,6 +376,10 @@ def test_candidate_is_paired_manual_and_disabled_by_default(snapshot):
         == snapshot["src/sds200/daemon_display_frames.py"]
     )
     assert "scanner_display_config" not in before["home-assistant/sds200/config.yaml"].decode()
+    assert (
+        "qualified_sds200_menu_control_enabled"
+        not in before["home-assistant/sds200/config.yaml"].decode()
+    )
 
 
 def test_candidate_inventory_is_deterministic_and_excludes_unrelated_files(snapshot):

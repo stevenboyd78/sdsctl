@@ -1028,6 +1028,14 @@ acknowledgement completes the command but is not reported as proof that a menu
 is visible. A mismatch, timeout, busy Waterfall, lost connection, serial owner,
 unqualified key or unenabled policy refuses before key I/O.
 
+The Home Assistant runtime accepts the separate strict boolean
+`qualified_sds200_menu_control_enabled`, defaults it to false, reconciles it
+against Supervisor's effective option state and translates only a true value to
+the daemon CLI flag. The published v0.30.0 App catalog remains on its reviewed
+seven-field contract. Only the source-pinned manual acceptance stager adds this
+candidate-only switch to a matching image and manifest; staging remains
+disabled by default and never installs, starts or presses the scanner.
+
 The daemon-backed Mimic-SDS TUI runtime/help drawer now renders the same
 validated inventory snapshot as read-only text. It is fetched once during
 daemon-client startup when the operation is advertised, never on drawer refresh,

@@ -127,8 +127,12 @@ firmware, requests two new matching GSI frames and sends one `KEY,M,P` without
 retry. The typed daemon/client operation and one exact bodyless operator-Web
 route are server-authorized; observe-only peers, the Home Assistant card and
 the TUI remain read-only, and the other 26 keys remain unavailable. This
-candidate is not installed and the closed physical press is not repeated. No
-milestone/release number is assigned. Waterfall-screen fidelity remains a
+candidate's Home Assistant runtime has a separate strict default-false opt-in
+that maps only to the daemon flag. The published v0.30.0 seven-field catalog is
+unchanged; only the source-pinned manual acceptance stager adds the switch to a
+matching private manifest. Staging does not install, start or press the scanner.
+This candidate is not installed and the closed physical press is not repeated.
+No milestone/release number is assigned. Waterfall-screen fidelity remains a
 separate slice. The later exact
 `85042e6` daemon-backed TUI waterfall passed authenticated live 240-bin
 streaming and user-reported visual/interaction acceptance on the 100x30 small

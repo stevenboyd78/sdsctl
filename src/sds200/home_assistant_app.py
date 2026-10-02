@@ -216,6 +216,7 @@ class HomeAssistantAppOptions:
     scanner_host: str
     mqtt_topic_prefix: str = HOME_ASSISTANT_APP_DEFAULT_MQTT_TOPIC_PREFIX
     recording_directory: str = HOME_ASSISTANT_APP_DEFAULT_RECORDING_DIRECTORY
+    qualified_sds200_menu_control_enabled: bool = False
     remote_daemon_enabled: bool = False
     native_dashboard_enabled: bool = False
     advanced_access_server_name: str = ""
@@ -242,6 +243,14 @@ class HomeAssistantAppOptions:
             self,
             "recording_directory",
             _require_recording_directory(self.recording_directory),
+        )
+        object.__setattr__(
+            self,
+            "qualified_sds200_menu_control_enabled",
+            _require_bool(
+                self.qualified_sds200_menu_control_enabled,
+                label=("Home Assistant App qualified SDS200 Menu-control enabled setting"),
+            ),
         )
         object.__setattr__(
             self,
@@ -472,6 +481,7 @@ def load_home_assistant_app_options(
         "scanner_host",
         "mqtt_topic_prefix",
         "recording_directory",
+        "qualified_sds200_menu_control_enabled",
         "remote_daemon_enabled",
         "native_dashboard_enabled",
         "advanced_access_server_name",
@@ -502,6 +512,10 @@ def load_home_assistant_app_options(
             recording_directory=payload.get(
                 "recording_directory",
                 HOME_ASSISTANT_APP_DEFAULT_RECORDING_DIRECTORY,
+            ),
+            qualified_sds200_menu_control_enabled=payload.get(
+                "qualified_sds200_menu_control_enabled",
+                False,
             ),
             remote_daemon_enabled=payload.get("remote_daemon_enabled", False),
             native_dashboard_enabled=payload.get("native_dashboard_enabled", False),
@@ -706,6 +720,7 @@ def reconcile_home_assistant_app_advanced_exposure(
         raise TypeError("Advanced App exposure requires Supervisor App information.")
 
     for field_name in (
+        "qualified_sds200_menu_control_enabled",
         "remote_daemon_enabled",
         "native_dashboard_enabled",
         "advanced_access_server_name",

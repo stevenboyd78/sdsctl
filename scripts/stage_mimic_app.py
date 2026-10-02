@@ -29,6 +29,18 @@ PUBLIC_OPTIONS = {
     "advanced_access_server_name",
     "advanced_access_host_address",
 }
+ACCEPTANCE_OPTIONS = {
+    "qualified_sds200_menu_control_enabled",
+    "scanner_display_config",
+}
+MENU_CONTROL_CONFIGURATION_NOTE = """  qualified_sds200_menu_control_enabled:
+    name: Qualified SDS200 Menu control
+    description: >-
+      Unreleased acceptance only. Leave disabled unless the scanner is an
+      SDS200 running Version 1.26.01 and the operator has reviewed the exact
+      one-press Menu boundary. Every attempt is rechecked from fresh Trunk Scan
+      context. No retry, held gesture, key sequence or other key is enabled.
+"""
 CONFIGURATION_NOTE = """  scanner_display_config:
     name: Candidate display-profile deployment
     description: >-
@@ -154,11 +166,16 @@ def render(
             '  recording_directory: "sdsctl/recordings"\n',
             '  recording_directory: "sdsctl-mimic-acceptance/recordings"\n',
         ),
-        ("schema:\n", '  scanner_display_config: ""\nschema:\n'),
+        (
+            "schema:\n",
+            "  qualified_sds200_menu_control_enabled: false\n"
+            '  scanner_display_config: ""\n'
+            "schema:\n",
+        ),
     ):
         manifest = replace_once(manifest, old, new)
-    manifest += '  scanner_display_config: "str?"\n'
-    translations += CONFIGURATION_NOTE
+    manifest += '  qualified_sds200_menu_control_enabled: bool\n  scanner_display_config: "str?"\n'
+    translations += MENU_CONTROL_CONFIGURATION_NOTE + CONFIGURATION_NOTE
     result = {
         name: data
         for name, data in snapshot.items()
@@ -178,7 +195,11 @@ def render(
         "All host ports default to unmapped. If testing audio, map UDP 50000 only "
         "during the reviewed switchover after stopping the installed App. "
         "Do not copy credentials or enable advanced listeners as an installation side effect.\n\n"
-        "The empty scanner_display_config default leaves the feature disabled. "
+        "The qualified_sds200_menu_control_enabled default is false. Enabling it "
+        "only exposes the exact SDS200 Version 1.26.01 one-press Menu boundary; "
+        "the daemon still rechecks fresh Trunk Scan context on every attempt and "
+        "does not enable retries, held gestures, sequences or other keys. "
+        "The empty scanner_display_config default leaves Mimic-SDS disabled. "
         "Provision and review the private manifests and accepted state before opting in. "
         "Changing this option requires an App restart. Never add it to the published App.\n\n"
         "Rollback: stop this candidate, restore any explicitly changed card resources, "

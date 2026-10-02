@@ -142,6 +142,7 @@ def test_home_assistant_app_manifest_uses_ingress_and_required_mqtt_service() ->
     assert "  native_dashboard_enabled: bool\n" in manifest
     assert '  advanced_access_server_name: "str?"\n' in manifest
     assert '  advanced_access_host_address: "str?"\n' in manifest
+    assert "qualified_sds200_menu_control_enabled" not in manifest
     assert "hassio_api: true\n" not in manifest
     assert "host_network: true\n" not in manifest
 

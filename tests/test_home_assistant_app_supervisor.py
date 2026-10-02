@@ -380,6 +380,7 @@ def test_prepare_launch_plan_generates_config_and_separates_child_secrets(
             {
                 "scanner_host": "192.0.2.25",
                 "mqtt_topic_prefix": "scanner/main",
+                "qualified_sds200_menu_control_enabled": True,
             }
         ),
         encoding="utf-8",
@@ -421,6 +422,7 @@ def test_prepare_launch_plan_generates_config_and_separates_child_secrets(
                 HOME_ASSISTANT_APP_REMOTE_DAEMON_PORT_KEY: None,
                 HOME_ASSISTANT_APP_NATIVE_DASHBOARD_PORT_KEY: None,
             },
+            options={"qualified_sds200_menu_control_enabled": True},
         ),
         environ={
             HOME_ASSISTANT_SUPERVISOR_TOKEN_VARIABLE: "supervisor-token",
@@ -455,6 +457,7 @@ def test_prepare_launch_plan_generates_config_and_separates_child_secrets(
     assert plan.web_environment == {"PATH": "/usr/bin"}
     assert HOME_ASSISTANT_SUPERVISOR_TOKEN_VARIABLE not in plan.web_environment
     assert HOME_ASSISTANT_APP_MQTT_PASSWORD_VARIABLE not in plan.web_environment
+    assert plan.daemon_command.count("--enable-qualified-sds200-menu-control") == 1
 
 
 def test_prepare_launch_plan_rejects_advanced_files_outside_runtime_directory(

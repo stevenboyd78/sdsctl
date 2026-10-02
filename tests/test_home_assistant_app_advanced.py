@@ -176,6 +176,13 @@ def test_reconcile_home_assistant_app_advanced_exposure_accepts_distinct_ports()
             ),
             "options disagree",
         ),
+        (
+            HomeAssistantAppOptions(scanner_host="scanner.local"),
+            supervisor_info_payload(
+                options={"qualified_sds200_menu_control_enabled": True},
+            ),
+            "options disagree",
+        ),
     ],
 )
 def test_reconcile_home_assistant_app_advanced_exposure_rejects_mismatch(
