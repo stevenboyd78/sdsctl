@@ -11,6 +11,11 @@ updates:
     directory: "/"
     schedule:
       interval: monthly
+    groups:
+      monthly-github-actions:
+        applies-to: version-updates
+        patterns:
+          - "*"
     labels:
       - dependencies
 

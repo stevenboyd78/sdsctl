@@ -112,16 +112,16 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Set up QEMU
-        # docker/setup-qemu-action v4.2.0
-        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8
+        # docker/setup-qemu-action v4.4.0
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1
 
       - name: Set up Docker Buildx
         # docker/setup-buildx-action v4.3.0
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
 
       - name: Build generic image without publication
-        # docker/build-push-action v7.3.0
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        # docker/build-push-action v7.4.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc
         with:
           context: .
           file: Dockerfile
@@ -153,8 +153,8 @@ jobs:
           fi
 
       - name: Set up QEMU
-        # docker/setup-qemu-action v4.2.0
-        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8
+        # docker/setup-qemu-action v4.4.0
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1
 
       - name: Set up Docker Buildx
         # docker/setup-buildx-action v4.3.0
@@ -168,8 +168,8 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and publish generic image
-        # docker/build-push-action v7.3.0
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        # docker/build-push-action v7.4.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc
         with:
           context: .
           file: Dockerfile

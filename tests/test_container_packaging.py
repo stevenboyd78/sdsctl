@@ -586,9 +586,9 @@ def test_generic_docker_hub_workflow_has_safe_trigger_and_publication_contract()
 def test_generic_docker_hub_workflow_pins_docker_actions() -> None:
     workflow = _DOCKER_HUB_WORKFLOW.read_text(encoding="utf-8")
     expected_pins = {
-        "docker/setup-qemu-action v4.2.0": (
+        "docker/setup-qemu-action v4.4.0": (
             "docker/setup-qemu-action@"
-            "96fe6ef7f33517b61c61be40b68a1882f3264fb8"
+            "99012661954931238ded8c8b007157a8430204e1"
         ),
         "docker/setup-buildx-action v4.3.0": (
             "docker/setup-buildx-action@"
@@ -598,9 +598,9 @@ def test_generic_docker_hub_workflow_pins_docker_actions() -> None:
             "docker/login-action@"
             "dbcb813823bdd20940b903addbd779551569679f"
         ),
-        "docker/build-push-action v7.3.0": (
+        "docker/build-push-action v7.4.0": (
             "docker/build-push-action@"
-            "53b7df96c91f9c12dcc8a07bcb9ccacbed38856a"
+            "c3c9e263c25d99ce0380d002d59b67737d91b0dc"
         ),
     }
 

@@ -27,6 +27,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Changed
 
+- Update the reviewed immutable pins for Home Assistant builder 2026.09.0,
+  Docker build-push-action v7.4.0 and setup-qemu-action v4.4.0. Group future
+  monthly GitHub Actions version updates into one Dependabot pull request so
+  related workflow changes and their integrity assertions are reviewed and
+  validated atomically; security updates remain independently actionable.
 - Replace the original WebUI LCARS theme with the reviewed v2 design: six
   palettes, bundled offline Antonio typography options, segmented rails, and
   Site beneath System. Keep the stable `lcars` theme ID and migrate saved

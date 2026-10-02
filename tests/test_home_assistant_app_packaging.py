@@ -364,20 +364,20 @@ def test_home_assistant_app_image_workflow_uses_reviewed_builder_action_commit()
     assert 'ARCHITECTURES: \'["amd64", "aarch64"]\'' in workflow
     assert (
         "home-assistant/builder/actions/prepare-multi-arch-matrix@"
-        "4de35182ce1e329181bffcbcc84d33db5e2c7e10"
+        "7412f0023ea9b6e58e8bb5059f1660f51376f49a"
         in workflow
     )
     assert (
         "home-assistant/builder/actions/build-image@"
-        "4de35182ce1e329181bffcbcc84d33db5e2c7e10"
+        "7412f0023ea9b6e58e8bb5059f1660f51376f49a"
         in workflow
     )
     assert (
         "home-assistant/builder/actions/publish-multi-arch-manifest@"
-        "4de35182ce1e329181bffcbcc84d33db5e2c7e10"
+        "7412f0023ea9b6e58e8bb5059f1660f51376f49a"
         in workflow
     )
-    assert workflow.count("# home-assistant/builder 2026.06.0") == 4
+    assert workflow.count("# home-assistant/builder 2026.09.0") == 4
     assert "context: .\n" in workflow
     assert "file: ${{ env.APP_DOCKERFILE }}\n" in workflow
 

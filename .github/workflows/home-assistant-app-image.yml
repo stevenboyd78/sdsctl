@@ -72,8 +72,8 @@ jobs:
 
       - name: Prepare architecture matrix
         id: matrix
-        # home-assistant/builder 2026.06.0
-        uses: home-assistant/builder/actions/prepare-multi-arch-matrix@4de35182ce1e329181bffcbcc84d33db5e2c7e10
+        # home-assistant/builder 2026.09.0
+        uses: home-assistant/builder/actions/prepare-multi-arch-matrix@7412f0023ea9b6e58e8bb5059f1660f51376f49a
         with:
           architectures: ${{ env.ARCHITECTURES }}
           image-name: ${{ env.IMAGE_NAME }}
@@ -95,8 +95,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Build App image
-        # home-assistant/builder 2026.06.0
-        uses: home-assistant/builder/actions/build-image@4de35182ce1e329181bffcbcc84d33db5e2c7e10
+        # home-assistant/builder 2026.09.0
+        uses: home-assistant/builder/actions/build-image@7412f0023ea9b6e58e8bb5059f1660f51376f49a
         with:
           arch: ${{ matrix.arch }}
           container-registry-password: "unused"
@@ -134,8 +134,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Build and publish App image
-        # home-assistant/builder 2026.06.0
-        uses: home-assistant/builder/actions/build-image@4de35182ce1e329181bffcbcc84d33db5e2c7e10
+        # home-assistant/builder 2026.09.0
+        uses: home-assistant/builder/actions/build-image@7412f0023ea9b6e58e8bb5059f1660f51376f49a
         with:
           arch: ${{ matrix.arch }}
           container-registry-password: ${{ secrets.GITHUB_TOKEN }}
@@ -168,8 +168,8 @@ jobs:
 
     steps:
       - name: Publish multi-architecture manifest
-        # home-assistant/builder 2026.06.0
-        uses: home-assistant/builder/actions/publish-multi-arch-manifest@4de35182ce1e329181bffcbcc84d33db5e2c7e10
+        # home-assistant/builder 2026.09.0
+        uses: home-assistant/builder/actions/publish-multi-arch-manifest@7412f0023ea9b6e58e8bb5059f1660f51376f49a
         with:
           architectures: ${{ env.ARCHITECTURES }}
           container-registry-password: ${{ secrets.GITHUB_TOKEN }}
