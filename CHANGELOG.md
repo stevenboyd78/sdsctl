@@ -12,6 +12,8 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   daemon-backed TUI Waterfall while retaining its monochrome glyph ramp. Label
   the bands as per-frame and uncalibrated, and keep raw scanner span fields
   separate so the colors are not represented as absolute signal-strength units.
+  Present its timezone-aware source timestamp in the TUI host's local timezone
+  without changing the validated daemon record.
 - Bundle offline, licensed typography for First Responder, Amateur Radio,
   Pip-Boy-inspired and Matrix, with per-theme font pairing and readable/system
   fallback choices. Keep Mimic-SDS, System and terminal fonts independent;

@@ -8,7 +8,7 @@ import threading
 from collections import deque
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, tzinfo
 from typing import ClassVar, Protocol
 
 from rich.text import Text
@@ -527,7 +527,11 @@ def _render_relative_row(
     return rendered
 
 
-def _scale_text(snapshot: TuiWaterfallSnapshot) -> str:
+def _scale_text(
+    snapshot: TuiWaterfallSnapshot,
+    *,
+    local_timezone: tzinfo | None = None,
+) -> str:
     session_state = _session_value(snapshot.session, "state")
     waterfall_status = snapshot.session.get("waterfall_status")
     status = waterfall_status if isinstance(waterfall_status, Mapping) else {}
@@ -535,14 +539,14 @@ def _scale_text(snapshot: TuiWaterfallSnapshot) -> str:
     center = _session_value(status, "center_frequency")
     upper = _session_value(status, "upper_frequency")
     received = (
-        snapshot.source_received_at.isoformat()
+        snapshot.source_received_at.astimezone(local_timezone).isoformat()
         if snapshot.source_received_at is not None
         else "Unavailable"
     )
     return (
         f"Scanner span (raw): lower {lower} | center {center} | upper {upper} | "
         f"Session: {session_state}\n"
-        f"Source timestamp: {received}"
+        f"Source local timestamp: {received}"
     )
 
 

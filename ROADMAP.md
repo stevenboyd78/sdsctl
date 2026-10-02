@@ -118,9 +118,13 @@ Pi, followed by successful guarded restoration and no stale consumer. A later
 guarded 160x45 HDMI run also passed layout and interaction, but its photo/video
 review found the monochrome punctuation field visually difficult to interpret.
 The next candidate therefore retains that redundant glyph ramp while adding
-explicitly frame-relative green/yellow/red intensity bands. Physical acceptance
-of that color treatment and independently observed physical-Q termination
-remain unclaimed; this does not broaden front-panel-control authorization.
+explicitly frame-relative green/yellow/red intensity bands. The HDMI review
+confirmed that color made the information materially easier to understand and
+identified one presentation-only follow-up: render the aware source timestamp
+in the TUI host's local timezone rather than UTC. The candidate now performs
+that conversion without changing the validated record. Physical recheck of the
+timestamp and independently observed physical-Q termination remain unclaimed;
+this does not broaden front-panel-control authorization.
 
 ### Low-priority TUI usability follow-up
 

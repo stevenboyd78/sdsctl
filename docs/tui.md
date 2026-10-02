@@ -190,6 +190,12 @@ strength, spectrum power, FFT magnitude, or a higher acquisition rate. Lower,
 center and upper frequency fields are shown literally as raw scanner metadata
 without inferred units.
 
+The footer retains the validated timezone-aware source timestamp in the model
+and converts only its displayed form to the TUI host's configured local timezone.
+It is labeled `Source local timestamp` and keeps an explicit UTC offset. When the
+TUI is viewed over SSH or on a managed display, "local" therefore means the
+machine running the TUI, not the browser, SSH client, scanner, or daemon host.
+
 Inside the waterfall view:
 
 - **Space** pauses or resumes only this client's local display history; the

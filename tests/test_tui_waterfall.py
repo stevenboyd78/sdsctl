@@ -4,7 +4,7 @@ import asyncio
 import queue
 import threading
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from math import nextafter
 
 import pytest
@@ -22,6 +22,7 @@ from sds200.tui_waterfall import (
     TuiWaterfallModel,
     TuiWaterfallReader,
     _render_relative_row,
+    _scale_text,
     _waterfall_title,
     normalize_waterfall_values,
 )
@@ -151,6 +152,26 @@ def test_waterfall_relative_intensity_band_boundaries_are_exact() -> None:
         (2, 4, "#ffaf00"),
         (4, 6, "bold #ff5f5f"),
     ]
+
+
+def test_waterfall_source_timestamp_is_presented_in_local_time_only() -> None:
+    model = TuiWaterfallModel()
+    model.begin_connection()
+    model.apply(_checkpoint())
+    model.apply(_gwf(2))
+
+    snapshot = model.snapshot()
+    source_timestamp = snapshot.source_received_at
+    assert source_timestamp == datetime(2026, 10, 1, 0, 0, 2, tzinfo=UTC)
+
+    rendered = _scale_text(
+        snapshot,
+        local_timezone=timezone(timedelta(hours=-6)),
+    )
+
+    assert "Source local timestamp: 2026-09-30T18:00:02-06:00" in rendered
+    assert source_timestamp.isoformat() not in rendered
+    assert snapshot.source_received_at is source_timestamp
 
 
 def test_waterfall_model_bounds_history_and_pause_clear_are_local() -> None:
@@ -361,6 +382,9 @@ def test_daemon_tui_waterfall_is_responsive_and_releases_lease(
             assert "Frames: 1" in _plain(waterfall.query_one("#waterfall-health", Static))
             assert "uncalibrated" in _plain(waterfall.query_one("#waterfall-title", Static))
             assert "Scanner span (raw): lower 1540000 | center 1550000 | upper 1560000" in _plain(
+                waterfall.query_one("#waterfall-scale", Static)
+            )
+            assert "Source local timestamp:" in _plain(
                 waterfall.query_one("#waterfall-scale", Static)
             )
             spectrum = waterfall.query_one("#waterfall-spectrum", Static)
