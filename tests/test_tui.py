@@ -256,6 +256,13 @@ def test_daemon_version_remains_visible_on_both_pi_layouts(tmp_path, size, palet
                 assert f"Daemon: {expected}" in text
                 assert "Link for 00:01:00" in text
                 assert "Target: 192.0.2.18:50443" in text
+                daemon_row = next(line for line in text.splitlines() if line.startswith("Daemon:"))
+                if size == (100, 30):
+                    assert daemon_row == f"Daemon: {expected} | Link for 00:01:00"
+                    assert "sdsctl-remote-daemon" not in daemon_row
+                    assert f"{expected} | s." not in daemon_row
+                else:
+                    assert f"Daemon: {expected} | sdsc" in daemon_row
                 assert connection.content_region.height >= len(text.splitlines())
                 assert all(
                     len(line) <= connection.content_region.width for line in text.splitlines()
@@ -273,7 +280,16 @@ def test_daemon_version_remains_visible_on_both_pi_layouts(tmp_path, size, palet
             resized = (160, 45) if size == (100, 30) else (100, 30)
             await pilot.resize_terminal(*resized)
             await _settle_responsive_layout(app, pilot)
-            assert "Daemon: 99.2.3rc1" in _plain(app.query_one("#connection", Static))
+            resized_text = _plain(app.query_one("#connection", Static))
+            assert "Daemon: 99.2.3rc1" in resized_text
+            resized_daemon_row = next(
+                line for line in resized_text.splitlines() if line.startswith("Daemon:")
+            )
+            if resized == (100, 30):
+                assert resized_daemon_row == "Daemon: 99.2.3rc1 | Link for 00:01:00"
+                assert "sdsctl-remote-daemon" not in resized_daemon_row
+            else:
+                assert "Daemon: 99.2.3rc1 | sdsc" in resized_daemon_row
             assert app.query_one("#body").max_scroll_y == 0
             # Long but valid endpoint metadata cannot create a hidden row.
             # The full token remains accessible in the runtime drawer.

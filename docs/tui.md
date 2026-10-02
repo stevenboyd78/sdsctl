@@ -75,6 +75,10 @@ scanner command, polling request, credential, or capability is added.
 Long versions/endpoints are ellipsized to the Connection panel width, not wrapped
 into a hidden row. The Mimic-SDS runtime drawer retains the full bounded daemon
 version and endpoint alongside the separate client and scanner identities.
+When the event-link duration is present in the compact 100×30 split, the
+redundant symbolic endpoint is omitted from the Daemon row instead of being
+ellipsized to a meaningless fragment; the concrete Target row remains visible.
+The 160×45 layout and runtime drawer continue to show the endpoint.
 Local geometry tests cover both Pi sizes and themes, audio/no-audio, metadata
 changes and resizing. On September 28, 2026, the installed development wheel at
 `824c417` passed user-observed readability and keyboard checks on the 100×30 and

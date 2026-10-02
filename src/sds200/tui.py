@@ -2022,9 +2022,14 @@ class ScannerTuiApp(App[None]):
                         - 5,
                     ),
                 )
-            description = Text(
-                f"{self._daemon_version_text()} | {self._identity.endpoint}"
-            )
+            # The compact 100x30 split already retains the concrete remote
+            # address on the Target row.  Once the fixed link-duration suffix
+            # is present, omit the redundant symbolic endpoint instead of
+            # reducing it to a meaningless one- or two-character fragment.
+            # The wide layout and runtime drawer retain the endpoint.
+            description = Text(self._daemon_version_text())
+            if not (self._uses_short_split_layout() and self._daemon_link_since_source is not None):
+                description.append(f" | {self._identity.endpoint}")
             if self._daemon_link_since_source is not None:
                 link_text = f" | Link for {self._daemon_link_duration_text()}"
                 description.truncate(
