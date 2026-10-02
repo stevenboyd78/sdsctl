@@ -157,9 +157,13 @@ remain unclaimed; this does not broaden front-panel-control authorization.
   remains visible. The repaired installed wheel then passed the user's live
   100x30 visual check with an advancing link timer and exact guarded cleanup.
   The older published daemon honestly reported its version as `Unavailable`;
-  no local or protocol version was substituted. The 160x45 physical layout,
-  live reconnect/outage behavior and release remain separate; this is not part
-  of v0.30.0 or the browser-device qualification.
+  no local or protocol version was substituted. A later guarded restart of that
+  same published App showed the 51-second link becoming `Unavailable` during
+  event loss, the managed waiting screen, and a fresh authoritative connection
+  restarting at `00:00:00` before advancing normally. The byte-identical Pi
+  service and normal App ownership were restored afterward. The 160x45 physical
+  layout and release remain separate; this is not part of v0.30.0 or the
+  browser-device qualification.
 
 ### Managed-display enrollment and unattended recovery
 

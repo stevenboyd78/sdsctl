@@ -20,6 +20,10 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   panel, separately from the local client version and scanner firmware. Reuse
   existing authenticated snapshots, show unavailable for older daemons, and
   clear stale metadata on daemon disconnection without adding a Pi layout row.
+- Show the age of the current daemon event-stream link in the TUI without
+  fabricating daemon uptime. Begin only after the first authoritative stream
+  snapshot, clear the value during event loss, and restart it after a fresh
+  reconnect snapshot. Preserve direct sessions and scanner-only reconnects.
 
 ### Changed
 

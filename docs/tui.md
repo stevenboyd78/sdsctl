@@ -110,7 +110,17 @@ retained a useless fragment of the redundant symbolic endpoint. Commit
 wide endpoint, full runtime metadata and honest `Unavailable` version remained.
 The repaired installed wheel then received the user's `visual pass`; the finite
 guard restored the byte-identical original service and normal Home Assistant App
-ownership. This does not qualify the 160×45 physical layout or a live reconnect.
+ownership.
+
+A second guarded Small Pi run restarted that same published Home Assistant App
+while sampling the 100×30 text console. The pre-outage link reached `00:00:51`.
+Event loss changed it to `Link for Unavailable`, retained the concrete target,
+and then entered the managed `Daemon disconnected` waiting screen. Recovery used
+a fresh authoritative connection timestamp, first rendered `00:00:00`, and
+advanced normally; no pre-outage time survived the reconnect. The finite guard
+again restored the byte-identical original service and normal App ownership.
+This qualifies the live outage/reconnect behavior on the Small Pi, not the
+160×45 physical layout.
 
 Duration uses the TUI host's monotonic clock and whole elapsed seconds. It does
 not jump when the wall clock or daylight-saving offset changes, add a tolerance,

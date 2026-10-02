@@ -109,8 +109,10 @@ These are merged development changes, not a claim that a new release is publishe
    endpoint fragment. The compact split now omits that redundant token while
    retaining the concrete Target row, and the repaired installed wheel passed
    the user's live visual check with an advancing timer and guarded restoration.
-   The 160x45 physical layout and live reconnect/outage acceptance remain
-   separate.
+   A guarded restart of the same published App then showed event loss as
+   `Link for Unavailable`, exercised the managed waiting screen, and recovered
+   from a fresh authoritative snapshot at `00:00:00` before advancing normally.
+   The 160x45 physical layout remains separate.
 
 ### Test contract
 
