@@ -984,13 +984,11 @@ reference-table order, with immutable definitions and model-aware presentation
 notes. It records the SDS100 Backlight meaning of `V` and the explicit absence
 of `Q` and `T`; models without their own column retain unknown reference support.
 Soft keys remain generically numbered until current scanner context supplies
-their labels. All general-key presentations remain unavailable: being listed
-in the specification is not command qualification or authorization. The pure
-inventory layer performs no I/O and constructs no wire command. Regression
-tests retain the existing four-key hold-only allowlist. Typed dispatch and
-permission checks remain subsequent work. The Web dashboard now renders the
-full inventory as a fail-closed control drawer, but every key is disabled and
-no click handler, general key request, queue or scanner I/O exists.
+their labels. Being listed in the specification is not command qualification
+or authorization. The pure inventory layer performs no I/O and constructs no
+wire command. Regression tests retain the existing four-key hold-only allowlist.
+Its optional Menu projection can describe only the separately authorized exact
+SDS200 capability below; it cannot enable another key or model by itself.
 
 The next offline foundation adds a separate internal one-press qualification
 boundary without widening that hold allowlist or enabling these presentations.
@@ -1008,37 +1006,74 @@ and front-panel research policies are mutually exclusive. The source-pinned
 manual Home Assistant staging adapter can prepare this exact research image,
 but no image is installed or triggered by implementation or tests.
 
+The guarded October 2, 2026 physical qualification consumed that one-use
+attempt for exactly `M` on an SDS200 running firmware `Version 1.26.01`, with
+both preflight frames pinned to `Trunk Scan` / `trunk_scan`. `KEY,OK` was
+followed by one bounded PSI frame reporting `Menu tree` / `menu_selection`; the
+operator independently confirmed the physical menu and exited it manually. A
+fresh normal daemon then reported the restored `Trunk Scan` context. This is
+positive evidence only for that exact key, model, firmware and starting context.
+screen, a sequence, a retry or a post-ACK state guarantee.
+
+The production candidate deliberately does not reuse or reopen that one-use
+research attempt. A separate `QualifiedMenuControlPolicy` is constructible only
+for SDS200, firmware `Version 1.26.01`, `Trunk Scan` / `trunk_scan` and the typed
+Menu enum. It is disabled during ordinary daemon startup and may be enabled only
+for direct network ownership with
+`--enable-qualified-sds200-menu-control`. Each API invocation independently
+reserves idle Waterfall, enters the existing owner/command lock without
+connecting or retrying, verifies the exact model and firmware, requests two new
+overlay-free matching GSI frames, and emits exactly one `KEY,M,P`. An
+acknowledgement completes the command but is not reported as proof that a menu
+is visible. A mismatch, timeout, busy Waterfall, lost connection, serial owner,
+unqualified key or unenabled policy refuses before key I/O.
+
 The daemon-backed Mimic-SDS TUI runtime/help drawer now renders the same
 validated inventory snapshot as read-only text. It is fetched once during
 daemon-client startup when the operation is advertised, never on drawer refresh,
-and older daemons fail closed with an unavailable message. All 27 codes are
-explicitly labels rather than TUI shortcuts; there are no new bindings, command
-palette actions, enabled controls, general key requests or scanner I/O.
+and older daemons fail closed with an unavailable message. It can identify Menu
+as qualified elsewhere, but all 27 codes remain labels rather than TUI
+shortcuts; there are no new bindings, command-palette actions, enabled controls,
+general key requests or scanner I/O.
 
 The read-only foundation now exposes that same complete inventory through the
 versioned `scanner.front_panel.inventory` daemon operation and typed client
-method. It takes no parameters, reads one authoritative runtime snapshot only
-to select the known model presentation, never reflects the model, endpoint,
-firmware or scanner values, and is available to authenticated observe-only
-clients. Every key remains explicitly `unqualified` or `unsupported`, every
-`available` value and the aggregate `controls_available` value remain false,
-and the client rejects incomplete, reordered or unexpectedly enabled results.
-The projection and its Web drawer still add no general key command, permission
-grant, retry, queue, enabled UI control or scanner I/O; those remain separate
-reviewed work.
+method. It takes no parameters, reads one authoritative runtime snapshot, never
+reflects the model, endpoint, firmware or scanner values, and is available to
+authenticated observe-only clients. The daemon projects Menu as `qualified`
+only when the explicit production policy is enabled, the cached connected
+model/firmware/mode/screen exactly match the evidence and the requesting peer
+is authorized for `scanner.front_panel.press`. Observe-only remote peers receive
+the original all-disabled projection. The client accepts exactly that one
+qualified SDS200 Menu combination and rejects incomplete, reordered or any
+other unexpectedly enabled result.
+
+The typed `scanner.front_panel.press` operation accepts only `{key: "M",
+timeout}` and is omitted from daemon capabilities unless the exact policy was
+enabled at startup. A typed client method refuses strings and every other enum
+before a request. The operator Web dashboard exposes only a bodyless
+`POST /api/v1/scanner/front-panel/menu`; it negotiates the advertised control
+capability and calls the typed client once. The button is rendered only from a
+currently qualified inventory, is disabled before dispatch and never retries.
+Display-only browser sessions are denied by the server. The Home Assistant card
+can describe the qualified Menu entry but keeps every button disabled with no
+listener, matching the read-only TUI boundary.
 
 The cross-surface regression gate now carries the authoritative snapshots for
-an unlisted model, SDS200, SDS100 and BCD536HP through the Web projection, TUI
-renderer and actual Home Assistant card controller. It requires all 27 codes in
-the same order, preserves the SDS100 `V` Backlight label and exactly its absent
-`Q`/`T` statuses, and requires every rendered entry to remain disabled with no
-listener. The Web application exposes only the parameterless read-only `GET`
-route for this inventory; there is still no general front-panel control route.
-These are model-sensitive negative-capability checks, not additional model or
-transport qualification.
+an unlisted model, SDS200, qualified SDS200, SDS100 and BCD536HP through the Web
+projection, TUI renderer and actual Home Assistant card controller. It requires
+all 27 codes in the same order, preserves the SDS100 `V` Backlight label and
+exactly its absent `Q`/`T` statuses, and keeps the HA/TUI presentations disabled
+with no listener or shortcut even when Menu is qualified elsewhere. The Web
+application exposes the parameterless inventory `GET` plus only the exact Menu
+`POST`; no general `{key}` route exists. These checks do not add model, firmware
+or transport qualification beyond the single physical result.
 
-Extend typed command validation, the single-owner daemon control transaction,
-authenticated API/remote permission checks and renderer affordances together.
+Keep the first eligible capability limited to the exact qualified `M` press
+above. Any installed or milestone acceptance must preserve its explicit opt-in
+and server-side fresh model, firmware and context checks; it must not repeat the
+closed one-use research attempt as a development convenience. All other keys
+remain unavailable until separately evidenced and reviewed.
 Do not simply widen the existing hold-only `PressKey` allowlist and inherit
 hold-only authorization for Menu/Enter/Avoid. Keep desired-state hold APIs intact.
 Observe-only kiosk/TUI credentials stay read-only at the server, even if someone

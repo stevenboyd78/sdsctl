@@ -15,16 +15,20 @@ function decodeFrontPanel(payload) {
   require(keys(payload, ["protocol", "version", "front_panel"]) && payload.protocol === "sdsctl.web" && payload.version === 1);
   const value = payload.front_panel;
   require(keys(value, ["version", "controls_available", "keys"]) &&
-    value.version === FRONT_PANEL_VERSION && value.controls_available === false &&
+    value.version === FRONT_PANEL_VERSION && typeof value.controls_available === "boolean" &&
     Array.isArray(value.keys) && value.keys.length === FRONT_PANEL_CODES.length);
   const fields = ["code", "label", "context_note", "reference_status", "control_status", "available", "unavailable_reason"];
   value.keys.forEach((entry, index) => {
     require(keys(entry, fields) && entry.code === FRONT_PANEL_CODES[index] &&
       frontPanelText(entry.label) && frontPanelText(entry.context_note) && frontPanelText(entry.unavailable_reason) &&
       ["listed", "absent_for_model", "model_not_listed"].includes(entry.reference_status) &&
-      entry.control_status === (entry.reference_status === "absent_for_model" ? "unsupported" : "unqualified") &&
-      entry.available === false);
+      typeof entry.available === "boolean");
+    const qualifiedMenu = entry.code === "M" && entry.reference_status === "model_not_listed" &&
+      entry.control_status === "qualified" && entry.available === true;
+    require(qualifiedMenu || (entry.available === false &&
+      entry.control_status === (entry.reference_status === "absent_for_model" ? "unsupported" : "unqualified")));
   });
+  require(value.controls_available === value.keys.some(entry => entry.available));
   return value;
 }
 function configValue(input) {
@@ -228,9 +232,11 @@ class Sds200MimicCard extends HTMLElement {
       return button;
     });
     const unsupported = value.keys.filter(entry => entry.control_status === "unsupported").length;
+    const qualified = value.keys.filter(entry => entry.available).length;
     this._frontPanelGrid.replaceChildren(...buttons);
     this._frontPanelStatus.textContent =
-      `Inventory v${value.version} — ${value.keys.length} keys shown; all controls remain unavailable` +
+      `Inventory v${value.version} — ${value.keys.length} keys shown; ` +
+      (qualified === 1 ? "Menu is qualified in the operator Web dashboard; this Home Assistant card remains read-only" : "all controls remain unavailable") +
       (unsupported > 0 ? ` (${unsupported} unsupported for this model).` : ".");
   }
   async _loadFrontPanel(displayUrl, route, parentSignal, epoch) {

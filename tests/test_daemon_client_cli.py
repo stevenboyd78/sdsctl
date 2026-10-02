@@ -28,6 +28,7 @@ from sds200 import (
     cli,
     resolve_configuration_paths,
 )
+from sds200.front_panel_keys import FrontPanelKey
 
 HELLO = {
     "protocol": DAEMON_API_PROTOCOL,
@@ -60,6 +61,7 @@ CONTROL_HELLO = {
         DaemonApiOperation.AUDIO_HEALTH.value,
     ],
     "control_operations": [
+        DaemonApiOperation.SCANNER_FRONT_PANEL_PRESS.value,
         DaemonApiOperation.SCANNER_HOLD.value,
         DaemonApiOperation.SCANNER_HOLD_STATE.value,
         DaemonApiOperation.SCANNER_VOLUME_SET.value,
@@ -209,6 +211,22 @@ class FakeControlDaemonApiClient(FakeDaemonApiClient):
             )
         )
         return dict(CONTROL_RESULT)
+
+    def press_front_panel(
+        self,
+        key: FrontPanelKey,
+        *,
+        timeout: float,
+    ) -> dict[str, object]:
+        self.requests.append(
+            (
+                DaemonApiOperation.SCANNER_FRONT_PANEL_PRESS,
+                {"key": key.value, "timeout": timeout},
+            )
+        )
+        result = dict(CONTROL_RESULT)
+        result["operation"] = DaemonApiOperation.SCANNER_FRONT_PANEL_PRESS.value
+        return result
 
     def hold_state(
         self,
@@ -655,6 +673,13 @@ def test_daemon_client_parser_accepts_safe_control_options() -> None:
     assert volume.level == 0
     assert volume.control_timeout == 2.0
 
+    menu = cli.build_parser().parse_args(
+        ["daemon-client", "front-panel-menu", "--control-timeout", "1.25", "--json"]
+    )
+    assert menu.daemon_client_action == "front-panel-menu"
+    assert menu.control_timeout == 1.25
+    assert menu.json is True
+
 
 def test_daemon_client_status_prints_human_summary(
     monkeypatch: pytest.MonkeyPatch,
@@ -1069,6 +1094,11 @@ def test_daemon_client_hold_prints_authoritative_completion(
 @pytest.mark.parametrize(
     ("arguments", "operation", "params"),
     [
+        (
+            ["front-panel-menu", "--control-timeout", "1.5"],
+            DaemonApiOperation.SCANNER_FRONT_PANEL_PRESS,
+            {"key": "M", "timeout": 1.5},
+        ),
         (
             ["hold-state", "site", "off", "--control-timeout", "3.5"],
             DaemonApiOperation.SCANNER_HOLD_STATE,

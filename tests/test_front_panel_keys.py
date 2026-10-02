@@ -99,6 +99,34 @@ def test_snapshot_marks_only_reference_absences_unsupported():
     assert snapshot["controls_available"] is False
 
 
+def test_snapshot_qualifies_only_exact_sds200_menu_projection():
+    snapshot = front_panel_inventory_snapshot("SDS200", qualified_menu=True)
+    entries = {entry["code"]: entry for entry in snapshot["keys"]}
+
+    assert snapshot["controls_available"] is True
+    assert entries["M"]["available"] is True
+    assert entries["M"]["control_status"] == "qualified"
+    assert "Version 1.26.01" in entries["M"]["unavailable_reason"]
+    assert all(
+        entry["available"] is False and entry["control_status"] == "unqualified"
+        for code, entry in entries.items()
+        if code != "M"
+    )
+
+
+@pytest.mark.parametrize("model", [None, "SDS100", "BCD536HP", "SDS150"])
+def test_qualified_menu_projection_never_expands_to_other_models(model):
+    snapshot = front_panel_inventory_snapshot(model, qualified_menu=True)
+    assert snapshot["controls_available"] is False
+    assert all(entry["available"] is False for entry in snapshot["keys"])
+
+
+@pytest.mark.parametrize("value", [None, 0, 1, "true", object()])
+def test_qualified_menu_projection_requires_an_exact_boolean(value):
+    with pytest.raises(TypeError, match="Qualified Menu availability"):
+        front_panel_inventory("SDS200", qualified_menu=value)
+
+
 def test_snapshot_does_not_reflect_inputs_or_share_mutable_results():
     private_model = "private://scanner.example.invalid"
     first = front_panel_inventory_snapshot(private_model)

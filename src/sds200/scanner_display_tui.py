@@ -86,7 +86,7 @@ def render_front_panel_inventory_terminal(
     if (
         type(inventory["version"]) is not int
         or inventory["version"] != FRONT_PANEL_INVENTORY_VERSION
-        or inventory["controls_available"] is not False
+        or type(inventory["controls_available"]) is not bool
     ):
         return unavailable
     keys = inventory["keys"]
@@ -94,7 +94,8 @@ def render_front_panel_inventory_terminal(
     if not isinstance(keys, list) or len(keys) != len(expected_codes):
         return unavailable
 
-    rows: list[tuple[str, str, str, str, str, str]] = []
+    rows: list[tuple[str, str, str, str, str, str, bool]] = []
+    any_available = False
     for expected_code, entry in zip(expected_codes, keys, strict=True):
         if not isinstance(entry, Mapping) or set(entry) != _FRONT_PANEL_ENTRY_FIELDS:
             return unavailable
@@ -104,28 +105,68 @@ def render_front_panel_inventory_terminal(
         reason = _front_panel_text(entry["unavailable_reason"])
         reference_status = entry["reference_status"]
         control_status = entry["control_status"]
+        available = entry["available"]
+        qualified_menu = (
+            code == FrontPanelKey.MENU.value
+            and reference_status == "model_not_listed"
+            and control_status == "qualified"
+            and available is True
+        )
+        expected_control_status = (
+            "unsupported"
+            if reference_status == "absent_for_model"
+            else "unqualified"
+        )
         if (
             code != expected_code
             or label is None
             or context_note is None
             or reason is None
             or reference_status not in {"listed", "absent_for_model", "model_not_listed"}
-            or control_status
-            != ("unsupported" if reference_status == "absent_for_model" else "unqualified")
-            or entry["available"] is not False
+            or type(available) is not bool
+            or (
+                not qualified_menu
+                and (
+                    control_status != expected_control_status
+                    or available is not False
+                )
+            )
         ):
             return unavailable
-        rows.append((code, label, context_note, str(reference_status), str(control_status), reason))
+        any_available = any_available or available
+        rows.append(
+            (
+                code,
+                label,
+                context_note,
+                str(reference_status),
+                str(control_status),
+                reason,
+                available,
+            )
+        )
+
+    if inventory["controls_available"] is not any_available:
+        return unavailable
 
     output = Text(
         "Front-panel keys — read-only inventory\n"
         f"Inventory v{FRONT_PANEL_INVENTORY_VERSION} | {len(rows)} codes | "
-        "controls enabled: no\n"
+        f"qualified elsewhere: {'1' if any_available else '0'} | controls enabled here: no\n"
         "These codes are labels, not TUI shortcuts. No scanner-key dispatch is installed.\n"
     )
-    for code, label, context_note, reference_status, control_status, reason in rows:
+    for (
+        code,
+        label,
+        context_note,
+        reference_status,
+        control_status,
+        reason,
+        available,
+    ) in rows:
+        availability = "qualified elsewhere; read-only here" if available else "unavailable"
         output.append(
-            f"\n{code}  {label} — unavailable "
+            f"\n{code}  {label} — {availability} "
             f"({reference_status.replace('_', ' ')}; {control_status}).\n"
             f"   {context_note} {reason}\n"
         )

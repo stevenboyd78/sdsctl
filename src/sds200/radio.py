@@ -1236,6 +1236,28 @@ class SDSScanner:
             yield
 
     @contextmanager
+    def _front_panel_control_scope(self, *, timeout: float) -> Iterator[None]:
+        """Serialize one qualified key press on the existing UDP owner."""
+        normalized = _require_positive_timeout(
+            timeout,
+            label="Front-panel control timeout",
+        )
+        if type(self.transport) is not UdpTransport:
+            raise UnsupportedScannerFeatureError(
+                "Front-panel control requires a directly owned UDP transport."
+            )
+        if not self._command_lock.acquire(timeout=normalized):
+            raise CommandTimeoutError("Front-panel control command scope timed out.")
+        try:
+            if not self.connected:
+                raise UnsupportedScannerFeatureError(
+                    "Front-panel control requires an existing connection."
+                )
+            yield
+        finally:
+            self._command_lock.release()
+
+    @contextmanager
     def _direct_udp_research_scope(self, *, timeout: float, label: str) -> Iterator[None]:
         """Serialize the internal research transaction on an existing UDP owner.
 

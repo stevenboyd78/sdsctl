@@ -310,6 +310,23 @@ class DaemonApiClient:
             params["second"] = normalized_second
         return self._control(DaemonApiOperation.SCANNER_HOLD, params)
 
+    def press_front_panel(
+        self,
+        key: FrontPanelKey,
+        *,
+        timeout: float = DAEMON_API_DEFAULT_CONTROL_TIMEOUT,
+    ) -> dict[str, object]:
+        """Press the one server-qualified front-panel key exactly once."""
+
+        if type(key) is not FrontPanelKey or key is not FrontPanelKey.MENU:
+            raise ValueError("Only the physically qualified Menu key is available.")
+        operation = DaemonApiOperation.SCANNER_FRONT_PANEL_PRESS
+        normalized_timeout = self._require_control_operation(operation, timeout)
+        return self._control(
+            operation,
+            {"key": key.value, "timeout": normalized_timeout},
+        )
+
     def hold_state(
         self,
         scope: str,
@@ -1131,19 +1148,27 @@ def _validate_front_panel_inventory(result: Mapping[str, object]) -> None:
                 "The daemon front-panel reference status is invalid."
             )
         control_status = entry["control_status"]
+        available = entry["available"]
+        if type(available) is not bool:
+            raise DaemonProtocolError(
+                "The daemon front-panel key availability is invalid."
+            )
+        qualified_menu = (
+            code == FrontPanelKey.MENU.value
+            and reference_status == "model_not_listed"
+            and control_status == "qualified"
+            and available is True
+        )
         expected_control_status = (
             "unsupported"
             if reference_status == "absent_for_model"
             else "unqualified"
         )
-        if control_status != expected_control_status:
+        if not qualified_menu and (
+            control_status != expected_control_status or available is not False
+        ):
             raise DaemonProtocolError(
                 "The daemon front-panel control status is invalid."
-            )
-        available = entry["available"]
-        if type(available) is not bool or available:
-            raise DaemonProtocolError(
-                "The daemon front-panel key availability is invalid."
             )
         any_available = any_available or available
 

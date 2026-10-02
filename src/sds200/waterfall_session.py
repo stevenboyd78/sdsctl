@@ -442,6 +442,17 @@ class WaterfallSession:
         promptly if session work is already in progress. Disconnect callbacks
         and shutdown remain free to acquire the session lock while reserved.
         """
+        with self._reserve_idle():
+            yield
+
+    @contextmanager
+    def reserve_idle_for_control(self) -> Iterator[None]:
+        """Exclude Waterfall work for one bounded qualified control."""
+        with self._reserve_idle():
+            yield
+
+    @contextmanager
+    def _reserve_idle(self) -> Iterator[None]:
         if not self._lock.acquire(blocking=False):
             raise WaterfallIdleReservationError("Waterfall session is busy.")
         try:

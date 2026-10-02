@@ -297,7 +297,10 @@ def test_front_panel_inventory_renderer_is_complete_disabled_and_fail_closed(mod
     inventory = front_panel_inventory_snapshot(model)
     rendered = render_front_panel_inventory_terminal(inventory).plain
 
-    assert "Inventory v1 | 27 codes | controls enabled: no" in rendered
+    assert (
+        "Inventory v1 | 27 codes | qualified elsewhere: 0 | "
+        "controls enabled here: no"
+    ) in rendered
     assert "not TUI shortcuts" in rendered
     assert rendered.count("— unavailable (") == 27
     for entry in inventory["keys"]:
@@ -324,6 +327,17 @@ def test_front_panel_inventory_renderer_is_complete_disabled_and_fail_closed(mod
     enabled["controls_available"] = True
     enabled["keys"][0]["available"] = True
     assert "Inventory unavailable" in render_front_panel_inventory_terminal(enabled).plain
+
+
+def test_front_panel_inventory_renderer_shows_qualified_menu_without_a_tui_binding():
+    inventory = front_panel_inventory_snapshot("SDS200", qualified_menu=True)
+
+    rendered = render_front_panel_inventory_terminal(inventory).plain
+
+    assert "qualified elsewhere: 1 | controls enabled here: no" in rendered
+    assert "\nM  Menu — qualified elsewhere; read-only here" in rendered
+    assert rendered.count("— unavailable (") == 26
+    assert "not TUI shortcuts" in rendered
 
 
 @pytest.mark.parametrize("held", [True, False, None])
@@ -463,7 +477,10 @@ def test_actual_tui_screen_drawer_palette_and_return(packets, size):
                     app.screen.query_one("#mimic-runtime", Static)
                 )
                 runtime = _plain(app.screen.query_one("#mimic-runtime", Static))
-                assert "Inventory v1 | 27 codes | controls enabled: no" in runtime
+                assert (
+                    "Inventory v1 | 27 codes | qualified elsewhere: 0 | "
+                    "controls enabled here: no"
+                ) in runtime
                 assert runtime.count("— unavailable (") == 27
                 assert "No scanner-key dispatch is installed" in runtime
                 assert closes and app._mimic_reader.view()[0] is None

@@ -80,6 +80,7 @@ from .daemon_events import (
     DaemonEvent,
     DaemonEventKind,
 )
+from .daemon_front_panel_control import QualifiedMenuControlPolicy
 from .daemon_ipc import (
     DaemonSocketListener,
     resolve_daemon_event_socket_location,
@@ -173,6 +174,7 @@ from .exceptions import (
     DaemonProtocolError,
     SDS200Error,
 )
+from .front_panel_keys import FrontPanelKey
 from .home_assistant_live_audio import (
     LiveAudioEncoderPipeline,
     LiveAudioSession,
@@ -909,6 +911,14 @@ def build_parser(
         help=(
             "Minimum delay between automatic PSI reconnect attempts "
             "(default: 60.0)"
+        ),
+    )
+    daemon.add_argument(
+        "--enable-qualified-sds200-menu-control",
+        action="store_true",
+        help=(
+            "Explicitly enable the exact SDS200 firmware 1.26.01 Menu press; "
+            "every request still requires two fresh Trunk Scan preflights"
         ),
     )
     daemon.add_argument(
@@ -1802,6 +1812,21 @@ def build_parser(
         action="store_true",
         help="Print the authoritative completion result as JSON",
     )
+
+    daemon_menu = daemon_client_commands.add_parser(
+        "front-panel-menu",
+        help=(
+            "Press Menu once through the explicitly enabled, exact qualified "
+            "SDS200 control boundary"
+        ),
+    )
+    daemon_menu.add_argument(
+        "--control-timeout",
+        type=_positive_float,
+        default=DAEMON_API_DEFAULT_CONTROL_TIMEOUT,
+        metavar="SECONDS",
+    )
+    daemon_menu.add_argument("--json", action="store_true")
 
     web = subparsers.add_parser(
         "web",
@@ -3542,6 +3567,10 @@ def _run_daemon(
 
     profile_store = ProfileStore(args.config) if args.profile is not None else None
     host = _daemon_host(args, profile_store=profile_store)
+    if args.enable_qualified_sds200_menu_control and host is None:
+        raise ValueError(
+            "--enable-qualified-sds200-menu-control requires direct network ownership."
+        )
     scanner = selected_radio(args, profile_store=profile_store)
     from .scanner_display_profile_storage import DisplayProfileStorageError
 
@@ -3617,6 +3646,11 @@ def _run_daemon(
         ),
         psi_recover_after=args.psi_recover_after,
         psi_recovery_cooldown=args.psi_recovery_cooldown,
+        front_panel_control=(
+            QualifiedMenuControlPolicy()
+            if args.enable_qualified_sds200_menu_control
+            else None
+        ),
     )
     recording_manager: DaemonRecordingManager | None = None
     recording_file_server: DaemonRecordingFileServer | None = None
@@ -4671,6 +4705,16 @@ def _run_daemon_client(
                 args.target,
                 args.first,
                 args.second,
+                timeout=args.control_timeout,
+            )
+        elif action == "front-panel-menu":
+            _require_daemon_client_operation(
+                hello,
+                DaemonApiOperation.SCANNER_FRONT_PANEL_PRESS,
+                control=True,
+            )
+            control_result = client.press_front_panel(
+                FrontPanelKey.MENU,
                 timeout=args.control_timeout,
             )
         elif action == "hold-state":

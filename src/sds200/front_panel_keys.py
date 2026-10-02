@@ -4,7 +4,8 @@ The table's model columns actually say BCD536HP and SDS100. A listed key is
 documentation evidence, not qualified model/firmware/transport support. This
 module neither constructs commands nor grants access to the existing hold-key
 path. General key dispatch, press modes and per-session authorization remain
-separate work; every presentation below is therefore unavailable.
+separate work. The optional ``qualified_menu`` projection is only an advisory
+presentation of the separately enforced exact Menu control boundary.
 """
 
 from __future__ import annotations
@@ -82,7 +83,7 @@ FRONT_PANEL_KEYS: tuple[KeyDefinition, ...] = (
 )
 
 ReferenceStatus = Literal["listed", "absent_for_model", "model_not_listed"]
-ControlStatus = Literal["unqualified", "unsupported"]
+ControlStatus = Literal["qualified", "unqualified", "unsupported"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,16 +92,19 @@ class KeyPresentation:
     label: str
     reference_status: ReferenceStatus
     unavailable_reason: str
+    qualified: bool = False
 
     @property
-    def available(self) -> Literal[False]:
+    def available(self) -> bool:
         """Presentation only; never use reference membership as authorization."""
-        return False
+        return self.qualified
 
     @property
     def control_status(self) -> ControlStatus:
         """Return an explicit fail-closed control qualification."""
 
+        if self.qualified:
+            return "qualified"
         if self.reference_status == "absent_for_model":
             return "unsupported"
         return "unqualified"
@@ -119,7 +123,11 @@ class KeyPresentation:
         }
 
 
-def front_panel_inventory(model: str | None = None) -> tuple[KeyPresentation, ...]:
+def front_panel_inventory(
+    model: str | None = None,
+    *,
+    qualified_menu: bool = False,
+) -> tuple[KeyPresentation, ...]:
     """Describe every requested key without qualifying or dispatching any key.
 
     Recognize only the two exact model names printed in the reference table
@@ -129,6 +137,8 @@ def front_panel_inventory(model: str | None = None) -> tuple[KeyPresentation, ..
     """
     if model is not None and type(model) is not str:
         raise TypeError("Scanner model must be text or unavailable.")
+    if type(qualified_menu) is not bool:
+        raise TypeError("Qualified Menu availability must be a boolean.")
     normalized = (
         model.strip().upper() if model is not None and len(model) <= 32 and model.isascii() else ""
     )
@@ -146,21 +156,36 @@ def front_panel_inventory(model: str | None = None) -> tuple[KeyPresentation, ..
                 reason = "The reviewed table lists this key as absent for SDS100."
             elif definition.code is FrontPanelKey.VOLUME_PUSH:
                 label = "Backlight"
-        entries.append(KeyPresentation(definition, label, status, reason))
+        qualified = (
+            qualified_menu
+            and normalized == "SDS200"
+            and definition.code is FrontPanelKey.MENU
+        )
+        if qualified:
+            reason = (
+                "Qualified only for one press from fresh Trunk Scan on "
+                "firmware Version 1.26.01."
+            )
+        entries.append(KeyPresentation(definition, label, status, reason, qualified))
     return tuple(entries)
 
 
-def front_panel_inventory_snapshot(model: str | None = None) -> dict[str, object]:
+def front_panel_inventory_snapshot(
+    model: str | None = None,
+    *,
+    qualified_menu: bool = False,
+) -> dict[str, object]:
     """Describe every requested key without granting or dispatching control.
 
     The versioned result is safe to expose to observe-only clients.  It never
     includes the supplied model text, firmware, endpoint, scanner values, or a
     wire representation.  ``controls_available`` remains false until a future
     separately reviewed capability and authorization path qualifies at least
-    one general front-panel action.
+    one separately authorized action.  A true Menu projection is advisory;
+    the control path still performs fresh model, firmware and context checks.
     """
 
-    entries = front_panel_inventory(model)
+    entries = front_panel_inventory(model, qualified_menu=qualified_menu)
     return {
         "version": FRONT_PANEL_INVENTORY_VERSION,
         "controls_available": any(entry.available for entry in entries),

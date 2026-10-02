@@ -7,7 +7,7 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from sds200.daemon_api import DaemonApiOperation
-from sds200.front_panel_keys import front_panel_inventory_snapshot
+from sds200.front_panel_keys import FrontPanelKey, front_panel_inventory_snapshot
 from sds200.web_dashboard import (
     WEB_DASHBOARD_API_PROTOCOL,
     WEB_DASHBOARD_API_VERSION,
@@ -38,7 +38,11 @@ class _FrontPanelDaemonClient:
         return {
             "operations": [
                 DaemonApiOperation.SCANNER_FRONT_PANEL_INVENTORY.value,
-            ]
+            ],
+            "read_only": False,
+            "control_operations": [
+                DaemonApiOperation.SCANNER_FRONT_PANEL_PRESS.value,
+            ],
         }
 
     def front_panel_inventory(self) -> dict[str, object]:
@@ -48,6 +52,18 @@ class _FrontPanelDaemonClient:
     def runtime_snapshot(self) -> dict[str, object]:
         self.snapshot_calls += 1
         return {"scanner_model": "private model value"}
+
+    def press_front_panel(
+        self,
+        key: FrontPanelKey,
+        *,
+        timeout: float = 2.0,
+    ) -> dict[str, object]:
+        assert key is FrontPanelKey.MENU
+        return {
+            "operation": DaemonApiOperation.SCANNER_FRONT_PANEL_PRESS.value,
+            "snapshot": {"state": "running", "scanner_connected": True},
+        }
 
 
 @pytest.mark.parametrize(
@@ -83,7 +99,7 @@ def test_web_projection_preserves_each_fail_closed_model_inventory(
     assert inventory["controls_available"] is False
 
 
-def test_web_exposes_no_general_front_panel_control_route() -> None:
+def test_web_exposes_only_the_exact_qualified_menu_control_route() -> None:
     app = create_web_dashboard_app(
         lambda: _FrontPanelDaemonClient(front_panel_inventory_snapshot("SDS200"))
     )
@@ -92,5 +108,6 @@ def test_web_exposes_no_general_front_panel_control_route() -> None:
     ]
 
     assert [(route.path, route.methods) for route in front_panel_routes] == [
-        ("/api/v1/scanner/front-panel", {"GET"})
+        ("/api/v1/scanner/front-panel", {"GET"}),
+        ("/api/v1/scanner/front-panel/menu", {"POST"}),
     ]

@@ -27,7 +27,7 @@ from sds200.exceptions import (
     DaemonRequestError,
     DaemonUnavailableError,
 )
-from sds200.front_panel_keys import front_panel_inventory_snapshot
+from sds200.front_panel_keys import FrontPanelKey, front_panel_inventory_snapshot
 from sds200.pcmu import PcmuPacket
 from sds200.pcmu_protocol import encode_pcmu_delivery
 from sds200.pcmu_subscriptions import PcmuPacketDelivery, PcmuPublication
@@ -103,6 +103,16 @@ class FakeDaemonApiClient:
         if self.error is not None:
             raise self.error
         return dict(self.front_panel_result)
+
+    def press_front_panel(
+        self,
+        key: FrontPanelKey,
+        *,
+        timeout: float = 2.0,
+    ) -> dict[str, object]:
+        self.control_calls.append(("press_front_panel", key, timeout))
+        self._raise_control_error()
+        return self._control_result("scanner.front_panel.press")
 
     def recording_status(self) -> dict[str, object]:
         self.recording_status_calls += 1
@@ -958,7 +968,9 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert "button.disabled = true" in script.text
     assert 'button.setAttribute("aria-describedby", "front-panel-status")' in script.text
     assert "label.textContent = entry.label" in script.text
-    assert 'performScannerControl("front-panel"' not in script.text
+    assert '"front-panel/menu"' in script.text
+    assert '"Qualified Menu press"' in script.text
+    assert 'daemonControlSupported("scanner.front_panel.press")' in script.text
     assert 'performRecordingAction("start")' in script.text
     assert 'performRecordingAction("stop")' in script.text
     assert 'performScannerHoldState("channel")' in script.text
@@ -1083,6 +1095,7 @@ def test_web_dashboard_api_index_advertises_endpoints() -> None:
         "scanner_previous_scope": "/api/v1/scanner/previous/{scope}",
         "scanner_reconnect": "/api/v1/scanner/reconnect",
         "scanner_front_panel": "/api/v1/scanner/front-panel",
+        "scanner_front_panel_menu": "/api/v1/scanner/front-panel/menu",
         "snapshot": "/api/v1/snapshot",
         "status": "/api/v1/status",
         "waterfall": "/api/v1/waterfall",
@@ -1119,6 +1132,33 @@ def test_web_dashboard_front_panel_is_read_only_and_parameterless() -> None:
     assert rejected.json() == {
         "detail": "Front-panel inventory does not accept parameters."
     }
+
+
+def test_web_dashboard_dispatches_only_exact_bodyless_menu_control() -> None:
+    daemon_client = FakeDaemonApiClient(
+        hello=_web_control_hello("scanner.front_panel.press"),
+        snapshot=_web_control_snapshot(),
+        front_panel=front_panel_inventory_snapshot(
+            "SDS200",
+            qualified_menu=True,
+        ),
+    )
+    app = create_web_dashboard_app(lambda: daemon_client)
+
+    with TestClient(app) as client:
+        accepted = client.post("/api/v1/scanner/front-panel/menu")
+        body = client.post("/api/v1/scanner/front-panel/menu", json={})
+        query = client.post("/api/v1/scanner/front-panel/menu?key=M")
+        unqualified = client.post("/api/v1/scanner/front-panel/enter")
+
+    assert accepted.status_code == 200
+    assert accepted.json()["control"]["operation"] == "scanner.front_panel.press"
+    assert body.status_code == 400
+    assert query.status_code == 400
+    assert unqualified.status_code == 404
+    assert daemon_client.control_calls == [
+        ("press_front_panel", FrontPanelKey.MENU, 2.0),
+    ]
 
 
 def test_web_dashboard_status_negotiates_and_returns_snapshot() -> None:

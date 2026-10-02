@@ -35,6 +35,7 @@ from .daemon_recording_file_client import (
 from .daemon_recording_file_protocol import RecordingFileResponseStatus
 from .daemon_waterfall_protocol import DaemonWaterfallRecord
 from .exceptions import DaemonRequestError, SDS200Error
+from .front_panel_keys import FrontPanelKey
 from .home_assistant_app_advanced_ingress import (
     home_assistant_app_advanced_ingress_status,
     issue_home_assistant_app_advanced_ingress_client,
@@ -274,6 +275,14 @@ class DaemonApiClientLike(Protocol):
 
     def front_panel_inventory(self) -> Mapping[str, object]:
         """Return the daemon's validated fail-closed front-panel inventory."""
+
+    def press_front_panel(
+        self,
+        key: FrontPanelKey,
+        *,
+        timeout: float = 2.0,
+    ) -> Mapping[str, object]:
+        """Press the one exact server-qualified front-panel key."""
 
     def display_frame(self) -> Mapping[str, object]:
         """Return the configured daemon's read-only Mimic-SDS presentations."""
@@ -936,6 +945,7 @@ def create_web_dashboard_app(
             "scanner_previous_scope": "/api/v1/scanner/previous/{scope}",
             "scanner_reconnect": "/api/v1/scanner/reconnect",
             "scanner_front_panel": "/api/v1/scanner/front-panel",
+            "scanner_front_panel_menu": "/api/v1/scanner/front-panel/menu",
             "snapshot": "/api/v1/snapshot",
             "display_frame": "/api/v1/display-frame",
             "status": "/api/v1/status",
@@ -1146,6 +1156,25 @@ def create_web_dashboard_app(
             "front_panel": _query_daemon(
                 api_client_factory,
                 _daemon_front_panel_inventory,
+            ),
+        }
+
+    @app.post("/api/v1/scanner/front-panel/menu")
+    def scanner_front_panel_menu(
+        request: Request,
+        payload: Annotated[object | None, Body()] = None,
+    ) -> dict[str, object]:
+        if request.query_params or payload is not None:
+            raise HTTPException(
+                status_code=400,
+                detail=WEB_DASHBOARD_CONTROL_INVALID_DETAIL,
+            )
+        return {
+            **_api_envelope(),
+            "control": _query_scanner_control(
+                api_client_factory,
+                DaemonApiOperation.SCANNER_FRONT_PANEL_PRESS,
+                lambda client: client.press_front_panel(FrontPanelKey.MENU),
             ),
         }
 

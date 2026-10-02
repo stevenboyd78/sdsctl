@@ -271,10 +271,11 @@ def test_capabilities_preserve_reads_and_advertise_controls() -> None:
         "protocol": DAEMON_API_PROTOCOL,
         "supported_versions": list(DAEMON_API_SUPPORTED_VERSIONS),
         "operations": [
-            operation.value
-            for operation in DaemonApiOperation
-            if operation not in DAEMON_API_RECORDING_OPERATIONS
-            and operation not in (
+                operation.value
+                for operation in DaemonApiOperation
+                if operation not in DAEMON_API_RECORDING_OPERATIONS
+                and operation is not DaemonApiOperation.SCANNER_FRONT_PANEL_PRESS
+                and operation not in (
                 DaemonApiOperation.DISPLAY_PROFILE, DaemonApiOperation.DISPLAY_PROFILE_RELOAD,
                 DaemonApiOperation.DISPLAY_FRAME,
                 DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT,
@@ -294,9 +295,10 @@ def test_capabilities_preserve_reads_and_advertise_controls() -> None:
             )
         ],
         "control_operations": [
-            operation.value
-            for operation in DAEMON_API_CONTROL_OPERATIONS
-        ],
+                operation.value
+                for operation in DAEMON_API_CONTROL_OPERATIONS
+                if operation is not DaemonApiOperation.SCANNER_FRONT_PANEL_PRESS
+            ],
         "max_control_timeout": DAEMON_API_MAX_CONTROL_TIMEOUT,
         "max_hold_state_timeout": DAEMON_API_MAX_HOLD_STATE_TIMEOUT,
         "selected_version": DAEMON_API_VERSION,

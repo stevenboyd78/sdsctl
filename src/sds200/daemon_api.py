@@ -9,6 +9,12 @@ from types import MappingProxyType
 from typing import Protocol, cast
 
 from .commands import NAVIGATION_TARGETS
+from .daemon_front_panel_control import (
+    QUALIFIED_MENU_FIRMWARE,
+    QUALIFIED_MENU_MODE,
+    QUALIFIED_MENU_MODEL,
+    QUALIFIED_MENU_SCREEN,
+)
 from .daemon_recording import (
     DaemonRecordingBusyError,
     DaemonRecordingOperationError,
@@ -23,7 +29,7 @@ from .exceptions import (
     UnsupportedScannerFeatureError,
     UnsupportedScannerModelError,
 )
-from .front_panel_keys import front_panel_inventory_snapshot
+from .front_panel_keys import FrontPanelKey, front_panel_inventory_snapshot
 from .scanner_display_configuration import ScannerDisplayConfigurationError
 from .scanner_display_profile_storage import DisplayProfileStorageError
 from .scanner_display_supplemental_transport import (
@@ -62,6 +68,7 @@ class DaemonApiOperation(StrEnum):
     DISPLAY_PROFILE_RELOAD = "display.profile.reload"
     SCANNER_STATE = "scanner.state"
     SCANNER_FRONT_PANEL_INVENTORY = "scanner.front_panel.inventory"
+    SCANNER_FRONT_PANEL_PRESS = "scanner.front_panel.press"
     AUDIO_HEALTH = "audio.health"
     RECORDING_STATUS = "recording.status"
     RECORDING_START = "recording.start"
@@ -99,6 +106,7 @@ DAEMON_API_RECORDING_OPERATIONS = (
     DaemonApiOperation.RECORDINGS_LIST,
 )
 DAEMON_API_CONTROL_OPERATIONS: tuple[DaemonApiOperation, ...] = (
+    DaemonApiOperation.SCANNER_FRONT_PANEL_PRESS,
     DaemonApiOperation.SCANNER_HOLD,
     DaemonApiOperation.SCANNER_HOLD_STATE,
     DaemonApiOperation.SCANNER_NEXT,
@@ -168,6 +176,16 @@ class _RecordingManagerLike(Protocol):
 
 
 class _ControlRuntimeLike(_RuntimeLike, Protocol):
+    @property
+    def front_panel_control_available(self) -> bool: ...
+
+    def press_front_panel(
+        self,
+        key: FrontPanelKey,
+        *,
+        timeout: float = DAEMON_API_DEFAULT_CONTROL_TIMEOUT,
+    ) -> _ControlResultLike: ...
+
     def hold(
         self,
         target: str,
@@ -493,12 +511,21 @@ class DaemonReadOnlyApi:
             supplemental_display.validate_owner(runtime, display_frames)
 
     def _control_operations(self) -> tuple[DaemonApiOperation, ...]:
+        front_panel_available = (
+            getattr(self.runtime, "front_panel_control_available", False) is True
+        )
         return tuple(
             operation
             for operation in DAEMON_API_CONTROL_OPERATIONS
             if (
-                self.reconnect_available
-                or operation is not DaemonApiOperation.SCANNER_RECONNECT
+                (
+                    self.reconnect_available
+                    or operation is not DaemonApiOperation.SCANNER_RECONNECT
+                )
+                and (
+                    front_panel_available
+                    or operation is not DaemonApiOperation.SCANNER_FRONT_PANEL_PRESS
+                )
             )
         )
 
@@ -798,8 +825,26 @@ class DaemonReadOnlyApi:
             return snapshot
         if operation is DaemonApiOperation.SCANNER_FRONT_PANEL_INVENTORY:
             model = snapshot.get("scanner_model")
+            radio_state = snapshot.get("radio_state")
+            qualified_menu = (
+                getattr(self.runtime, "front_panel_control_available", False)
+                is True
+                and (
+                    allowed_operations is None
+                    or DaemonApiOperation.SCANNER_FRONT_PANEL_PRESS
+                    in allowed_operations
+                )
+                and snapshot.get("scanner_connected") is True
+                and model == QUALIFIED_MENU_MODEL
+                and snapshot.get("scanner_firmware")
+                == QUALIFIED_MENU_FIRMWARE
+                and isinstance(radio_state, Mapping)
+                and radio_state.get("mode") == QUALIFIED_MENU_MODE
+                and radio_state.get("screen") == QUALIFIED_MENU_SCREEN
+            )
             return front_panel_inventory_snapshot(
-                model if type(model) is str else None
+                model if type(model) is str else None,
+                qualified_menu=qualified_menu,
             )
         if operation is DaemonApiOperation.SCANNER_STATE:
             return {
@@ -866,6 +911,11 @@ class DaemonReadOnlyApi:
         runtime = cast(_ControlRuntimeLike, self.runtime)
 
         try:
+            if operation is DaemonApiOperation.SCANNER_FRONT_PANEL_PRESS:
+                return runtime.press_front_panel(
+                    _front_panel_key(params),
+                    timeout=_control_timeout(params),
+                ).as_dict()
             if operation is DaemonApiOperation.SCANNER_HOLD:
                 return runtime.hold(
                     _control_target(params),
@@ -1112,6 +1162,17 @@ def _validate_control_params(
     operation: DaemonApiOperation,
     params: Mapping[str, object],
 ) -> None:
+    if operation is DaemonApiOperation.SCANNER_FRONT_PANEL_PRESS:
+        unexpected = sorted(set(params) - {"key", "timeout"})
+        if unexpected:
+            raise _ControlParameterError(
+                "scanner.front_panel.press received unexpected parameters: "
+                f"{unexpected!r}."
+            )
+        _front_panel_key(params)
+        _control_timeout(params)
+        return
+
     if operation is DaemonApiOperation.SCANNER_HOLD_STATE:
         unexpected = sorted(set(params) - {"scope", "held", "timeout"})
         if unexpected:
@@ -1167,6 +1228,15 @@ def _validate_control_params(
     _control_timeout(params)
     if "count" in allowed:
         _navigation_count(params)
+
+
+def _front_panel_key(params: Mapping[str, object]) -> FrontPanelKey:
+    value = params.get("key")
+    if value != FrontPanelKey.MENU.value:
+        raise _ControlParameterError(
+            "Only the physically qualified Menu key is available."
+        )
+    return FrontPanelKey.MENU
 
 
 def _hold_state_scope(params: Mapping[str, object]) -> str:

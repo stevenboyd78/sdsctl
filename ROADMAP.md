@@ -109,12 +109,25 @@ are now implemented as unreleased candidates; paired installed/live acceptance
 remains separate. Both Pi TUI geometries and the
 [HA card layout](docs/home-assistant-mimic-card.md#offline-visual-acceptance--september-28-2026)
 passed offline fictional-data visual checks. The complete front-panel key
-inventory is implemented read-only. An internal, disabled-by-default SDS200
-qualification harness now provides exactly one typed press behind pinned
-firmware, two exact visible-context preflights, the existing daemon owner, an
-idle Waterfall and a fresh local operator signal. It has no public API/UI,
-sequence or retry and does not qualify any key merely by existing. Supervised
-physical key evidence, server permissions and the control UI remain pending. No
+inventory is implemented. An internal, disabled-by-default SDS200 qualification
+harness provided exactly one typed press behind pinned firmware, two exact
+visible-context preflights, the existing daemon owner, an idle Waterfall and a
+fresh local operator signal. It had no public API/UI, sequence or retry and did
+not qualify any key merely by existing. A supervised
+physical qualification on October 2, 2026 proved exactly one `M` press on an
+SDS200 running firmware `Version 1.26.01` from fresh `Trunk Scan` /
+`trunk_scan`: the scanner acknowledged the command, the next bounded PSI frame
+reported `Menu tree` / `menu_selection`, and the operator physically confirmed
+and exited the menu. This does not qualify another key, firmware, starting
+context, sequence or retry. The current development candidate turns only that
+evidence into a separate opt-in production boundary. A direct-network daemon
+must be started with `--enable-qualified-sds200-menu-control`; every request
+reserves idle Waterfall, holds the existing owner lock, verifies exact model and
+firmware, requests two new matching GSI frames and sends one `KEY,M,P` without
+retry. The typed daemon/client operation and one exact bodyless operator-Web
+route are server-authorized; observe-only peers, the Home Assistant card and
+the TUI remain read-only, and the other 26 keys remain unavailable. This
+candidate is not installed and the closed physical press is not repeated. No
 milestone/release number is assigned. Waterfall-screen fidelity remains a
 separate slice. The later exact
 `85042e6` daemon-backed TUI waterfall passed authenticated live 240-bin

@@ -151,6 +151,10 @@ def test_mimic_browser_lifecycle(case):
                 "front_panels": {
                     "unlisted": front_panel_inventory_snapshot(None),
                     "sds200": front_panel_inventory_snapshot("SDS200"),
+                    "sds200_qualified": front_panel_inventory_snapshot(
+                        "SDS200",
+                        qualified_menu=True,
+                    ),
                     "sds100": front_panel_inventory_snapshot("SDS100"),
                     "bcd536hp": front_panel_inventory_snapshot("BCD536HP"),
                 },

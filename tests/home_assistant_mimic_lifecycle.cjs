@@ -103,7 +103,11 @@ function assertFrontPanel(c,inventory){
     assert.deepEqual(button.children.map(node=>node.textContent),[entry.code,entry.label,
       `reference: ${entry.reference_status}; control: ${entry.control_status}`,entry.context_note,entry.unavailable_reason]);
   });
-  assert.ok(c._frontPanelStatus.textContent.includes('all controls remain unavailable'));
+  const qualified=inventory.keys.filter(entry=>entry.available).length;
+  if(qualified===1){
+    assert.ok(c._frontPanelStatus.textContent.includes('Menu is qualified in the operator Web dashboard'));
+    assert.ok(c._frontPanelStatus.textContent.includes('Home Assistant card remains read-only'));
+  }else assert.ok(c._frontPanelStatus.textContent.includes('all controls remain unavailable'));
   const unsupported=inventory.keys.filter(entry=>entry.control_status==='unsupported').length;
   if(unsupported===0)assert.ok(!c._frontPanelStatus.textContent.includes('unsupported for this model'));
   else assert.ok(c._frontPanelStatus.textContent.includes(`(${unsupported} unsupported for this model)`));

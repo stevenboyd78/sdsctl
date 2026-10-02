@@ -27,6 +27,11 @@ from .daemon_display_read_research import (
     _DisplayResearchScanner,
     display_read_timeout,
 )
+from .daemon_front_panel_control import (
+    QualifiedMenuControlPolicy,
+    QualifiedMenuScanner,
+    execute_qualified_menu_press,
+)
 from .daemon_front_panel_research import (
     FrontPanelResearchAttempt,
     FrontPanelResearchPolicy,
@@ -77,6 +82,7 @@ class DaemonControlOperation(StrEnum):
     RECONNECT = "scanner.reconnect"
     VOLUME_SET = "scanner.volume_set"
     SQUELCH_SET = "scanner.squelch_set"
+    FRONT_PANEL_PRESS = "scanner.front_panel.press"
 
 
 DAEMON_HOLD_STATE_DEFAULT_TIMEOUT = 4.0
@@ -372,6 +378,7 @@ class DaemonRuntime:
         system_status_research: SystemStatusResearchPolicy | None = None,
         display_read_research: DisplayReadResearchPolicy | None = None,
         front_panel_research: FrontPanelResearchPolicy | None = None,
+        front_panel_control: QualifiedMenuControlPolicy | None = None,
         clock: Callable[[], float] = monotonic,
         now: Callable[[], datetime] = _utc_now,
     ) -> None:
@@ -451,6 +458,10 @@ class DaemonRuntime:
             front_panel_research, FrontPanelResearchPolicy
         ):
             raise TypeError("Front-panel research requires an explicit policy.")
+        if front_panel_control is not None and not isinstance(
+            front_panel_control, QualifiedMenuControlPolicy
+        ):
+            raise TypeError("Front-panel control requires an explicit qualified policy.")
         if sum(
             policy is not None
             for policy in (
@@ -468,6 +479,7 @@ class DaemonRuntime:
             None if front_panel_research is None
             else FrontPanelResearchAttempt(front_panel_research)
         )
+        self._front_panel_control = front_panel_control
 
     @property
     def running(self) -> bool:
@@ -482,6 +494,12 @@ class DaemonRuntime:
             audio=self.audio.snapshot(),
             router=self.router.snapshot(),
         )
+
+    @property
+    def front_panel_control_available(self) -> bool:
+        """Whether the exact qualified Menu capability was explicitly enabled."""
+
+        return self._front_panel_control is not None
 
     def on_transition(
         self,
@@ -878,6 +896,34 @@ class DaemonRuntime:
             timeout=timeout,
             setter=self.scanner.set_squelch,
             getter=self.scanner.get_squelch,
+        )
+
+    def press_front_panel(
+        self,
+        key: object,
+        *,
+        timeout: float = 2.0,
+    ) -> DaemonControlResult:
+        """Press the one qualified key after fresh server-side preflights."""
+
+        from .front_panel_keys import FrontPanelKey
+
+        if type(key) is not FrontPanelKey or key is not FrontPanelKey.MENU:
+            raise ValueError("Only the qualified Menu key is available.")
+        policy = self._front_panel_control
+        if policy is None:
+            raise UnsupportedScannerFeatureError(
+                "Qualified Menu control is not enabled."
+            )
+        return self._execute_control(
+            DaemonControlOperation.FRONT_PANEL_PRESS,
+            timeout,
+            lambda remaining: execute_qualified_menu_press(
+                cast(QualifiedMenuScanner, self.scanner),
+                policy,
+                timeout=remaining,
+                clock=self._clock,
+            ),
         )
 
     def _set_level(

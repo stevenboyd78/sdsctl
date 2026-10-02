@@ -66,6 +66,23 @@ def test_daemon_psi_recovery_options_parse() -> None:
     assert args.psi_recovery_cooldown == 90.0
 
 
+def test_daemon_qualified_menu_control_requires_explicit_opt_in() -> None:
+    default = cli.build_parser().parse_args(
+        ["--host", "192.168.0.251", "daemon"]
+    )
+    enabled = cli.build_parser().parse_args(
+        [
+            "--host",
+            "192.168.0.251",
+            "daemon",
+            "--enable-qualified-sds200-menu-control",
+        ]
+    )
+
+    assert default.enable_qualified_sds200_menu_control is False
+    assert enabled.enable_qualified_sds200_menu_control is True
+
+
 def test_tui_psi_recovery_options_parse() -> None:
     args = cli.build_parser().parse_args(
         [

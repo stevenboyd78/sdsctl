@@ -329,7 +329,7 @@ def test_runtime_serializes_research_with_normal_controls_without_consuming_atte
     assert runtime.run_front_panel_research(operator_ready=True, timeout=0.1).acknowledged
 
 
-def test_opt_in_research_is_not_a_public_api_operation(scanner: Scanner) -> None:
+def test_opt_in_research_does_not_enable_public_control(scanner: Scanner) -> None:
     api = DaemonReadOnlyApi(runtime_for(scanner, front_panel_research=policy()))
     response = api.handle_payload(
         {
@@ -341,7 +341,7 @@ def test_opt_in_research_is_not_a_public_api_operation(scanner: Scanner) -> None
         }
     )
     assert response.error is not None
-    assert response.error.code.value == "unknown_operation"
+    assert response.error.code.value == "unsupported_operation"
     assert scanner.commands == []
 
 
