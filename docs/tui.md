@@ -102,6 +102,16 @@ after its fresh authoritative snapshot. A scanner-only disconnect, stale PSI,
 degraded status, theme change, resize or redraw does not reset the event link.
 Disconnected time is never added to a later link.
 
+On October 2, 2026, a live authenticated 100×30 Small Pi pass showed the timer
+advancing but exposed `Unavailable | s. | Link for ...`: the older published
+daemon correctly lacked application-version metadata, while the compact row
+retained a useless fragment of the redundant symbolic endpoint. Commit
+`37a414a` removed only that compact endpoint token. The separate Target row,
+wide endpoint, full runtime metadata and honest `Unavailable` version remained.
+The repaired installed wheel then received the user's `visual pass`; the finite
+guard restored the byte-identical original service and normal Home Assistant App
+ownership. This does not qualify the 160×45 physical layout or a live reconnect.
+
 Duration uses the TUI host's monotonic clock and whole elapsed seconds. It does
 not jump when the wall clock or daylight-saving offset changes, add a tolerance,
 approximate calendar months/years, or wrap at 24 hours. Missing, non-finite or

@@ -105,7 +105,12 @@ These are merged development changes, not a claim that a new release is publishe
    Connection panel shares its existing Daemon row with `Link for HH:MM:SS` or
    `Nd HH:MM:SS`; no `Connected since` wall time is fabricated. Direct scanner
    sessions stay unchanged. Boundary, reconnect, invalid-source and Pi geometry
-   tests pass; live endpoint and physical display acceptance remain separate.
+   tests pass. A live 100x30 pass first exposed a meaningless truncated symbolic
+   endpoint fragment. The compact split now omits that redundant token while
+   retaining the concrete Target row, and the repaired installed wheel passed
+   the user's live visual check with an advancing timer and guarded restoration.
+   The 160x45 physical layout and live reconnect/outage acceptance remain
+   separate.
 
 ### Test contract
 

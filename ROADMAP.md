@@ -150,9 +150,16 @@ remain unclaimed; this does not broaden front-panel-control authorization.
   presentation do not reset the link. Elapsed time uses the local monotonic clock
   and renders `HH:MM:SS` or `Nd HH:MM:SS`, without a tolerance, calendar-unit
   approximation or 24-hour wrap. Direct scanner sessions remain unchanged.
-  Exact boundary/reconnect and 100x30/160x45 geometry tests pass. A live endpoint
-  and physical display pass remain separate before this presentation is accepted;
-  this is not part of v0.30.0 or the browser-device qualification.
+  Exact boundary/reconnect and 100x30/160x45 geometry tests pass. The first live
+  100x30 review found that preserving a redundant symbolic endpoint reduced it
+  to a meaningless `s.` fragment beside the fixed link suffix. Commit `37a414a`
+  omits that endpoint only in the compact split, where the concrete Target row
+  remains visible. The repaired installed wheel then passed the user's live
+  100x30 visual check with an advancing link timer and exact guarded cleanup.
+  The older published daemon honestly reported its version as `Unavailable`;
+  no local or protocol version was substituted. The 160x45 physical layout,
+  live reconnect/outage behavior and release remain separate; this is not part
+  of v0.30.0 or the browser-device qualification.
 
 ### Managed-display enrollment and unattended recovery
 
