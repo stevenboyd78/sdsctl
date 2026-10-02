@@ -34,7 +34,7 @@ historical; consult the [release record](release-0.30.0.md) for current status.
 | TUI endpoint identity and connection duration | Yes | Build on the accepted local-date presentation; trace actual endpoint metadata and link ownership | Exact endpoint semantics and both Pi layouts |
 | Mimic-SDS and full front-panel controls | Yes for offline foundations | Read-only profile parser, shared slot/color/live-data map and typed key inventory | Profile acquisition, all three renderers and model-specific supervised control acceptance |
 | Renderer field parity | Yes | Reconcile the existing audit against current models and synthetic fixtures | Per-field provenance and targeted physical observations |
-| TUI waterfall | Candidate implemented over the existing daemon data plane; exact 100x30 small-Pi and 160x45 HDMI functional visual checks plus guarded cleanup passed; HDMI accepted the new relative color hierarchy | Strict relative renderer, bounded history, reconnect, local pause/clear and fake-stream tests | Recheck host-local source-time presentation, and independently observe a physical `Q`-triggered exit |
+| TUI waterfall | Candidate implemented over the existing daemon data plane; exact 100x30 small-Pi and 160x45 HDMI functional visual checks plus guarded cleanup passed; HDMI accepted the relative color hierarchy, host-local source time and physical `Q` cleanup | Strict relative renderer, bounded history, reconnect, local pause/clear and fake-stream tests | Retain this evidence through milestone integration and CI; no additional physical display gate is open for this slice |
 | Weather/alert presentation and recording | Partly | Define unknown/unavailable states and sanitized fixture requirements | Genuine alert evidence and reviewed recording lifecycle |
 | Advanced protocol/menu/analysis | Partly | Evidence inventory and lossless parser fixtures | Exact command/model/firmware proof before any mutation |
 | Audio client and playback follow-ups | Yes | Bounded fanout and failure-isolation test design | One scanner stream and physical audio acceptance |
@@ -171,9 +171,11 @@ uncalibrated; they are not absolute signal strength. A subsequent guarded HDMI
 review confirmed that the color hierarchy made the information materially
 easier to understand. That review also selected a presentation-only correction:
 keep the validated aware timestamp unchanged in the model, but display it in the
-TUI host's configured local timezone with an explicit offset. Physical recheck
-of that timestamp and independently observed `Q`-triggered termination remain
-open; the exact Textual regression retains Q/quit cleanup coverage.
+TUI host's configured local timezone with an explicit offset. A second guarded
+HDMI run accepted the local label, clock and offset. The user then pressed `Q`
+from the Waterfall; the candidate and guardian exited successfully and the
+byte-identical normal display service returned. The exact Textual regression
+retains the same Q/quit cleanup coverage.
 Rendering at a faster rate must not be described as a higher scanner acquisition
 rate. Binary GW2 remains deferred unless new independently reproducible evidence
 changes the recorded conclusion.

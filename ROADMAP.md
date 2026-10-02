@@ -122,9 +122,11 @@ explicitly frame-relative green/yellow/red intensity bands. The HDMI review
 confirmed that color made the information materially easier to understand and
 identified one presentation-only follow-up: render the aware source timestamp
 in the TUI host's local timezone rather than UTC. The candidate now performs
-that conversion without changing the validated record. Physical recheck of the
-timestamp and independently observed physical-Q termination remain unclaimed;
-this does not broaden front-panel-control authorization.
+that conversion without changing the validated record. A second guarded HDMI
+run accepted the labeled local timestamp with its explicit offset. The user then
+pressed `Q` from the Waterfall, both transient units exited successfully, and
+the byte-identical normal display service returned. This does not broaden
+front-panel-control authorization.
 
 ### Low-priority TUI usability follow-up
 

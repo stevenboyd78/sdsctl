@@ -196,6 +196,13 @@ It is labeled `Source local timestamp` and keeps an explicit UTC offset. When th
 TUI is viewed over SSH or on a managed display, "local" therefore means the
 machine running the TUI, not the browser, SSH client, scanner, or daemon host.
 
+The color hierarchy and host-local timestamp subsequently passed a guarded
+160×45 physical HDMI review. A user-initiated **Q** from the Waterfall also
+closed the candidate cleanly and allowed its independent guardian to restore
+the byte-identical normal display service. This qualifies presentation and
+owned-resource cleanup for the tested HDMI path; it does not make the relative
+colors calibrated measurements or add a scanner command.
+
 Inside the waterfall view:
 
 - **Space** pauses or resumes only this client's local display history; the
