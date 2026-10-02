@@ -5,8 +5,10 @@ import queue
 import threading
 import time
 from datetime import UTC, datetime
+from math import nextafter
 
 import pytest
+from rich.text import Text
 from textual.widgets import Static
 
 from sds200.daemon_waterfall_protocol import (
@@ -14,10 +16,13 @@ from sds200.daemon_waterfall_protocol import (
     DaemonWaterfallRecordKind,
 )
 from sds200.state import snapshot_from_scanner_info
+from sds200.theme import DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME, ThemePalette
 from sds200.tui import ScannerIdentity, ScannerTuiApp
 from sds200.tui_waterfall import (
     TuiWaterfallModel,
     TuiWaterfallReader,
+    _render_relative_row,
+    _waterfall_title,
     normalize_waterfall_values,
 )
 from sds200.xml_protocol import ScannerInfoParser
@@ -71,11 +76,16 @@ def _gwf(sequence: int, *, offset: int = 0) -> DaemonWaterfallRecord:
     )
 
 
-def _app(factory=None) -> ScannerTuiApp:  # type: ignore[no-untyped-def]
+def _app(
+    factory=None,  # type: ignore[no-untyped-def]
+    *,
+    palette: ThemePalette = DEFAULT_DARK_THEME,
+) -> ScannerTuiApp:
     return ScannerTuiApp(
         ScannerIdentity("sdsctl-remote-daemon", "SDS200", "Version 1.26.01"),
         snapshot_from_scanner_info(ScannerInfoParser().parse("GSI", XML)),
         waterfall_client_factory=factory,
+        palette=palette,
     )
 
 
@@ -100,6 +110,47 @@ def test_waterfall_normalization_is_strict_and_relative_only() -> None:
     ):
         with pytest.raises(ValueError, match="Waterfall frame"):
             normalize_waterfall_values(invalid)
+
+
+@pytest.mark.parametrize(
+    ("light", "expected_styles"),
+    [
+        (False, ["#5fd75f", "#ffaf00", "bold #ff5f5f"]),
+        (True, ["#15803d", "#b45309", "bold #b91c1c"]),
+    ],
+)
+def test_waterfall_relative_intensity_uses_color_and_glyph_redundantly(
+    light: bool,
+    expected_styles: list[str],
+) -> None:
+    rendered = _render_relative_row((0.0, 0.5, 1.0), 3, light=light)
+
+    assert rendered.plain == " =@"
+    assert [span.style for span in rendered.spans] == expected_styles
+    title = _waterfall_title(light=light)
+    assert "LOW MID HIGH" in title.plain
+    assert "relative per frame" in title.plain
+    assert "uncalibrated" in title.plain
+
+
+def test_waterfall_relative_intensity_band_boundaries_are_exact() -> None:
+    rendered = _render_relative_row(
+        (
+            0.0,
+            nextafter(1.0 / 3.0, 0.0),
+            1.0 / 3.0,
+            nextafter(2.0 / 3.0, 0.0),
+            2.0 / 3.0,
+            1.0,
+        ),
+        6,
+    )
+
+    assert [(span.start, span.end, span.style) for span in rendered.spans] == [
+        (0, 2, "#5fd75f"),
+        (2, 4, "#ffaf00"),
+        (4, 6, "bold #ff5f5f"),
+    ]
 
 
 def test_waterfall_model_bounds_history_and_pause_clear_are_local() -> None:
@@ -273,8 +324,18 @@ def test_waterfall_reader_does_not_retry_an_invalid_payload() -> None:
 
 
 @pytest.mark.parametrize("size", [(100, 30), (160, 45)])
+@pytest.mark.parametrize(
+    ("palette", "expected_styles"),
+    [
+        (DEFAULT_DARK_THEME, {"#5fd75f", "#ffaf00", "bold #ff5f5f"}),
+        (DEFAULT_LIGHT_THEME, {"#15803d", "#b45309", "bold #b91c1c"}),
+    ],
+    ids=["dark", "light"],
+)
 def test_daemon_tui_waterfall_is_responsive_and_releases_lease(
     size: tuple[int, int],
+    palette: ThemePalette,
+    expected_styles: set[str],
 ) -> None:
     async def exercise() -> None:
         clients: list[_QueueClient] = []
@@ -284,7 +345,7 @@ def test_daemon_tui_waterfall_is_responsive_and_releases_lease(
             clients.append(client)
             return client
 
-        app = _app(factory)
+        app = _app(factory, palette=palette)
         async with app.run_test(size=size) as pilot:
             assert app.waterfall_available
             assert app.check_action("waterfall", ())
@@ -294,15 +355,19 @@ def test_daemon_tui_waterfall_is_responsive_and_releases_lease(
             await pilot.pause(0.3)
             waterfall = app._waterfall_screen
             assert waterfall is not None
+            assert waterfall.has_class("light") == (palette is DEFAULT_LIGHT_THEME)
             assert len(clients) == 1
             assert waterfall.reader.alive
             assert "Frames: 1" in _plain(waterfall.query_one("#waterfall-health", Static))
             assert "uncalibrated" in _plain(waterfall.query_one("#waterfall-title", Static))
-            assert "1540000 | 1550000 | 1560000" in _plain(
+            assert "Scanner span (raw): lower 1540000 | center 1550000 | upper 1560000" in _plain(
                 waterfall.query_one("#waterfall-scale", Static)
             )
             spectrum = waterfall.query_one("#waterfall-spectrum", Static)
             assert "Latest:" in _plain(spectrum)
+            spectrum_content = spectrum.content
+            assert isinstance(spectrum_content, Text)
+            assert {span.style for span in spectrum_content.spans} >= expected_styles
             assert spectrum.content_size.height >= 1
             history = waterfall.query_one("#waterfall-history", Static)
             assert history.region.right <= waterfall.screen.region.right

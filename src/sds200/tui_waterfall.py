@@ -34,6 +34,10 @@ _WATERFALL_BIN_COUNT = 240
 _MAX_SAFE_INTEGER = (1 << 53) - 1
 _HEX_VALUE = re.compile(r"^[0-9a-fA-F]+$")
 _GRADIENT = " .:-=+*#%@"
+_LOW_INTENSITY_CEILING = 1.0 / 3.0
+_MID_INTENSITY_CEILING = 2.0 / 3.0
+_DARK_INTENSITY_STYLES = ("#5fd75f", "#ffaf00", "bold #ff5f5f")
+_LIGHT_INTENSITY_STYLES = ("#15803d", "#b45309", "bold #b91c1c")
 
 
 class TuiWaterfallClient(Protocol):
@@ -377,7 +381,7 @@ class WaterfallScreen(ModalScreen[None]):
 
     def compose(self) -> ComposeResult:
         yield Static(
-            "Relative waterfall — daemon stream; uncalibrated, no absolute power units",
+            _waterfall_title(light=self.has_class("light")),
             id="waterfall-title",
             markup=False,
         )
@@ -440,37 +444,87 @@ class WaterfallScreen(ModalScreen[None]):
         history = self.query_one("#waterfall-history", Static)
         width = max(1, history.content_size.width - 2)
         visible_rows = max(1, history.content_size.height - 2)
-        spectrum.update(
-            "Latest: "
-            + (
-                _render_relative_row(snapshot.latest, max(1, width - len("Latest: ")))
-                if snapshot.latest is not None
-                else "No current frame"
+        spectrum_text = Text("Latest: ")
+        if snapshot.latest is None:
+            spectrum_text.append("No current frame")
+        else:
+            spectrum_text.append(
+                _render_relative_row(
+                    snapshot.latest,
+                    max(1, width - len("Latest: ")),
+                    light=self.has_class("light"),
+                )
             )
-        )
+        spectrum.update(spectrum_text)
         rows = snapshot.history[-visible_rows:]
-        history.update(
-            Text("\n".join(_render_relative_row(row, width) for row in rows))
-            if rows
-            else Text("Waiting for relative GWF frames…")
-        )
+        if rows:
+            rendered_history = Text()
+            for index, row in enumerate(rows):
+                if index:
+                    rendered_history.append("\n")
+                rendered_history.append(
+                    _render_relative_row(row, width, light=self.has_class("light"))
+                )
+            history.update(rendered_history)
+        else:
+            history.update(Text("Waiting for relative GWF frames…"))
         self.query_one("#waterfall-scale", Static).update(_scale_text(snapshot))
 
 
-def _render_relative_row(values: Sequence[float], width: int) -> str:
+def _intensity_styles(*, light: bool) -> tuple[str, str, str]:
+    return _LIGHT_INTENSITY_STYLES if light else _DARK_INTENSITY_STYLES
+
+
+def _waterfall_title(*, light: bool = False) -> Text:
+    low_style, mid_style, high_style = _intensity_styles(light=light)
+    title = Text("Relative waterfall — daemon stream | ")
+    title.append("LOW", style=low_style)
+    title.append(" ")
+    title.append("MID", style=mid_style)
+    title.append(" ")
+    title.append("HIGH", style=high_style)
+    title.append(" (relative per frame; uncalibrated)")
+    return title
+
+
+def _relative_intensity_style(level: float, *, light: bool) -> str:
+    low_style, mid_style, high_style = _intensity_styles(light=light)
+    if level < _LOW_INTENSITY_CEILING:
+        return low_style
+    if level < _MID_INTENSITY_CEILING:
+        return mid_style
+    return high_style
+
+
+def _render_relative_row(
+    values: Sequence[float],
+    width: int,
+    *,
+    light: bool = False,
+) -> Text:
+    rendered = Text(no_wrap=True, overflow="crop")
     if width <= 0:
-        return ""
+        return rendered
     if not values:
-        return " " * width
-    output: list[str] = []
+        rendered.append(" " * width)
+        return rendered
     count = len(values)
+    run: list[str] = []
+    run_style: str | None = None
     for column in range(width):
         start = column * count // width
         stop = max(start + 1, (column + 1) * count // width)
         level = sum(values[start:stop]) / (stop - start)
         index = min(len(_GRADIENT) - 1, max(0, round(level * (len(_GRADIENT) - 1))))
-        output.append(_GRADIENT[index])
-    return "".join(output)
+        style = _relative_intensity_style(level, light=light)
+        if run_style is not None and style != run_style:
+            rendered.append("".join(run), style=run_style)
+            run.clear()
+        run.append(_GRADIENT[index])
+        run_style = style
+    if run_style is not None:
+        rendered.append("".join(run), style=run_style)
+    return rendered
 
 
 def _scale_text(snapshot: TuiWaterfallSnapshot) -> str:
@@ -486,7 +540,8 @@ def _scale_text(snapshot: TuiWaterfallSnapshot) -> str:
         else "Unavailable"
     )
     return (
-        f"Raw frequency fields: {lower} | {center} | {upper} | Session: {session_state}\n"
+        f"Scanner span (raw): lower {lower} | center {center} | upper {upper} | "
+        f"Session: {session_state}\n"
         f"Source timestamp: {received}"
     )
 

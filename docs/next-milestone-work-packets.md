@@ -34,7 +34,7 @@ historical; consult the [release record](release-0.30.0.md) for current status.
 | TUI endpoint identity and connection duration | Yes | Build on the accepted local-date presentation; trace actual endpoint metadata and link ownership | Exact endpoint semantics and both Pi layouts |
 | Mimic-SDS and full front-panel controls | Yes for offline foundations | Read-only profile parser, shared slot/color/live-data map and typed key inventory | Profile acquisition, all three renderers and model-specific supervised control acceptance |
 | Renderer field parity | Yes | Reconcile the existing audit against current models and synthetic fixtures | Per-field provenance and targeted physical observations |
-| TUI waterfall | Candidate implemented over the existing daemon data plane; exact 100x30 small-Pi live visual and guarded-cleanup acceptance passed | Strict relative renderer, bounded history, reconnect, local pause/clear and fake-stream tests | HDMI remains unclaimed; a physical `Q`-triggered exit was not independently observed, although exact offline Q cleanup and live guarded consumer release passed |
+| TUI waterfall | Candidate implemented over the existing daemon data plane; exact 100x30 small-Pi and 160x45 HDMI functional visual checks plus guarded cleanup passed | Strict relative renderer, bounded history, reconnect, local pause/clear and fake-stream tests | HDMI feedback found the glyph-only history hard to interpret; the new redundant green/yellow/red frame-relative treatment still needs physical visual acceptance, and a physical `Q`-triggered exit was not independently observed |
 | Weather/alert presentation and recording | Partly | Define unknown/unavailable states and sanitized fixture requirements | Genuine alert evidence and reviewed recording lifecycle |
 | Advanced protocol/menu/analysis | Partly | Evidence inventory and lossless parser fixtures | Exact command/model/firmware proof before any mutation |
 | Audio client and playback follow-ups | Yes | Bounded fanout and failure-isolation test design | One scanner stream and physical audio acceptance |
@@ -160,13 +160,20 @@ bounded shutdown and both Pi geometries. Exact development head `85042e6`
 subsequently passed authenticated live 240-bin streaming and user-reported
 visual/interaction acceptance on the 100x30 small Pi. Its finite guardian
 restored the unchanged prior service, and a post-termination checkpoint proved
-that no stale waterfall consumer remained. The candidate was still running when
-closeout began, so that evidence does not independently qualify physical
-`Q`-triggered termination; the exact Textual regression retains Q/quit cleanup
-coverage. The 160x45 HDMI display remains outside the live claim. Rendering at a
-faster rate must not be described as a higher scanner acquisition rate. Binary
-GW2 remains deferred unless new independently reproducible evidence changes the
-recorded conclusion.
+that no stale waterfall consumer remained. A later guarded 160x45 HDMI run also
+passed layout and interaction, and the original service and ordinary Home
+Assistant scanner owner were restored. Its photo/video review nevertheless
+found the dense glyph-only field difficult to understand as a human signal
+display. The follow-up keeps the glyph ramp as a monochrome/color-vision fallback
+and adds green `LOW`, yellow `MID`, and bold red `HIGH` bands based only on each
+frame's normalized values. Those labels are explicitly relative per frame and
+uncalibrated; they are not absolute signal strength. The new color treatment
+still needs physical review. The candidate was still running when closeout
+began, so neither physical run independently qualifies `Q`-triggered
+termination; the exact Textual regression retains Q/quit cleanup coverage.
+Rendering at a faster rate must not be described as a higher scanner acquisition
+rate. Binary GW2 remains deferred unless new independently reproducible evidence
+changes the recorded conclusion.
 
 ## 3. Weather, menus and advanced analysis
 

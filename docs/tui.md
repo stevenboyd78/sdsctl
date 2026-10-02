@@ -180,10 +180,15 @@ the demand-driven scanner session and last-consumer cleanup.
 
 The view validates exactly 240 hexadecimal source strings, converts them to a
 per-frame relative 0-to-1 range, and renders a bounded 256-row terminal history.
-A constant frame uses the neutral midpoint. This is an uncalibrated relative
-display: it does not label values as dB, signal strength, spectrum power, FFT
-magnitude, or a higher acquisition rate. Lower, center and upper frequency
-fields are shown literally as raw scanner metadata without inferred units.
+A constant frame uses the neutral midpoint. Each row redundantly represents
+that normalized value with both its existing glyph ramp and three explicit
+relative-intensity bands: green `LOW`, yellow `MID`, and bold red `HIGH`. The
+colors improve visual hierarchy without making color the only carrier of
+meaning. They are not calibrated weak/medium/strong signal thresholds. This is
+an uncalibrated relative display: it does not label values as dB, signal
+strength, spectrum power, FFT magnitude, or a higher acquisition rate. Lower,
+center and upper frequency fields are shown literally as raw scanner metadata
+without inferred units.
 
 Inside the waterfall view:
 
@@ -213,11 +218,14 @@ cannot exceed the protocol's 64 KiB limit. These options are inert until the
 view is opened.
 
 Synthetic tests establish validation, bounds, pause/clear, reconnect,
-responsive rendering, direct-session absence and cleanup. They do not establish
-physical scanner-mode appearance, terminal color quality, frequency semantics,
-or another model/firmware. A separately frozen candidate still needs a concise
-live daemon/scanner visual and exit-cleanup pass before this support is claimed
-as physically accepted or released.
+responsive rendering, direct-session absence, dark/light color contrast and
+cleanup. They do not establish physical terminal color quality, frequency
+semantics, or another model/firmware. The glyph-only candidate passed functional
+visual review on both Pi geometries, but the HDMI review found its dense
+punctuation difficult to interpret as a human signal display. The three-band
+relative-intensity treatment remains an unreleased follow-up until a concise
+physical visual check confirms the improvement. No release claim follows from
+the offline render alone.
 
 ## Unreleased Mimic-SDS candidate
 
