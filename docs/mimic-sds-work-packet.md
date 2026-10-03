@@ -284,10 +284,19 @@ process exit as well as the browser UI and administrator boundaries.
 
 `src/sds200/scanner_display_profile_favorites.py` now supplies the first
 internal, read-only acquisition boundary for this remaining slice. It accepts an
-explicit Favorites source and profile reader, or an explicit copied
-`favorites_lists` directory plus an explicit absolute `profile.cfg` path. It
-does not discover either path, start synchronization, switch scanner storage
-modes, contact a scanner, open a listener or write scanner/Favorites data.
+explicit Favorites source and profile reader, an explicit copied
+`favorites_lists` directory plus an explicit absolute `profile.cfg` path, or the
+canonical pair on one explicitly selected already-mounted Linux USB volume. It
+does not discover a target, start synchronization, mount storage, switch scanner
+storage modes, contact a scanner, open a listener or write scanner/Favorites
+data.
+
+The mounted-USB adapter reuses exact-path Linux mount and block-device evidence
+without the writable qualification required by the USB executor. It permits a
+read-only mount, reads `BCDx36HP/favorites_lists` with sibling
+`BCDx36HP/profile.cfg`, rechecks mount and sysfs identity, and refuses a profile
+whose filesystem device differs from the selected mount. It never inspects a
+different candidate.
 
 One observation contains the exact immutable Favorites snapshot and exact
 profile bytes. Two complete, byte-identical observations are required before a
@@ -305,8 +314,8 @@ last-good profile data, but reports `unknown_freshness` because no source read i
 performed implicitly. This deliberately keeps renderers fail-closed until a
 future authorized integration performs a fresh acquisition and coherent owner
 reload. The module has no public export, CLI/API/App wiring or background job.
-Copied-tree qualification is synthetic/offline only; already-mounted USB and
-supported network acquisition remain separate work.
+Copied-tree and already-mounted USB qualification are synthetic/offline only;
+physical scanner-volume and supported network acquisition remain separate work.
 
 ### Remaining acquisition and synchronization contract
 
@@ -314,11 +323,11 @@ Introduce a scanner-display profile type separate from existing sdsctl connectio
 profiles. Import an explicitly selected `profile.cfg`, or acquire that exact
 file as an optional part of an operator-selected Favorites synchronization.
 
-The current USB/FTP Favorites storage adapters operate on Favorites catalogs and
-documents; they do not yet provide this scanner-display import. The internal
-copied-tree foundation above establishes the bounded acquisition contract but is
-not a runtime sync integration. Do not casually broaden accepted Favorites paths
-or assume `GLT` returns the profile. A USB read requires
+The current FTP Favorites storage adapter operates on Favorites catalogs and
+documents; it does not yet provide this scanner-display import. The internal
+copied-tree and mounted-USB foundation above establishes the bounded acquisition
+contract but is not a runtime sync integration. Do not casually broaden accepted
+Favorites paths or assume `GLT` returns the profile. A USB read requires
 already-accessible scanner storage or a separately coordinated storage-mode
 workflow. Do not switch modes, interrupt scanning, expose ports, or open a
 competing scanner-control session just to refresh a theme.
@@ -430,11 +439,12 @@ alter recordings, scanner programming, connection credentials or display-local
 presentation choices. The internal durable manual-file adapter implements the
 accepted-state portion locally, with explicit standalone manifest/command wiring
 and local daemon cache reload. The private upload/Ingress adapter implements
-guarded staging locally. The internal copied-tree Favorites/profile adapter now
-implements coherent read/review/atomic last-good behavior; App path/configuration
-wiring, renderer/subscriber refresh, authorized sync orchestration, mounted-USB
-and network acquisition remain future integration work. None of the
-planned paths above has been created or activated on live hosts.
+guarded staging locally. The internal copied-tree and already-mounted USB
+Favorites/profile adapters now implement coherent read/review/atomic last-good
+behavior; App path/configuration wiring, renderer/subscriber refresh, authorized
+sync orchestration, physical USB qualification and network acquisition remain
+future integration work. None of the planned paths above has been created or
+activated on live hosts.
 
 ## 2. Shared screen descriptor and live-data mapping
 
@@ -1203,13 +1213,14 @@ programming, power-off, mass-storage switching or speculative key sequences.
    the disclosure performs no request or scanner action, and malformed or
    unexpectedly enabled input fails closed. No installed HA or physical
    acceptance is claimed.
-4. **Profile acquisition during Favorites sync:** the internal copied-tree
-   foundation now covers exact endpoint/source binding, two-pass complete reads,
-   commit-time whole-acquisition recheck, partial/failed/missing/changed input,
-   source conflict, sanitized failures and atomic last-good retention. Next,
-   independently qualify already-mounted USB and any supported network path,
-   then design explicit sync orchestration without changing scanner write
-   contracts or treating offline tests as installed acceptance.
+4. **Profile acquisition during Favorites sync:** the internal copied-tree and
+   exact already-mounted Linux USB foundations now cover endpoint/source binding,
+   two-pass complete reads, commit-time whole-acquisition recheck,
+   partial/failed/missing/changed input, source conflict, sanitized failures and
+   atomic last-good retention. Next, physically qualify the read-only mounted
+   path and independently qualify any supported network path, then design
+   explicit sync orchestration without changing scanner write contracts or
+   treating offline tests as installed acceptance.
 5. **Front-panel controls:** use the internal typed, same-owner, one-press
    qualification boundary to gather exact supervised model/firmware/context
    evidence first. Then implement server-side capability/permission refusal,

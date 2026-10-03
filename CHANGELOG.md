@@ -9,13 +9,16 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 ### Added
 
 - Add an internal, read-only Favorites-sync display-profile acquisition
-  foundation. An explicitly selected copied Favorites tree and `profile.cfg`
-  must produce two identical complete observations before review, and the whole
-  acquisition is checked again before atomic acceptance. Endpoint/source
-  binding, source-change confirmation, sanitized failures, last-good retention
-  and unknown restart freshness remain explicit. This adds no sync trigger,
-  scanner/Favorites write, path discovery, storage-mode switch, CLI/API route or
-  installed integration.
+  foundation. An explicitly selected copied Favorites tree and `profile.cfg`,
+  or the canonical pair on one explicitly selected already-mounted Linux USB
+  volume, must produce two identical complete observations before review; the
+  whole acquisition is checked again before atomic acceptance. The mounted path
+  requires current mount-namespace and USB block-device evidence, accepts a
+  read-only volume, and proves `profile.cfg` is on that same filesystem.
+  Endpoint/source binding, source-change confirmation, sanitized failures,
+  last-good retention and unknown restart freshness remain explicit. This adds
+  no sync trigger, scanner/Favorites write, path discovery, storage-mode switch,
+  CLI/API route, physical-volume qualification or installed integration.
 - Add a disabled-by-default, internal SDS200 front-panel qualification harness.
   It accepts one typed inventory key only after exact firmware and two stable
   visible-context preflights on the existing direct-UDP owner, requires a fresh

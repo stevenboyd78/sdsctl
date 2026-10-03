@@ -1775,13 +1775,13 @@ def _reject_ambiguous_discovered_candidates(
         ] = candidate
 
 
-def qualify_favorites_usb_storage_path(
+def _select_explicit_favorites_usb_storage(
     path: Path,
-    mountinfo_path: Path = DEFAULT_LINUX_MOUNTINFO_PATH,
+    mountinfo_path: Path,
     *,
-    sys_dev_block_directory: Path = DEFAULT_LINUX_SYS_DEV_BLOCK_DIRECTORY,
-) -> FavoritesUsbStorageQualification:
-    """Qualify one explicit mounted scanner path through current Linux evidence."""
+    sys_dev_block_directory: Path,
+) -> tuple[LinuxMountInfoEntry, LinuxBlockDeviceEvidence]:
+    """Select exact current mount/device evidence without reading another target."""
 
     if not isinstance(
         path,
@@ -1924,10 +1924,44 @@ def qualify_favorites_usb_storage_path(
             ),
         ) from error
 
-    qualification = _qualify_favorites_usb_storage_target_evidence(
-        mount,
-        block_device,
+    return mount, block_device
+
+
+def _observe_favorites_usb_storage_path(
+    path: Path,
+    mountinfo_path: Path = DEFAULT_LINUX_MOUNTINFO_PATH,
+    *,
+    sys_dev_block_directory: Path = DEFAULT_LINUX_SYS_DEV_BLOCK_DIRECTORY,
+) -> FavoritesUsbStorageCandidate:
+    """Observe one explicit readable USB target, including read-only mounts."""
+
+    mount, block_device = _select_explicit_favorites_usb_storage(
+        path,
+        mountinfo_path,
+        sys_dev_block_directory=sys_dev_block_directory,
     )
+    candidate = _observe_favorites_usb_storage_candidate(mount, block_device)
+
+    _require_current_mount_evidence(mount, mountinfo_path)
+    _require_current_block_device_evidence(block_device, sys_dev_block_directory)
+
+    return candidate
+
+
+def qualify_favorites_usb_storage_path(
+    path: Path,
+    mountinfo_path: Path = DEFAULT_LINUX_MOUNTINFO_PATH,
+    *,
+    sys_dev_block_directory: Path = DEFAULT_LINUX_SYS_DEV_BLOCK_DIRECTORY,
+) -> FavoritesUsbStorageQualification:
+    """Qualify one explicit writable scanner path through current Linux evidence."""
+
+    mount, block_device = _select_explicit_favorites_usb_storage(
+        path,
+        mountinfo_path,
+        sys_dev_block_directory=sys_dev_block_directory,
+    )
+    qualification = _qualify_favorites_usb_storage_target_evidence(mount, block_device)
 
     _require_current_mount_evidence(
         mount,

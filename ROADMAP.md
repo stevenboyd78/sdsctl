@@ -157,12 +157,16 @@ the byte-identical normal display service returned. This does not broaden
 front-panel-control authorization.
 
 The first offline profile-acquisition foundation is also implemented internally.
-It pairs one explicitly selected copied Favorites tree with one explicit
-`profile.cfg`, requires two identical full reads before review, and rechecks the
-complete acquisition before atomically accepting the display profile. Restart
-restores last-good data with unknown freshness until another authorized
-acquisition. It is not wired to a sync job, CLI/API, App, USB storage mode, FTP
-path or live scanner, and it cannot write scanner settings or Favorites.
+It pairs either one explicitly selected copied Favorites tree with one explicit
+`profile.cfg`, or the canonical pair on one explicitly selected already-mounted
+Linux USB volume. The mounted path requires current mount-namespace and USB
+block-device evidence, permits a read-only volume and proves the profile remains
+on that filesystem. Both paths require two identical full reads before review
+and recheck the complete acquisition before atomically accepting the display
+profile. Restart restores last-good data with unknown freshness until another
+authorized acquisition. It is not wired to a sync job, CLI/API, App, USB
+storage-mode transition, FTP path or live scanner, and it cannot write scanner
+settings or Favorites. No physical scanner-volume qualification is claimed.
 
 ### Low-priority TUI usability follow-up
 

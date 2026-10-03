@@ -10,10 +10,19 @@ from uuid import UUID
 
 import pytest
 
+import sds200.scanner_display_profile_favorites as favorites_profile
 from sds200.favorites_storage import FavoritesStorageDocument, FavoritesStorageSnapshot
+from sds200.favorites_storage_usb import (
+    FavoritesUsbStorageCandidate,
+    FavoritesUsbStorageQualificationError,
+    FavoritesUsbStorageQualificationReason,
+    LinuxBlockDeviceEvidence,
+    LinuxMountInfoEntry,
+)
 from sds200.scanner_display_profile_favorites import (
     FavoritesCopiedTreeDisplayProfileSource,
     FavoritesDisplayProfileAcquisition,
+    FavoritesMountedUsbDisplayProfileSource,
     PairedFavoritesDisplayProfileSource,
     PersistentFavoritesScannerDisplayProfile,
 )
@@ -196,6 +205,166 @@ def test_copied_tree_source_refuses_missing_profile_without_private_path(tmp_pat
 
     error = _assert_error(ProfileStorageFailure.SOURCE_UNAVAILABLE, source.read_acquisition)
     assert str(tmp_path) not in str(error)
+
+
+def _mounted_usb_candidate(tmp_path: Path) -> FavoritesUsbStorageCandidate:
+    mount = tmp_path / "mounted-scanner"
+    favorites = mount / "BCDx36HP" / "favorites_lists"
+    favorites.mkdir(parents=True)
+    (favorites / "f_list.cfg").write_bytes(FAVORITES.catalog_bytes)
+    document = FAVORITES.documents[0]
+    (favorites / document.filename).write_bytes(document.content)
+    status = mount.stat()
+    major, minor = os.major(status.st_dev), os.minor(status.st_dev)
+    evidence = LinuxMountInfoEntry(
+        mount_id=1,
+        parent_id=2,
+        device_major=major,
+        device_minor=minor,
+        root="/",
+        mount_point=mount,
+        mount_options=("ro",),
+        optional_fields=(),
+        filesystem_type="vfat",
+        mount_source="/dev/test",
+        super_options=("ro",),
+    )
+    block = LinuxBlockDeviceEvidence(
+        device_major=major,
+        device_minor=minor,
+        sysfs_path=Path("/sys/devices/test/block/sdz1"),
+        device_name="sdz1",
+        usb_ancestor_path=Path("/sys/devices/test/usb1/1-1"),
+        removable=True,
+    )
+    return FavoritesUsbStorageCandidate(evidence, block, mount, favorites, FAVORITES)
+
+
+def test_mounted_usb_source_reads_canonical_profile_without_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate = _mounted_usb_candidate(tmp_path)
+    profile = candidate.mount_directory / "BCDx36HP" / "profile.cfg"
+    profile.write_bytes(PROFILE)
+    before = profile.read_bytes(), profile.stat().st_mtime_ns
+    calls: list[Path] = []
+
+    def observe(path: Path, *args: object, **kwargs: object) -> FavoritesUsbStorageCandidate:
+        calls.append(path)
+        return candidate
+
+    monkeypatch.setattr(favorites_profile, "_observe_favorites_usb_storage_path", observe)
+
+    result = FavoritesMountedUsbDisplayProfileSource(
+        mount_path=candidate.mount_directory
+    ).read_acquisition()
+
+    assert result == _acquisition()
+    assert calls == [candidate.mount_directory, candidate.mount_directory]
+    assert (profile.read_bytes(), profile.stat().st_mtime_ns) == before
+
+
+def test_mounted_usb_source_refuses_profile_change_between_complete_passes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate = _mounted_usb_candidate(tmp_path)
+    profile = candidate.mount_directory / "BCDx36HP" / "profile.cfg"
+    profile.write_bytes(PROFILE)
+    calls = 0
+
+    def observe(*args: object, **kwargs: object) -> FavoritesUsbStorageCandidate:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            profile.write_bytes(OTHER_PROFILE)
+        return candidate
+
+    monkeypatch.setattr(favorites_profile, "_observe_favorites_usb_storage_path", observe)
+    source = FavoritesMountedUsbDisplayProfileSource(mount_path=candidate.mount_directory)
+
+    _assert_error(ProfileStorageFailure.SOURCE_CHANGED, source.read_acquisition)
+
+
+def test_mounted_usb_source_refuses_missing_profile_without_private_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate = _mounted_usb_candidate(tmp_path)
+    monkeypatch.setattr(
+        favorites_profile,
+        "_observe_favorites_usb_storage_path",
+        lambda *args, **kwargs: candidate,
+    )
+    source = FavoritesMountedUsbDisplayProfileSource(
+        mount_path=candidate.mount_directory
+    )
+
+    error = _assert_error(
+        ProfileStorageFailure.SOURCE_UNAVAILABLE,
+        source.read_acquisition,
+    )
+
+    assert str(tmp_path) not in str(error)
+
+
+def test_mounted_usb_source_redacts_usb_evidence_refusal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    private_path = tmp_path / "PRIVATE_USB_TARGET"
+
+    def refuse(*args: object, **kwargs: object) -> FavoritesUsbStorageCandidate:
+        raise FavoritesUsbStorageQualificationError(
+            FavoritesUsbStorageQualificationReason.NOT_USB,
+            private_path,
+            "PRIVATE_DEVICE_EVIDENCE",
+        )
+
+    monkeypatch.setattr(
+        favorites_profile,
+        "_observe_favorites_usb_storage_path",
+        refuse,
+    )
+    source = FavoritesMountedUsbDisplayProfileSource(mount_path=private_path)
+
+    error = _assert_error(
+        ProfileStorageFailure.SOURCE_UNAVAILABLE,
+        source.read_acquisition,
+    )
+
+    assert str(tmp_path) not in str(error)
+    assert "PRIVATE_DEVICE_EVIDENCE" not in str(error)
+
+
+def test_mounted_usb_source_refuses_profile_from_another_device(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate = _mounted_usb_candidate(tmp_path)
+    profile = candidate.mount_directory / "BCDx36HP" / "profile.cfg"
+    profile.write_bytes(PROFILE)
+    observed = favorites_profile._source(profile)
+    other_device = os.makedev(
+        candidate.mount.device_major,
+        candidate.mount.device_minor + 1,
+    )
+    foreign = favorites_profile._File(
+        observed.data,
+        (other_device, *observed.identity[1:]),
+    )
+    monkeypatch.setattr(
+        favorites_profile,
+        "_observe_favorites_usb_storage_path",
+        lambda *args, **kwargs: candidate,
+    )
+    monkeypatch.setattr(favorites_profile, "_source", lambda path: foreign)
+    source = FavoritesMountedUsbDisplayProfileSource(
+        mount_path=candidate.mount_directory
+    )
+
+    _assert_error(ProfileStorageFailure.SOURCE_CHANGED, source.read_acquisition)
 
 
 def test_favorites_import_is_atomic_and_restores_with_unknown_freshness(state: Path) -> None:

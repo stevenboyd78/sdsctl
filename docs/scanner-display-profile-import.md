@@ -191,20 +191,26 @@ remaining renderer, App configuration and acquisition scope.
 
 ## Internal Favorites-sync acquisition foundation
 
-The development source includes a separate internal, read-only acquisition
-adapter for an explicitly selected copied Favorites tree and explicit absolute
-`profile.cfg` path. It requires two identical complete Favorites/profile reads
-before review and reacquires that complete observation before atomically
-accepting the profile. Missing, malformed, partial or changed input preserves
-last-good state; endpoint/source identity and a manual-to-sync source change are
-explicitly reviewed. Raw Favorites bytes are not added to accepted profile
-state, and restart reports the restored profile with unknown source freshness.
+The development source includes separate internal, read-only acquisition
+adapters for an explicitly selected copied Favorites tree and explicit absolute
+`profile.cfg` path, or for the canonical pair on one explicitly selected
+already-mounted Linux USB volume. The mounted adapter reads
+`BCDx36HP/favorites_lists` and sibling `BCDx36HP/profile.cfg`, requires current
+mount-namespace and USB block-device evidence, accepts read-only media, and
+refuses a profile on another filesystem. Both adapters require two identical
+complete Favorites/profile reads before review and reacquire that complete
+observation before atomically accepting the profile. Missing, malformed,
+partial or changed input preserves last-good state; endpoint/source identity and
+a manual-to-sync source change are explicitly reviewed. Raw Favorites bytes are
+not added to accepted profile state, and restart reports the restored profile
+with unknown source freshness.
 
 This is an offline foundation, not another command in this runbook. It is not
 exported through the public package, daemon API, browser adapter, App options or
 Favorites synchronization workflow. It performs no discovery, USB storage-mode
-change, network acquisition, scanner command or Favorites write. Those runtime
-and installed qualification steps remain in the
+change, mount operation, network acquisition, scanner command or Favorites
+write. The mounted-USB behavior is synthetically qualified only; physical,
+runtime and installed qualification steps remain in the
 [work packet](mimic-sds-work-packet.md#remaining-acquisition-and-synchronization-contract).
 
 ## Browser Upload/Refresh development adapter

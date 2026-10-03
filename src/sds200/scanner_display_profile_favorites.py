@@ -10,6 +10,7 @@ accepted display profile is atomically replaced.
 
 from __future__ import annotations
 
+import os
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -20,6 +21,13 @@ from uuid import UUID
 
 from .favorites_storage import FavoritesStorageSnapshot, FavoritesStorageSource
 from .favorites_storage_local import FavoritesCopiedTreeStorageSource
+from .favorites_storage_usb import (
+    DEFAULT_LINUX_MOUNTINFO_PATH,
+    DEFAULT_LINUX_SYS_DEV_BLOCK_DIRECTORY,
+    FavoritesUsbStorageCandidate,
+    FavoritesUsbStorageQualificationError,
+    _observe_favorites_usb_storage_path,
+)
 from .scanner_display_profile import MAX_PROFILE_BYTES
 from .scanner_display_profile_state import (
     DisplayProfileBinding,
@@ -134,6 +142,53 @@ class FavoritesCopiedTreeDisplayProfileSource:
             lambda: _source(self._profile_path).data,
         )
         return source.read_acquisition()
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class _MountedUsbAcquisitionPass:
+    candidate: FavoritesUsbStorageCandidate
+    profile: _File
+
+
+class FavoritesMountedUsbDisplayProfileSource:
+    """Read the canonical profile beside one explicit mounted USB Favorites tree."""
+
+    def __init__(
+        self,
+        *,
+        mount_path: Path,
+        mountinfo_path: Path = DEFAULT_LINUX_MOUNTINFO_PATH,
+        sys_dev_block_directory: Path = DEFAULT_LINUX_SYS_DEV_BLOCK_DIRECTORY,
+    ) -> None:
+        self._mount_path = _path(mount_path)
+        if not isinstance(mountinfo_path, Path) or not isinstance(
+            sys_dev_block_directory, Path
+        ):
+            raise TypeError("Mounted USB evidence paths must be pathlib.Path.")
+        self._mountinfo_path = mountinfo_path
+        self._sys_dev_block_directory = sys_dev_block_directory
+
+    def _read_pass(self) -> _MountedUsbAcquisitionPass:
+        try:
+            candidate = _observe_favorites_usb_storage_path(
+                self._mount_path,
+                self._mountinfo_path,
+                sys_dev_block_directory=self._sys_dev_block_directory,
+            )
+        except FavoritesUsbStorageQualificationError:
+            raise _error(ProfileStorageFailure.SOURCE_UNAVAILABLE) from None
+        profile = _source(candidate.mount_directory / "BCDx36HP" / "profile.cfg")
+        device = profile.identity[0]
+        if (os.major(device), os.minor(device)) != candidate.mount.device_number:
+            raise _error(ProfileStorageFailure.SOURCE_CHANGED)
+        return _MountedUsbAcquisitionPass(candidate, profile)
+
+    def read_acquisition(self) -> FavoritesDisplayProfileAcquisition:
+        first = self._read_pass()
+        second = self._read_pass()
+        if first != second:
+            raise _error(ProfileStorageFailure.SOURCE_CHANGED)
+        return FavoritesDisplayProfileAcquisition(second.candidate.snapshot, second.profile.data)
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -278,6 +333,7 @@ __all__ = [
     "FavoritesCopiedTreeDisplayProfileSource",
     "FavoritesDisplayProfileAcquisition",
     "FavoritesDisplayProfileAcquisitionSource",
+    "FavoritesMountedUsbDisplayProfileSource",
     "PairedFavoritesDisplayProfileSource",
     "PersistentFavoritesScannerDisplayProfile",
 ]
