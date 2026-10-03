@@ -314,8 +314,13 @@ last-good profile data, but reports `unknown_freshness` because no source read i
 performed implicitly. This deliberately keeps renderers fail-closed until a
 future authorized integration performs a fresh acquisition and coherent owner
 reload. The module has no public export, CLI/API/App wiring or background job.
-Copied-tree and already-mounted USB qualification are synthetic/offline only;
-physical scanner-volume and supported network acquisition remain separate work.
+Copied-tree qualification remains synthetic/offline. The already-mounted USB
+source passed a bounded physical SDS100 read-only gate through a direct
+development invocation: the exact volume was remounted read-only before file
+access, four paired observations agreed, the profile parsed, all 15 Favorites
+documents bound without unresolved records, the relevant content/metadata
+manifest remained exact and the volume was safely unmounted. SDS200 USB and
+supported network acquisition remain separate work.
 
 ### Remaining acquisition and synchronization contract
 
@@ -442,9 +447,10 @@ and local daemon cache reload. The private upload/Ingress adapter implements
 guarded staging locally. The internal copied-tree and already-mounted USB
 Favorites/profile adapters now implement coherent read/review/atomic last-good
 behavior; App path/configuration wiring, renderer/subscriber refresh, authorized
-sync orchestration, physical USB qualification and network acquisition remain
-future integration work. None of the planned paths above has been created or
-activated on live hosts.
+sync orchestration, SDS200 USB qualification and network acquisition remain
+future integration work. No installed/runtime acquisition path has been created
+or activated; the physical SDS100 evidence used only the exact direct
+development source against an operator-present read-only mount.
 
 ## 2. Shared screen descriptor and live-data mapping
 
@@ -1217,10 +1223,11 @@ programming, power-off, mass-storage switching or speculative key sequences.
    exact already-mounted Linux USB foundations now cover endpoint/source binding,
    two-pass complete reads, commit-time whole-acquisition recheck,
    partial/failed/missing/changed input, source conflict, sanitized failures and
-   atomic last-good retention. Next, physically qualify the read-only mounted
-   path and independently qualify any supported network path, then design
-   explicit sync orchestration without changing scanner write contracts or
-   treating offline tests as installed acceptance.
+   atomic last-good retention. The read-only mounted path has passed one bounded
+   physical SDS100 gate with exact non-mutation and safe-unmount evidence. Next,
+   independently qualify any supported network path, then design explicit sync
+   orchestration without changing scanner write contracts or treating a direct
+   development test as installed acceptance.
 5. **Front-panel controls:** use the internal typed, same-owner, one-press
    qualification boundary to gather exact supervised model/firmware/context
    evidence first. Then implement server-side capability/permission refusal,

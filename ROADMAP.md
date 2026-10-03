@@ -166,7 +166,12 @@ and recheck the complete acquisition before atomically accepting the display
 profile. Restart restores last-good data with unknown freshness until another
 authorized acquisition. It is not wired to a sync job, CLI/API, App, USB
 storage-mode transition, FTP path or live scanner, and it cannot write scanner
-settings or Favorites. No physical scanner-volume qualification is claimed.
+settings or Favorites. A bounded direct development invocation physically
+accepted the read-only path against an SDS100 mass-storage volume: four paired
+observations agreed, the profile parsed, all 15 Favorites documents bound with
+no unresolved records, the complete relevant file/metadata manifest remained
+exact and the volume was safely unmounted. This does not qualify installed
+orchestrator behavior, SDS200 USB or network profile acquisition.
 
 ### Low-priority TUI usability follow-up
 

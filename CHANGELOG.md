@@ -18,7 +18,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   Endpoint/source binding, source-change confirmation, sanitized failures,
   last-good retention and unknown restart freshness remain explicit. This adds
   no sync trigger, scanner/Favorites write, path discovery, storage-mode switch,
-  CLI/API route, physical-volume qualification or installed integration.
+  CLI/API route or installed integration. A bounded physical SDS100 acceptance
+  remounted the exact volume read-only before file access, proved four identical
+  paired production observations, parsed the profile, bound all 15 Favorites
+  documents without unresolved records, preserved an exact before/after
+  content-and-metadata manifest, and safely unmounted the volume.
 - Add a disabled-by-default, internal SDS200 front-panel qualification harness.
   It accepts one typed inventory key only after exact firmware and two stable
   visible-context preflights on the existing direct-UDP owner, requires a fresh

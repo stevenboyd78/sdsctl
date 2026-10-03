@@ -209,8 +209,12 @@ This is an offline foundation, not another command in this runbook. It is not
 exported through the public package, daemon API, browser adapter, App options or
 Favorites synchronization workflow. It performs no discovery, USB storage-mode
 change, mount operation, network acquisition, scanner command or Favorites
-write. The mounted-USB behavior is synthetically qualified only; physical,
-runtime and installed qualification steps remain in the
+write. The mounted-USB source also passed a bounded physical SDS100 read-only
+gate through a direct development invocation: the exact volume was remounted
+read-only before file access, four complete paired observations agreed, the
+profile parsed, all 15 Favorites documents bound without unresolved records,
+the relevant content/metadata manifest remained exact and the volume was safely
+unmounted. Runtime, installed, SDS200 USB and network qualification remain in the
 [work packet](mimic-sds-work-packet.md#remaining-acquisition-and-synchronization-contract).
 
 ## Browser Upload/Refresh development adapter
