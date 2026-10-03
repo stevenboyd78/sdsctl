@@ -335,9 +335,20 @@ socket. The selected mount must be read-only; a writable automount is refused
 before profile access. It previews before approval, reacquires at commit and
 uses the one-review coordinator above. It performs no discovery, mount,
 storage-mode transition or scanner/Favorites write. This is not App/Ingress or
-catalog wiring, and the command path still requires its own bounded physical
-acceptance; the earlier SDS100 result qualified the underlying production source
-through a direct development invocation only.
+catalog wiring. The implementation commit deliberately left its own bounded
+physical acceptance pending; the earlier SDS100 result qualified the underlying
+production source through a direct development invocation only.
+
+That separate command-path acceptance is now complete against the same physical
+SDS100. The exact committed CLI initialized only a private test-state directory,
+read an explicitly selected `ro,nosuid,nodev,noexec` mount, completed its four
+paired production observations, durably accepted one `favorites_sync` revision
+and received one exact confirmation from a real bounded Unix-socket daemon
+profile owner configured with scanner I/O forbidden. The owner reported the
+same endpoint/revision, `unknown_freshness` and no failure. The relevant 17-file,
+1,411,024-byte content/identity/metadata digest was identical before and after;
+the volume was safely unmounted. No scanner command, Favorites/profile write,
+installed daemon, App, Pi, Home Assistant or catalog state participated.
 
 ### Remaining acquisition and synchronization contract
 
@@ -469,10 +480,10 @@ claiming confirmation; the owner frame context then exposes that same accepted
 revision with unknown sync freshness. Installed source selection, App
 path/configuration and browser-administrator workflow wiring, SDS200 USB
 qualification and network acquisition remain future integration work. The local
-development CLI now provides an explicit read-only mounted-USB import path, but
-it has not yet passed its separate physical command-path acceptance. The earlier
-SDS100 evidence used only the exact direct development source against an
-operator-present read-only mount.
+development CLI now provides an explicit read-only mounted-USB import path and
+has passed its separate physical SDS100 command-path acceptance. The earlier
+underlying-source gate remains distinct evidence; neither acceptance qualifies
+installed orchestration, SDS200 USB acquisition or a network source.
 
 ## 2. Shared screen descriptor and live-data mapping
 

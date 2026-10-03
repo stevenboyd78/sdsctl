@@ -267,8 +267,19 @@ different revision, preserve the accepted state, inspect status, and use the
 existing local `reload` command when appropriate; **do not repeat the mounted
 USB import merely to obtain green reload evidence**. Raw profile/Favorites bytes
 are not printed. This standalone local command is not App, Ingress or published
-catalog wiring, and it has not yet passed its separate physical command-path
-acceptance.
+catalog wiring.
+
+The exact development command passed a separate bounded physical SDS100
+acceptance. The selected partition was mounted `ro,nosuid,nodev,noexec`; four
+complete Favorites/profile observations agreed; one private accepted revision
+was followed by one confirmed exact endpoint/revision reload through a real
+bounded local Unix-socket daemon profile owner with scanner I/O forbidden. The
+owner reported `favorites_sync`, `unknown_freshness` and no failure. A manifest
+covering the relevant 17 files, 1,411,024 bytes, identities, modes, sizes,
+timestamps and content digests was exactly equal before and after, and the
+volume was safely unmounted. This qualifies the explicit mounted-SDS100 command
+path only—not discovery, mounting, scanner mode changes, installed
+orchestration, SDS200 USB or network acquisition.
 
 ## Browser Upload/Refresh development adapter
 

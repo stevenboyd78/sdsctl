@@ -182,9 +182,11 @@ remain pending. A development-only local-administrator
 `scanner-display-profile import-mounted-usb` command now selects one existing
 read-only USB mount and stable source UUID, previews and reacquires the complete
 pair, accepts once and requests the exact owner reload. It never discovers,
-mounts, changes scanner mode or writes scanner/Favorites data. Its separate
-physical command-path acceptance remains pending; the earlier SDS100 gate used
-the underlying source directly.
+mounts, changes scanner mode or writes scanner/Favorites data. Its exact command
+path subsequently passed a separate bounded physical SDS100 acceptance: four
+complete observations agreed, the private accepted revision and local owner
+revision matched exactly, the source manifest remained byte-for-byte and
+metadata identical, and the read-only volume was safely unmounted.
 
 ### Low-priority TUI usability follow-up
 

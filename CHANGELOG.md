@@ -41,6 +41,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   volume, switches scanner storage mode, writes scanner/Favorites data or adds
   an App/browser route. Reload uncertainty preserves accepted state and directs
   recovery through status/reload rather than repeating the acquisition.
+  The exact command then passed a bounded physical SDS100 gate: the selected
+  USB partition was mounted read-only, four complete observations agreed, one
+  private acceptance and one exact local owner reload were confirmed, the
+  relevant 17-file/1,411,024-byte content-and-metadata manifest was unchanged,
+  and the volume was safely unmounted.
 - Add a disabled-by-default, internal SDS200 front-panel qualification harness.
   It accepts one typed inventory key only after exact firmware and two stable
   visible-context preflights on the existing direct-UDP owner, requires a fresh
