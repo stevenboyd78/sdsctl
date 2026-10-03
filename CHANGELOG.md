@@ -8,6 +8,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add an internal, read-only Favorites-sync display-profile acquisition
+  foundation. An explicitly selected copied Favorites tree and `profile.cfg`
+  must produce two identical complete observations before review, and the whole
+  acquisition is checked again before atomic acceptance. Endpoint/source
+  binding, source-change confirmation, sanitized failures, last-good retention
+  and unknown restart freshness remain explicit. This adds no sync trigger,
+  scanner/Favorites write, path discovery, storage-mode switch, CLI/API route or
+  installed integration.
 - Add a disabled-by-default, internal SDS200 front-panel qualification harness.
   It accepts one typed inventory key only after exact firmware and two stable
   visible-context preflights on the existing direct-UDP owner, requires a fresh

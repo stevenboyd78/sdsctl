@@ -153,7 +153,8 @@ sync, a CLI/API route, automatic profile selection or a scanner write.
 local-file adapter. The local development branch now connects it to explicit
 daemon configuration and local administrator commands, described below; the
 separate upload adapter does not alter this read-only import contract. Installed
-App wiring and Favorites sync remain pending. It requires three explicit inputs:
+App wiring and Favorites-sync runtime integration remain pending. It requires
+three explicit inputs:
 the selected endpoint UUID, an existing operator-selected source `profile.cfg`,
 and a separate private accepted-state directory. It does not discover paths or
 create the planned installation paths listed below.
@@ -279,16 +280,45 @@ Browser restart never posts, and loss of an action response stops further writes
 pending review. Synthetic tests cover cancellation during commit and abrupt
 process exit as well as the browser UI and administrator boundaries.
 
+### Offline Favorites-sync acquisition foundation
+
+`src/sds200/scanner_display_profile_favorites.py` now supplies the first
+internal, read-only acquisition boundary for this remaining slice. It accepts an
+explicit Favorites source and profile reader, or an explicit copied
+`favorites_lists` directory plus an explicit absolute `profile.cfg` path. It
+does not discover either path, start synchronization, switch scanner storage
+modes, contact a scanner, open a listener or write scanner/Favorites data.
+
+One observation contains the exact immutable Favorites snapshot and exact
+profile bytes. Two complete, byte-identical observations are required before a
+review begins. Commit consumes the exact review once, takes the existing
+exclusive durable-state lock, confirms that accepted state has not changed,
+then reacquires and compares the complete Favorites/profile observation before
+using the existing atomic accepted-state writer. A partial, missing, malformed,
+changed or refused acquisition cannot replace last-good state. Endpoint and
+`favorites_sync` source binding are exact, and changing from a manual source
+still requires the existing explicit source-change confirmation.
+
+Only validated profile bytes and opaque provenance enter accepted state; raw
+Favorites catalog/document bytes are never persisted there. Restart can restore
+last-good profile data, but reports `unknown_freshness` because no source read is
+performed implicitly. This deliberately keeps renderers fail-closed until a
+future authorized integration performs a fresh acquisition and coherent owner
+reload. The module has no public export, CLI/API/App wiring or background job.
+Copied-tree qualification is synthetic/offline only; already-mounted USB and
+supported network acquisition remain separate work.
+
 ### Remaining acquisition and synchronization contract
 
 Introduce a scanner-display profile type separate from existing sdsctl connection
 profiles. Import an explicitly selected `profile.cfg`, or acquire that exact
 file as an optional part of an operator-selected Favorites synchronization.
 
-The current copied/USB/FTP Favorites storage adapters operate on Favorites
-catalogs and documents; they do not yet provide this scanner-display import.
-Add a bounded acquisition contract rather than casually broadening accepted
-Favorites paths or assuming `GLT` returns the profile. A USB read requires
+The current USB/FTP Favorites storage adapters operate on Favorites catalogs and
+documents; they do not yet provide this scanner-display import. The internal
+copied-tree foundation above establishes the bounded acquisition contract but is
+not a runtime sync integration. Do not casually broaden accepted Favorites paths
+or assume `GLT` returns the profile. A USB read requires
 already-accessible scanner storage or a separately coordinated storage-mode
 workflow. Do not switch modes, interrupt scanning, expose ports, or open a
 competing scanner-control session just to refresh a theme.
@@ -400,8 +430,10 @@ alter recordings, scanner programming, connection credentials or display-local
 presentation choices. The internal durable manual-file adapter implements the
 accepted-state portion locally, with explicit standalone manifest/command wiring
 and local daemon cache reload. The private upload/Ingress adapter implements
-guarded staging locally; App path/configuration wiring, renderer/subscriber
-refresh and Favorites acquisition remain future integration work. None of the
+guarded staging locally. The internal copied-tree Favorites/profile adapter now
+implements coherent read/review/atomic last-good behavior; App path/configuration
+wiring, renderer/subscriber refresh, authorized sync orchestration, mounted-USB
+and network acquisition remain future integration work. None of the
 planned paths above has been created or activated on live hosts.
 
 ## 2. Shared screen descriptor and live-data mapping
@@ -1171,10 +1203,13 @@ programming, power-off, mass-storage switching or speculative key sequences.
    the disclosure performs no request or scanner action, and malformed or
    unexpectedly enabled input fails closed. No installed HA or physical
    acceptance is claimed.
-4. **Profile acquisition during Favorites sync:** independently qualify copied,
-   already-mounted USB and any supported network path. Test wrong endpoint,
-   changed file during read, partial/failed sync, missing profile, source conflict
-   and atomic last-good retention. Keep scanner write contracts unchanged.
+4. **Profile acquisition during Favorites sync:** the internal copied-tree
+   foundation now covers exact endpoint/source binding, two-pass complete reads,
+   commit-time whole-acquisition recheck, partial/failed/missing/changed input,
+   source conflict, sanitized failures and atomic last-good retention. Next,
+   independently qualify already-mounted USB and any supported network path,
+   then design explicit sync orchestration without changing scanner write
+   contracts or treating offline tests as installed acceptance.
 5. **Front-panel controls:** use the internal typed, same-owner, one-press
    qualification boundary to gather exact supervised model/firmware/context
    evidence first. Then implement server-side capability/permission refusal,

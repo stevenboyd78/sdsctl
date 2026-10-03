@@ -156,6 +156,14 @@ pressed `Q` from the Waterfall, both transient units exited successfully, and
 the byte-identical normal display service returned. This does not broaden
 front-panel-control authorization.
 
+The first offline profile-acquisition foundation is also implemented internally.
+It pairs one explicitly selected copied Favorites tree with one explicit
+`profile.cfg`, requires two identical full reads before review, and rechecks the
+complete acquisition before atomically accepting the display profile. Restart
+restores last-good data with unknown freshness until another authorized
+acquisition. It is not wired to a sync job, CLI/API, App, USB storage mode, FTP
+path or live scanner, and it cannot write scanner settings or Favorites.
+
 ### Low-priority TUI usability follow-up
 
 - For remote-daemon connections, show the connected daemon's reported application

@@ -70,6 +70,7 @@ class DisplayProfileSourceStatus(StrEnum):
     INVALID = "invalid_source"
     UNAVAILABLE = "source_unavailable"
     UNSAFE = "unsafe_source"
+    UNKNOWN = "unknown_freshness"
 
 
 @dataclass(frozen=True, slots=True)
@@ -295,8 +296,7 @@ def _decode(file: _File, endpoint: UUID) -> _State:
             or not all(isinstance(value, str) for value in record.values())
         ):
             raise ValueError()
-        if record["source_kind"] != DisplayProfileSourceKind.MANUAL_IMPORT.value:
-            raise ValueError()
+        source_kind = DisplayProfileSourceKind(record["source_kind"])
         data = base64.b64decode(record["raw"], validate=True)
         if base64.b64encode(data).decode("ascii") != record["raw"]:
             raise ValueError()
@@ -306,9 +306,7 @@ def _decode(file: _File, endpoint: UUID) -> _State:
             or profile.revision != record["revision"]
         ):
             raise ValueError()
-        binding = DisplayProfileBinding(
-            endpoint, _uuid(record["source_id"]), DisplayProfileSourceKind.MANUAL_IMPORT
-        )
+        binding = DisplayProfileBinding(endpoint, _uuid(record["source_id"]), source_kind)
         provenance = DisplayProfileProvenance(
             binding,
             datetime.fromisoformat(record["acquired_at"]),
