@@ -620,18 +620,13 @@ class DaemonReadOnlyApi:
                 f"interface: {request.operation!r}.",
             )
 
-        control_operations = self._control_operations()
-        if (
-            operation in DAEMON_API_CONTROL_OPERATIONS
-            and operation not in control_operations
-        ):
-            return DaemonApiResponse.failure(
-                request.request_id,
-                DaemonApiErrorCode.UNSUPPORTED_OPERATION,
-                "The daemon does not advertise this scanner control operation.",
-            )
-
-        if operation in control_operations:
+        if operation in DAEMON_API_CONTROL_OPERATIONS:
+            if operation not in self._control_operations():
+                return DaemonApiResponse.failure(
+                    request.request_id,
+                    DaemonApiErrorCode.UNSUPPORTED_OPERATION,
+                    "The daemon does not advertise this scanner control operation.",
+                )
             try:
                 _validate_control_params(operation, request.params)
             except _ControlParameterError as error:

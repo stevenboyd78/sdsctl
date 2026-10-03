@@ -70,6 +70,10 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Fixed
 
+- Keep ordinary daemon read operations independent of scanner-control capability
+  probing. Display-profile preflight and other non-control requests no longer
+  consult front-panel availability before dispatch; capability/Hello responses
+  and actual control operations retain their existing availability checks.
 - Keep Home Assistant Waterfall cards at a stable density-based height when an
   external theme applies generic percentage heights to an automatic grid row.
   Account for the history canvas border when sizing its bitmap, and fill the

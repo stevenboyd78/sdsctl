@@ -51,6 +51,26 @@ class FakeRuntime:
         return FakeSnapshot(self.payload)
 
 
+class ReadOnlyRuntimeWithForbiddenControlProbe:
+    """Fail if an ordinary read consults scanner-control capability state."""
+
+    @property
+    def front_panel_control_available(self) -> bool:
+        raise AssertionError("Read-only requests must not probe front-panel control.")
+
+    def snapshot(self) -> FakeSnapshot:
+        raise AssertionError("Ping must not read the scanner runtime snapshot.")
+
+
+def test_read_only_request_does_not_probe_front_panel_control() -> None:
+    api = DaemonReadOnlyApi(ReadOnlyRuntimeWithForbiddenControlProbe())
+
+    response = api.handle_payload(request_payload(DaemonApiOperation.PING.value))
+
+    assert response.error is None
+    assert response.result == {"pong": True}
+
+
 def test_connected_clients_is_local_only_and_separate_from_runtime() -> None:
     from sds200.daemon_remote_server import (
         DAEMON_REMOTE_CONTROL_OPERATIONS,
