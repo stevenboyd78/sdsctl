@@ -131,9 +131,15 @@ candidate's Home Assistant runtime has a separate strict default-false opt-in
 that maps only to the daemon flag. The published v0.30.0 seven-field catalog is
 unchanged; only the source-pinned manual acceptance stager adds the switch to a
 matching private manifest. Staging does not install, start or press the scanner.
-This candidate is not installed and the closed physical press is not repeated.
-No milestone/release number is assigned. Waterfall-screen fidelity remains a
-separate slice. The later exact
+The exact source-pinned candidate later completed a bounded visual-only Home
+Assistant Ingress installation. Read-only live checks verified one enable flag,
+SDS200 firmware `Version 1.26.01`, `Trunk Scan` / `trunk_scan`, inactive
+recording and exactly `M` available; the user reported a visual pass. No Menu
+POST or scanner key was sent, and the exact normal App source, image, options,
+network settings, App data, media contents and Home Assistant Core state were
+restored. The closed physical press was not repeated. No milestone/release
+number is assigned, and the other 26 keys remain unavailable. Waterfall-screen
+fidelity remains a separate slice. The later exact
 `85042e6` daemon-backed TUI waterfall passed authenticated live 240-bin
 streaming and user-reported visual/interaction acceptance on the 100x30 small
 Pi, followed by successful guarded restoration and no stale consumer. A later

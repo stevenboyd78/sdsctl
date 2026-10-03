@@ -1002,6 +1002,7 @@ shutdown continues.
 | `GET` | `/api/v1/audio` | Validated daemon-owned PCMU v1 binary frame stream |
 | `GET` | `/api/v1/waterfall` | Validated ordered daemon waterfall NDJSON or negotiated SSE stream |
 | `GET` | `/api/v1/scanner/front-panel` | Complete fail-closed front-panel inventory; no key dispatch |
+| `POST` | `/api/v1/scanner/front-panel/menu` | Issue the one qualified SDS200 Menu press when the exact control policy, authorization, firmware and fresh context checks all pass |
 | `POST` | `/api/v1/scanner/hold/{scope}` | Set desired system, department, site, or channel hold state |
 | `POST` | `/api/v1/scanner/next` | Compatibility alias for the next current channel selection |
 | `POST` | `/api/v1/scanner/next/{scope}` | Move to the next current system, department, site, or channel selection |
@@ -1018,13 +1019,26 @@ shutdown continues.
 | `GET` | `/api/v1/redoc` | Self-hosted ReDoc API reference |
 
 The Controls workspace renders the versioned 27-key front-panel inventory from
-the daemon as an authoritative drawer. Every key is deliberately disabled and
-shows its unavailable reason; the browser rejects incomplete, reordered,
-unexpectedly enabled, or otherwise malformed inventories. Labels are built as
-text nodes, and opening the drawer installs no key handler or scanner command.
-This is a presentation milestone only: it does not qualify a model/firmware
-combination, grant control permission, widen the four-key hold path, or add a
-general front-panel wire operation.
+the daemon as an authoritative drawer. In the default or unqualified projection,
+every key is deliberately disabled and shows its unavailable reason. Only an
+exact qualified SDS200 Menu inventory from a control-authorized peer may render
+`M` as an enabled button, and only when the daemon also advertises
+`scanner.front_panel.press`. The button sends the exact bodyless Menu POST once,
+disables before dispatch and never retries. The browser rejects incomplete,
+reordered, unexpectedly enabled or otherwise malformed inventories. Labels are
+built as text nodes, and there is no general `{key}` route, raw-key request,
+held gesture or sequence. This boundary does not widen the four-key hold path;
+the Home Assistant card and daemon TUI remain read-only even when their
+inventory describes Menu as qualified.
+
+The exact source-pinned candidate completed a bounded visual-only Home Assistant
+Ingress acceptance on October 2, 2026. Live read-only checks verified the
+advertised operation, SDS200 `Version 1.26.01`, `Trunk Scan` / `trunk_scan`,
+inactive recording and exactly `M` available, and the live inventory GET returned
+that projection. The user reported a visual pass. No Menu POST, daemon control
+request or scanner key was sent, and the exact normal Home Assistant App and Core
+state was restored. This did not repeat the closed physical press, qualify
+another key or assign a milestone/release.
 
 Swagger UI and ReDoc are served entirely from version-pinned assets packaged
 with `sds200`. Loading either documentation page does not contact the scanner

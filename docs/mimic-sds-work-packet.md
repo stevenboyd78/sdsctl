@@ -1036,6 +1036,19 @@ seven-field contract. Only the source-pinned manual acceptance stager adds this
 candidate-only switch to a matching image and manifest; staging remains
 disabled by default and never installs, starts or presses the scanner.
 
+On October 2, 2026, the exact source-pinned `d0389e7` candidate was temporarily
+installed for a bounded, no-press Home Assistant Ingress visual acceptance.
+Read-only live checks verified one exact enable flag, SDS200 firmware
+`Version 1.26.01`, `Trunk Scan` / `trunk_scan`, inactive recording, the
+advertised `scanner.front_panel.press` operation and a complete inventory with
+only `M` available. The live Web inventory GET returned exactly that projection,
+and the user reported a visual pass. No Menu POST, daemon control request,
+scanner key, retry, held press or sequence occurred. The exact normal App
+source/image, options, Network mapping, manual boot setting, App-data contents,
+media contents and Home Assistant Core state were restored afterward. This does
+not repeat the closed physical press, qualify another key or publish the
+candidate option.
+
 The daemon-backed Mimic-SDS TUI runtime/help drawer now renders the same
 validated inventory snapshot as read-only text. It is fetched once during
 daemon-client startup when the operation is advertised, never on drawer refresh,

@@ -83,6 +83,18 @@ Menu boundary to the daemon. Every request still requires fresh `Trunk Scan` /
 `trunk_scan` evidence; it does not enable another key, a held gesture, a
 sequence, a retry, or a post-acknowledgement state claim.
 
+On October 2, 2026, the exact source-pinned `d0389e7` candidate completed a
+bounded visual-only Home Assistant Ingress acceptance. Read-only checks inside
+the candidate verified one exact enable flag, SDS200 firmware `Version 1.26.01`,
+`Trunk Scan` / `trunk_scan`, inactive recording, the advertised
+`scanner.front_panel.press` operation, and a 27-key inventory with only `M`
+available. A live Web inventory GET returned exactly that projection and the
+user reported a visual pass. No Menu POST, daemon control request or scanner key
+was sent. The exact normal App source/image, options, Network mapping, manual
+boot setting, App-data contents, media contents and Home Assistant Core state
+were restored afterward. This acceptance does not publish the candidate option,
+repeat the closed physical press or qualify another key.
+
 Home Assistant writes these values to `/data/options.json`. The App reads that
 file at startup and converts the Supervisor MQTT service response into the
 existing strict daemon MQTT configuration.

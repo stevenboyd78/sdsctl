@@ -14,6 +14,16 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   local operator signal, excludes active Waterfall and other research modes,
   and records bounded post-acknowledgement display evidence. It adds no public
   control/API, permission, sequence, retry, inferred key mode or enabled UI.
+- Add a separate default-off production boundary for the physically qualified
+  SDS200 `Version 1.26.01` Menu press. The direct-network owner requires two new
+  matching `Trunk Scan` / `trunk_scan` frames before one `KEY,M,P`, exposes one
+  typed daemon/client operation and one exact bodyless operator-Web route, and
+  provides a candidate-only Home Assistant option. It adds no general key
+  route, held gesture, sequence or retry; the Home Assistant card and daemon
+  TUI remain read-only, and the other 26 keys remain unavailable. A later
+  visual-only Home Assistant Ingress acceptance rendered the qualified Menu
+  control without sending the POST or another key and restored the exact normal
+  App and Home Assistant state afterward.
 - Add a redundant green/yellow/red relative-intensity treatment to the
   daemon-backed TUI Waterfall while retaining its monochrome glyph ramp. Label
   the bands as per-frame and uncalibrated, and keep raw scanner span fields
