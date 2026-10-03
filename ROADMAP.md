@@ -178,7 +178,13 @@ accepted-but-unconfirmed distinct from failed acceptance, never replays an
 import merely to obtain reload confirmation, and reports a restored
 Favorites-sourced revision with unknown freshness rather than comparing the
 unrelated manual source path. Installed selection and App/administrator wiring
-remain pending.
+remain pending. A development-only local-administrator
+`scanner-display-profile import-mounted-usb` command now selects one existing
+read-only USB mount and stable source UUID, previews and reacquires the complete
+pair, accepts once and requests the exact owner reload. It never discovers,
+mounts, changes scanner mode or writes scanner/Favorites data. Its separate
+physical command-path acceptance remains pending; the earlier SDS100 gate used
+the underlying source directly.
 
 ### Low-priority TUI usability follow-up
 

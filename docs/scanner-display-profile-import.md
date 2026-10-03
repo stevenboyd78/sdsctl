@@ -226,7 +226,49 @@ replaying the acquisition; the durable accepted revision remains available for
 later inspection and explicit reload. When the daemon restores accepted state
 whose provenance is `favorites_sync`, it reports `unknown_freshness` rather than
 reading or comparing the unrelated manual-import source path. No installed
-caller or automatic trigger invokes this coordinator yet.
+App/browser caller or automatic trigger invokes this coordinator; the standalone
+local-administrator command below is its only runtime caller.
+
+## Local mounted-USB import development command
+
+The development CLI can invoke that coordinator for one explicitly selected,
+already-mounted Linux USB scanner volume:
+
+```bash
+sdsctl scanner-display-profile \
+  --manifest /srv/sdsctl/config/scanner-display.toml \
+  import-mounted-usb \
+  --mount-path /run/media/operator/SDS100 \
+  --source-id 01234567-89ab-cdef-0123-456789abcdef \
+  --daemon-socket-path /run/sdsctl/daemon.sock
+```
+
+The source UUID is a stable administrator-chosen identity for that selected
+acquisition source; it is not a scanner serial number, path or credential. Use
+the same UUID for later refreshes of the same intended source, and a different
+UUID for a different source. Changing from a manual import or another source
+requires `--confirm-source-change` after reviewing the preview. A noninteractive
+caller additionally needs `--yes`; without an interactive confirmation or that
+explicit flag, the prepared review is cancelled without acceptance.
+
+The command does not discover, mount, unmount or remount the device, and it does
+not place a scanner into Mass Storage mode. The exact selected mount must
+already have current USB block-device evidence, the canonical
+`BCDx36HP/favorites_lists` and sibling `BCDx36HP/profile.cfg`, and read-only
+mount/superblock evidence. A writable desktop automount is refused before the
+profile file is opened. Review and commit together require four matching
+complete observations. The command writes only the configured private accepted
+state, never the mounted scanner volume, then requests one reload through the
+already configured private local daemon socket.
+
+Success means the daemon reported the exact selected endpoint and newly accepted
+revision. If acceptance succeeds but reload is unconfirmed or reports a
+different revision, preserve the accepted state, inspect status, and use the
+existing local `reload` command when appropriate; **do not repeat the mounted
+USB import merely to obtain green reload evidence**. Raw profile/Favorites bytes
+are not printed. This standalone local command is not App, Ingress or published
+catalog wiring, and it has not yet passed its separate physical command-path
+acceptance.
 
 ## Browser Upload/Refresh development adapter
 

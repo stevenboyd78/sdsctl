@@ -8,6 +8,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 from .daemon_api import DaemonApiOperation
 from .daemon_client import DaemonApiClient
@@ -54,6 +55,37 @@ def add_display_profile_parser(subparsers: Any) -> None:
         "reload", help="Reload accepted state in the local daemon; no import"
     )
     reload.add_argument("--daemon-socket-path", type=Path, required=True)
+    sync_usb = actions.add_parser(
+        "import-mounted-usb",
+        help="Review one already-mounted USB Favorites/profile pair; never mounts or writes",
+    )
+    sync_usb.add_argument("--mount-path", type=Path, required=True, metavar="PATH")
+    sync_usb.add_argument(
+        "--source-id",
+        type=_canonical_uuid,
+        required=True,
+        metavar="UUID",
+        help="Stable explicit identity for this selected mounted source",
+    )
+    sync_usb.add_argument("--daemon-socket-path", type=Path, required=True)
+    sync_usb.add_argument(
+        "--yes", action="store_true", help="Explicitly approve the prepared acquisition"
+    )
+    sync_usb.add_argument(
+        "--confirm-source-change",
+        action="store_true",
+        help="Explicitly approve replacing a differently bound accepted source",
+    )
+
+
+def _canonical_uuid(value: str) -> UUID:
+    try:
+        result = UUID(value)
+    except (ValueError, TypeError, AttributeError):
+        raise argparse.ArgumentTypeError("a canonical lowercase UUID is required") from None
+    if str(result) != value:
+        raise argparse.ArgumentTypeError("a canonical lowercase UUID is required")
+    return result
 
 
 def _approve(args: argparse.Namespace, question: str) -> bool:
@@ -81,11 +113,87 @@ def _reload(configuration: ScannerDisplayConfiguration, socket_path: Path) -> di
         return dict(result)
 
 
+def _run_mounted_usb_sync(
+    args: argparse.Namespace,
+    configuration: ScannerDisplayConfiguration,
+) -> int:
+    from .scanner_display_profile_favorites import (
+        FavoritesMountedUsbDisplayProfileSource,
+        FavoritesProfileReloadStatus,
+        FavoritesScannerDisplayProfileSynchronization,
+        PersistentFavoritesScannerDisplayProfile,
+    )
+    from .scanner_display_profile_state import DisplayProfileBinding, DisplayProfileSourceKind
+
+    binding = DisplayProfileBinding(
+        configuration.binding.endpoint_id,
+        args.source_id,
+        DisplayProfileSourceKind.FAVORITES_SYNC,
+    )
+    synchronization = FavoritesScannerDisplayProfileSynchronization(
+        repository=PersistentFavoritesScannerDisplayProfile(
+            acquisition_source=FavoritesMountedUsbDisplayProfileSource(
+                mount_path=args.mount_path,
+                require_read_only=True,
+            ),
+            state_directory=configuration.state_directory,
+            endpoint_id=configuration.binding.endpoint_id,
+        ),
+        binding=binding,
+        reload_accepted=lambda: _reload(configuration, args.daemon_socket_path),
+    )
+    preview = synchronization.prepare(acquired_at=datetime.now(UTC))
+    print(
+        json.dumps(
+            {
+                "revision": preview.profile.revision,
+                "previous_revision": preview.previous_revision,
+                "source_changed": preview.source_changed,
+                "descriptor": preview.profile.as_dict(),
+                "kind": DisplayProfileSourceKind.FAVORITES_SYNC.value,
+            },
+            sort_keys=True,
+        )
+    )
+    try:
+        approved = _approve(args, "Accept this mounted USB scanner display profile?")
+    except ValueError:
+        synchronization.cancel(preview)
+        raise
+    if not approved:
+        synchronization.cancel(preview)
+        print("Cancelled. The accepted profile is unchanged.")
+        return 0
+    result = synchronization.commit(
+        preview,
+        imported_at=datetime.now(UTC),
+        confirm_source_change=args.confirm_source_change,
+    )
+    print(
+        f"Accepted display profile revision {result.accepted.profile.revision}. "
+        "Scanner unchanged."
+    )
+    if result.daemon_reload is FavoritesProfileReloadStatus.CONFIRMED:
+        print("The local daemon confirmed the exact accepted Favorites profile revision.")
+        return 0
+    if result.daemon_reload is FavoritesProfileReloadStatus.DIFFERENT_REVISION:
+        raise ValueError(
+            "The profile was accepted, but the daemon reports a different revision. "
+            "Inspect current status; do not repeat the acquisition."
+        )
+    raise ValueError(
+        "The profile was accepted, but daemon reload was not confirmed. "
+        "Inspect status, then use the local reload command; do not repeat the acquisition."
+    )
+
+
 def run_display_profile_command(args: argparse.Namespace) -> int:
     """OS account/file/socket permissions confer local administration, not web roles."""
     config = load_scanner_display_configuration(args.manifest)
     repository = config.repository()
     try:
+        if args.display_profile_action == "import-mounted-usb":
+            return _run_mounted_usb_sync(args, config)
         if args.display_profile_action == "init":
             if not _approve(args, "Create a new private accepted-profile state directory?"):
                 print("Cancelled. No state created.")

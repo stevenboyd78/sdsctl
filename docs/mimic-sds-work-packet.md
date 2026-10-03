@@ -318,7 +318,8 @@ request exactly one revision-checked owner reload; lost reload evidence does not
 replay the import, and a concurrently accepted different revision is reported
 separately. A Favorites-sourced revision restores through the existing owner as
 `unknown_freshness` without consulting an unrelated manual source path. The
-module has no public export, CLI/API/App wiring or background job.
+module has no public package export, daemon API/App wiring or background job;
+its only runtime caller is the standalone local-administrator command below.
 Copied-tree qualification remains synthetic/offline. The already-mounted USB
 source passed a bounded physical SDS100 read-only gate through a direct
 development invocation: the exact volume was remounted read-only before file
@@ -326,6 +327,17 @@ access, four paired observations agreed, the profile parsed, all 15 Favorites
 documents bound without unresolved records, the relevant content/metadata
 manifest remained exact and the volume was safely unmounted. SDS200 USB and
 supported network acquisition remain separate work.
+
+The standalone development CLI now exposes this exact mounted path only as a
+local-administrator `import-mounted-usb` action. It requires an explicit
+already-mounted path, stable source UUID, configured private state and daemon
+socket. The selected mount must be read-only; a writable automount is refused
+before profile access. It previews before approval, reacquires at commit and
+uses the one-review coordinator above. It performs no discovery, mount,
+storage-mode transition or scanner/Favorites write. This is not App/Ingress or
+catalog wiring, and the command path still requires its own bounded physical
+acceptance; the earlier SDS100 result qualified the underlying production source
+through a direct development invocation only.
 
 ### Remaining acquisition and synchronization contract
 
@@ -455,11 +467,12 @@ behavior. Their internal one-review coordinator adds one exact owner reload
 after durable acceptance and verifies the selected endpoint/revision before
 claiming confirmation; the owner frame context then exposes that same accepted
 revision with unknown sync freshness. Installed source selection, App
-path/configuration and administrator workflow wiring, SDS200 USB qualification
-and network acquisition remain future integration work. No installed/runtime
-acquisition path has been created or activated; the physical SDS100 evidence
-used only the exact direct development source against an operator-present
-read-only mount.
+path/configuration and browser-administrator workflow wiring, SDS200 USB
+qualification and network acquisition remain future integration work. The local
+development CLI now provides an explicit read-only mounted-USB import path, but
+it has not yet passed its separate physical command-path acceptance. The earlier
+SDS100 evidence used only the exact direct development source against an
+operator-present read-only mount.
 
 ## 2. Shared screen descriptor and live-data mapping
 

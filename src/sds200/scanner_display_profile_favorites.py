@@ -177,14 +177,16 @@ class FavoritesMountedUsbDisplayProfileSource:
         mount_path: Path,
         mountinfo_path: Path = DEFAULT_LINUX_MOUNTINFO_PATH,
         sys_dev_block_directory: Path = DEFAULT_LINUX_SYS_DEV_BLOCK_DIRECTORY,
+        require_read_only: bool = False,
     ) -> None:
         self._mount_path = _path(mount_path)
         if not isinstance(mountinfo_path, Path) or not isinstance(
             sys_dev_block_directory, Path
-        ):
-            raise TypeError("Mounted USB evidence paths must be pathlib.Path.")
+        ) or type(require_read_only) is not bool:
+            raise TypeError("Mounted USB evidence paths and read-only policy are invalid.")
         self._mountinfo_path = mountinfo_path
         self._sys_dev_block_directory = sys_dev_block_directory
+        self._require_read_only = require_read_only
 
     def _read_pass(self) -> _MountedUsbAcquisitionPass:
         try:
@@ -195,6 +197,8 @@ class FavoritesMountedUsbDisplayProfileSource:
             )
         except FavoritesUsbStorageQualificationError:
             raise _error(ProfileStorageFailure.SOURCE_UNAVAILABLE) from None
+        if self._require_read_only and not candidate.is_read_only:
+            raise _error(ProfileStorageFailure.SOURCE_UNAVAILABLE)
         profile = _source(candidate.mount_directory / "BCDx36HP" / "profile.cfg")
         device = profile.identity[0]
         if (os.major(device), os.minor(device)) != candidate.mount.device_number:

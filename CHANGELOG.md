@@ -30,7 +30,17 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   distinct from import failure and never authorize replaying the import. The
   owner restores a Favorites-sourced accepted revision with honest unknown
   freshness instead of comparing it to an unrelated manual source path. This
-  adds no source discovery, background job, CLI/API/App route or scanner write.
+  coordinator itself adds no source discovery, background job, daemon API/App
+  route or scanner write.
+- Add a local-administrator `scanner-display-profile import-mounted-usb`
+  command over that coordinator. It accepts one explicit existing mount path,
+  stable source UUID, profile manifest and local daemon socket; requires the
+  selected USB volume to be read-only; previews before explicit approval;
+  reacquires the complete Favorites/profile observation before acceptance; and
+  confirms the exact daemon endpoint/revision. It never discovers or mounts a
+  volume, switches scanner storage mode, writes scanner/Favorites data or adds
+  an App/browser route. Reload uncertainty preserves accepted state and directs
+  recovery through status/reload rather than repeating the acquisition.
 - Add a disabled-by-default, internal SDS200 front-panel qualification harness.
   It accepts one typed inventory key only after exact firmware and two stable
   visible-context preflights on the existing direct-UDP owner, requires a fresh

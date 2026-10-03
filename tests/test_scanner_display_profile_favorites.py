@@ -6,11 +6,14 @@ from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
 
+import sds200.scanner_display_profile_cli as profile_cli
 import sds200.scanner_display_profile_favorites as favorites_profile
+from sds200 import cli
 from sds200.daemon_display_profile import DaemonDisplayProfile
 from sds200.favorites_storage import FavoritesStorageDocument, FavoritesStorageSnapshot
 from sds200.favorites_storage_usb import (
@@ -214,7 +217,11 @@ def test_copied_tree_source_refuses_missing_profile_without_private_path(tmp_pat
     assert str(tmp_path) not in str(error)
 
 
-def _mounted_usb_candidate(tmp_path: Path) -> FavoritesUsbStorageCandidate:
+def _mounted_usb_candidate(
+    tmp_path: Path,
+    *,
+    read_only: bool = True,
+) -> FavoritesUsbStorageCandidate:
     mount = tmp_path / "mounted-scanner"
     favorites = mount / "BCDx36HP" / "favorites_lists"
     favorites.mkdir(parents=True)
@@ -230,11 +237,11 @@ def _mounted_usb_candidate(tmp_path: Path) -> FavoritesUsbStorageCandidate:
         device_minor=minor,
         root="/",
         mount_point=mount,
-        mount_options=("ro",),
+        mount_options=(("ro",) if read_only else ("rw",)),
         optional_fields=(),
         filesystem_type="vfat",
         mount_source="/dev/test",
-        super_options=("ro",),
+        super_options=(("ro",) if read_only else ("rw",)),
     )
     block = LinuxBlockDeviceEvidence(
         device_major=major,
@@ -372,6 +379,247 @@ def test_mounted_usb_source_refuses_profile_from_another_device(
     )
 
     _assert_error(ProfileStorageFailure.SOURCE_CHANGED, source.read_acquisition)
+
+
+def _usb_cli_manifest(tmp_path: Path, state: Path) -> Path:
+    source = tmp_path / "manual-profile.cfg"
+    source.write_bytes(PROFILE)
+    manifest = tmp_path / "display.toml"
+    manifest.write_text(
+        "\n".join(
+            (
+                "version = 1",
+                f'endpoint_id = "{ENDPOINT}"',
+                f'source_id = "{UUID(int=3)}"',
+                'scanner_target = "usb://selected-scanner"',
+                f'source_path = {json.dumps(str(source))}',
+                f'state_directory = {json.dumps(str(state))}',
+            )
+        )
+    )
+    manifest.chmod(0o600)
+    return manifest
+
+
+def _run_usb_cli(manifest: Path, mount: Path, *extra: str) -> int:
+    paths = cli.resolve_configuration_paths(
+        environ={},
+        home=manifest.parent / "isolated-home",
+        system_config_dir=manifest.parent / "system",
+    )
+    return cli.main(
+        [
+            "scanner-display-profile",
+            "--manifest",
+            str(manifest),
+            "import-mounted-usb",
+            "--mount-path",
+            str(mount),
+            "--source-id",
+            str(SOURCE_ID),
+            "--daemon-socket-path",
+            str(manifest.parent / "daemon.sock"),
+            *extra,
+        ],
+        configuration_paths=paths,
+        environ={},
+    )
+
+
+def test_mounted_usb_cli_accepts_once_and_confirms_exact_daemon_revision(
+    state: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    candidate = _mounted_usb_candidate(tmp_path)
+    profile = candidate.mount_directory / "BCDx36HP" / "profile.cfg"
+    profile.write_bytes(PROFILE)
+    manifest = _usb_cli_manifest(tmp_path, state)
+    before = {
+        str(path.relative_to(candidate.mount_directory)): (
+            path.read_bytes(),
+            path.stat().st_mtime_ns,
+        )
+        for path in candidate.mount_directory.rglob("*")
+        if path.is_file()
+    }
+    observations: list[Path] = []
+    reloads: list[str] = []
+
+    def observe(path: Path, *args: object, **kwargs: object) -> FavoritesUsbStorageCandidate:
+        observations.append(path)
+        return candidate
+
+    def reload(configuration: ScannerDisplayConfiguration, socket: Path) -> dict[str, object]:
+        reloads.append(str(socket))
+        accepted = configuration.repository().inspect().profile.last_good
+        assert accepted is not None
+        return _reload_projection(accepted.profile.revision)
+
+    monkeypatch.setattr(favorites_profile, "_observe_favorites_usb_storage_path", observe)
+    monkeypatch.setattr(profile_cli, "_reload", reload)
+    monkeypatch.setattr(cli, "selected_radio", lambda *a, **k: pytest.fail("scanner selected"))
+
+    assert _run_usb_cli(manifest, candidate.mount_directory, "--yes") == 0
+
+    accepted = profile_cli.load_scanner_display_configuration(manifest).repository().inspect()
+    assert accepted.profile.last_good is not None
+    assert accepted.profile.last_good.provenance.binding == BINDING
+    assert accepted.source_status is DisplayProfileSourceStatus.UNKNOWN
+    assert observations == [candidate.mount_directory] * 4
+    assert reloads == [str(tmp_path / "daemon.sock")]
+    after = {
+        str(path.relative_to(candidate.mount_directory)): (
+            path.read_bytes(),
+            path.stat().st_mtime_ns,
+        )
+        for path in candidate.mount_directory.rglob("*")
+        if path.is_file()
+    }
+    assert after == before
+    output = capsys.readouterr()
+    assert "exact accepted Favorites profile revision" in output.out
+    assert "PRIVATE_SENTINEL" not in output.out + output.err
+
+
+def test_mounted_usb_cli_requires_explicit_approval_before_acceptance(
+    state: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate = _mounted_usb_candidate(tmp_path)
+    (candidate.mount_directory / "BCDx36HP" / "profile.cfg").write_bytes(PROFILE)
+    manifest = _usb_cli_manifest(tmp_path, state)
+    reloads: list[str] = []
+    monkeypatch.setattr(
+        favorites_profile,
+        "_observe_favorites_usb_storage_path",
+        lambda *args, **kwargs: candidate,
+    )
+    monkeypatch.setattr(profile_cli, "_reload", lambda *args: reloads.append("reload"))
+    monkeypatch.setattr("sys.stdin", SimpleNamespace(isatty=lambda: False))
+
+    assert _run_usb_cli(manifest, candidate.mount_directory) == 2
+
+    restored = profile_cli.load_scanner_display_configuration(manifest).repository().inspect()
+    assert restored.profile.last_good is None
+    assert reloads == []
+
+
+def test_mounted_usb_cli_refuses_writable_volume_before_profile_access(
+    state: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate = _mounted_usb_candidate(tmp_path, read_only=False)
+    profile = candidate.mount_directory / "BCDx36HP" / "profile.cfg"
+    profile.write_bytes(PROFILE)
+    manifest = _usb_cli_manifest(tmp_path, state)
+    reads: list[Path] = []
+    monkeypatch.setattr(
+        favorites_profile,
+        "_observe_favorites_usb_storage_path",
+        lambda *args, **kwargs: candidate,
+    )
+    original_source = favorites_profile._source
+
+    def read_source(path: Path):
+        reads.append(path)
+        return original_source(path)
+
+    monkeypatch.setattr(favorites_profile, "_source", read_source)
+
+    assert _run_usb_cli(manifest, candidate.mount_directory, "--yes") == 2
+
+    restored = profile_cli.load_scanner_display_configuration(manifest).repository().inspect()
+    assert restored.profile.last_good is None
+    assert profile not in reads
+
+
+def test_mounted_usb_cli_retains_acceptance_when_reload_is_unconfirmed(
+    state: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    candidate = _mounted_usb_candidate(tmp_path)
+    (candidate.mount_directory / "BCDx36HP" / "profile.cfg").write_bytes(PROFILE)
+    manifest = _usb_cli_manifest(tmp_path, state)
+    reloads = 0
+    monkeypatch.setattr(
+        favorites_profile,
+        "_observe_favorites_usb_storage_path",
+        lambda *args, **kwargs: candidate,
+    )
+
+    def fail_reload(*args: object, **kwargs: object) -> dict[str, object]:
+        nonlocal reloads
+        reloads += 1
+        raise RuntimeError("PRIVATE_RELOAD_FAILURE")
+
+    monkeypatch.setattr(profile_cli, "_reload", fail_reload)
+
+    assert _run_usb_cli(manifest, candidate.mount_directory, "--yes") == 2
+
+    accepted = profile_cli.load_scanner_display_configuration(manifest).repository().inspect()
+    assert accepted.profile.last_good is not None
+    assert accepted.profile.last_good.provenance.binding == BINDING
+    assert reloads == 1
+    output = capsys.readouterr()
+    assert "do not repeat the acquisition" in output.err
+    assert "PRIVATE_RELOAD_FAILURE" not in output.out + output.err
+
+
+def test_mounted_usb_cli_requires_explicit_manual_to_sync_source_change(
+    state: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate = _mounted_usb_candidate(tmp_path)
+    (candidate.mount_directory / "BCDx36HP" / "profile.cfg").write_bytes(OTHER_PROFILE)
+    manifest = _usb_cli_manifest(tmp_path, state)
+    configuration = profile_cli.load_scanner_display_configuration(manifest)
+    manual = configuration.repository()
+    manual.commit(
+        manual.prepare(configuration.binding, acquired_at=NOW),
+        imported_at=NOW,
+    )
+    reloads: list[str] = []
+    monkeypatch.setattr(
+        favorites_profile,
+        "_observe_favorites_usb_storage_path",
+        lambda *args, **kwargs: candidate,
+    )
+
+    def reload(configuration: ScannerDisplayConfiguration, socket: Path) -> dict[str, object]:
+        reloads.append(str(socket))
+        accepted = configuration.repository().inspect().profile.last_good
+        assert accepted is not None
+        return _reload_projection(accepted.profile.revision)
+
+    monkeypatch.setattr(profile_cli, "_reload", reload)
+
+    assert _run_usb_cli(manifest, candidate.mount_directory, "--yes") == 2
+    retained = configuration.repository().inspect().profile.last_good
+    assert retained is not None
+    assert retained.provenance.binding == configuration.binding
+    assert reloads == []
+
+    assert (
+        _run_usb_cli(
+            manifest,
+            candidate.mount_directory,
+            "--yes",
+            "--confirm-source-change",
+        )
+        == 0
+    )
+    accepted = configuration.repository().inspect().profile.last_good
+    assert accepted is not None
+    assert accepted.provenance.binding == BINDING
+    assert accepted.profile.revision == OTHER_PROFILE_REVISION
+    assert reloads == [str(tmp_path / "daemon.sock")]
 
 
 def test_favorites_import_is_atomic_and_restores_with_unknown_freshness(state: Path) -> None:
