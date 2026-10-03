@@ -217,6 +217,17 @@ the relevant content/metadata manifest remained exact and the volume was safely
 unmounted. Runtime, installed, SDS200 USB and network qualification remain in the
 [work packet](mimic-sds-work-packet.md#remaining-acquisition-and-synchronization-contract).
 
+The internal foundation also includes a one-review synchronization coordinator.
+It refuses to displace a pending review, consumes commit authority before the
+durable mutation, and requests at most one local owner reload after acceptance.
+Confirmation requires the exact selected endpoint and accepted revision. A lost
+reload result or a different concurrently accepted revision is reported without
+replaying the acquisition; the durable accepted revision remains available for
+later inspection and explicit reload. When the daemon restores accepted state
+whose provenance is `favorites_sync`, it reports `unknown_freshness` rather than
+reading or comparing the unrelated manual-import source path. No installed
+caller or automatic trigger invokes this coordinator yet.
+
 ## Browser Upload/Refresh development adapter
 
 This is **not a published App option or a native-dashboard operator feature**.

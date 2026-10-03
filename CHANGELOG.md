@@ -23,6 +23,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   paired production observations, parsed the profile, bound all 15 Favorites
   documents without unresolved records, preserved an exact before/after
   content-and-metadata manifest, and safely unmounted the volume.
+- Add an internal one-review Favorites/profile synchronization coordinator. A
+  successful reviewed acquisition is durably accepted once, followed by at
+  most one local owner reload whose endpoint and exact revision must match.
+  Lost reload results and concurrently accepted different revisions remain
+  distinct from import failure and never authorize replaying the import. The
+  owner restores a Favorites-sourced accepted revision with honest unknown
+  freshness instead of comparing it to an unrelated manual source path. This
+  adds no source discovery, background job, CLI/API/App route or scanner write.
 - Add a disabled-by-default, internal SDS200 front-panel qualification harness.
   It accepts one typed inventory key only after exact firmware and two stable
   visible-context preflights on the existing direct-UDP owner, requires a fresh

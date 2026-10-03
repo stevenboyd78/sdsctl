@@ -312,8 +312,13 @@ Only validated profile bytes and opaque provenance enter accepted state; raw
 Favorites catalog/document bytes are never persisted there. Restart can restore
 last-good profile data, but reports `unknown_freshness` because no source read is
 performed implicitly. This deliberately keeps renderers fail-closed until a
-future authorized integration performs a fresh acquisition and coherent owner
-reload. The module has no public export, CLI/API/App wiring or background job.
+future authorized integration selects and invokes a fresh acquisition. The
+internal one-review coordinator can now atomically accept that acquisition and
+request exactly one revision-checked owner reload; lost reload evidence does not
+replay the import, and a concurrently accepted different revision is reported
+separately. A Favorites-sourced revision restores through the existing owner as
+`unknown_freshness` without consulting an unrelated manual source path. The
+module has no public export, CLI/API/App wiring or background job.
 Copied-tree qualification remains synthetic/offline. The already-mounted USB
 source passed a bounded physical SDS100 read-only gate through a direct
 development invocation: the exact volume was remounted read-only before file
@@ -446,11 +451,15 @@ accepted-state portion locally, with explicit standalone manifest/command wiring
 and local daemon cache reload. The private upload/Ingress adapter implements
 guarded staging locally. The internal copied-tree and already-mounted USB
 Favorites/profile adapters now implement coherent read/review/atomic last-good
-behavior; App path/configuration wiring, renderer/subscriber refresh, authorized
-sync orchestration, SDS200 USB qualification and network acquisition remain
-future integration work. No installed/runtime acquisition path has been created
-or activated; the physical SDS100 evidence used only the exact direct
-development source against an operator-present read-only mount.
+behavior. Their internal one-review coordinator adds one exact owner reload
+after durable acceptance and verifies the selected endpoint/revision before
+claiming confirmation; the owner frame context then exposes that same accepted
+revision with unknown sync freshness. Installed source selection, App
+path/configuration and administrator workflow wiring, SDS200 USB qualification
+and network acquisition remain future integration work. No installed/runtime
+acquisition path has been created or activated; the physical SDS100 evidence
+used only the exact direct development source against an operator-present
+read-only mount.
 
 ## 2. Shared screen descriptor and live-data mapping
 

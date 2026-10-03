@@ -171,7 +171,14 @@ accepted the read-only path against an SDS100 mass-storage volume: four paired
 observations agreed, the profile parsed, all 15 Favorites documents bound with
 no unresolved records, the complete relevant file/metadata manifest remained
 exact and the volume was safely unmounted. This does not qualify installed
-orchestrator behavior, SDS200 USB or network profile acquisition.
+orchestrator behavior, SDS200 USB or network profile acquisition. The internal
+foundation now also couples one explicit reviewed acquisition to durable
+acceptance and at most one exact-endpoint/exact-revision owner reload. It keeps
+accepted-but-unconfirmed distinct from failed acceptance, never replays an
+import merely to obtain reload confirmation, and reports a restored
+Favorites-sourced revision with unknown freshness rather than comparing the
+unrelated manual source path. Installed selection and App/administrator wiring
+remain pending.
 
 ### Low-priority TUI usability follow-up
 

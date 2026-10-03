@@ -455,22 +455,34 @@ class PersistentScannerDisplayProfile:
             state = _read_state(directory, self._endpoint)
             status = DisplayProfileSourceStatus.NOT_IMPORTED
             if state.accepted is not None:
-                try:
-                    source = _source(self._source_path)
-                    parse_scanner_display_profile(source.data)
-                    status = (
-                        DisplayProfileSourceStatus.MATCHES_IMPORT
-                        if source.data == state.source
-                        else DisplayProfileSourceStatus.CHANGED
-                    )
-                except DisplayProfileStorageError as exc:
-                    status = {
-                        ProfileStorageFailure.INVALID_PROFILE: DisplayProfileSourceStatus.INVALID,
-                        ProfileStorageFailure.UNSAFE_PATH: DisplayProfileSourceStatus.UNSAFE,
-                        ProfileStorageFailure.SOURCE_CHANGED: DisplayProfileSourceStatus.CHANGED,
-                    }.get(exc.category, DisplayProfileSourceStatus.UNAVAILABLE)
-                except (ValueError, TypeError):
-                    status = DisplayProfileSourceStatus.INVALID
+                if (
+                    state.accepted.provenance.binding.source_kind
+                    is DisplayProfileSourceKind.FAVORITES_SYNC
+                ):
+                    # This repository can restore shared accepted state for the owner,
+                    # but its manual source path says nothing about sync freshness.
+                    status = DisplayProfileSourceStatus.UNKNOWN
+                else:
+                    try:
+                        source = _source(self._source_path)
+                        parse_scanner_display_profile(source.data)
+                        status = (
+                            DisplayProfileSourceStatus.MATCHES_IMPORT
+                            if source.data == state.source
+                            else DisplayProfileSourceStatus.CHANGED
+                        )
+                    except DisplayProfileStorageError as exc:
+                        status = {
+                            ProfileStorageFailure.INVALID_PROFILE: (
+                                DisplayProfileSourceStatus.INVALID
+                            ),
+                            ProfileStorageFailure.UNSAFE_PATH: DisplayProfileSourceStatus.UNSAFE,
+                            ProfileStorageFailure.SOURCE_CHANGED: (
+                                DisplayProfileSourceStatus.CHANGED
+                            ),
+                        }.get(exc.category, DisplayProfileSourceStatus.UNAVAILABLE)
+                    except (ValueError, TypeError):
+                        status = DisplayProfileSourceStatus.INVALID
             return DiskDisplayProfileSnapshot(
                 _store(self._endpoint, state).snapshot(self._endpoint), status
             )

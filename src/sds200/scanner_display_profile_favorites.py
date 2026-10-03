@@ -12,9 +12,10 @@ from __future__ import annotations
 
 import os
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 from uuid import UUID
@@ -76,6 +77,23 @@ class FavoritesDisplayProfileAcquisitionSource(Protocol):
     def read_acquisition(self) -> FavoritesDisplayProfileAcquisition:
         """Return exact private bytes or a sanitized storage failure."""
         ...
+
+
+class FavoritesProfileReloadStatus(StrEnum):
+    """Outcome of the one reload request after a durable profile acceptance."""
+
+    CONFIRMED = "confirmed"
+    UNCONFIRMED = "unconfirmed"
+    DIFFERENT_REVISION = "different_revision"
+
+
+@dataclass(frozen=True, slots=True)
+class FavoritesProfileSynchronizationResult:
+    """One accepted revision and the independently observed owner-reload outcome."""
+
+    accepted: DisplayProfileImport
+    daemon_reload: FavoritesProfileReloadStatus
+    daemon_revision: str | None
 
 
 def _read_favorites(source: FavoritesStorageSource) -> FavoritesStorageSnapshot:
@@ -329,11 +347,105 @@ class PersistentFavoritesScannerDisplayProfile:
             return accepted
 
 
+class FavoritesScannerDisplayProfileSynchronization:
+    """Couple one explicit Favorites review to one revision-checked owner reload.
+
+    The durable acceptance is authoritative even when the reload result is lost.
+    A caller may inspect or reload that accepted state later, but must not replay
+    the acquisition commit merely to obtain a different reload result.
+    """
+
+    def __init__(
+        self,
+        *,
+        repository: PersistentFavoritesScannerDisplayProfile,
+        binding: DisplayProfileBinding,
+        reload_accepted: Callable[[], object],
+    ) -> None:
+        if (
+            not isinstance(repository, PersistentFavoritesScannerDisplayProfile)
+            or not isinstance(binding, DisplayProfileBinding)
+            or binding.source_kind is not DisplayProfileSourceKind.FAVORITES_SYNC
+            or not callable(reload_accepted)
+        ):
+            raise _error(ProfileStorageFailure.INVALID_REVIEW)
+        self._repository = repository
+        self._binding = binding
+        self._reload_accepted = reload_accepted
+        self._lock = threading.Lock()
+        self._pending: DisplayProfilePreview | None = None
+
+    def prepare(self, *, acquired_at: datetime) -> DisplayProfilePreview:
+        """Acquire and prepare once; a prior unconsumed review is never displaced."""
+        with self._lock:
+            if self._pending is not None:
+                raise _error(ProfileStorageFailure.CONFLICT)
+            preview = self._repository.prepare(self._binding, acquired_at=acquired_at)
+            self._pending = preview
+            return preview
+
+    def cancel(self, preview: DisplayProfilePreview) -> None:
+        with self._lock:
+            if self._pending is not preview:
+                raise _error(ProfileStorageFailure.INVALID_REVIEW)
+            self._repository.cancel(preview)
+            self._pending = None
+
+    def commit(
+        self,
+        preview: DisplayProfilePreview,
+        *,
+        imported_at: datetime,
+        confirm_source_change: bool = False,
+    ) -> FavoritesProfileSynchronizationResult:
+        """Accept once, then request exactly one reload and classify its evidence."""
+        with self._lock:
+            if self._pending is not preview:
+                raise _error(ProfileStorageFailure.INVALID_REVIEW)
+            # Consume before durable mutation. A lost result is not replay authority.
+            self._pending = None
+            accepted = self._repository.commit(
+                preview,
+                imported_at=imported_at,
+                confirm_source_change=confirm_source_change,
+            )
+            try:
+                result = self._reload_accepted()
+            except Exception:
+                return FavoritesProfileSynchronizationResult(
+                    accepted, FavoritesProfileReloadStatus.UNCONFIRMED, None
+                )
+            if not isinstance(result, Mapping) or result.get("endpoint_id") != str(
+                self._binding.endpoint_id
+            ):
+                return FavoritesProfileSynchronizationResult(
+                    accepted, FavoritesProfileReloadStatus.UNCONFIRMED, None
+                )
+            daemon_accepted = result.get("accepted")
+            daemon_revision = (
+                daemon_accepted.get("revision")
+                if isinstance(daemon_accepted, Mapping)
+                and isinstance(daemon_accepted.get("revision"), str)
+                and len(daemon_accepted["revision"]) == 64
+                and all(char in "0123456789abcdef" for char in daemon_accepted["revision"])
+                else None
+            )
+            status = (
+                FavoritesProfileReloadStatus.CONFIRMED
+                if daemon_revision == accepted.profile.revision
+                else FavoritesProfileReloadStatus.DIFFERENT_REVISION
+            )
+            return FavoritesProfileSynchronizationResult(accepted, status, daemon_revision)
+
+
 __all__ = [
     "FavoritesCopiedTreeDisplayProfileSource",
     "FavoritesDisplayProfileAcquisition",
     "FavoritesDisplayProfileAcquisitionSource",
     "FavoritesMountedUsbDisplayProfileSource",
+    "FavoritesProfileReloadStatus",
+    "FavoritesProfileSynchronizationResult",
+    "FavoritesScannerDisplayProfileSynchronization",
     "PairedFavoritesDisplayProfileSource",
     "PersistentFavoritesScannerDisplayProfile",
 ]

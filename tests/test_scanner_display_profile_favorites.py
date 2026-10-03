@@ -11,6 +11,7 @@ from uuid import UUID
 import pytest
 
 import sds200.scanner_display_profile_favorites as favorites_profile
+from sds200.daemon_display_profile import DaemonDisplayProfile
 from sds200.favorites_storage import FavoritesStorageDocument, FavoritesStorageSnapshot
 from sds200.favorites_storage_usb import (
     FavoritesUsbStorageCandidate,
@@ -19,10 +20,14 @@ from sds200.favorites_storage_usb import (
     LinuxBlockDeviceEvidence,
     LinuxMountInfoEntry,
 )
+from sds200.scanner_display_configuration import ScannerDisplayConfiguration
+from sds200.scanner_display_profile import parse_scanner_display_profile
 from sds200.scanner_display_profile_favorites import (
     FavoritesCopiedTreeDisplayProfileSource,
     FavoritesDisplayProfileAcquisition,
     FavoritesMountedUsbDisplayProfileSource,
+    FavoritesProfileReloadStatus,
+    FavoritesScannerDisplayProfileSynchronization,
     PairedFavoritesDisplayProfileSource,
     PersistentFavoritesScannerDisplayProfile,
 )
@@ -48,6 +53,8 @@ PROFILE = (
     b"DispColors\tDispColorId=2\tColorLayoutId=1\tffffff\t000000\r\n"
 )
 OTHER_PROFILE = PROFILE.replace(b"ffffff", b"123456")
+PROFILE_REVISION = parse_scanner_display_profile(PROFILE).revision
+OTHER_PROFILE_REVISION = parse_scanner_display_profile(OTHER_PROFILE).revision
 FAVORITES = FavoritesStorageSnapshot(
     b"catalog\r\n",
     (FavoritesStorageDocument("f_000001.hpd", b"document\r\n"),),
@@ -515,3 +522,198 @@ def test_cancel_is_one_use_and_changes_no_state(state: Path) -> None:
 
     assert (state / "accepted-profile.json").read_bytes() == before
     _assert_error(ProfileStorageFailure.INVALID_REVIEW, lambda: repository.cancel(preview))
+
+
+def _synchronization(
+    state: Path,
+    source: _SequenceAcquisition,
+    reload_accepted: Callable[[], object],
+) -> FavoritesScannerDisplayProfileSynchronization:
+    return FavoritesScannerDisplayProfileSynchronization(
+        repository=_repository(state, source),
+        binding=BINDING,
+        reload_accepted=reload_accepted,
+    )
+
+
+def _reload_projection(revision: str) -> dict[str, object]:
+    return {
+        "endpoint_id": str(ENDPOINT),
+        "accepted": {"revision": revision},
+    }
+
+
+def test_synchronization_accepts_once_and_confirms_exact_owner_revision(state: Path) -> None:
+    reloads: list[str] = []
+    synchronization = _synchronization(
+        state,
+        _SequenceAcquisition([_acquisition(), _acquisition()]),
+        lambda: reloads.append("reload") or _reload_projection(PROFILE_REVISION),
+    )
+    preview = synchronization.prepare(acquired_at=NOW)
+
+    result = synchronization.commit(preview, imported_at=NOW)
+
+    assert result.accepted.profile.revision == PROFILE_REVISION
+    assert result.daemon_reload is FavoritesProfileReloadStatus.CONFIRMED
+    assert result.daemon_revision == PROFILE_REVISION
+    assert reloads == ["reload"]
+    _assert_error(
+        ProfileStorageFailure.INVALID_REVIEW,
+        lambda: synchronization.commit(preview, imported_at=NOW),
+    )
+    assert reloads == ["reload"]
+
+
+def test_synchronization_retains_acceptance_when_reload_is_unconfirmed(state: Path) -> None:
+    reloads = 0
+
+    def fail_reload() -> object:
+        nonlocal reloads
+        reloads += 1
+        raise RuntimeError("PRIVATE_RELOAD_FAILURE")
+
+    synchronization = _synchronization(
+        state,
+        _SequenceAcquisition([_acquisition(), _acquisition()]),
+        fail_reload,
+    )
+    preview = synchronization.prepare(acquired_at=NOW)
+
+    result = synchronization.commit(preview, imported_at=NOW)
+
+    assert result.daemon_reload is FavoritesProfileReloadStatus.UNCONFIRMED
+    assert result.daemon_revision is None
+    assert reloads == 1
+    restored = _repository(state, _SequenceAcquisition([])).inspect().profile.last_good
+    assert restored == result.accepted
+
+
+@pytest.mark.parametrize(
+    ("projection", "status", "revision"),
+    [
+        ({}, FavoritesProfileReloadStatus.UNCONFIRMED, None),
+        (
+            {"endpoint_id": str(UUID(int=9)), "accepted": {"revision": PROFILE_REVISION}},
+            FavoritesProfileReloadStatus.UNCONFIRMED,
+            None,
+        ),
+        (
+            _reload_projection(OTHER_PROFILE_REVISION),
+            FavoritesProfileReloadStatus.DIFFERENT_REVISION,
+            OTHER_PROFILE_REVISION,
+        ),
+        (
+            _reload_projection("PRIVATE_MALFORMED_REVISION"),
+            FavoritesProfileReloadStatus.DIFFERENT_REVISION,
+            None,
+        ),
+        (
+            {"endpoint_id": str(ENDPOINT), "accepted": None},
+            FavoritesProfileReloadStatus.DIFFERENT_REVISION,
+            None,
+        ),
+    ],
+)
+def test_synchronization_requires_exact_endpoint_and_revision_confirmation(
+    state: Path,
+    projection: dict[str, object],
+    status: FavoritesProfileReloadStatus,
+    revision: str | None,
+) -> None:
+    synchronization = _synchronization(
+        state,
+        _SequenceAcquisition([_acquisition(), _acquisition()]),
+        lambda: projection,
+    )
+    result = synchronization.commit(
+        synchronization.prepare(acquired_at=NOW),
+        imported_at=NOW,
+    )
+
+    assert result.daemon_reload is status
+    assert result.daemon_revision == revision
+
+
+def test_synchronization_never_reloads_failed_or_cancelled_review(state: Path) -> None:
+    reloads: list[str] = []
+    changed = _synchronization(
+        state,
+        _SequenceAcquisition([_acquisition(), _acquisition(profile=OTHER_PROFILE)]),
+        lambda: reloads.append("reload"),
+    )
+    preview = changed.prepare(acquired_at=NOW)
+    _assert_error(
+        ProfileStorageFailure.SOURCE_CHANGED,
+        lambda: changed.commit(preview, imported_at=NOW),
+    )
+    cancelled = _synchronization(
+        state,
+        _SequenceAcquisition([_acquisition()]),
+        lambda: reloads.append("reload"),
+    )
+    preview = cancelled.prepare(acquired_at=NOW)
+    cancelled.cancel(preview)
+
+    assert reloads == []
+    _assert_error(
+        ProfileStorageFailure.INVALID_REVIEW,
+        lambda: cancelled.commit(preview, imported_at=NOW),
+    )
+
+
+def test_synchronization_refuses_to_displace_pending_review(state: Path) -> None:
+    synchronization = _synchronization(
+        state,
+        _SequenceAcquisition([_acquisition(), _acquisition()]),
+        lambda: _reload_projection(PROFILE_REVISION),
+    )
+    preview = synchronization.prepare(acquired_at=NOW)
+
+    _assert_error(
+        ProfileStorageFailure.CONFLICT,
+        lambda: synchronization.prepare(acquired_at=NOW),
+    )
+    synchronization.cancel(preview)
+
+
+def test_synchronization_reloads_owner_without_conflating_manual_source_freshness(
+    state: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manual_source = tmp_path / "manual-profile.cfg"
+    manual_source.write_bytes(b"PRIVATE_INVALID_MANUAL_SOURCE")
+    manual_binding = replace(
+        BINDING,
+        source_id=UUID(int=3),
+        source_kind=DisplayProfileSourceKind.MANUAL_IMPORT,
+    )
+    configuration = ScannerDisplayConfiguration(
+        manual_binding,
+        "usb://selected-scanner",
+        manual_source,
+        state,
+    )
+    owner = DaemonDisplayProfile(configuration, lambda: "usb://selected-scanner")
+    synchronization = _synchronization(
+        state,
+        _SequenceAcquisition([_acquisition(), _acquisition()]),
+        owner.reload,
+    )
+    preview = synchronization.prepare(acquired_at=NOW)
+    monkeypatch.setattr(
+        "sds200.scanner_display_profile_storage._source",
+        lambda path: pytest.fail(f"manual source read during Favorites reload: {path}"),
+    )
+
+    result = synchronization.commit(preview, imported_at=NOW)
+
+    assert result.daemon_reload is FavoritesProfileReloadStatus.CONFIRMED
+    projection = owner.snapshot()
+    assert projection["source_status"] == DisplayProfileSourceStatus.UNKNOWN.value
+    assert projection["accepted"]["source_kind"] == DisplayProfileSourceKind.FAVORITES_SYNC.value
+    profile, failure, source_status, _ = owner.frame_context()
+    assert profile.last_good == result.accepted
+    assert failure is None
+    assert source_status == DisplayProfileSourceStatus.UNKNOWN.value
