@@ -58,6 +58,7 @@ def observed(helper, monkeypatch):
         reverse = m.launch.time_domain.Evidence(
             helper.observer_identity, proof.native_time, proof.host_time, proof.user, remote
         )
+        deadline = remote.after_ns / m.probe.clock.NS + m.probe.permission.WAIT_SECONDS
         raw = (
             m.launch.base.encode(
                 dict(
@@ -70,8 +71,8 @@ def observed(helper, monkeypatch):
                     observer=asdict(helper.observer_identity),
                     original_clock=asdict(remote),
                     domain_sha256=reverse.sha256,
-                    deadline=remote.after_ns / m.probe.clock.NS + 15,
-                    wait_by=remote.after_ns / m.probe.clock.NS + 13,
+                    deadline=deadline,
+                    wait_by=deadline - m.probe.permission.IO_SECONDS,
                     nonce="e" * 64,
                 )
             )

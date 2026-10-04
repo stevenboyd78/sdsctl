@@ -37,6 +37,7 @@ const context = {
   reconcileMimicDisplay() {}, clearHomeAssistantBridgeKey() {},
   clearHomeAssistantAdvancedSecrets() {}, stopEventStream() {},
   stopWaterfallStream() {}, stopAudioPlayback() {}, setScannerControls() {},
+  clearFrontPanelInventory() {},
 };
 vm.createContext(context);
 vm.runInContext(source, context);

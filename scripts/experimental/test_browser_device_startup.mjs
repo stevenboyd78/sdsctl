@@ -210,6 +210,7 @@ function dashboardFixture(managed, reply) {
     syncSavedPlaybackControls(){f.savedSyncs++;},
     stopEventStream(){f.stops.push('events');},stopWaterfallStream(){f.stops.push('waterfall');},
     stopAudioPlayback(){f.stops.push('audio');},setScannerControls(){f.stops.push('controls');},
+    clearFrontPanelInventory(){},
     initializeDisplayNavigation:form=>{f.form=form;},setOverallStatus(){},AbortSignal,
     fetch:async(url,options)=>{f.requests.push({url,options});
       if(reply instanceof Error) throw reply;

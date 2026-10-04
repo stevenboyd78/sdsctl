@@ -124,12 +124,9 @@ def test_recording_capabilities_are_advertised_only_with_manager() -> None:
     assert with_manager.result is not None
     assert with_manager.result["operations"] == [
         operation.value for operation in DaemonApiOperation
-        if operation not in (
-            DaemonApiOperation.DISPLAY_PROFILE, DaemonApiOperation.DISPLAY_PROFILE_RELOAD,
-            DaemonApiOperation.DISPLAY_FRAME,
-            DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT,
-            DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME,
-            DaemonApiOperation.DISPLAY_SUPPLEMENTAL_DEMAND,
+        if (
+            operation.value in without_operations
+            or operation in DAEMON_API_RECORDING_OPERATIONS
         )
     ]
     assert with_manager.result["read_only_operations"] == [
