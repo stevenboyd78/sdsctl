@@ -247,9 +247,14 @@ private Ingress adapter described below does not extend the general daemon API.
 If persistence succeeds but notification fails, the command reports the two
 outcomes distinctly and directs the administrator to retry reload, not import.
 
-Existing renderers and event subscriptions do not consume the new projection
-yet. No Home Assistant/Pi option, service, profile copy or installed display has
-changed as part of this local work.
+The later shared-frame integration described below now feeds the accepted
+projection to Web, TUI and Home Assistant renderers without adding another
+scanner owner. The private Ingress administrator status keeps the configured
+copied-file selection separate from durable accepted provenance, which may be a
+manual import or the already qualified mounted/Favorites acquisition. It shows
+source-copy status, acquisition time, last successful acceptance and explicit
+inspection time; none is relabeled as scanner-setting freshness. Published App
+catalog wiring and installed acceptance remain separate gates.
 
 ### Administrator browser Upload/Refresh adapter
 

@@ -89,6 +89,25 @@ async def _wait_for_status(
     raise AssertionError(f"Expected audio status {status.value}, received {session.status.value}")
 
 
+async def _wait_for_pi_dashboard_layout(app: ScannerTuiApp, pilot) -> None:
+    """Wait for the asynchronous audio/layout refresh to release its scrollbar."""
+    for _ in range(200):
+        body = app.query_one("#body")
+        system = app.query_one("#system")
+        if (
+            body.max_scroll_y == 0
+            and not body.show_vertical_scrollbar
+            and system.region.width == body.region.width
+        ):
+            return
+        await pilot.pause(0.01)
+    raise AssertionError(
+        "Pi dashboard did not settle without scrolling: "
+        f"body={body.region}, max_scroll_y={body.max_scroll_y}, "
+        f"vertical_scrollbar={body.show_vertical_scrollbar}, system={system.region}"
+    )
+
+
 def test_tui_audio_binding_records_updates_and_stops(tmp_path: Path) -> None:
     async def exercise() -> None:
         output = tmp_path / "tui-audio.wav"
@@ -161,6 +180,7 @@ def test_tui_preserves_network_audio_at_physical_pi_size(tmp_path: Path) -> None
 
         async with app.run_test(size=(100, 30)) as pilot:
             await pilot.pause()
+            await _wait_for_pi_dashboard_layout(app, pilot)
             assert app.audio_controls_available
             assert app.screen.has_class("-split")
             assert app.screen.has_class("-short")

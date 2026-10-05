@@ -318,6 +318,17 @@ to it only when explicitly configured. The installed dashboard has no new
 management tab yet. The local candidate's explicit App/launcher wiring is
 described below; no published catalog or installed App has been changed.
 
+The status section keeps three facts separate. **Configured source** is the
+administrator-selected copied-file path and its opaque selection identity.
+**Accepted source** comes from the durable accepted revision and can therefore
+say either `manual_import` or `favorites_sync`; the latter covers the bounded
+mounted read-only acquisition workflow even though the configured copied-file
+path cannot establish its freshness. **Source-copy status** reports the result
+of the current explicit inspection. The page also shows the accepted
+acquisition time, last successful acceptance time and the time of this status
+inspection in the browser's local timezone. None of those timestamps claims
+when scanner settings were last changed or triggers a background refresh.
+
 ### Candidate App and command-line wiring
 
 The local runtime now recognizes one optional `scanner_display_config` App

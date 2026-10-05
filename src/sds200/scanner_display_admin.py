@@ -92,8 +92,16 @@ class ScannerDisplayProfileAdmin:
 
     def status(self) -> dict[str, object]:
         with self._access():
+            snapshot = self._repository.inspect()
+            checked_at = datetime.now(UTC)
             return {
-                **display_profile_projection(self._repository.inspect()),
+                **display_profile_projection(snapshot),
+                "configured_source": {
+                    "source_id": str(self.configuration.binding.source_id),
+                    "source_kind": self.configuration.binding.source_kind.value,
+                    "path": str(self.configuration.source_path),
+                },
+                "status_checked_at": checked_at.isoformat(),
                 "source_path": str(self.configuration.source_path),
                 "scanner_target": self.configuration.scanner_target,
                 "upload_enabled": self.allow_upload,

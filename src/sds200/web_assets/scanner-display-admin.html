@@ -40,9 +40,13 @@
     <h2 id="current-heading">1. Check the selected scanner and file</h2>
     <dl>
       <dt>Scanner target</dt><dd id="target">Not checked</dd>
-      <dt>Managed source</dt><dd id="source">Not checked</dd>
+      <dt>Configured source</dt><dd id="source">Not checked</dd>
+      <dt>Accepted source</dt><dd id="accepted-source">Not checked</dd>
       <dt>Accepted revision</dt><dd id="revision">Not checked</dd>
       <dt>Source-copy status</dt><dd id="source-status">Not checked</dd>
+      <dt>Source acquired</dt><dd id="acquired-at">Not checked</dd>
+      <dt>Last accepted update</dt><dd id="imported-at">Not checked</dd>
+      <dt>Status checked</dt><dd id="checked-at">Not checked</dd>
     </dl>
     <p class="muted">File status does not prove that these settings still match the physical scanner.
       Raw profiles can contain personal settings. Protect the selected folder and its backups.</p>
@@ -71,7 +75,8 @@
       <button id="cancel" data-mutation>Cancel review</button></div>
   </section>
   <p class="muted">No scanner restart or new connection is needed. A daemon reload is separate from
-    saving the accepted profile. Existing display renderers are not connected to Mimic-SDS yet.</p>
+    saving the accepted profile. Web, TUI and Home Assistant displays use only the daemon’s accepted
+    revision; an edited source is never adopted until this reviewed workflow accepts and reloads it.</p>
   <noscript>This administrator page requires JavaScript. The local scanner-display-profile commands remain available.</noscript>
   <script nonce="__CSP_NONCE__">
     "use strict";
@@ -79,6 +84,16 @@
     const el = id => document.getElementById(id);
     let csrf = document.querySelector('meta[name="profile-csrf"]').content;
     let review = null, busy = false, stopped = false, checked = false, uploads = false, pending = false;
+    function localTime(value) {
+      if (typeof value !== "string") return "Not available";
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? "Unavailable" : parsed.toLocaleString();
+    }
+    function sourceKind(value) {
+      return value === "manual_import" ? "Copied or administrator-managed file"
+        : value === "favorites_sync" ? "Favorites synchronization or mounted read-only acquisition"
+        : "Not available";
+    }
     function controls() {
       document.querySelectorAll("[data-mutation]").forEach(button => {
         button.disabled = busy || stopped || !checked;
@@ -96,9 +111,15 @@
         if (!response.ok) throw new Error();
         const data = await response.json();
         el("target").textContent = data.scanner_target;
-        el("source").textContent = data.source_path;
+        const configured = data.configured_source || {};
+        const accepted = data.accepted || null;
+        el("source").textContent = `${sourceKind(configured.source_kind)} · ${configured.path || data.source_path}`;
+        el("accepted-source").textContent = accepted ? sourceKind(accepted.source_kind) : "No accepted profile";
         el("revision").textContent = data.accepted ? data.accepted.revision : "No accepted profile";
         el("source-status").textContent = data.source_status;
+        el("acquired-at").textContent = localTime(accepted && accepted.acquired_at);
+        el("imported-at").textContent = localTime(accepted && accepted.imported_at);
+        el("checked-at").textContent = localTime(data.status_checked_at);
         uploads = data.upload_enabled === true; pending = data.review_pending === true; checked = true;
         el("upload-note").textContent = uploads
           ? "Uploads are explicitly enabled for this private managed source."
