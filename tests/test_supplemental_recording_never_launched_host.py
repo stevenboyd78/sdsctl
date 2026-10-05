@@ -243,12 +243,12 @@ def test_cancellation_before_ready_expiry_can_restore_after_ready_without_renewa
 ):
     s = cancel
     original, monotonic = m.plans.clock.read, m.time.monotonic
-    elapsed = [119]
     deadlines = s.plan.deadlines
+    offset = [deadlines.ready_by - 1 - monotonic()]
 
     def shifted():
         value = original()
-        amount = elapsed[0] * m.plans.clock.NS
+        amount = round((monotonic() + offset[0]) * m.plans.clock.NS) - value.boottime_ns
         return replace(
             value,
             before_ns=value.before_ns + amount,
@@ -257,10 +257,10 @@ def test_cancellation_before_ready_expiry_can_restore_after_ready_without_renewa
         )
 
     monkeypatch.setattr(m.plans.clock, "read", shifted)
-    monkeypatch.setattr(m.time, "monotonic", lambda: monotonic() + elapsed[0])
+    monkeypatch.setattr(m.time, "monotonic", lambda: monotonic() + offset[0])
     finish(s)
     assert s.session.poll().phase == "stopping_candidate"
-    elapsed[0] = 121
+    offset[0] = deadlines.ready_by + 1 - monotonic()
     assert s.session.poll().phase == "starting_normal"
     assert s.session.poll().phase == "complete"
     assert s.plan.deadlines is deadlines
