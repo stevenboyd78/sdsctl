@@ -20,11 +20,21 @@ merging this development does not publish it or qualify unattended production us
 
 ## Dependency map
 
+September 14, 2026 addition: the v0.30.0 release closure is complete. The immediate
+maintenance priority is the separately reported Home Assistant Waterfall-card
+height issue. The requested [Mimic-SDS work packet](mimic-sds-work-packet.md)
+adds profile-driven TUI/WebUI layouts, an additional Home Assistant card, a TUI
+runtime drawer and the full documented front-panel key inventory. Keep its
+feature slices separate from that maintenance correction and from browser-device
+authorization. Older baseline/publication wording elsewhere in this packet is
+historical; consult the [release record](release-0.30.0.md) for current status.
+
 | Work packet | Can start without browser continuation? | Safe preparation now | Gate before claiming support |
 | --- | --- | --- | --- |
 | TUI endpoint identity and connection duration | Yes | Build on the accepted local-date presentation; trace actual endpoint metadata and link ownership | Exact endpoint semantics and both Pi layouts |
+| Mimic-SDS and full front-panel controls | Yes for offline foundations | Read-only profile parser, shared slot/color/live-data map, typed key inventory and disabled same-owner one-press qualification harness | Profile acquisition, all three renderers and model-specific supervised control acceptance |
 | Renderer field parity | Yes | Reconcile the existing audit against current models and synthetic fixtures | Per-field provenance and targeted physical observations |
-| TUI waterfall | Yes, but use the existing daemon data plane | Read-only renderer design, bounded history and fake-stream tests | Subscription cleanup, resizing and scanner-mode acceptance |
+| TUI waterfall | Candidate implemented over the existing daemon data plane; exact 100x30 small-Pi and 160x45 HDMI functional visual checks plus guarded cleanup passed; HDMI accepted the relative color hierarchy, host-local source time and physical `Q` cleanup | Strict relative renderer, bounded history, reconnect, local pause/clear and fake-stream tests | Retain this evidence through milestone integration and CI; no additional physical display gate is open for this slice |
 | Weather/alert presentation and recording | Partly | Define unknown/unavailable states and sanitized fixture requirements | Genuine alert evidence and reviewed recording lifecycle |
 | Advanced protocol/menu/analysis | Partly | Evidence inventory and lossless parser fixtures | Exact command/model/firmware proof before any mutation |
 | Audio client and playback follow-ups | Yes | Bounded fanout and failure-isolation test design | One scanner stream and physical audio acceptance |
@@ -78,18 +88,31 @@ These are merged development changes, not a claim that a new release is publishe
 
 ### Remaining implementation slices
 
-1. **Endpoint version:** introduce optional, bounded application-version
-   metadata on an authenticated daemon response, with compatibility tests for
-   old clients and old daemons. Render it only for a remote daemon, with an
-   explicit unavailable value when missing. Refresh or invalidate it when the
-   selected connection changes; do not retain an old daemon version after an
-   upgrade or use a second scanner connection to discover it.
-2. **Connection duration, if implemented:** first add an explicit owner for the
-   selected link's successful connection/reconnection events. Use monotonic
-   time for elapsed duration and aware wall time for `Connected since`.
-   Separate unavailable transport, stale scanner state and process uptime.
-   Do not reset uptime on a stale/degraded label change, and do not count
-   disconnected time as connected time.
+1. **Endpoint version:** implemented in the local development candidate through
+   optional bounded `application_version` metadata on the existing authenticated
+   snapshot. The Connection panel shares its Endpoint row with the daemon build;
+   direct scanner sessions stay unchanged. Compatibility, loss/reconnect and
+   Pi geometry tests pass. Both bench Pis passed installed, fictional offline
+   visual/keyboard checks on September 28, 2026; live endpoint-version acceptance
+   remains separate from that presentation evidence.
+   See the [TUI candidate details](tui.md#unreleased-connected-daemon-version-follow-up).
+2. **Connection duration:** implemented in the unreleased local candidate for
+   the TUI-client-to-daemon event stream only. `DaemonTuiRadio` owns the observed
+   monotonic start after the first authoritative stream snapshot and replaces it
+   only after a fresh reconnect snapshot. The preliminary API snapshot remains
+   explicitly unavailable, stream loss clears the value, and scanner-only
+   disconnect, stale PSI or a degraded presentation does not reset it. The
+   Connection panel shares its existing Daemon row with `Link for HH:MM:SS` or
+   `Nd HH:MM:SS`; no `Connected since` wall time is fabricated. Direct scanner
+   sessions stay unchanged. Boundary, reconnect, invalid-source and Pi geometry
+   tests pass. A live 100x30 pass first exposed a meaningless truncated symbolic
+   endpoint fragment. The compact split now omits that redundant token while
+   retaining the concrete Target row, and the repaired installed wheel passed
+   the user's live visual check with an advancing timer and guarded restoration.
+   A guarded restart of the same published App then showed event loss as
+   `Link for Unavailable`, exercised the managed waiting screen, and recovered
+   from a fresh authoritative snapshot at `00:00:00` before advancing normally.
+   The 160x45 physical layout remains separate.
 
 ### Test contract
 
@@ -124,13 +147,38 @@ snapshot projection, renderer, test fixture and physical-validation boundary
 before adding a field. Candidate examples include talkgroup/unit IDs and
 scanner-reported P25 or battery details; do not invent units or status meanings.
 
-A TUI waterfall should consume [daemon waterfall](daemon-waterfall.md), not
-issue competing `PWF`/`GWF` commands. Prepare tests for zero consumers, one
-consumer, multiple consumers, last-consumer cleanup, resize, pause/clear,
-bounded history, changed span and reconnect. Preserve relative, uncalibrated
-values and display-only pointer semantics. Rendering at a faster rate must not
-be described as a higher scanner acquisition rate. Binary GW2 remains deferred
-unless new independently reproducible evidence changes the recorded conclusion.
+The unreleased TUI waterfall candidate consumes
+[daemon waterfall](daemon-waterfall.md); it does not issue competing
+`PWF`/`GWF` commands. Its screen owns one existing daemon client only while
+visible, validates and normalizes exactly 240 base-16 source strings for
+relative presentation, bounds history to 256 rows, resizes locally, and keeps
+pause/clear presentation-only. Transport loss clears unconfirmed values before
+a fresh checkpoint reconnect; an invalid payload fails closed without retry.
+The existing shared-session tests retain zero/one/multiple-consumer and
+last-consumer cleanup coverage, while the TUI tests cover one-screen ownership,
+bounded shutdown and both Pi geometries. Exact development head `85042e6`
+subsequently passed authenticated live 240-bin streaming and user-reported
+visual/interaction acceptance on the 100x30 small Pi. Its finite guardian
+restored the unchanged prior service, and a post-termination checkpoint proved
+that no stale waterfall consumer remained. A later guarded 160x45 HDMI run also
+passed layout and interaction, and the original service and ordinary Home
+Assistant scanner owner were restored. Its photo/video review nevertheless
+found the dense glyph-only field difficult to understand as a human signal
+display. The follow-up keeps the glyph ramp as a monochrome/color-vision fallback
+and adds green `LOW`, yellow `MID`, and bold red `HIGH` bands based only on each
+frame's normalized values. Those labels are explicitly relative per frame and
+uncalibrated; they are not absolute signal strength. A subsequent guarded HDMI
+review confirmed that the color hierarchy made the information materially
+easier to understand. That review also selected a presentation-only correction:
+keep the validated aware timestamp unchanged in the model, but display it in the
+TUI host's configured local timezone with an explicit offset. A second guarded
+HDMI run accepted the local label, clock and offset. The user then pressed `Q`
+from the Waterfall; the candidate and guardian exited successfully and the
+byte-identical normal display service returned. The exact Textual regression
+retains the same Q/quit cleanup coverage.
+Rendering at a faster rate must not be described as a higher scanner acquisition
+rate. Binary GW2 remains deferred unless new independently reproducible evidence
+changes the recorded conclusion.
 
 ## 3. Weather, menus and advanced analysis
 

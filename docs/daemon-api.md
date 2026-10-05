@@ -292,6 +292,15 @@ probe fails. Version 1 clients continue accepting older snapshots that omit
 these additive fields. A failed identity probe does not stop daemon-owned
 scanner control, PSI, or audio.
 
+The unreleased candidate also includes optional `application_version` in runtime
+snapshots and initial event-stream snapshots. This identifies the daemon's own
+installed sds200 build, not the client build, scanner firmware, or protocol
+version. It is additive metadata: older daemons may omit it, and clients must
+not infer compatibility or substitute their own version when it is unavailable.
+The TUI reads it from the existing authenticated daemon session without another
+scanner command or network request. Missing or malformed display metadata is
+shown as unavailable without rejecting an otherwise valid older session.
+
 ## Recording operations
 
 Milestone 20.5 adds four parameterless recording operations when the daemon owns
@@ -314,6 +323,17 @@ An active recording is daemon-owned rather than browser-owned, so it survives a
 browser reload or complete web-process disconnect. Daemon shutdown closes the
 recording manager before destination and audio-runtime teardown so an active WAV
 can be finalized while the shared router is still available.
+
+Recording reliability counters retain their existing shared-transport,
+cumulative meaning; they are not recording-relative loss estimates. While a
+recording is active, the counters follow the transport. Finalization captures
+one reliability snapshot for both the metadata and the terminal response/state
+event. Later `recording.status` calls and repeated stops retain those counters,
+even if browser audio continues and the shared transport reports new faults.
+A failed start or finalization also retains its captured counters. An explicit
+finalization retry captures a new boundary, and starting another recording
+resumes live counters. This does not reset transport statistics or rewrite
+previous recording metadata.
 
 Stable recording failures are:
 

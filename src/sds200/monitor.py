@@ -2,14 +2,24 @@ from __future__ import annotations
 
 import sys
 from datetime import UTC, datetime
+from math import isfinite
 from threading import RLock
 from typing import TextIO
 
 from .state import RadioStateSnapshot
+from .terminal_text import bounded_terminal_value
 
 
 def _display(value: object | None) -> str:
-    return "—" if value is None or value == "" else str(value)
+    return bounded_terminal_value(value, unavailable="—")
+
+
+def _battery(value: object | None) -> str:
+    return (
+        f"{value:g}"
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and isfinite(value)
+        else "—"
+    )
 
 
 def _signal_bar(signal: int | None, width: int = 5) -> str:
@@ -43,6 +53,8 @@ def format_snapshot(
             f"Service     : {_display(snapshot.service_type)}",
             f"Talkgroup   : {_display(snapshot.talkgroup_id)}",
             f"Unit ID     : {_display(snapshot.unit_id)}",
+            f"P25 status  : {_display(snapshot.p25_status)}",
+            f"Battery raw : {_battery(snapshot.battery)}",
             f"Signal      : {signal}",
             f"RSSI        : {_display(snapshot.rssi)}",
             f"Volume      : {_display(snapshot.volume)}",

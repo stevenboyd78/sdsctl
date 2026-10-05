@@ -21,36 +21,36 @@ HOME_ASSISTANT_LOVELACE_CARD_PATH = (
 )
 HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_FILENAME = "sds200-display-card.js"
 HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_PATH = (
-    HOME_ASSISTANT_LOVELACE_CARD_DIRECTORY
-    / HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_FILENAME
+    HOME_ASSISTANT_LOVELACE_CARD_DIRECTORY / HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_FILENAME
 )
 HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_FILENAME = "sds200-waterfall-card.js"
+HOME_ASSISTANT_LOVELACE_MIMIC_CARD_FILENAME = "sds200-mimic-card.js"
+HOME_ASSISTANT_LOVELACE_MIMIC_CARD_PATH = (
+    HOME_ASSISTANT_LOVELACE_CARD_DIRECTORY / HOME_ASSISTANT_LOVELACE_MIMIC_CARD_FILENAME
+)
 HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_PATH = (
-    HOME_ASSISTANT_LOVELACE_CARD_DIRECTORY
-    / HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_FILENAME
+    HOME_ASSISTANT_LOVELACE_CARD_DIRECTORY / HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_FILENAME
 )
-HOME_ASSISTANT_LOVELACE_AGGREGATE_FILENAME = (
-    HOME_ASSISTANT_CARD_AGGREGATE_MODULE_FILENAME
-)
+HOME_ASSISTANT_LOVELACE_AGGREGATE_FILENAME = HOME_ASSISTANT_CARD_AGGREGATE_MODULE_FILENAME
 HOME_ASSISTANT_LOVELACE_AGGREGATE_PATH = (
-    HOME_ASSISTANT_LOVELACE_CARD_DIRECTORY
-    / HOME_ASSISTANT_LOVELACE_AGGREGATE_FILENAME
+    HOME_ASSISTANT_LOVELACE_CARD_DIRECTORY / HOME_ASSISTANT_LOVELACE_AGGREGATE_FILENAME
 )
 _HOME_ASSISTANT_LOVELACE_CARD_MODE = 0o644
 
 _BUILT_IN_HOME_ASSISTANT_THEMES = built_in_home_assistant_theme_registry()
-HOME_ASSISTANT_LOVELACE_CARD_RESOURCE_URL = (
-    _BUILT_IN_HOME_ASSISTANT_THEMES.require("compact").resource_url
-)
-HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_RESOURCE_URL = (
-    _BUILT_IN_HOME_ASSISTANT_THEMES.require("sds200-display").resource_url
-)
-HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_RESOURCE_URL = (
-    _BUILT_IN_HOME_ASSISTANT_THEMES.require("waterfall").resource_url
-)
-_HOME_ASSISTANT_LOVELACE_AGGREGATE_BYTES = (
-    read_built_in_home_assistant_card_aggregate_module()
-)
+HOME_ASSISTANT_LOVELACE_CARD_RESOURCE_URL = _BUILT_IN_HOME_ASSISTANT_THEMES.require(
+    "compact"
+).resource_url
+HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_RESOURCE_URL = _BUILT_IN_HOME_ASSISTANT_THEMES.require(
+    "sds200-display"
+).resource_url
+HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_RESOURCE_URL = _BUILT_IN_HOME_ASSISTANT_THEMES.require(
+    "waterfall"
+).resource_url
+HOME_ASSISTANT_LOVELACE_MIMIC_CARD_RESOURCE_URL = _BUILT_IN_HOME_ASSISTANT_THEMES.require(
+    "mimic-sds"
+).resource_url
+_HOME_ASSISTANT_LOVELACE_AGGREGATE_BYTES = read_built_in_home_assistant_card_aggregate_module()
 HOME_ASSISTANT_LOVELACE_AGGREGATE_RESOURCE_URL = (
     f"/local/sds200/{HOME_ASSISTANT_LOVELACE_AGGREGATE_FILENAME}?v="
     f"{hashlib.sha256(_HOME_ASSISTANT_LOVELACE_AGGREGATE_BYTES).hexdigest()}"
@@ -64,9 +64,7 @@ def _asset_bytes(filename: str) -> bytes:
     for theme in registry.themes:
         if theme.installed_filename == filename:
             return read_built_in_home_assistant_theme_module(theme)
-    raise HomeAssistantThemeError(
-        f"unknown built-in Home Assistant module filename: {filename}"
-    )
+    raise HomeAssistantThemeError(f"unknown built-in Home Assistant module filename: {filename}")
 
 
 def _install_home_assistant_lovelace_asset(
@@ -79,10 +77,7 @@ def _install_home_assistant_lovelace_asset(
     if not target.is_absolute():
         raise ValueError("Home Assistant Lovelace card destination must be absolute.")
     if target.name != filename:
-        raise ValueError(
-            "Home Assistant Lovelace card destination must use "
-            f"{filename!r}."
-        )
+        raise ValueError(f"Home Assistant Lovelace card destination must use {filename!r}.")
 
     parent = target.parent
     www = parent.parent
@@ -177,7 +172,16 @@ def install_home_assistant_lovelace_aggregate(
     )
 
 
-def install_home_assistant_lovelace_cards() -> tuple[Path, Path, Path, Path]:
+def install_home_assistant_lovelace_mimic_card(
+    destination: str | Path = HOME_ASSISTANT_LOVELACE_MIMIC_CARD_PATH,
+) -> Path:
+    """Atomically install the read-only profile-driven Mimic-SDS card asset."""
+    return _install_home_assistant_lovelace_asset(
+        destination, filename=HOME_ASSISTANT_LOVELACE_MIMIC_CARD_FILENAME
+    )
+
+
+def install_home_assistant_lovelace_cards() -> tuple[Path, Path, Path, Path, Path]:
     """Install all first-party Home Assistant Lovelace card assets."""
     card_modules = tuple(
         _install_home_assistant_lovelace_asset(
@@ -186,18 +190,21 @@ def install_home_assistant_lovelace_cards() -> tuple[Path, Path, Path, Path]:
         )
         for theme in built_in_home_assistant_theme_registry().themes
     )
-    if len(card_modules) != 3:
+    if len(card_modules) != 4:
         raise HomeAssistantThemeError(
-            "built-in Home Assistant compatibility set must contain three modules"
+            "built-in Home Assistant compatibility set must contain four modules"
         )
     aggregate = install_home_assistant_lovelace_aggregate(
-        HOME_ASSISTANT_LOVELACE_CARD_DIRECTORY
-        / HOME_ASSISTANT_LOVELACE_AGGREGATE_FILENAME
+        HOME_ASSISTANT_LOVELACE_CARD_DIRECTORY / HOME_ASSISTANT_LOVELACE_AGGREGATE_FILENAME
     )
-    return card_modules[0], card_modules[1], card_modules[2], aggregate
+    return card_modules[0], card_modules[1], card_modules[2], card_modules[3], aggregate
 
 
 __all__ = [
+    "HOME_ASSISTANT_LOVELACE_MIMIC_CARD_FILENAME",
+    "HOME_ASSISTANT_LOVELACE_MIMIC_CARD_PATH",
+    "HOME_ASSISTANT_LOVELACE_MIMIC_CARD_RESOURCE_URL",
+    "install_home_assistant_lovelace_mimic_card",
     "HOME_ASSISTANT_LOVELACE_CARD_DIRECTORY",
     "HOME_ASSISTANT_LOVELACE_AGGREGATE_FILENAME",
     "HOME_ASSISTANT_LOVELACE_AGGREGATE_PATH",

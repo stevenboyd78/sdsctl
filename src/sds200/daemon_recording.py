@@ -302,6 +302,7 @@ class DaemonRecordingManager:
         self._last_packets = 0
         self._last_samples = 0
         self._last_sink_statistics = PcmSinkStatistics()
+        self._final_reliability: AudioReliabilitySnapshot | None = None
         self._error: str | None = None
         self._recorder: PcmuWavRecorder | None = None
         self._sink: PcmWavSink | None = None
@@ -359,6 +360,7 @@ class DaemonRecordingManager:
             packets = self._last_packets
             samples = self._last_samples
             sink_statistics = self._last_sink_statistics
+            final_reliability = self._final_reliability
             error = self._error
             recorder = self._recorder
             sink = self._sink
@@ -390,7 +392,11 @@ class DaemonRecordingManager:
             packets=packets,
             samples=samples,
             audio_duration_seconds=samples / PCMU_SAMPLE_RATE,
-            reliability=self._reliability_snapshot(),
+            reliability=(
+                final_reliability
+                if final_reliability is not None
+                else self._reliability_snapshot()
+            ),
             sink_statistics=sink_statistics,
             completed_recordings=completed_recordings,
             closed=closed,
@@ -571,6 +577,7 @@ class DaemonRecordingManager:
                 self._last_packets = 0
                 self._last_samples = 0
                 self._last_sink_statistics = PcmSinkStatistics()
+                self._final_reliability = None
                 self._error = None
                 self._started_snapshot = None
                 self._started_state = None
@@ -617,6 +624,7 @@ class DaemonRecordingManager:
                     self._status = AudioSessionStatus.FAILED
                     self._recording_path = path
                     self._stopped_at = _require_aware(self._now())
+                    self._final_reliability = self._reliability_snapshot()
                     self._error = _redacted_error_type(error)
                 self._emit_state()
                 raise DaemonRecordingOperationError(
@@ -768,6 +776,9 @@ class DaemonRecordingManager:
                 self._last_packets = packets
                 self._last_samples = samples
                 self._last_sink_statistics = sink_statistics
+                # Share the exact finalization boundary used by metadata. The
+                # daemon's audio transport may continue for browser listeners.
+                self._final_reliability = stopped_snapshot.reliability
                 self._stopped_at = stopped_at
                 self._metadata_path = metadata_path
                 self._status = (

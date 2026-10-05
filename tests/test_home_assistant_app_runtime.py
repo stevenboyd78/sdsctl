@@ -132,6 +132,25 @@ def test_home_assistant_daemon_command_never_contains_mqtt_password() -> None:
     assert all("password" not in argument.casefold() for argument in command)
 
 
+def test_home_assistant_daemon_command_adds_only_explicit_qualified_menu_opt_in() -> None:
+    default_command = build_home_assistant_daemon_command(
+        HomeAssistantAppOptions(scanner_host="scanner.local"),
+        default_home_assistant_app_runtime_paths(),
+    )
+    enabled_command = build_home_assistant_daemon_command(
+        HomeAssistantAppOptions(
+            scanner_host="scanner.local",
+            qualified_sds200_menu_control_enabled=True,
+        ),
+        default_home_assistant_app_runtime_paths(),
+    )
+
+    flag = "--enable-qualified-sds200-menu-control"
+    assert flag not in default_command
+    assert enabled_command.count(flag) == 1
+    assert enabled_command == default_command + (flag,)
+
+
 def test_home_assistant_daemon_command_selects_explicit_remote_configuration(
     tmp_path: Path,
 ) -> None:

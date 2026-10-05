@@ -72,6 +72,29 @@ The App exposes these options:
 | `advanced_access_server_name` | advanced only | empty | Private certificate identity used by both advanced services |
 | `advanced_access_host_address` | remote daemon only | empty | Literal private Home Assistant host address placed in downloaded daemon-client profiles |
 
+The published v0.30.0 catalog intentionally retains this seven-field contract.
+The source runtime also recognizes
+`qualified_sds200_menu_control_enabled`, defaulting to `false`, but only the
+source-pinned manual acceptance App may add that option to its matching private
+manifest. It must not be added to the published catalog while that catalog can
+select an older strict-parser image. When explicitly enabled in the matching
+candidate, it adds only the already qualified SDS200 `Version 1.26.01` one-press
+Menu boundary to the daemon. Every request still requires fresh `Trunk Scan` /
+`trunk_scan` evidence; it does not enable another key, a held gesture, a
+sequence, a retry, or a post-acknowledgement state claim.
+
+On October 2, 2026, the exact source-pinned `d0389e7` candidate completed a
+bounded visual-only Home Assistant Ingress acceptance. Read-only checks inside
+the candidate verified one exact enable flag, SDS200 firmware `Version 1.26.01`,
+`Trunk Scan` / `trunk_scan`, inactive recording, the advertised
+`scanner.front_panel.press` operation, and a 27-key inventory with only `M`
+available. A live Web inventory GET returned exactly that projection and the
+user reported a visual pass. No Menu POST, daemon control request or scanner key
+was sent. The exact normal App source/image, options, Network mapping, manual
+boot setting, App-data contents, media contents and Home Assistant Core state
+were restored afterward. This acceptance does not publish the candidate option,
+repeat the closed physical press or qualify another key.
+
 Home Assistant writes these values to `/data/options.json`. The App reads that
 file at startup and converts the Supervisor MQTT service response into the
 existing strict daemon MQTT configuration.
@@ -205,7 +228,7 @@ be played or downloaded through Ingress.
 
 The App enables the daemon's Home Assistant MQTT Discovery adapter plus the
 dedicated Milestone 20.12.3 Home Assistant control adapter. One SDS200 device
-contains twenty-four fixed components:
+contains twenty-eight fixed components:
 
 | Component | Home Assistant platform |
 | --- | --- |
@@ -221,6 +244,10 @@ contains twenty-four fixed components:
 | Service Type | sensor |
 | Tone-Out Tone A | sensor |
 | Tone-Out Tone B | sensor |
+| Talkgroup ID | sensor |
+| Unit ID | sensor |
+| P25 Status (Reported) | sensor |
+| Battery (Raw) | sensor |
 | Signal | sensor |
 | RSSI | sensor |
 | Audio | binary sensor |
@@ -241,11 +268,16 @@ Screen Kind is a fixed read-only sensor over the canonical radio-state topic. It
 reports `unknown` when `screen_kind` is missing, null, or empty and remains
 available across mode changes. Site, Frequency, Modulation, Service Type, and
 configured Tone-Out Tone A and
-Tone B use the existing generic radio-state topic. Each sensor is unavailable
+Tone B, Talkgroup ID, Unit ID, P25 Status (Reported), and Battery (Raw) use the
+existing generic radio-state topic. Each sensor is unavailable
 when its nullable field is absent, null, or empty for the current scanner mode,
 so a prior value is not presented as current. The component inventory remains
 fixed; mode changes do not create or remove discovery components. Tone-Out
 values are scanner configuration, not detected search or Close Call `SAD`.
+Talkgroup and unit prefixes and leading zeroes are preserved. P25 status is the
+scanner-reported raw value, and battery is the raw finite scanner value; neither
+sensor infers a unit, percentage, range, charging state, or undocumented P25
+meaning.
 
 The App keeps the generic daemon MQTT request-envelope command transport
 disabled. Home Assistant controls instead use seven exact dedicated QoS 0,
@@ -370,8 +402,13 @@ identity rules, automation syntax, target limitations, and test workflow.
 
 ## Bundled Lovelace cards
 
-The Home Assistant App installs three first-party SDS200 cards and one
+The **published 0.30.0** Home Assistant App installs three first-party SDS200 cards and one
 declarative aggregate entry point:
+
+The unreleased Mimic-SDS candidate adds a fourth card and a shared Ingress session
+manager. Its changed resources must ship together with the candidate runtime;
+see the [candidate card guide](home-assistant-mimic-card.md). The published URLs
+below are not candidate resource URLs.
 
 ```text
 /homeassistant/www/sds200/sds200-card.js
@@ -499,6 +536,10 @@ entities:
   service_type: sensor.REPLACE_ME
   tone_out_tone_a: sensor.REPLACE_ME
   tone_out_tone_b: sensor.REPLACE_ME
+  talkgroup_id: sensor.REPLACE_ME
+  unit_id: sensor.REPLACE_ME
+  p25_status: sensor.REPLACE_ME
+  battery: sensor.REPLACE_ME
   signal: sensor.REPLACE_ME
   rssi: sensor.REPLACE_ME
   audio_running: binary_sensor.REPLACE_ME
@@ -513,7 +554,7 @@ standard Home Assistant switch and button entities, so the card does not acquire
 a scanner, daemon, MQTT, or Home Assistant service-call transport.
 
 For the scanner-style presentation, add **SDS200 Display** from the picker and
-configure the same sixteen display entities. To use automatic presentation,
+configure the same twenty display entities. To use automatic presentation,
 also configure the Screen Kind entity. The graphical editor selects the layout,
 automatic scanning fallback, palette, and fit mode. Equivalent YAML starts with:
 
@@ -536,6 +577,10 @@ entities:
   service_type: sensor.REPLACE_ME
   tone_out_tone_a: sensor.REPLACE_ME
   tone_out_tone_b: sensor.REPLACE_ME
+  talkgroup_id: sensor.REPLACE_ME
+  unit_id: sensor.REPLACE_ME
+  p25_status: sensor.REPLACE_ME
+  battery: sensor.REPLACE_ME
   signal: sensor.REPLACE_ME
   rssi: sensor.REPLACE_ME
   audio_running: binary_sensor.REPLACE_ME
@@ -548,7 +593,9 @@ Auto maps `search` and `close_call` to Search/Close Call, `weather` to Weather,
 and `tone_out` to Tone-Out. `scanning`, `unknown`, unavailable, missing, and
 future values use `scan_layout`. Explicit layouts ignore Screen Kind and retain
 their existing behavior. Existing cards remain Simple by default unless Auto is
-selected.
+selected. The four raw telemetry fields appear only when selected. Compact-card
+configurations that omit them keep their previous row structure; Display Detail
+configurations that omit them keep the previous two-column detail grid.
 
 `card` fit fills the available Lovelace column while retaining a 4:3 surface.
 `viewport` fit grows to the smaller width- or height-constrained size, centers
@@ -1381,7 +1428,7 @@ scanner-control, PSI, and RTSP/RTP owner.
 
 The acceptance run confirmed:
 
-- System, LCARS-inspired, Matrix-inspired, First Responder, Amateur Radio, and
+- System, LCARS, Matrix-inspired, First Responder, Amateur Radio, and
   Pip-Boy-inspired appeared in deterministic order over the shared Scanner,
   Controls, Audio, Recordings, and Diagnostics panes. System and
   Pip-Boy-inspired were visually inspected through live Ingress; theme, pane,

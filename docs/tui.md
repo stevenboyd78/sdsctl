@@ -9,9 +9,9 @@ Milestone 19.10 adds explicit daemon-backed operation while preserving
 standalone scanner ownership as the default. Textual and PortAudio remain
 optional so the core installation stays lightweight.
 
-## Unreleased local date/time follow-up
+## Local date and time (v0.30.0)
 
-The development candidate replaces the header's time-only clock with the full
+Version 0.30.0 replaces the header's time-only clock with the full
 local date and 24-hour time, for example `Fri, 11 Sep 2026 06:26:10 -0600`.
 This is RFC 2822-style formatting: English weekday/month names, a four-digit
 year and an explicit numeric UTC offset. Each display uses its own operating
@@ -46,15 +46,267 @@ computer. No console font change is involved.
 An unavailable timestamp stays unavailable for that status observation, even
 if the clock later recovers; the TUI does not invent the missing start time.
 A new status uses the new clock reading. This does not add an elapsed-duration
-counter or remote-daemon version field, alter console fonts or change managed-
-display startup. The previews below record the earlier accepted layout; the
-date/time candidate still needs physical checks on both Pi displays before
-release acceptance.
+counter, alter console fonts or change managed-display startup. The date/time
+layout passed physical checks on both Pi displays, including published-client
+acceptance; see the [v0.30.0 release record](release-0.30.0.md). The previews below
+record an earlier layout. The separate, unreleased connected-daemon version
+follow-up is described below.
 
 The wide layout also reserves room for every Connection and Scanner State row,
 including the remote target and scanner-reported recording status beside the
 taller Network Audio panel. These fields must not be present only in hidden,
 clipped panel content.
+
+## Unreleased connected-daemon version follow-up
+
+Daemon-backed sessions show the endpoint's reported application version in the
+Connection panel, for example `Daemon: 0.30.0 | sdsctl-remote-daemon`. This shares
+the former Endpoint row to preserve room at both 100×30 and 160×45; the Target
+row is retained. The local TUI version remains in the header and physical scanner
+firmware remains in the Scanner panel. Direct scanner sessions are unchanged.
+
+The value comes from the existing daemon snapshot, not an assumption that client
+and daemon were upgraded together. Older daemons or malformed/missing metadata
+show `Daemon: Unavailable`. Losing the daemon event connection clears the cached
+version; a fresh reconnect snapshot supplies the replacement. A scanner outage
+alone does not erase the version of a still-connected daemon. No additional
+scanner command, polling request, credential, or capability is added.
+
+Long versions/endpoints are ellipsized to the Connection panel width, not wrapped
+into a hidden row. The Mimic-SDS runtime drawer retains the full bounded daemon
+version and endpoint alongside the separate client and scanner identities.
+When the event-link duration is present in the compact 100×30 split, the
+redundant symbolic endpoint is omitted from the Daemon row instead of being
+ellipsized to a meaningless fragment; the concrete Target row remains visible.
+The 160×45 layout and runtime drawer continue to show the endpoint.
+Local geometry tests cover both Pi sizes and themes, audio/no-audio, metadata
+changes and resizing. On September 28, 2026, the installed development wheel at
+`824c417` passed user-observed readability and keyboard checks on the 100×30 and
+160×45 bench Pis using a fictional, offline endpoint. Both original displays were
+restored with their configuration and fonts unchanged. This verifies physical
+presentation, not a real daemon's reported version or live transport behavior.
+
+## Unreleased daemon event-link duration follow-up
+
+Daemon-backed sessions also show `Link for HH:MM:SS` on the existing Daemon row,
+or `Nd HH:MM:SS` after 24 hours. This is the elapsed age of this TUI client's
+current daemon **event-stream link**. It is not daemon process uptime, scanner
+connection age, PSI freshness, or the age of the initial API snapshot. Direct
+scanner and replay sessions do not gain this field.
+
+The adapter records a monotonic start only after the stream supplies its first
+authoritative snapshot. A preliminary API snapshot therefore shows
+`Link for Unavailable` rather than inventing an earlier start. Event-stream loss
+returns the value to `Unavailable`; a successful reconnect begins again only
+after its fresh authoritative snapshot. A scanner-only disconnect, stale PSI,
+degraded status, theme change, resize or redraw does not reset the event link.
+Disconnected time is never added to a later link.
+
+On October 2, 2026, a live authenticated 100×30 Small Pi pass showed the timer
+advancing but exposed `Unavailable | s. | Link for ...`: the older published
+daemon correctly lacked application-version metadata, while the compact row
+retained a useless fragment of the redundant symbolic endpoint. Commit
+`37a414a` removed only that compact endpoint token. The separate Target row,
+wide endpoint, full runtime metadata and honest `Unavailable` version remained.
+The repaired installed wheel then received the user's `visual pass`; the finite
+guard restored the byte-identical original service and normal Home Assistant App
+ownership.
+
+A second guarded Small Pi run restarted that same published Home Assistant App
+while sampling the 100×30 text console. The pre-outage link reached `00:00:51`.
+Event loss changed it to `Link for Unavailable`, retained the concrete target,
+and then entered the managed `Daemon disconnected` waiting screen. Recovery used
+a fresh authoritative connection timestamp, first rendered `00:00:00`, and
+advanced normally; no pre-outage time survived the reconnect. The finite guard
+again restored the byte-identical original service and normal App ownership.
+This qualifies the live outage/reconnect behavior on the Small Pi, not the
+160×45 physical layout.
+
+Duration uses the TUI host's monotonic clock and whole elapsed seconds. It does
+not jump when the wall clock or daylight-saving offset changes, add a tolerance,
+approximate calendar months/years, or wrap at 24 hours. Missing, non-finite or
+future clock observations are `Unavailable`. A one-second in-memory refresh makes
+the value advance without another daemon request or scanner command. The full
+runtime drawer labels the same value `Daemon event link for`.
+
+The Daemon row retains its existing row budget. During a wide-to-compact resize,
+the version/endpoint prefix is ellipsized against both current panel geometry and
+the incoming 100×30 two-column width before the fixed link suffix is appended.
+Automated checks cover the exact 59/60, 3599/3600 and 86399/86400 boundaries,
+multi-day values, invalid/unknown sources, initial stream establishment,
+scanner-only disconnect, event loss, authenticated reconnect, direct-session
+absence, both Pi geometries, themes, audio/no-audio and live resize. This does
+not yet claim a live endpoint or physical-display acceptance pass.
+
+## Unreleased read-only scanner details
+
+From the ordinary dashboard, press **X** or choose **Scanner details** in the
+command palette. This opens a separate scrollable view of the existing shared
+scanner snapshot: mode, channel, talkgroup ID, unit ID, reported P25 status and
+raw battery telemetry. **Esc** or **X** returns to the dashboard without adding
+rows to its compact layout. Inside Mimic-SDS, **X** keeps its existing runtime/help
+meaning; it does not open this drawer.
+
+These values require no additional scanner command, daemon request or connection.
+IDs retain their reported prefixes and leading zeroes. Missing fields show
+`Unavailable`; battery values have no inferred volts/percent label, and unknown
+P25 text does not imply encryption or reception quality. Controls/formatting
+characters are replaced and long text is ellipsized at 128 terminal cells without
+changing the underlying snapshot. This is raw reported telemetry, not new
+model/firmware support.
+
+The drawer clears values during disconnection, stale data or a degraded
+connection. Reconnection alone does not restore the preceding channel's values:
+it waits for a fresh snapshot. Normal incoming updates continue while it is open.
+Scanner and audio action keys are inactive in this read-only view; existing audio
+and recording sessions continue unchanged. Return to the dashboard for controls.
+Quit remains available. The command palette contains only Back and Quit here.
+Automated checks cover direct/shared-daemon fields, both Pi sizes, the narrower
+fallback, light/dark, resizing and clearing. The same September 28 offline Pi
+checks passed for drawer readability, changing values and unavailable fields,
+theme inheritance, return navigation and inactive action keys. Those fictional
+values do not qualify new physical scanner fields, models or live audio behavior;
+the candidate remains unreleased.
+
+## Unreleased read-only relative waterfall candidate
+
+A daemon-backed TUI can open the existing shared waterfall stream with **W**
+or **Relative waterfall** in the command palette. The direct scanner and replay
+TUIs do not advertise this action. Opening the view creates one local-socket or
+authenticated-remote waterfall client; it does not issue `PWF` or `GWF`
+commands, open scanner hardware, or create a second acquisition owner. Closing
+the view releases that consumer lease while the daemon remains responsible for
+the demand-driven scanner session and last-consumer cleanup.
+
+The view validates exactly 240 hexadecimal source strings, converts them to a
+per-frame relative 0-to-1 range, and renders a bounded 256-row terminal history.
+A constant frame uses the neutral midpoint. Each row redundantly represents
+that normalized value with both its existing glyph ramp and three explicit
+relative-intensity bands: green `LOW`, yellow `MID`, and bold red `HIGH`. The
+colors improve visual hierarchy without making color the only carrier of
+meaning. They are not calibrated weak/medium/strong signal thresholds. This is
+an uncalibrated relative display: it does not label values as dB, signal
+strength, spectrum power, FFT magnitude, or a higher acquisition rate. Lower,
+center and upper frequency fields are shown literally as raw scanner metadata
+without inferred units.
+
+The footer retains the validated timezone-aware source timestamp in the model
+and converts only its displayed form to the TUI host's configured local timezone.
+It is labeled `Source local timestamp` and keeps an explicit UTC offset. When the
+TUI is viewed over SSH or on a managed display, "local" therefore means the
+machine running the TUI, not the browser, SSH client, scanner, or daemon host.
+
+The color hierarchy and host-local timestamp subsequently passed a guarded
+160×45 physical HDMI review. A user-initiated **Q** from the Waterfall also
+closed the candidate cleanly and allowed its independent guardian to restore
+the byte-identical normal display service. This qualifies presentation and
+owned-resource cleanup for the tested HDMI path; it does not make the relative
+colors calibrated measurements or add a scanner command.
+
+Inside the waterfall view:
+
+- **Space** pauses or resumes only this client's local display history; the
+  daemon stream continues so lifecycle and loss counters stay current.
+- **C** clears only this client's local latest frame and history. It does not
+  clear daemon state or send a scanner command.
+- **W** or **Esc** closes the view and returns to the ordinary dashboard.
+- **Q** quits the TUI, and **Ctrl+P** opens the limited waterfall command
+  palette. Ordinary scanner, audio and recording actions remain inactive until
+  returning to the dashboard.
+
+History is resampled to available terminal columns and clipped to the visible
+rows on each redraw; source acquisition is unchanged. Automated layout checks
+cover 100×30 and 160×45 terminals plus live resize. A transport failure clears
+the unconfirmed frame, history and session metadata before obtaining a fresh
+client whose first record must be a new checkpoint. Invalid payload content
+fails closed without a retry loop. Closing or quitting interrupts the pending
+receive by closing its dedicated client and uses a bounded worker join.
+
+The daemon-client CLI accepts optional
+`--daemon-waterfall-socket-path` and
+`--daemon-waterfall-max-record-bytes` settings. An authenticated
+`--remote-profile` selects its existing authorized `waterfall` service; local
+socket overrides remain mutually exclusive with that profile. The record bound
+cannot exceed the protocol's 64 KiB limit. These options are inert until the
+view is opened.
+
+Synthetic tests establish validation, bounds, pause/clear, reconnect,
+responsive rendering, direct-session absence, dark/light color contrast and
+cleanup. They do not establish physical terminal color quality, frequency
+semantics, or another model/firmware. The glyph-only candidate passed functional
+visual review on both Pi geometries, but the HDMI review found its dense
+punctuation difficult to interpret as a human signal display. The three-band
+relative-intensity treatment remains an unreleased follow-up until a concise
+physical visual check confirms the improvement. No release claim follows from
+the offline render alone.
+
+## Unreleased Mimic-SDS candidate
+
+Mimic-SDS is a separate, read-only screen in the local development candidate.
+The ordinary TUI remains the startup view. When a configured daemon advertises
+the shared display-frame service, press **M** or choose **Mimic-SDS** in the
+command palette to open it. The existing daemon client profile, identity and
+permissions are reused; there is no new scanner connection or credential.
+Older daemons and direct-USB sessions keep their existing interface without this
+action. Direct-USB profile configuration remains a separate delivery item.
+
+Inside Mimic-SDS:
+
+- **V** cycles imported profile preference, Simple and Detail. This changes only
+  this client's presentation, not the physical scanner's manual display toggle.
+- **B** switches the reported alert color between top/bottom strips and a border.
+  Blink timing is not inferred from the color. Configured alert-pattern matching
+  remains separate work.
+- **X** or **?** opens the runtime/help drawer; **Esc** or **X** returns from it.
+  It shows profile qualification at drawer-open time, current TUI connection and
+  scanner identity, available client audio/recording state, and the latest 20
+  operational log lines. When the daemon advertises the versioned front-panel
+  inventory, the drawer also lists all 27 codes with their model-reference and
+  unavailable reasons. The snapshot is validated once before the TUI starts;
+  opening or refreshing the drawer performs no API request. These labels are not
+  keyboard shortcuts: every entry remains disabled and the TUI installs no
+  general scanner-key dispatch. An older daemon shows inventory unavailable.
+  This is not an additional daemon recording-status feed.
+- **M** or **Esc** returns from Mimic-SDS to the ordinary TUI. **Q** quits the
+  application. **Ctrl+P** opens the command palette. Scanner/audio control keys
+  are inactive inside Mimic-SDS and its drawer; return to the ordinary TUI to
+  operate the scanner.
+
+Layout and LED choices survive closing/reopening the screen in the same TUI
+process, but are not saved across restarts. The app/version and local RFC 2822
+clock remain in the header. Profile colors, alignment and individual name-hold
+inversion use the shared frame mapping; no generic labels are added to name
+bands. Simple/Detail selection applies to Conventional and Trunk families; the
+special screen family remains shared. Waterfall is separate.
+
+The scanner grid needs at least 60 columns and 22 rows of content space (26
+terminal rows including the current header/footer). Below that, a resize/back
+message replaces the grid. At 100×30 and 160×45, synthetic Textual tests show the
+complete grid without dashboard scrolling. Wider/taller windows scale the grid
+in terminal cells, with bounded rendering up to 500×160 content cells; text
+wraps only in the supported Simple name bands and otherwise clips with an
+ellipsis. No console font is changed. Terminal capabilities determine color
+approximation; `NO_COLOR` is respected. Missing/unqualified fields and
+BLACK/WHITE profile transformations are not invented.
+
+Only a visible Mimic-SDS screen requests frames. Opening a drawer or palette,
+returning to the ordinary TUI, or exiting clears live values and stops requests.
+A pending finite read may finish in the background, but its result is discarded
+and its dedicated API connection is closed by the worker. Resuming requires a
+new read. Stale, disconnected, malformed or failed responses never leave old
+values looking current. See the [frame API guide](scanner-display-frame-api.md#candidate-tui-presentation)
+for timeout, freshness and compatibility details. This remains development
+candidate support, not a published release.
+
+On September 28, 2026, the installed development wheel at `824c417` passed
+user-observed Mimic-SDS visual and keyboard checks on both bench Pis: 100×30
+and 160×45 Linux consoles. The isolated, offline fixture used fictional profile
+colors and scanner data to exercise the grid, layout/LED choices, runtime drawer,
+hold/release and stale/recovery presentations. Both original display services
+were restored, with their published installations, saved profiles and console
+fonts unchanged. This qualifies physical presentation of those fixtures, not
+live scanner field accuracy, supplemental-reader admission, audio, or release
+readiness.
 
 ## Interface previews
 
@@ -88,7 +340,9 @@ their space-saving, mutually exclusive drawers.
 ![sdsctl TUI recording library populated with fictional demonstration WAV files](assets/screenshots/tui-recordings.svg)
 
 The recording library presents compatible WAV recordings newest first and
-supports selection, playback, pause, resume, and return to live audio.
+supports selection, playback, pause, resume, and return to live audio. This
+100-by-50 capture is scrolled to Network Audio so all three demonstration files
+are visible; the application header and keyboard shortcuts remain in place.
 
 ### Compact layout
 
@@ -295,6 +549,11 @@ Keyboard shortcuts:
 - `A`: toggle live scanner playback without stopping the RTSP/RTP stream
 - `L`: show or hide the newest compatible recordings
 - `G`: show or hide the operational log panel without discarding buffered records
+- `X`: open read-only Scanner details from the ordinary dashboard (development
+  candidate); inside Mimic-SDS it retains the runtime/help meaning
+- `W`: open the read-only relative waterfall in a daemon-backed TUI
+  (development candidate); inside that view, `Space` pauses local history,
+  `C` clears local history, and `W` or `Esc` returns
 - `Up` / `Down`: select a saved recording
 - `Enter`: play the selected recording and temporarily suspend live playback
 - `Space`: pause or resume saved playback

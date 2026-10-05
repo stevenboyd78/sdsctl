@@ -6,6 +6,7 @@ import threading
 from collections.abc import Mapping
 from contextlib import suppress
 from copy import deepcopy
+from dataclasses import asdict
 from datetime import datetime
 from math import isfinite
 
@@ -32,6 +33,14 @@ from .exceptions import (
     DaemonRequestError,
     DaemonUnavailableError,
 )
+from .front_panel_keys import FRONT_PANEL_INVENTORY_VERSION, FrontPanelKey
+from .scanner_display_supplemental_transport import (
+    decode_context_response,
+    decode_demand_response,
+    validate_bundle,
+    validate_renewal_id,
+)
+from .scanner_display_supplemental_wire import decode_supplemental_context
 
 DAEMON_API_CLIENT_DEFAULT_TIMEOUT = 5.0
 _DAEMON_API_CLIENT_RECV_BYTES = 4096
@@ -177,6 +186,57 @@ class DaemonApiClient:
             raise
         return result
 
+    def front_panel_inventory(self) -> dict[str, object]:
+        """Return the validated fail-closed front-panel presentation."""
+
+        result = self.request(DaemonApiOperation.SCANNER_FRONT_PANEL_INVENTORY)
+        try:
+            _validate_front_panel_inventory(result)
+        except DaemonProtocolError:
+            self.close()
+            raise
+        return result
+
+    def display_frame(self) -> dict[str, object]:
+        """Read independent Mimic-SDS presentations; never imports or controls."""
+        return self.request(DaemonApiOperation.DISPLAY_FRAME)
+
+    def display_supplemental_context(self) -> dict[str, object]:
+        """Explicitly negotiate a current supplemental owner context; no reads."""
+        result = self.request(DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT)
+        try:
+            decode_context_response(result)
+        except ValueError:
+            self.close()
+            raise DaemonProtocolError("Invalid supplemental context response.") from None
+        return result
+
+    def display_supplemental_frame(self, context: object) -> dict[str, object]:
+        """Read one cached same-cut bundle bound to a previously negotiated context."""
+        binding = decode_supplemental_context(context)
+        result = self.request(
+            DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME, params={"context": asdict(binding)}
+        )
+        try:
+            return validate_bundle(result, binding)
+        except ValueError:
+            self.close()
+            raise DaemonProtocolError("Invalid supplemental display bundle.") from None
+
+    def display_supplemental_demand(self, context: object, renewal_id: str) -> dict[str, object]:
+        """One non-replayed lease renewal; a failed reply does not undo acquisition."""
+        binding = decode_supplemental_context(context)
+        validate_renewal_id(renewal_id)
+        self._require_operation(DaemonApiOperation.DISPLAY_SUPPLEMENTAL_DEMAND)
+        result = self.request(DaemonApiOperation.DISPLAY_SUPPLEMENTAL_DEMAND,
+                              params={"context": asdict(binding), "renewal_id": renewal_id})
+        try:
+            decode_demand_response(result, binding, renewal_id)
+            return result
+        except (ValueError, TypeError):
+            self.close()
+            raise DaemonProtocolError("Supplemental demand acknowledgement was invalid.") from None
+
     def remote_clients(self) -> dict[str, object]:
         """Return operator-only live connections through the local daemon API."""
 
@@ -249,6 +309,23 @@ class DaemonApiClient:
         if normalized_second is not None:
             params["second"] = normalized_second
         return self._control(DaemonApiOperation.SCANNER_HOLD, params)
+
+    def press_front_panel(
+        self,
+        key: FrontPanelKey,
+        *,
+        timeout: float = DAEMON_API_DEFAULT_CONTROL_TIMEOUT,
+    ) -> dict[str, object]:
+        """Press the one server-qualified front-panel key exactly once."""
+
+        if type(key) is not FrontPanelKey or key is not FrontPanelKey.MENU:
+            raise ValueError("Only the physically qualified Menu key is available.")
+        operation = DaemonApiOperation.SCANNER_FRONT_PANEL_PRESS
+        normalized_timeout = self._require_control_operation(operation, timeout)
+        return self._control(
+            operation,
+            {"key": key.value, "timeout": normalized_timeout},
+        )
 
     def hold_state(
         self,
@@ -990,6 +1067,121 @@ def _validate_runtime_snapshot(
     _non_negative_integer(result["transition_sequence"], "transition_sequence")
     _optional_string(result["last_failure_at"], "last_failure_at")
     _optional_string(result["last_error"], "last_error")
+
+
+def _validate_front_panel_inventory(result: Mapping[str, object]) -> None:
+    expected_fields = {"version", "controls_available", "keys"}
+    if set(result) != expected_fields:
+        raise DaemonProtocolError(
+            "The daemon front-panel inventory fields are invalid."
+        )
+    if type(result["version"]) is not int or (
+        result["version"] != FRONT_PANEL_INVENTORY_VERSION
+    ):
+        raise DaemonProtocolError(
+            "The daemon front-panel inventory version is unsupported."
+        )
+    if type(result["controls_available"]) is not bool:
+        raise DaemonProtocolError(
+            "The daemon front-panel availability must be a boolean."
+        )
+
+    keys = result["keys"]
+    if not isinstance(keys, list):
+        raise DaemonProtocolError(
+            "The daemon front-panel inventory keys must be a list."
+        )
+    expected_codes = [key.value for key in FrontPanelKey]
+    if len(keys) != len(expected_codes):
+        raise DaemonProtocolError(
+            "The daemon front-panel inventory is incomplete."
+        )
+
+    entry_fields = {
+        "code",
+        "label",
+        "context_note",
+        "reference_status",
+        "control_status",
+        "available",
+        "unavailable_reason",
+    }
+    observed_codes: list[str] = []
+    any_available = False
+    for entry in keys:
+        if not isinstance(entry, Mapping) or any(
+            not isinstance(name, str) for name in entry
+        ):
+            raise DaemonProtocolError(
+                "The daemon front-panel inventory entry must be an object."
+            )
+        if set(entry) != entry_fields:
+            raise DaemonProtocolError(
+                "The daemon front-panel inventory entry fields are invalid."
+            )
+        code = entry["code"]
+        if not isinstance(code, str):
+            raise DaemonProtocolError(
+                "The daemon front-panel inventory code must be text."
+            )
+        observed_codes.append(code)
+        for name in ("label", "context_note", "unavailable_reason"):
+            value = entry[name]
+            if (
+                not isinstance(value, str)
+                or not value
+                or len(value) > 256
+                or not value.isascii()
+                or any(ord(character) < 32 for character in value)
+            ):
+                raise DaemonProtocolError(
+                    f"The daemon front-panel inventory {name} is invalid."
+                )
+
+        reference_status = entry["reference_status"]
+        if reference_status not in {
+            "listed",
+            "absent_for_model",
+            "model_not_listed",
+        }:
+            raise DaemonProtocolError(
+                "The daemon front-panel reference status is invalid."
+            )
+        control_status = entry["control_status"]
+        available = entry["available"]
+        if type(available) is not bool:
+            raise DaemonProtocolError(
+                "The daemon front-panel key availability is invalid."
+            )
+        qualified_menu = (
+            code == FrontPanelKey.MENU.value
+            and reference_status == "model_not_listed"
+            and control_status == "qualified"
+            and available is True
+        )
+        expected_control_status = (
+            "unsupported"
+            if reference_status == "absent_for_model"
+            else "unqualified"
+        )
+        if not qualified_menu and (
+            control_status != expected_control_status or available is not False
+        ):
+            raise DaemonProtocolError(
+                "The daemon front-panel control status is invalid."
+            )
+        any_available = any_available or available
+
+    if observed_codes != expected_codes or len(set(observed_codes)) != len(
+        observed_codes
+    ):
+        raise DaemonProtocolError(
+            "The daemon front-panel inventory key order is invalid."
+        )
+    if result["controls_available"] is not any_available:
+        raise DaemonProtocolError(
+            "The daemon front-panel aggregate availability is invalid."
+        )
 
 
 def _validate_remote_result_privacy(value: object) -> None:

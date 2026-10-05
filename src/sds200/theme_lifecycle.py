@@ -32,6 +32,7 @@ from .tui_themes import (
 )
 from .web_themes import (
     BUILT_IN_WEB_THEME_IDS,
+    LEGACY_WEB_THEME_IDS,
     WebThemeManifest,
     WebThemeRegistry,
     built_in_web_theme_registry,
@@ -1088,8 +1089,9 @@ def discover_theme_inventory(root: Path) -> ThemeInventory:
 
 
 def _built_in_ids(interface: ThemeInterface) -> tuple[str, ...]:
+    """Return protected identities, including retired browser aliases."""
     if interface == "web":
-        return BUILT_IN_WEB_THEME_IDS
+        return (*BUILT_IN_WEB_THEME_IDS, *LEGACY_WEB_THEME_IDS)
     if interface == "home-assistant":
         return BUILT_IN_HOME_ASSISTANT_THEME_IDS
     return BUILT_IN_TUI_THEME_IDS

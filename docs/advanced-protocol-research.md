@@ -830,6 +830,147 @@ not automatically issued. RF Power Plot remains deferred as a separate slice
 because its start grammar and applicability carry additional parameters and
 version/model caveats.
 
+### System Status manual-source qualification and pre-send preparation
+
+A September 16, 2026 SDS200 investigation separately qualified incoming PSI
+while the operator manually selected the physical System Status screen. The
+existing daemon remained the only scanner owner. A passive capture saw 59
+complete analysis observations in approximately 30 seconds, each with
+`V_Screen="analyze_system_status"` and exactly one `SystemStatus` record.
+The physical display matched the received SystemID/SystemSubID composition,
+SiteID, WacnID and NAC. Signal, Quality and Activity changed during the sample;
+their graph scaling is not yet qualified. Missing attributes remained missing.
+No raw XML, scanner names, audio or credentials were retained in this evidence.
+
+Crucially, `Mode="Trunk Scan"` remained present throughout the analysis sample.
+The mode label alone therefore does not prove ordinary scanning is continuing.
+The before/after samples (56 observations each) contained no SystemStatus
+records. After the operator used the visible physical **to Scan** soft key,
+all 56 recovery observations were trunk-scan screens and 12 display-frame API
+samples were current. Analysis-only identifiers did not leak into normal Mimic
+fields. These are bounded observations on one SDS200 setup, not a universal
+absence claim, a browser-pixel acceptance result, or a qualified remote exit.
+No AST or APR command was sent; APR is not treated as a stop command.
+
+The internal [pre-send guard](../src/sds200/system_status_research.py) is an
+offline preparation layer, not a daemon control or a new public API. It selects
+the current `System.Index` and `Site.Index` from a structurally unambiguous
+PSI/GSI trunk-scan observation. These are scanner object indices, **not** the
+displayed SystemID, SiteID, or quick keys. Malformed, unavailable, duplicate,
+foreign and overlay records are refused. It deliberately excludes the mixed
+scan transitions that the display adapter can qualify independently.
+
+The guard binds one reservation to the selected system/site and an opaque
+owner-connection identity. Both preparation and the final observation must be
+at most two seconds old, using owner-supplied monotonic receipt times; the final
+observation must also be no earlier than preparation. Readiness, connection and
+idle-waterfall checks must all be explicitly true. Concurrent claims can reserve
+only one typed start command. Once reserved, it cannot be rearmed, including
+after a timeout, nonexact acknowledgement, or an exact `AST,OK`. The latter
+still conveys no System Status frame or confirmed analysis-running state.
+
+This latch is not an exactly-once network-delivery guarantee. An owner
+bridge must hold the existing control/lifecycle locks through final validation
+and dispatch, supply a new connection identity after reconnect, establish the
+intended model/firmware/transport scope, and bound the entire request. It must
+also define post-start observations, cancellation and recovery without replaying
+an uncertain start or inventing a remote stop. The daemon API still has no
+analysis operation or arbitrary-command route. The guard sends nothing, adds
+no polling, and does not change normal scanner operation or Mimic rendering.
+
+### Opt-in same-owner System Status research transaction
+
+The internal [runtime helper](../src/sds200/daemon_system_status_research.py)
+now composes that guard with the existing daemon owner. Ordinary daemon startup
+does not supply its explicit `SystemStatusResearchPolicy`, so the method is
+disabled by default. No daemon API, remote-client grant, WebUI control, Home
+Assistant option or automatic polling path is added.
+
+An explicit research invocation uses the normal daemon control/lifecycle locks
+and the scanner command lock, with one total budget capped at eight seconds.
+It requires a directly owned UDP transport, an already connected SDS200, an
+exact firmware pin, and a physically ready operator. It checks MDL/VER, reads
+two authoritative GSI selections, and reserves at most one typed AST start.
+The entire attempt is consumed even when preflight fails. Disconnect/reconnect
+invalidates the attempt; there is no connect, retry, replay or model fallback.
+
+A short-lived idle reservation prevents waterfall subscription from racing
+with this transaction. It refuses existing/busy/non-idle waterfall sessions
+instead of stopping them. It does not hold the waterfall session lock while
+waiting for scanner replies, allowing receive callbacks to make progress.
+The reservation and temporary observers are released on success and failure.
+Ordinary controls are serialized; daemon shutdown waits for the bounded scope.
+
+Results distinguish not-started, start-unconfirmed, acknowledged-only,
+analysis-observed and connection-changed outcomes. Only a subsequent complete
+PSI `analyze_system_status` frame with one SystemStatus record, after the exact
+acknowledgement and before the deadline, supplies the observation flag. A
+pre-ack frame, repeated SystemStatus records or overlay does not qualify. The
+result stores flags/timing and sanitized failure categories, not identifiers,
+scanner names, raw XML or raw exception messages. No scanner transaction ID
+ties the observed frame to the requested site; physical comparison is still
+required. The helper does not claim ongoing analysis ownership after returning,
+does not issue APR, and does not implement a remote stop.
+
+The [temporary research launcher](../scripts/research_system_status_daemon.py)
+is developer-only and is not installed by normal packaging. It launches the
+normal daemon in the same process with that policy and waits for an explicit
+administrator `SIGUSR1` while the operator is physically at the scanner. It
+ignores signals before readiness and after the one attempt; shutdown cancels
+the wait. No signal means no research command. Evidence uses a new private
+directory and create-only files; existing state is never adopted or overwritten.
+Before signaling, verify the exact candidate/container, fresh `ready.json`,
+PID and process start ticks. Do not signal a remembered PID from an earlier run.
+
+For a reviewed local Home Assistant candidate, `scripts/stage_mimic_app.py`
+accepts the optional `--system-status-research-firmware` argument. This pins
+the launcher to the selected commit, gives the image an `-ast-research` suffix,
+and rewrites only the staged daemon executable; the web child and public App
+schema remain unchanged. The source inventory covers the launcher and staged
+rewrite. Without the argument, staging is unchanged. Staging does not install,
+start or contact an App. This is not a published release configuration.
+
+Physical acceptance must be separately coordinated: keep the scanner in normal
+trunk scanning, stop waterfall consumers, verify there is only one scanner
+owner, and have the physical **to Scan** return path available. Trigger once,
+inspect the private result and physical screen, then return manually and
+confirm normal Mimic recovery. Do not treat a missing result or uncertain start
+as permission to retry. Retain evidence before restoring the normal acceptance
+image. Fake transport/launcher tests are not physical AST acceptance.
+
+### SDS200 guarded AST command qualification
+
+On September 17, 2026, a separately coordinated test exercised that one-shot
+path on an SDS200 reporting `Version 1.26.01`, using the existing daemon's
+direct UDP owner. The operator confirmed the physical System Status screen
+matched the expected target and subsequently returned to normal scanning with
+the physical **to Scan** key. No APR or remote return command was used.
+
+The guarded transaction received exact `AST,OK` and then a qualifying analysis
+PSI observation within approximately 0.33 seconds, with no connection change.
+A 30-second receive-only sample contained nine normal trunk observations followed
+by 52 `analyze_system_status` observations, each with one `SystemStatus` record,
+and no decoding errors. The passive observer also saw one exact incoming AST
+acknowledgement, but did not capture outgoing AST packets; it is not independent
+wire-count proof or an exactly-once delivery guarantee.
+
+This analysis sample reported Signal, Quality and Activity while omitting
+SystemID, SystemSubID, SiteID, WacnID and NAC. The cause is not established.
+Unlike the earlier manual-source sample, it does not qualify identifier values.
+Missing identifiers do not negate the separately observed analysis screen, and
+must not be filled from prior analysis, scanner programming or object indices.
+
+After the operator's manual return, all 56 sampled observations were ordinary
+scan screens (54 trunk, two conventional), with no SystemStatus records or
+decoding errors. All 12 sampled Mimic API frames were current, and the four
+analysis-only identifier regions remained unqualified with null text.
+
+This qualifies the bounded start/acknowledgement/analysis-observation/manual-return
+path on that tested setup. It does not qualify APR, automatic recovery into
+analysis, remote exit, graph scaling, other models/firmware/transports, an
+analysis renderer, or ordinary-scanning identifier availability. The research
+path remains opt-in, with no public daemon operation or background AST polling.
+
 ## Milestone 24.10 implementation boundary
 
 The first Milestone 24.10 slice is the separately deferred RF Power Plot start

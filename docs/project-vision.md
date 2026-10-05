@@ -224,7 +224,7 @@ safe saved-WAV playback and download, and browser-local visual presentation.
 
 The web process remains a daemon client and does not open scanner hardware or a
 second RTSP/RTP session. The dashboard also provides capability-negotiated
-semantic scanner controls and browser-local System, LCARS-inspired,
+semantic scanner controls and browser-local System, LCARS,
 Matrix-inspired, First Responder, Amateur Radio, and Pip-Boy-inspired themes over
 one shared accessible structure. The stable `system` identity remains the
 browser-local default and safe fallback, with scanner-display hierarchy and
@@ -312,13 +312,14 @@ components, all seven bounded scanner controls, Lovelace/configuration acceptanc
 recording and audio regression validation, and single-owner behavior physically
 validated through the repository-managed HAOS App.
 
-Current Home Assistant Discovery contains twenty-four fixed components:
-seventeen daemon/scanner/radio/audio/recording state and diagnostic components,
+Current Home Assistant Discovery contains twenty-eight fixed components:
+twenty-one daemon/scanner/radio/audio/recording state and diagnostic components,
 including fixed Screen Kind and optional Site, Frequency, Modulation, Service
-Type, and configured Tone-Out Tone A and Tone B sensors, plus the seven bounded
-scanner controls. Broader mode-specific entity growth, destination health,
-richer scanner events, and GUI implementation remain separate future
-considerations. Milestone 32.1 established the first authenticated remote
+Type, configured Tone-Out Tone A and Tone B, literal Talkgroup ID and Unit ID,
+reported P25 status, and raw battery sensors, plus the seven bounded scanner
+controls. Broader mode-specific entity growth, destination health, richer
+scanner events, and GUI implementation remain separate future considerations.
+Milestone 32.1 established the first authenticated remote
 daemon-client transport and shared-service construction boundary. Milestone 32.2
 packages ordinary-host daemon startup and explicit CLI/TUI client profiles.
 Milestone 32.3 completed isolated native-Linux Docker Engine publication and one
@@ -426,7 +427,7 @@ deliberately trusts only the Supervisor proxy peer.
 
 A future desktop GUI may reuse the same services and API.
 
-The web dashboard now provides System, LCARS-inspired, Matrix-inspired, First
+The web dashboard now provides System, LCARS, Matrix-inspired, First
 Responder, Amateur Radio, and original Pip-Boy-inspired environments over one
 shared accessible structure rather than separate interfaces. They use
 renderer-specific structural tokens and an ARIA-hidden decorative stage for

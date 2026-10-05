@@ -6,7 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from scripts.check_browser_namespace_results import REQUIRED_MODULES, check_report, main
+from scripts.check_browser_namespace_results import (
+    REQUIRED_MODULES,
+    REQUIRED_RECORDING_MODULES,
+    check_report,
+    main,
+)
 
 
 @pytest.fixture
@@ -100,6 +105,27 @@ def test_cli_failure_returns_nonzero(tmp_path, report, capsys, kind):
     assert "gate failed:" in output.err
 
 
+def test_native_recording_profile_requires_its_own_complete_report(report, capsys):
+    path = report([(module, "test_pass", None) for module in REQUIRED_RECORDING_MODULES])
+    assert check_report(path, required_modules=REQUIRED_RECORDING_MODULES) == dict.fromkeys(
+        REQUIRED_RECORDING_MODULES, 1
+    )
+    assert main([str(path), "--profile", "native-recording"]) == 0
+    assert "native-recording namespace gate passed" in capsys.readouterr().out
+    assert main([str(report()), "--profile", "native-recording"]) == 1
+    assert "modules absent" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("module", REQUIRED_RECORDING_MODULES)
+@pytest.mark.parametrize("outcome", ["skipped", "failure", "error", "absent"])
+def test_native_recording_profile_refuses_incomplete_namespace_execution(report, module, outcome):
+    cases = [(name, "test_pass", None) for name in REQUIRED_RECORDING_MODULES if name != module]
+    if outcome != "absent":
+        cases.append((module, "test_not_passed", outcome))
+    with pytest.raises(ValueError):
+        check_report(report(cases), required_modules=REQUIRED_RECORDING_MODULES)
+
+
 def test_workflow_checks_actual_namespace_report_and_keeps_latest_full_suite():
     workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/ci.yml").read_text()
     ordinary, namespace = workflow.split("  browser-namespace:\n", 1)
@@ -117,3 +143,7 @@ def test_workflow_checks_actual_namespace_report_and_keeps_latest_full_suite():
     assert '--report="${RUNNER_TEMP}/namespace-test-results.xml"' in namespace
     assert ('python scripts/check_browser_namespace_results.py '
             '"${RUNNER_TEMP}/namespace-test-results.xml"') in namespace
+    for module in REQUIRED_RECORDING_MODULES:
+        assert module.replace(".", "/") + ".py" in namespace
+    assert '--junitxml="${RUNNER_TEMP}/native-recording-namespace-results.xml"' in namespace
+    assert "--profile native-recording" in namespace

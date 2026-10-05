@@ -35,6 +35,10 @@ EXPECTED_ENTITY_FIELDS = {
     "service_type",
     "tone_out_tone_a",
     "tone_out_tone_b",
+    "talkgroup_id",
+    "unit_id",
+    "p25_status",
+    "battery",
     "signal",
     "rssi",
     "audio_running",
@@ -91,7 +95,7 @@ global.window = {{}};
 def test_display_card_resource_url_uses_home_assistant_local_path() -> None:
     assert HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_RESOURCE_URL == (
         "/local/sds200/sds200-display-card.js?v="
-        "b2d47c2b7abd19a92b2ee61b6b3de00362366f8df828d7786c54ae35aa0ada72"
+        "31e62f3d67b4d3a8577fbf69f3a5552a2880fb90984d1d15642a81ec58b15d1d"
     )
 
 
@@ -113,6 +117,7 @@ def test_install_cards_installs_all_packaged_assets(
         compact,
         display,
         waterfall,
+        tmp_path / "sds200-mimic-card.js",
         aggregate,
     )
     assert compact.read_text(encoding="utf-8") == compact_card_text()
@@ -136,7 +141,7 @@ def test_display_card_packaged_asset_is_importable() -> None:
 def test_display_card_uses_exact_existing_discovery_fields() -> None:
     fields = set(
         re.findall(
-            r'key: "([a-z_]+)"',
+            r'key: "([a-z0-9_]+)"',
             display_card_text(),
         )
     )
@@ -296,6 +301,134 @@ def test_display_card_tone_out_layout_presents_configured_tones() -> None:
     assert '["tone_out_tone_a", "tone_out_tone_b"].includes(field)' in text
     assert "special-layout-tone_out" in text
     assert "grid-template-rows: repeat(5, minmax(0, 1fr));" in text
+
+
+def test_display_card_preserves_raw_telemetry_and_clears_missing_values() -> None:
+    result = run_display_card_javascript(
+        """
+const card = Object.create(Sds200DisplayCard.prototype);
+card._config = requireDisplayCardConfig({entities: {
+  talkgroup_id: "sensor.sds200_talkgroup_id",
+  unit_id: "sensor.sds200_unit_id",
+  p25_status: "sensor.sds200_p25_status",
+  battery: "sensor.sds200_battery",
+}});
+card._states = {
+  "sensor.sds200_talkgroup_id": {state: "TGID:000123"},
+  "sensor.sds200_unit_id": {state: "UID:000045"},
+  "sensor.sds200_p25_status": {state: "unrecognized status"},
+  "sensor.sds200_battery": {state: "0"},
+};
+const present = Object.fromEntries(
+  ["talkgroup_id", "unit_id", "p25_status", "battery"].map(
+    (field) => [field, card._stateText(field)],
+  ),
+);
+card._states = {
+  "sensor.sds200_talkgroup_id": {state: "unknown"},
+  "sensor.sds200_unit_id": {state: "unavailable"},
+  "sensor.sds200_p25_status": {state: ""},
+};
+const cleared = Object.fromEntries(
+  ["talkgroup_id", "unit_id", "p25_status", "battery"].map(
+    (field) => [field, card._stateText(field)],
+  ),
+);
+process.stdout.write(JSON.stringify({present, cleared}));
+"""
+    )
+
+    assert result == {
+        "present": {
+            "talkgroup_id": "TGID:000123",
+            "unit_id": "UID:000045",
+            "p25_status": "unrecognized status",
+            "battery": "0",
+        },
+        "cleared": {
+            "talkgroup_id": "—",
+            "unit_id": "—",
+            "p25_status": "—",
+            "battery": "—",
+        },
+    }
+
+
+def test_display_card_adds_raw_telemetry_without_changing_old_detail_grid() -> None:
+    text = display_card_text()
+
+    for label, field in (
+        ("Talkgroup ID", "talkgroup_id"),
+        ("Unit ID", "unit_id"),
+        ("P25 reported", "p25_status"),
+        ("Battery raw", "battery"),
+    ):
+        assert f'["{label}", "{field}"]' in text
+    assert ".filter(([, field]) => this._config.entities[field])" in text
+    assert 'details.dataset.telemetry = String(telemetryFields.length > 0);' in text
+    assert '.detail-grid[data-telemetry="true"]' in text
+
+    result = run_display_card_javascript(
+        """
+const documentObject = {
+  createElement: (tagName) => ({
+    tagName,
+    className: "",
+    dataset: {},
+    attributes: {},
+    children: [],
+    setAttribute(name, value) { this.attributes[name] = value; },
+    append(...children) { this.children.push(...children); },
+  }),
+};
+function render(entities) {
+  const card = Object.create(Sds200DisplayCard.prototype);
+  card._config = requireDisplayCardConfig({layout: "detail", entities});
+  card._states = {};
+  const content = card._renderDetail(documentObject);
+  const details = content.children[1];
+  return {
+    telemetry: details.dataset.telemetry,
+    fields: details.children.map((child) => child.dataset.field),
+  };
+}
+process.stdout.write(JSON.stringify({
+  old: render({}),
+  telemetry: render({
+    talkgroup_id: "sensor.sds200_talkgroup_id",
+    unit_id: "sensor.sds200_unit_id",
+    p25_status: "sensor.sds200_p25_status",
+    battery: "sensor.sds200_battery",
+  }),
+}));
+"""
+    )
+
+    assert result["old"] == {
+        "telemetry": "false",
+        "fields": [
+            "site",
+            "frequency",
+            "service_type",
+            "modulation",
+            "signal",
+            "rssi",
+            "audio_running",
+            "recording_active",
+            "recording_status",
+            "daemon_state",
+        ],
+    }
+    assert result["telemetry"] == {
+        "telemetry": "true",
+        "fields": [
+            *result["old"]["fields"],
+            "talkgroup_id",
+            "unit_id",
+            "p25_status",
+            "battery",
+        ],
+    }
 
 
 def test_display_card_uses_graphical_configuration_and_domain_filters() -> None:

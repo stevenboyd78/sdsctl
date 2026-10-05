@@ -269,6 +269,26 @@ def test_daemon_host_accepts_serial_only_profile_without_audio() -> None:
     assert cli._daemon_host(args, profile_store=store) is None
 
 
+def test_qualified_menu_control_rejects_serial_only_daemon(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert (
+        cli.main(
+            [
+                "--port",
+                "/dev/ttyACM0",
+                "--model",
+                "SDS200",
+                "daemon",
+                "--enable-qualified-sds200-menu-control",
+            ],
+            environ={},
+        )
+        == 2
+    )
+    assert "requires direct network ownership" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
@@ -1111,6 +1131,7 @@ def test_daemon_cli_reports_process_os_error(
 def test_daemon_cli_explicit_socket_path_overrides_runtime_environment(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     explicit = tmp_path / "explicit" / "daemon.sock"
     explicit_events = tmp_path / "explicit" / "events.sock"
@@ -1147,6 +1168,9 @@ def test_daemon_cli_explicit_socket_path_overrides_runtime_environment(
             live_audio_server: object,
         ) -> None:
             del runtime, destination_coordinator, destination_reloader
+            # The fake process never runs the real service shutdown lifecycle.
+            assert isinstance(live_audio_server, cli.DaemonLiveAudioServer)
+            request.addfinalizer(live_audio_server.session.close)
             observed.append(
                 (
                     recording_manager,

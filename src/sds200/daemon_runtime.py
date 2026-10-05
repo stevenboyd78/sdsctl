@@ -3,7 +3,8 @@ from __future__ import annotations
 import logging
 import threading
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -11,12 +12,39 @@ from math import isfinite
 from time import monotonic
 from typing import Protocol, Self, cast
 
+from . import __version__
 from .audio_sinks import (
     AudioFanoutSession,
     AudioFanoutSnapshot,
     PcmSink,
     PcmSinkRouter,
     PcmSinkRouterSnapshot,
+)
+from .daemon_display_read_research import (
+    DisplayReadResearchAttempt,
+    DisplayReadResearchPolicy,
+    DisplayReadResearchResult,
+    _DisplayResearchScanner,
+    display_read_timeout,
+)
+from .daemon_front_panel_control import (
+    QualifiedMenuControlPolicy,
+    QualifiedMenuScanner,
+    execute_qualified_menu_press,
+)
+from .daemon_front_panel_research import (
+    FrontPanelResearchAttempt,
+    FrontPanelResearchPolicy,
+    FrontPanelResearchResult,
+    _FrontPanelResearchScanner,
+    front_panel_research_timeout,
+)
+from .daemon_system_status_research import (
+    SystemStatusResearchAttempt,
+    SystemStatusResearchPolicy,
+    SystemStatusResearchResult,
+    _ResearchScanner,
+    research_timeout,
 )
 from .events import EventBus
 from .exceptions import (
@@ -54,6 +82,7 @@ class DaemonControlOperation(StrEnum):
     RECONNECT = "scanner.reconnect"
     VOLUME_SET = "scanner.volume_set"
     SQUELCH_SET = "scanner.squelch_set"
+    FRONT_PANEL_PRESS = "scanner.front_panel.press"
 
 
 DAEMON_HOLD_STATE_DEFAULT_TIMEOUT = 4.0
@@ -224,6 +253,7 @@ class DaemonRuntimeSnapshot:
 
     def as_dict(self) -> dict[str, object]:
         return {
+            "application_version": __version__,
             "state": self.state.value,
             "scanner_endpoint": self.scanner_endpoint,
             "scanner_model": self.scanner_model,
@@ -345,6 +375,10 @@ class DaemonRuntime:
         allow_degraded_psi_startup: bool = False,
         psi_recover_after: float = 10.0,
         psi_recovery_cooldown: float = 60.0,
+        system_status_research: SystemStatusResearchPolicy | None = None,
+        display_read_research: DisplayReadResearchPolicy | None = None,
+        front_panel_research: FrontPanelResearchPolicy | None = None,
+        front_panel_control: QualifiedMenuControlPolicy | None = None,
         clock: Callable[[], float] = monotonic,
         now: Callable[[], datetime] = _utc_now,
     ) -> None:
@@ -385,6 +419,9 @@ class DaemonRuntime:
         self._now = now
         self._scanner_model: str | None = None
         self._scanner_firmware: str | None = None
+        # Internal candidate owner only; never constructed by default startup.
+        self._supplemental_acquisition: object | None = None
+        self._supplemental_acquisition_used = False
 
         self.events = EventBus()
         self._lifecycle_lock = threading.RLock()
@@ -405,6 +442,44 @@ class DaemonRuntime:
         self._psi_unsubscribe: Callable[[], None] | None = None
         self._last_psi_at: float | None = None
         self._last_psi_recovery_at: float | None = None
+        if system_status_research is not None and not isinstance(
+            system_status_research, SystemStatusResearchPolicy
+        ):
+            raise TypeError("System Status research requires an explicit policy.")
+        self._system_status_research = (
+            None if system_status_research is None
+            else SystemStatusResearchAttempt(system_status_research)
+        )
+        if display_read_research is not None and not isinstance(
+            display_read_research, DisplayReadResearchPolicy
+        ):
+            raise TypeError("Display-read research requires an explicit policy.")
+        if front_panel_research is not None and not isinstance(
+            front_panel_research, FrontPanelResearchPolicy
+        ):
+            raise TypeError("Front-panel research requires an explicit policy.")
+        if front_panel_control is not None and not isinstance(
+            front_panel_control, QualifiedMenuControlPolicy
+        ):
+            raise TypeError("Front-panel control requires an explicit qualified policy.")
+        if sum(
+            policy is not None
+            for policy in (
+                system_status_research,
+                display_read_research,
+                front_panel_research,
+            )
+        ) > 1:
+            raise ValueError("Only one research policy may be enabled per runtime.")
+        self._display_read_research = (
+            None if display_read_research is None
+            else DisplayReadResearchAttempt(display_read_research)
+        )
+        self._front_panel_research = (
+            None if front_panel_research is None
+            else FrontPanelResearchAttempt(front_panel_research)
+        )
+        self._front_panel_control = front_panel_control
 
     @property
     def running(self) -> bool:
@@ -419,6 +494,12 @@ class DaemonRuntime:
             audio=self.audio.snapshot(),
             router=self.router.snapshot(),
         )
+
+    @property
+    def front_panel_control_available(self) -> bool:
+        """Whether the exact qualified Menu capability was explicitly enabled."""
+
+        return self._front_panel_control is not None
 
     def on_transition(
         self,
@@ -817,6 +898,34 @@ class DaemonRuntime:
             getter=self.scanner.get_squelch,
         )
 
+    def press_front_panel(
+        self,
+        key: object,
+        *,
+        timeout: float = 2.0,
+    ) -> DaemonControlResult:
+        """Press the one qualified key after fresh server-side preflights."""
+
+        from .front_panel_keys import FrontPanelKey
+
+        if type(key) is not FrontPanelKey or key is not FrontPanelKey.MENU:
+            raise ValueError("Only the qualified Menu key is available.")
+        policy = self._front_panel_control
+        if policy is None:
+            raise UnsupportedScannerFeatureError(
+                "Qualified Menu control is not enabled."
+            )
+        return self._execute_control(
+            DaemonControlOperation.FRONT_PANEL_PRESS,
+            timeout,
+            lambda remaining: execute_qualified_menu_press(
+                cast(QualifiedMenuScanner, self.scanner),
+                policy,
+                timeout=remaining,
+                clock=self._clock,
+            ),
+        )
+
     def _set_level(
         self,
         operation: DaemonControlOperation,
@@ -1149,6 +1258,79 @@ class DaemonRuntime:
         *,
         requires_connection: bool = True,
     ) -> DaemonControlResult:
+        with self._control_scope(timeout, requires_connection=requires_connection) as remaining:
+            started_at = _require_aware_datetime(self._now())
+            action(remaining)
+            completed_at = _require_aware_datetime(self._now())
+            with self._state_lock:
+                self._control_sequence += 1
+                return DaemonControlResult(
+                    sequence=self._control_sequence,
+                    operation=operation,
+                    started_at=started_at,
+                    completed_at=completed_at,
+                    snapshot=self._snapshot_locked(),
+                )
+
+    def run_system_status_research(
+        self, *, operator_ready: bool, timeout: float = 6.0
+    ) -> SystemStatusResearchResult:
+        """Internal opt-in qualification, never advertised as a daemon control.
+
+        The research policy must have been explicitly supplied at construction;
+        ordinary CLI/config/API startup never supplies one. This does not manage
+        the ongoing analysis mode or implement a remote return-to-scan action.
+        """
+        if self._system_status_research is None:
+            raise UnsupportedScannerFeatureError("System Status research is disabled.")
+        normalized = research_timeout(timeout)
+        with self._control_scope(normalized) as remaining:
+            return self._system_status_research.run(
+                cast(_ResearchScanner, self.scanner),
+                operator_ready=operator_ready,
+                timeout=remaining,
+            )
+
+    def run_display_read_research(
+        self, *, operator_ready: bool, timeout: float = 6.0
+    ) -> DisplayReadResearchResult:
+        """One opt-in GET qualification; not a public daemon control or poller."""
+        if self._display_read_research is None:
+            raise UnsupportedScannerFeatureError("Display-read research is disabled.")
+        normalized = display_read_timeout(timeout)
+        with self._control_scope(normalized) as remaining:
+            return self._display_read_research.run(
+                cast(_DisplayResearchScanner, self.scanner),
+                operator_ready=operator_ready,
+                timeout=remaining,
+            )
+
+    def run_front_panel_research(
+        self, *, operator_ready: bool, timeout: float = 6.0
+    ) -> FrontPanelResearchResult:
+        """One opt-in key qualification; never a public daemon control."""
+        if self._front_panel_research is None:
+            raise UnsupportedScannerFeatureError("Front-panel research is disabled.")
+        normalized = front_panel_research_timeout(timeout)
+        with self._control_scope(normalized) as remaining:
+            return self._front_panel_research.run(
+                cast(_FrontPanelResearchScanner, self.scanner),
+                operator_ready=operator_ready,
+                timeout=remaining,
+            )
+
+    @contextmanager
+    def _supplemental_read_scope(self, scanner: object) -> Iterator[bool]:
+        """Internal optional reader gate; not a daemon API control or startup hook."""
+        from .daemon_supplemental_reads import supplemental_read_scope
+
+        with supplemental_read_scope(self, scanner) as ready:
+            yield ready
+
+    @contextmanager
+    def _control_scope(
+        self, timeout: float, *, requires_connection: bool = True
+    ) -> Iterator[float]:
         normalized_timeout = _require_positive_control_timeout(timeout)
         deadline = monotonic() + normalized_timeout
 
@@ -1184,19 +1366,7 @@ class DaemonRuntime:
                     "Daemon scanner control timed out before execution."
                 )
 
-            started_at = _require_aware_datetime(self._now())
-            action(remaining)
-            completed_at = _require_aware_datetime(self._now())
-
-            with self._state_lock:
-                self._control_sequence += 1
-                return DaemonControlResult(
-                    sequence=self._control_sequence,
-                    operation=operation,
-                    started_at=started_at,
-                    completed_at=completed_at,
-                    snapshot=self._snapshot_locked(),
-                )
+            yield remaining
         finally:
             if lifecycle_acquired:
                 self._lifecycle_lock.release()

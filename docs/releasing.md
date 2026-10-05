@@ -401,12 +401,14 @@ distribution path on Home Assistant OS.
    loading is harmless, and that the App never edits Home Assistant resource
    records. Confirm exactly one running App is required and no private
    Ingress value, URL, credential, or scanner address enters card configuration.
-8. Confirm the discovered SDS200 device exposes twenty-four components: seventeen
+8. Confirm the discovered SDS200 device exposes twenty-eight components: twenty-one
    state/diagnostic components plus four Hold switches and Previous Channel,
    Next Channel, and Reconnect Scanner buttons. Confirm the optional Site,
    Frequency, Modulation, Service Type, and configured Tone-Out Tone A and Tone B
-   sensors follow field availability; Screen Kind falls back to `unknown`; and
-   zero tones render as `Detect` in both entity cards.
+   sensors follow field availability; Talkgroup ID and Unit ID retain literal
+   prefixes and leading zeroes; P25 status and battery remain raw with no inferred
+   semantics; Screen Kind falls back to `unknown`; and zero tones render as
+   `Detect` in both entity cards.
 9. Exercise all four Hold scopes when meaningful, Previous and Next with a valid
    current channel selection, and Reconnect Scanner. Confirm Home Assistant state
    remains authoritative after each action and the App does not enable the

@@ -20,6 +20,20 @@ class Packet:
     received_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
+@dataclass(frozen=True, slots=True)
+class ScannerDateTime:
+    """DTM clock reading, not an instant in UTC or the host's timezone.
+
+    An invalid RTC has no usable local_time. DayLightSaving is preserved as
+    an opaque bounded token: V1.02 does not define its encoding or UTC offset.
+    """
+
+    local_time: datetime | None
+    daylight_saving: str
+    rtc_valid: bool
+    packet: Packet
+
+
 class FavoritesQuickKeyState(IntEnum):
     NONEXISTENT = 0
     DISABLED = 1
@@ -28,6 +42,28 @@ class FavoritesQuickKeyState(IntEnum):
 
 @dataclass(frozen=True, slots=True)
 class FavoritesQuickKeys:
+    states: tuple[FavoritesQuickKeyState, ...]
+    packet: Packet
+
+
+@dataclass(frozen=True, slots=True)
+class SystemQuickKeys:
+    """V1.02 SQK GET fields, including its documented extra SYS_QK field.
+
+    The meaning of that returned system key is not yet hardware-qualified;
+    it must not be treated as a live LCD bank selector.
+    """
+
+    favorites_quick_key: int
+    reported_system_quick_key: int
+    states: tuple[FavoritesQuickKeyState, ...]
+    packet: Packet
+
+
+@dataclass(frozen=True, slots=True)
+class DepartmentQuickKeys:
+    favorites_quick_key: int
+    system_quick_key: int
     states: tuple[FavoritesQuickKeyState, ...]
     packet: Packet
 

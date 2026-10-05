@@ -13,7 +13,7 @@ from sds200.tui import ScannerIdentity, ScannerTuiApp
 from sds200.tui_clock import LocalHeaderClock, ScannerTuiHeader
 from sds200.xml_protocol import ScannerInfoParser
 
-from .test_tui import XML
+from .test_tui import XML, _settle_responsive_layout
 
 pytestmark = pytest.mark.usefixtures("local_timezone_utc")
 
@@ -179,7 +179,7 @@ def test_full_header_fits_without_moving_panels_and_tracks_clock_changes(size, p
             palette=palette,
         )
         async with app.run_test(size=size) as pilot:
-            await pilot.pause()
+            await _settle_responsive_layout(app, pilot)
             header = app.query_one(ScannerTuiHeader)
             clock = app.query_one(LocalHeaderClock)
             title = header.query_one("HeaderTitle")

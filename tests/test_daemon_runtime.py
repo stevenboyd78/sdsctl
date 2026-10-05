@@ -650,6 +650,9 @@ def test_runtime_owns_startup_and_reverse_order_shutdown() -> None:
     ]
 
     payload = stopped.as_dict()
+    from sds200 import __version__
+
+    assert payload["application_version"] == __version__
     assert payload["state"] == "stopped"
     assert payload["scanner_model"] == "SDS200"
     assert payload["scanner_firmware"] == "Version 1.26.01"

@@ -63,6 +63,7 @@ from .daemon_destination_reload import DaemonDestinationReloader
 from .daemon_destinations import (
     load_daemon_destination_configuration,
 )
+from .daemon_display_profile import DaemonDisplayProfile
 from .daemon_event_client import (
     DaemonEventClient,
 )
@@ -79,6 +80,7 @@ from .daemon_events import (
     DaemonEvent,
     DaemonEventKind,
 )
+from .daemon_front_panel_control import QualifiedMenuControlPolicy
 from .daemon_ipc import (
     DaemonSocketListener,
     resolve_daemon_event_socket_location,
@@ -172,6 +174,7 @@ from .exceptions import (
     DaemonProtocolError,
     SDS200Error,
 )
+from .front_panel_keys import FrontPanelKey
 from .home_assistant_live_audio import (
     LiveAudioEncoderPipeline,
     LiveAudioSession,
@@ -775,6 +778,10 @@ def build_parser(
 
     subparsers = parser.add_subparsers(dest="action", required=True)
 
+    from .scanner_display_profile_cli import add_display_profile_parser
+
+    add_display_profile_parser(subparsers)
+
     discover = subparsers.add_parser(
         "discover",
         help="Find USB SDS-series scanners and LAN-connected SDS200 scanners",
@@ -907,6 +914,14 @@ def build_parser(
         ),
     )
     daemon.add_argument(
+        "--enable-qualified-sds200-menu-control",
+        action="store_true",
+        help=(
+            "Explicitly enable the exact SDS200 firmware 1.26.01 Menu press; "
+            "every request still requires two fresh Trunk Scan preflights"
+        ),
+    )
+    daemon.add_argument(
         "--rtsp-port",
         type=_remote_port,
         default=DEFAULT_RTSP_PORT,
@@ -948,6 +963,12 @@ def build_parser(
             "Explicit daemon destination manifest; otherwise use "
             "the user configuration directory"
         ),
+    )
+    daemon.add_argument(
+        "--scanner-display-profile-config",
+        type=Path,
+        metavar="PATH",
+        help="Opt in to an explicitly configured Mimic-SDS accepted profile (no auto-import)",
     )
     daemon.add_argument(
         "--mqtt-config",
@@ -1792,6 +1813,21 @@ def build_parser(
         help="Print the authoritative completion result as JSON",
     )
 
+    daemon_menu = daemon_client_commands.add_parser(
+        "front-panel-menu",
+        help=(
+            "Press Menu once through the explicitly enabled, exact qualified "
+            "SDS200 control boundary"
+        ),
+    )
+    daemon_menu.add_argument(
+        "--control-timeout",
+        type=_positive_float,
+        default=DAEMON_API_DEFAULT_CONTROL_TIMEOUT,
+        metavar="SECONDS",
+    )
+    daemon_menu.add_argument("--json", action="store_true")
+
     web = subparsers.add_parser(
         "web",
         help="Serve the optional daemon-backed web dashboard",
@@ -1832,6 +1868,14 @@ def build_parser(
         type=Path,
         metavar="PATH",
         help="Existing private server JSON; requires --experimental-browser-devices",
+    )
+    web.add_argument(
+        "--scanner-display-admin-config", type=Path, metavar="PATH",
+        help="Explicit display-profile deployment TOML; Home Assistant Ingress only",
+    )
+    web.add_argument(
+        "--scanner-display-recording-directory", type=Path, metavar="PATH",
+        help="Actual daemon recording root; required with --scanner-display-admin-config",
     )
     web.add_argument(
         "--lan-listen-address",
@@ -2078,7 +2122,7 @@ def build_parser(
         default=None,
         metavar="SECONDS",
         help=(
-            "Daemon API, event, and PCMU connection timeout "
+            "Daemon API, event, PCMU, and waterfall connection timeout "
             f"(default: {DAEMON_API_CLIENT_DEFAULT_TIMEOUT})"
         ),
     )
@@ -2112,6 +2156,15 @@ def build_parser(
         ),
     )
     tui.add_argument(
+        "--daemon-waterfall-socket-path",
+        type=Path,
+        metavar="PATH",
+        help=(
+            "Explicit daemon waterfall socket path used with --daemon-client; "
+            "otherwise use XDG_RUNTIME_DIR or the user state directory"
+        ),
+    )
+    tui.add_argument(
         "--daemon-pcmu-max-endpoint-bytes",
         type=_positive_integer,
         default=None,
@@ -2129,6 +2182,16 @@ def build_parser(
         help=(
             "Maximum accepted daemon PCMU frame size "
             f"(default: {PCMU_STREAM_DEFAULT_MAX_FRAME_BYTES})"
+        ),
+    )
+    tui.add_argument(
+        "--daemon-waterfall-max-record-bytes",
+        type=_positive_integer,
+        default=None,
+        metavar="BYTES",
+        help=(
+            "Maximum accepted daemon waterfall record size "
+            f"(default: {DAEMON_WATERFALL_DEFAULT_MAX_RECORD_BYTES})"
         ),
     )
     tui.add_argument(
@@ -3456,6 +3519,13 @@ def _run_daemon(
         if configuration_paths is not None
         else resolve_configuration_paths(environ=environ)
     )
+    from .scanner_display_configuration import load_scanner_display_configuration
+
+    display_config_path = getattr(args, "scanner_display_profile_config", None)
+    display_configuration = (
+        None if display_config_path is None
+        else load_scanner_display_configuration(display_config_path)
+    )
     destination_manifest_path = (
         args.destination_config
         if args.destination_config is not None
@@ -3492,10 +3562,25 @@ def _run_daemon(
         if args.recording_directory is not None
         else resolved_paths.daemon_recording_dir
     )
+    if display_configuration is not None:
+        display_configuration.require_separate_recordings(recording_directory)
 
     profile_store = ProfileStore(args.config) if args.profile is not None else None
     host = _daemon_host(args, profile_store=profile_store)
+    if args.enable_qualified_sds200_menu_control and host is None:
+        raise ValueError(
+            "--enable-qualified-sds200-menu-control requires direct network ownership."
+        )
     scanner = selected_radio(args, profile_store=profile_store)
+    from .scanner_display_profile_storage import DisplayProfileStorageError
+
+    try:
+        display_profile = (
+            None if display_configuration is None
+            else DaemonDisplayProfile(display_configuration, lambda: scanner.endpoint)
+        )
+    except DisplayProfileStorageError as exc:
+        raise ValueError(str(exc)) from None
 
     socket_location = resolve_daemon_socket_location(
         args.socket_path,
@@ -3561,6 +3646,11 @@ def _run_daemon(
         ),
         psi_recover_after=args.psi_recover_after,
         psi_recovery_cooldown=args.psi_recovery_cooldown,
+        front_panel_control=(
+            QualifiedMenuControlPolicy()
+            if args.enable_qualified_sds200_menu_control
+            else None
+        ),
     )
     recording_manager: DaemonRecordingManager | None = None
     recording_file_server: DaemonRecordingFileServer | None = None
@@ -3583,6 +3673,8 @@ def _run_daemon(
         recording_manager=recording_manager,
         reconnect_available=host is not None,
     )
+    if display_profile is not None:
+        daemon_api.display_profile = display_profile
     listener = DaemonSocketListener(socket_location)
     api_server = DaemonApiServer(
         listener,
@@ -3794,7 +3886,20 @@ def _run_daemon(
             **cast(Any, live_audio_process_options),
             **cast(Any, waterfall_process_options),
         )
-    result = process.run()
+    # Attach only around the actual daemon lifecycle, after construction succeeds.
+    # It observes existing PSI; it never starts a scanner/audio session of its own.
+    if display_profile is None:
+        result = process.run()
+    else:
+        from .daemon_display_frames import DaemonDisplayFrames
+
+        display_frames = DaemonDisplayFrames(display_profile, scanner)
+        daemon_api.display_frames = display_frames
+        try:
+            display_frames.start()
+            result = process.run()
+        finally:
+            display_frames.close()
     logger.info(
         "foreground daemon stopped audio_host=%s socket=%s event_socket=%s "
         "pcmu_socket=%s live_audio_socket=%s recording_file_socket=%s "
@@ -4602,6 +4707,16 @@ def _run_daemon_client(
                 args.second,
                 timeout=args.control_timeout,
             )
+        elif action == "front-panel-menu":
+            _require_daemon_client_operation(
+                hello,
+                DaemonApiOperation.SCANNER_FRONT_PANEL_PRESS,
+                control=True,
+            )
+            control_result = client.press_front_panel(
+                FrontPanelKey.MENU,
+                timeout=args.control_timeout,
+            )
         elif action == "hold-state":
             _require_daemon_client_operation(
                 hello,
@@ -5080,6 +5195,8 @@ def _reject_standalone_tui_daemon_options(
             args.daemon_pcmu_socket_path,
             args.daemon_pcmu_max_endpoint_bytes,
             args.daemon_pcmu_max_frame_bytes,
+            args.daemon_waterfall_socket_path,
+            args.daemon_waterfall_max_record_bytes,
             args.remote_profile,
         )
     ):
@@ -5164,6 +5281,20 @@ def _run_web(
 ) -> int:
     _reject_daemon_client_scanner_options(args)
     paths = configuration_paths or resolve_configuration_paths(environ=environ)
+
+    display_admin_config = args.scanner_display_admin_config
+    display_recordings = args.scanner_display_recording_directory
+    if (display_admin_config is None) != (display_recordings is None):
+        raise ValueError(
+            "Display-profile administration requires both configuration and recording root."
+        )
+    if display_admin_config is not None and (
+        not args.home_assistant_ingress or args.authenticated_lan or args.container_exposure
+        or not display_recordings.is_absolute()
+    ):
+        raise ValueError(
+            "Display-profile administration requires Ingress and an absolute recording root."
+        )
 
     if args.experimental_browser_devices != (args.browser_device_config is not None):
         raise ValueError(
@@ -5405,6 +5536,33 @@ def _run_web(
         )
 
     browser_options: dict[str, Any] = {}
+    if display_admin_config is not None:
+        from .scanner_display_admin import ScannerDisplayProfileAdmin
+        from .scanner_display_deployment import load_scanner_display_deployment
+        from .scanner_display_ingress import ScannerDisplayIngress
+
+        display_deployment = load_scanner_display_deployment(display_admin_config)
+        display_configuration = display_deployment.preflight(display_recordings)
+        # Verify the selected local API before exposing administrator actions.
+        # This is read-only: browser startup must never import or reload state.
+        with api_client_factory() as display_client:
+            display_current = display_client.request(DaemonApiOperation.DISPLAY_PROFILE)
+        if (
+            display_current.get("endpoint_id") != str(display_configuration.binding.endpoint_id)
+            or display_current.get("configured") is not True
+            or display_current.get("failure") is not None
+        ):
+            raise ValueError(
+                "The local daemon does not match the configured display-profile endpoint."
+            )
+        browser_options["scanner_display_admin_ingress"] = ScannerDisplayIngress(
+            ScannerDisplayProfileAdmin(
+                display_configuration, recording_directory=display_recordings,
+                daemon_socket_path=api_location.path,
+                allow_upload=display_deployment.allow_upload,
+            ),
+            display_deployment.ingress_origin, display_deployment.admin_user_ids,
+        )
     if args.experimental_browser_devices:
         from .browser_device_admin import BrowserDeviceAdmin
         from .browser_device_ingress import BrowserDeviceIngress
@@ -5494,6 +5652,8 @@ def _run_tui(
             ) from exc
         raise
 
+    from .scanner_display_reader import MAX_DISPLAY_RESPONSE_BYTES, daemon_display_source
+
     theme_runtime, theme_asset = _selected_terminal_theme(
         args.theme,
         configuration_paths=configuration_paths,
@@ -5542,6 +5702,7 @@ def _run_tui(
             args.daemon_socket_path,
             args.daemon_event_socket_path,
             args.daemon_pcmu_socket_path,
+            args.daemon_waterfall_socket_path,
         )
         api_endpoint = (
             DaemonRemoteClientTransport(
@@ -5579,6 +5740,18 @@ def _run_tui(
                 configuration_paths=configuration_paths,
             )
         )
+        waterfall_endpoint = (
+            DaemonRemoteClientTransport(
+                remote_configuration,
+                DaemonRemoteService.WATERFALL,
+            )
+            if remote_configuration is not None
+            else resolve_daemon_waterfall_socket_location(
+                args.daemon_waterfall_socket_path,
+                environ=environ,
+                configuration_paths=configuration_paths,
+            )
+        )
         api_client = DaemonApiClient(
             api_endpoint,
             timeout=timeout,
@@ -5611,6 +5784,24 @@ def _run_tui(
                 else args.daemon_pcmu_max_frame_bytes
             ),
         )
+        max_waterfall_record_bytes = (
+            DAEMON_WATERFALL_DEFAULT_MAX_RECORD_BYTES
+            if args.daemon_waterfall_max_record_bytes is None
+            else args.daemon_waterfall_max_record_bytes
+        )
+        if max_waterfall_record_bytes > DAEMON_WATERFALL_DEFAULT_MAX_RECORD_BYTES:
+            raise ValueError(
+                "--daemon-waterfall-max-record-bytes must not exceed the TUI "
+                "waterfall protocol limit of "
+                f"{DAEMON_WATERFALL_DEFAULT_MAX_RECORD_BYTES}."
+            )
+
+        def waterfall_client_factory() -> DaemonWaterfallClient:
+            return DaemonWaterfallClient(
+                waterfall_endpoint,
+                timeout=timeout,
+                max_record_bytes=max_waterfall_record_bytes,
+            )
 
         remote_reconnect_policy = (
             DaemonRemoteReconnectPolicy()
@@ -5674,6 +5865,35 @@ def _run_tui(
                 metadata=args.audio_metadata,
                 scanner=initial.model,
             )
+            daemon_operations = hello.get("operations")
+            display_capable = (
+                isinstance(daemon_operations, list)
+                and DaemonApiOperation.DISPLAY_FRAME.value in daemon_operations
+            )
+            front_panel_capable = (
+                isinstance(daemon_operations, list)
+                and DaemonApiOperation.SCANNER_FRONT_PANEL_INVENTORY.value
+                in daemon_operations
+            )
+            front_panel_inventory = (
+                api_client.front_panel_inventory()
+                if display_capable and front_panel_capable
+                else None
+            )
+            display_source = (
+                daemon_display_source(DaemonApiClient(
+                    api_endpoint,
+                    timeout=min(timeout, 2.0),
+                    max_response_bytes=min(
+                        MAX_DISPLAY_RESPONSE_BYTES,
+                        DAEMON_API_DEFAULT_MAX_RESPONSE_BYTES
+                        if args.daemon_max_response_bytes is None
+                        else args.daemon_max_response_bytes,
+                    ),
+                ))
+                if display_capable
+                else None
+            )
             run_tui(
                 endpoint=initial.endpoint,
                 model=initial.model,
@@ -5690,6 +5910,8 @@ def _run_tui(
                 ),
                 snapshot=initial.snapshot,
                 radio=radio,
+                daemon_version_source=lambda: radio.application_version,
+                daemon_link_since_source=lambda: radio.event_link_connected_at,
                 audio_session=daemon_audio_session,
                 interval_ms=args.interval,
                 stale_after=args.stale_after,
@@ -5697,6 +5919,9 @@ def _run_tui(
                 psi_recover_after=args.psi_recover_after,
                 psi_recovery_cooldown=args.psi_recovery_cooldown,
                 connected=initial.connected,
+                display_source=display_source,
+                front_panel_inventory=front_panel_inventory,
+                waterfall_client_factory=waterfall_client_factory,
                 palette=palette,
                 screen_class=theme_asset.manifest.screen_class,
                 managed_stylesheet=managed_stylesheet,
@@ -5767,20 +5992,20 @@ def _run_tui(
             scanner="SDS200",
         )
 
-    with selected_radio(args) as radio:
+    with selected_radio(args) as direct_radio:
         run_tui(
-            endpoint=radio.endpoint,
-            model=str(radio.get_model()),
-            firmware=str(radio.get_firmware()),
-            snapshot=snapshot_from_scanner_info(radio.get_scanner_info()),
-            radio=radio,
+            endpoint=direct_radio.endpoint,
+            model=str(direct_radio.get_model()),
+            firmware=str(direct_radio.get_firmware()),
+            snapshot=snapshot_from_scanner_info(direct_radio.get_scanner_info()),
+            radio=direct_radio,
             audio_session=audio_session,
             interval_ms=args.interval,
             stale_after=args.stale_after,
             psi_auto_recover=args.psi_auto_recover,
             psi_recover_after=args.psi_recover_after,
             psi_recovery_cooldown=args.psi_recovery_cooldown,
-            connected=radio.connected,
+            connected=direct_radio.connected,
             palette=palette,
             screen_class=theme_asset.manifest.screen_class,
             managed_stylesheet=managed_stylesheet,
@@ -6536,6 +6761,11 @@ def main(
 
         if args.action == "profile":
             return _manage_profile(args, ProfileStore(args.config))
+
+        if args.action == "scanner-display-profile":
+            from .scanner_display_profile_cli import run_display_profile_command
+
+            return run_display_profile_command(args)
 
         if args.action == "discover":
             return _run_discovery(args)

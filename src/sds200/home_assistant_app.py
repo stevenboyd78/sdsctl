@@ -216,12 +216,14 @@ class HomeAssistantAppOptions:
     scanner_host: str
     mqtt_topic_prefix: str = HOME_ASSISTANT_APP_DEFAULT_MQTT_TOPIC_PREFIX
     recording_directory: str = HOME_ASSISTANT_APP_DEFAULT_RECORDING_DIRECTORY
+    qualified_sds200_menu_control_enabled: bool = False
     remote_daemon_enabled: bool = False
     native_dashboard_enabled: bool = False
     advanced_access_server_name: str = ""
     advanced_access_host_address: str = ""
     experimental_browser_devices_enabled: bool = False
     browser_device_server_config: str = ""
+    scanner_display_config: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -241,6 +243,14 @@ class HomeAssistantAppOptions:
             self,
             "recording_directory",
             _require_recording_directory(self.recording_directory),
+        )
+        object.__setattr__(
+            self,
+            "qualified_sds200_menu_control_enabled",
+            _require_bool(
+                self.qualified_sds200_menu_control_enabled,
+                label=("Home Assistant App qualified SDS200 Menu-control enabled setting"),
+            ),
         )
         object.__setattr__(
             self,
@@ -296,6 +306,19 @@ class HomeAssistantAppOptions:
             )
         if self.experimental_browser_devices_enabled and not self.native_dashboard_enabled:
             raise ValueError("Experimental browser devices require the native HTTPS dashboard.")
+        display_config = self.scanner_display_config
+        if (
+            type(display_config) is not str
+            or display_config.strip() != display_config
+            or len(display_config) > 4096
+            or any(ord(char) < 32 or ord(char) == 127 for char in display_config)
+            or (display_config and (
+                not Path(display_config).is_absolute()
+                or Path(display_config) == Path("/")
+                or ".." in Path(display_config).parts
+            ))
+        ):
+            raise ValueError("Scanner display deployment must be an absolute path or empty.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -458,12 +481,14 @@ def load_home_assistant_app_options(
         "scanner_host",
         "mqtt_topic_prefix",
         "recording_directory",
+        "qualified_sds200_menu_control_enabled",
         "remote_daemon_enabled",
         "native_dashboard_enabled",
         "advanced_access_server_name",
         "advanced_access_host_address",
         "experimental_browser_devices_enabled",
         "browser_device_server_config",
+        "scanner_display_config",
     }
     unexpected = sorted(str(key) for key in payload if key not in allowed)
     if unexpected:
@@ -488,6 +513,10 @@ def load_home_assistant_app_options(
                 "recording_directory",
                 HOME_ASSISTANT_APP_DEFAULT_RECORDING_DIRECTORY,
             ),
+            qualified_sds200_menu_control_enabled=payload.get(
+                "qualified_sds200_menu_control_enabled",
+                False,
+            ),
             remote_daemon_enabled=payload.get("remote_daemon_enabled", False),
             native_dashboard_enabled=payload.get("native_dashboard_enabled", False),
             advanced_access_server_name=payload.get(
@@ -502,6 +531,7 @@ def load_home_assistant_app_options(
                 "experimental_browser_devices_enabled", False,
             ),
             browser_device_server_config=payload.get("browser_device_server_config", ""),
+            scanner_display_config=payload.get("scanner_display_config", ""),
         )
     except (TypeError, ValueError) as error:
         raise ConfigurationError(
@@ -690,6 +720,7 @@ def reconcile_home_assistant_app_advanced_exposure(
         raise TypeError("Advanced App exposure requires Supervisor App information.")
 
     for field_name in (
+        "qualified_sds200_menu_control_enabled",
         "remote_daemon_enabled",
         "native_dashboard_enabled",
         "advanced_access_server_name",

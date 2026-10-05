@@ -57,7 +57,7 @@ def test_built_in_web_theme_registry_is_ordered_and_immutable() -> None:
     assert tuple(theme.order for theme in registry.themes) == (0, 10, 20, 30, 40, 50)
     assert tuple(theme.label for theme in registry.themes) == (
         "System",
-        "LCARS-inspired",
+        "LCARS",
         "Matrix-inspired",
         "First Responder",
         "Amateur Radio",
@@ -146,14 +146,14 @@ def test_pip_boy_inspired_theme_uses_stable_declarative_hooks() -> None:
 def test_lcars_data_groups_keep_bounded_corners_without_removing_containment() -> None:
     theme = built_in_web_theme_registry().require("lcars")
     stylesheet = read_built_in_web_theme_stylesheet(theme).decode("utf-8")
-    match = re.search(r':root\[data-theme="lcars"\] \.radio-field-groups\s*\{([^}]+)\}',
+    match = re.search(r':root\[data-theme="lcars"\] :is\(\.radio-field-groups,[^{]+\{([^}]+)\}',
                       stylesheet)
     assert match is not None
-    assert "border-radius: var(--radius-small);" in match[1]
+    assert "border-radius: 0;" in match[1]
     assert "999px" not in match[1]
     assert "overflow:" not in match[1] and "z-index:" not in match[1]
-    # Decorative curves remain elsewhere; data-bearing corners alone change.
-    assert "border-radius: 999px 0.3rem 0.3rem 999px;" in stylesheet
+    # Decorative frame curves remain separate from data-bearing groups.
+    assert "border-radius: 0 0 0 clamp(2rem, 5vw, 4.25rem);" in stylesheet
     base = files("sds200.web_assets").joinpath("dashboard.css").read_text(encoding="utf-8")
     groups = re.findall(r"(?m)^\.radio-field-groups\s*\{([^}]+)\}", base)
     assert groups and "overflow: hidden;" in groups[-1]
@@ -168,29 +168,15 @@ def test_lcars_header_content_reserves_space_for_decorative_edges() -> None:
         stylesheet,
     )
     assert header is not None
-    assert "padding-right: 1.6rem;" in header[1]
-    assert "border-radius: 0 0 1.4rem 0;" in header[1]
-    refresh = re.search(
-        r':root\[data-theme="lcars"\] #recordings-refresh\s*\{([^}]+)\}',
-        stylesheet,
-    )
-    assert refresh is not None and "flex-shrink: 0;" in refresh[1]
-    assert ".recording-library-header > div {\n  min-width: 0;" in stylesheet
+    assert "border-radius: 0;" in header[1]
     viewport = files("sds200.web_assets").joinpath(
         "dashboard-viewport.css"
     ).read_text(encoding="utf-8")
-    rail = re.search(
-        r':root\[data-theme="lcars"\] \.site-header\s*\{([^}]+)\}',
-        viewport,
-    )
-    assert rail is not None
-    assert "padding-left: 2.2rem !important;" in rail[1]
-    panels = re.search(
-        r':root\[data-theme="lcars"\] \.panel-header\s*\{([^}]+)\}',
-        viewport,
-    )
-    assert panels is not None
-    assert "margin-right: 4.2rem !important;" in panels[1]
+    assert ':root[data-theme="lcars"]' not in viewport
+    layout = files("sds200.web_assets").joinpath("lcars-v2.css").read_text()
+    assert "--lcars-v2-nav-cap: 3.2rem;" in layout
+    assert ".workspace-tabs::before" in layout
+    assert "flex: 0 0 var(--lcars-v2-nav-cap) !important;" in layout
 
 
 @pytest.mark.parametrize("theme_id", ("first-responder", "amateur-radio"))

@@ -77,6 +77,117 @@ contains the immutable source/artifact identities and separate published-upgrade
 acceptance for both Pi displays and the Home Assistant App. This closes the
 release, not the remaining managed-browser milestone or its unattended-use gates.
 
+### Immediate maintenance follow-up: Home Assistant Waterfall sizing
+
+Correct the independently reported Waterfall-card height growth with an external
+theme and `grid_options.rows: auto`. Preserve the valid duration/history YAML,
+explicit grid sizing, existing themes and bounded canvas rendering. Add browser
+regressions for stable height over repeated redraws, density and theme changes,
+and automatic versus fixed grid rows. Keep this isolated from new renderer or
+control features; v0.30.0 acceptance remains complete.
+
+### Requested feature: Mimic-SDS screens and full front-panel controls
+
+Add optional **Mimic-SDS** layouts/themes for the TUI and WebUI, plus an additional
+Home Assistant card. A user-provided scanner `profile.cfg`, or one acquired during
+an explicitly selected Favorites sync, supplies display slots and colors; shared
+live state supplies the values. Match the seven documented screen modes and the
+user's layout reference without replacing existing cards or themes. Keep daemon
+runtime data in a toggleable TUI drawer, and keep scanner-owned recording/status
+indicators distinct from daemon audio. Profile source/freshness must be explicit;
+an imported file does not guarantee detection of later scanner-setting changes.
+
+Include all 27 front-panel key codes listed on page 35 of the supplied SDS200
+remote-command specification, with model-specific capabilities, current soft-key
+context, typed bounded commands and server-enforced control permissions. Do not
+infer undefined long-press behavior, retry uncertain keys or enable writes for
+observe-only displays. See the [Mimic-SDS work packet](docs/mimic-sds-work-packet.md)
+for source findings, profile/privacy boundaries, layout mappings, the complete
+control inventory and staged acceptance. An offline display-only parser is the
+first foundation. The optional WebUI, daemon-backed TUI and additional HA card
+are now implemented as unreleased candidates; paired installed/live acceptance
+remains separate. Both Pi TUI geometries and the
+[HA card layout](docs/home-assistant-mimic-card.md#offline-visual-acceptance--september-28-2026)
+passed offline fictional-data visual checks. The complete front-panel key
+inventory is implemented. An internal, disabled-by-default SDS200 qualification
+harness provided exactly one typed press behind pinned firmware, two exact
+visible-context preflights, the existing daemon owner, an idle Waterfall and a
+fresh local operator signal. It had no public API/UI, sequence or retry and did
+not qualify any key merely by existing. A supervised
+physical qualification on October 2, 2026 proved exactly one `M` press on an
+SDS200 running firmware `Version 1.26.01` from fresh `Trunk Scan` /
+`trunk_scan`: the scanner acknowledged the command, the next bounded PSI frame
+reported `Menu tree` / `menu_selection`, and the operator physically confirmed
+and exited the menu. This does not qualify another key, firmware, starting
+context, sequence or retry. The current development candidate turns only that
+evidence into a separate opt-in production boundary. A direct-network daemon
+must be started with `--enable-qualified-sds200-menu-control`; every request
+reserves idle Waterfall, holds the existing owner lock, verifies exact model and
+firmware, requests two new matching GSI frames and sends one `KEY,M,P` without
+retry. The typed daemon/client operation and one exact bodyless operator-Web
+route are server-authorized; observe-only peers, the Home Assistant card and
+the TUI remain read-only, and the other 26 keys remain unavailable. This
+candidate's Home Assistant runtime has a separate strict default-false opt-in
+that maps only to the daemon flag. The published v0.30.0 seven-field catalog is
+unchanged; only the source-pinned manual acceptance stager adds the switch to a
+matching private manifest. Staging does not install, start or press the scanner.
+The exact source-pinned candidate later completed a bounded visual-only Home
+Assistant Ingress installation. Read-only live checks verified one enable flag,
+SDS200 firmware `Version 1.26.01`, `Trunk Scan` / `trunk_scan`, inactive
+recording and exactly `M` available; the user reported a visual pass. No Menu
+POST or scanner key was sent, and the exact normal App source, image, options,
+network settings, App data, media contents and Home Assistant Core state were
+restored. The closed physical press was not repeated. No milestone/release
+number is assigned, and the other 26 keys remain unavailable. Waterfall-screen
+fidelity remains a separate slice. The later exact
+`85042e6` daemon-backed TUI waterfall passed authenticated live 240-bin
+streaming and user-reported visual/interaction acceptance on the 100x30 small
+Pi, followed by successful guarded restoration and no stale consumer. A later
+guarded 160x45 HDMI run also passed layout and interaction, but its photo/video
+review found the monochrome punctuation field visually difficult to interpret.
+The next candidate therefore retains that redundant glyph ramp while adding
+explicitly frame-relative green/yellow/red intensity bands. The HDMI review
+confirmed that color made the information materially easier to understand and
+identified one presentation-only follow-up: render the aware source timestamp
+in the TUI host's local timezone rather than UTC. The candidate now performs
+that conversion without changing the validated record. A second guarded HDMI
+run accepted the labeled local timestamp with its explicit offset. The user then
+pressed `Q` from the Waterfall, both transient units exited successfully, and
+the byte-identical normal display service returned. This does not broaden
+front-panel-control authorization.
+
+The first offline profile-acquisition foundation is also implemented internally.
+It pairs either one explicitly selected copied Favorites tree with one explicit
+`profile.cfg`, or the canonical pair on one explicitly selected already-mounted
+Linux USB volume. The mounted path requires current mount-namespace and USB
+block-device evidence, permits a read-only volume and proves the profile remains
+on that filesystem. Both paths require two identical full reads before review
+and recheck the complete acquisition before atomically accepting the display
+profile. Restart restores last-good data with unknown freshness until another
+authorized acquisition. It is not wired to a sync job, CLI/API, App, USB
+storage-mode transition, FTP path or live scanner, and it cannot write scanner
+settings or Favorites. A bounded direct development invocation physically
+accepted the read-only path against an SDS100 mass-storage volume: four paired
+observations agreed, the profile parsed, all 15 Favorites documents bound with
+no unresolved records, the complete relevant file/metadata manifest remained
+exact and the volume was safely unmounted. This does not qualify installed
+orchestrator behavior, SDS200 USB or network profile acquisition. The internal
+foundation now also couples one explicit reviewed acquisition to durable
+acceptance and at most one exact-endpoint/exact-revision owner reload. It keeps
+accepted-but-unconfirmed distinct from failed acceptance, never replays an
+import merely to obtain reload confirmation, and reports a restored
+Favorites-sourced revision with unknown freshness rather than comparing the
+unrelated manual source path. Installed selection and App/administrator wiring
+remain pending. A development-only local-administrator
+`scanner-display-profile import-mounted-usb` command now selects one existing
+read-only USB mount and stable source UUID, previews and reacquires the complete
+pair, accepts once and requests the exact owner reload. It never discovers,
+mounts, changes scanner mode or writes scanner/Favorites data. Its exact command
+path subsequently passed a separate bounded physical SDS100 acceptance: four
+complete observations agreed, the private accepted revision and local owner
+revision matched exactly, the source manifest remained byte-for-byte and
+metadata identical, and the read-only volume was safely unmounted.
+
 ### Low-priority TUI usability follow-up
 
 - For remote-daemon connections, show the connected daemon's reported application
@@ -84,8 +195,11 @@ release, not the remaining managed-browser milestone or its unattended-use gates
   header and scanner model/firmware in the Scanner panel. Use authenticated
   endpoint metadata rather than assuming the daemon matches the client version;
   handle unavailable version information explicitly. Direct USB connections
-  should not gain this remote-only field. This is a future improvement, not part
-  of v0.30.0 or the active browser-device qualification.
+  should not gain this remote-only field. Implemented in the unreleased local
+  candidate with additive snapshot metadata, reconnect clearing and both Pi
+  layout tests. Both bench Pi geometries passed installed offline presentation
+  checks; a real endpoint's version and live transport remain separate. This is
+  not part of v0.30.0 or the active browser-device qualification.
 - **Released in [v0.30.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.30.0):**
   PR #253 added the user-selected local RFC
   2822-style dates to the header and observed status transitions, for example
@@ -98,20 +212,28 @@ release, not the remaining managed-browser milestone or its unattended-use gates
   scanner model/firmware stay in the Scanner panel. Published-client acceptance
   also passed on both layouts. This is not a measured connection-start or
   socket-uptime feature.
-- **Remaining:** if elapsed connection time is shown, label it `Connected for`
-  only after identifying the actual successful connection events. Use a
-  compact duration such as `2d 04:17:36`, without wrapping at 24 hours or treating
-  variable-length calendar months/years as fixed durations. Derive elapsed time
-  from a monotonic clock, distinguish it from process uptime, and define which
-  connection it measures (client-to-daemon versus daemon-to-scanner). Reset it
-  only for a new connection and do not present disconnected time as connected
-  uptime. Do not relabel an observed status transition as `Connected since` or
-  reset duration merely because a stale/degraded label changes. Apply the
-  accepted local-date presentation to any genuine connection-start timestamp.
-  Verify midnight/day rollover, reconnects, wall-clock/DST adjustments, and
-  header/panel fit on both Pi geometries without wrapping or panel shifts.
-  This is a separate low-priority follow-up, not a change to browser-device
-  acceptance or already-released behavior.
+- An unreleased local candidate now adds `Link for` beside the daemon version.
+  It measures only this TUI client's current daemon event-stream link, beginning
+  after the stream's first authoritative snapshot and resetting after a fresh
+  reconnect snapshot. The initial API snapshot cannot invent an earlier start;
+  stream loss is `Unavailable`; scanner-only disconnect, stale PSI and degraded
+  presentation do not reset the link. Elapsed time uses the local monotonic clock
+  and renders `HH:MM:SS` or `Nd HH:MM:SS`, without a tolerance, calendar-unit
+  approximation or 24-hour wrap. Direct scanner sessions remain unchanged.
+  Exact boundary/reconnect and 100x30/160x45 geometry tests pass. The first live
+  100x30 review found that preserving a redundant symbolic endpoint reduced it
+  to a meaningless `s.` fragment beside the fixed link suffix. Commit `37a414a`
+  omits that endpoint only in the compact split, where the concrete Target row
+  remains visible. The repaired installed wheel then passed the user's live
+  100x30 visual check with an advancing link timer and exact guarded cleanup.
+  The older published daemon honestly reported its version as `Unavailable`;
+  no local or protocol version was substituted. A later guarded restart of that
+  same published App showed the 51-second link becoming `Unavailable` during
+  event loss, the managed waiting screen, and a fresh authoritative connection
+  restarting at `00:00:00` before advancing normally. The byte-identical Pi
+  service and normal App ownership were restored afterward. The 160x45 physical
+  layout and release remain separate; this is not part of v0.30.0 or the
+  browser-device qualification.
 
 ### Managed-display enrollment and unattended recovery
 

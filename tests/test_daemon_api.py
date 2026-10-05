@@ -22,6 +22,7 @@ from sds200.daemon_api import (
     DaemonApiResponse,
     DaemonReadOnlyApi,
 )
+from sds200.front_panel_keys import FRONT_PANEL_INVENTORY_VERSION, FrontPanelKey
 
 
 class FakeSnapshot:
@@ -48,6 +49,26 @@ class FakeRuntime:
         if self.error is not None:
             raise self.error
         return FakeSnapshot(self.payload)
+
+
+class ReadOnlyRuntimeWithForbiddenControlProbe:
+    """Fail if an ordinary read consults scanner-control capability state."""
+
+    @property
+    def front_panel_control_available(self) -> bool:
+        raise AssertionError("Read-only requests must not probe front-panel control.")
+
+    def snapshot(self) -> FakeSnapshot:
+        raise AssertionError("Ping must not read the scanner runtime snapshot.")
+
+
+def test_read_only_request_does_not_probe_front_panel_control() -> None:
+    api = DaemonReadOnlyApi(ReadOnlyRuntimeWithForbiddenControlProbe())
+
+    response = api.handle_payload(request_payload(DaemonApiOperation.PING.value))
+
+    assert response.error is None
+    assert response.result == {"pong": True}
 
 
 def test_connected_clients_is_local_only_and_separate_from_runtime() -> None:
@@ -202,16 +223,30 @@ def test_hello_negotiates_version_and_lists_capabilities(
             operation.value
             for operation in DaemonApiOperation
             if operation not in DAEMON_API_RECORDING_OPERATIONS
+            and operation is not DaemonApiOperation.SCANNER_FRONT_PANEL_PRESS
+            and operation not in (
+                DaemonApiOperation.DISPLAY_PROFILE, DaemonApiOperation.DISPLAY_PROFILE_RELOAD,
+                DaemonApiOperation.DISPLAY_FRAME,
+                DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT,
+                DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME,
+                DaemonApiOperation.DISPLAY_SUPPLEMENTAL_DEMAND,
+            )
         ],
         "read_only": False,
         "read_only_operations": [
             operation.value
             for operation in DAEMON_API_READ_ONLY_OPERATIONS
             if operation not in DAEMON_API_RECORDING_OPERATIONS
+            and operation not in (
+                DaemonApiOperation.DISPLAY_PROFILE, DaemonApiOperation.DISPLAY_FRAME,
+                DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT,
+                DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME,
+            )
         ],
         "control_operations": [
             operation.value
             for operation in DAEMON_API_CONTROL_OPERATIONS
+            if operation is not DaemonApiOperation.SCANNER_FRONT_PANEL_PRESS
         ],
         "max_control_timeout": DAEMON_API_MAX_CONTROL_TIMEOUT,
         "max_hold_state_timeout": DAEMON_API_MAX_HOLD_STATE_TIMEOUT,
@@ -242,6 +277,11 @@ def test_capabilities_and_ping_do_not_read_runtime_snapshot(
         operation.value
         for operation in DAEMON_API_READ_ONLY_OPERATIONS
         if operation not in DAEMON_API_RECORDING_OPERATIONS
+        and operation not in (
+            DaemonApiOperation.DISPLAY_PROFILE, DaemonApiOperation.DISPLAY_FRAME,
+            DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT,
+            DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME,
+        )
     ]
     assert ping.result == {"pong": True}
     assert runtime.snapshot_calls == 0
@@ -314,6 +354,130 @@ def test_scanner_state_returns_only_scanner_and_psi_fields(
         "psi_active": True,
         "radio_state": snapshot_payload["radio_state"],
     }
+
+
+def test_front_panel_inventory_is_complete_read_only_and_private(
+    snapshot_payload: dict[str, object],
+) -> None:
+    runtime = FakeRuntime(snapshot_payload)
+    response = DaemonReadOnlyApi(runtime).handle_payload(
+        request_payload(DaemonApiOperation.SCANNER_FRONT_PANEL_INVENTORY.value)
+    )
+
+    assert response.error is None
+    assert response.result is not None
+    assert response.result["version"] == FRONT_PANEL_INVENTORY_VERSION
+    assert response.result["controls_available"] is False
+    keys = response.result["keys"]
+    assert isinstance(keys, list)
+    assert [entry["code"] for entry in keys] == [key.value for key in FrontPanelKey]
+    assert all(entry["control_status"] == "unqualified" for entry in keys)
+    assert all(entry["available"] is False for entry in keys)
+    assert runtime.snapshot_calls == 1
+    encoded = response.to_json_line().decode("utf-8")
+    assert snapshot_payload["scanner_endpoint"] not in encoded
+    assert snapshot_payload["scanner_firmware"] not in encoded
+    assert snapshot_payload["scanner_model"] not in encoded
+
+
+def test_front_panel_inventory_rejects_parameters_before_runtime_read(
+    snapshot_payload: dict[str, object],
+) -> None:
+    runtime = FakeRuntime(snapshot_payload)
+    response = DaemonReadOnlyApi(runtime).handle_payload(
+        request_payload(
+            DaemonApiOperation.SCANNER_FRONT_PANEL_INVENTORY.value,
+            params={"key": "M"},
+        )
+    )
+
+    assert response.error is not None
+    assert response.error.code is DaemonApiErrorCode.INVALID_PARAMETERS
+    assert runtime.snapshot_calls == 0
+
+
+def test_front_panel_inventory_projects_only_authorized_exact_menu_context(
+    snapshot_payload: dict[str, object],
+) -> None:
+    from sds200.daemon_remote_server import DAEMON_REMOTE_OBSERVE_OPERATIONS
+
+    snapshot_payload["radio_state"] = {
+        "mode": "Trunk Scan",
+        "screen": "trunk_scan",
+    }
+    runtime = FakeRuntime(snapshot_payload)
+    runtime.front_panel_control_available = True
+    api = DaemonReadOnlyApi(runtime)
+
+    local = api.handle_payload(
+        request_payload(DaemonApiOperation.SCANNER_FRONT_PANEL_INVENTORY.value)
+    )
+    assert local.result is not None
+    assert local.result["controls_available"] is True
+    local_keys = local.result["keys"]
+    assert isinstance(local_keys, list)
+    assert [entry["code"] for entry in local_keys if entry["available"]] == ["M"]
+
+    observe = json.loads(
+        api.handle_authorized_json_line(
+            json.dumps(
+                request_payload(
+                    DaemonApiOperation.SCANNER_FRONT_PANEL_INVENTORY.value
+                )
+            ),
+            allowed_operations=DAEMON_REMOTE_OBSERVE_OPERATIONS,
+        )
+    )
+    assert observe["result"]["controls_available"] is False
+
+    control = json.loads(
+        api.handle_authorized_json_line(
+            json.dumps(
+                request_payload(
+                    DaemonApiOperation.SCANNER_FRONT_PANEL_INVENTORY.value
+                )
+            ),
+            allowed_operations=(
+                *DAEMON_REMOTE_OBSERVE_OPERATIONS,
+                DaemonApiOperation.SCANNER_FRONT_PANEL_PRESS,
+            ),
+        )
+    )
+    assert control["result"]["controls_available"] is True
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("scanner_connected", False),
+        ("scanner_model", "SDS100"),
+        ("scanner_firmware", "Version 1.27.00"),
+        ("mode", "Scan Hold"),
+        ("screen", "menu_selection"),
+    ],
+)
+def test_front_panel_inventory_keeps_menu_disabled_outside_exact_context(
+    snapshot_payload: dict[str, object],
+    field: str,
+    value: object,
+) -> None:
+    snapshot_payload["radio_state"] = {
+        "mode": "Trunk Scan",
+        "screen": "trunk_scan",
+    }
+    if field in {"mode", "screen"}:
+        snapshot_payload["radio_state"][field] = value
+    else:
+        snapshot_payload[field] = value
+    runtime = FakeRuntime(snapshot_payload)
+    runtime.front_panel_control_available = True
+
+    response = DaemonReadOnlyApi(runtime).handle_payload(
+        request_payload(DaemonApiOperation.SCANNER_FRONT_PANEL_INVENTORY.value)
+    )
+
+    assert response.result is not None
+    assert response.result["controls_available"] is False
 
 
 def test_audio_health_returns_audio_and_router_fields(

@@ -76,6 +76,7 @@ def test_load_home_assistant_app_options_uses_strict_defaults(
     )
 
     options = load_home_assistant_app_options(path)
+    assert options.qualified_sds200_menu_control_enabled is False
     assert options.experimental_browser_devices_enabled is False
     assert options.browser_device_server_config == ""
 
@@ -106,6 +107,45 @@ def test_load_home_assistant_app_options_accepts_topic_prefix(
         mqtt_topic_prefix="scanner/main",
         recording_directory="radio/sds200",
     )
+
+
+def test_load_home_assistant_app_options_accepts_qualified_menu_opt_in(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "options.json"
+    path.write_text(
+        json.dumps(
+            {
+                "scanner_host": "scanner.local",
+                "qualified_sds200_menu_control_enabled": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    options = load_home_assistant_app_options(path)
+
+    assert options.qualified_sds200_menu_control_enabled is True
+
+
+@pytest.mark.parametrize("value", [None, 0, 1, "false", "true", [], {}])
+def test_load_home_assistant_app_options_rejects_non_boolean_menu_opt_in(
+    tmp_path: Path,
+    value: object,
+) -> None:
+    path = tmp_path / "options.json"
+    path.write_text(
+        json.dumps(
+            {
+                "scanner_host": "scanner.local",
+                "qualified_sds200_menu_control_enabled": value,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="Menu-control enabled setting"):
+        load_home_assistant_app_options(path)
 
 
 @pytest.mark.parametrize(

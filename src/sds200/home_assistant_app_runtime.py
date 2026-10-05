@@ -186,6 +186,7 @@ def build_home_assistant_daemon_command(
     paths: HomeAssistantAppRuntimePaths,
     *,
     remote_configuration: Path | None = None,
+    scanner_display_profile_config: Path | None = None,
     executable: str = HOME_ASSISTANT_APP_EXECUTABLE,
 ) -> tuple[str, ...]:
     """Build the single-owner daemon child command without embedding secrets."""
@@ -202,7 +203,7 @@ def build_home_assistant_daemon_command(
     program = _require_executable(executable)
     assert paths.waterfall_socket is not None
     assert paths.live_audio_socket is not None
-    command = (
+    command: tuple[str, ...] = (
         program,
         "--host",
         options.scanner_host,
@@ -226,6 +227,15 @@ def build_home_assistant_daemon_command(
         "--live-audio-socket-path",
         os.fspath(paths.live_audio_socket),
     )
+    if options.qualified_sds200_menu_control_enabled:
+        command += ("--enable-qualified-sds200-menu-control",)
+    if scanner_display_profile_config is not None:
+        command += (
+            "--scanner-display-profile-config",
+            os.fspath(_require_absolute_path(
+                scanner_display_profile_config, label="Scanner display profile configuration"
+            )),
+        )
     if remote_configuration is None:
         return command
     normalized_remote_configuration = _require_absolute_path(
@@ -244,6 +254,7 @@ def build_home_assistant_web_command(
     executable: str = HOME_ASSISTANT_APP_EXECUTABLE,
     ingress_port: int = HOME_ASSISTANT_APP_INGRESS_PORT,
     browser_device_config: Path | None = None,
+    scanner_display_config: Path | None = None,
 ) -> tuple[str, ...]:
     """Build the Ingress web child command against the private daemon sockets."""
 
@@ -266,6 +277,12 @@ def build_home_assistant_web_command(
         program,
         "web",
         "--home-assistant-ingress",
+        *(
+            ("--scanner-display-admin-config", os.fspath(_require_absolute_path(
+                scanner_display_config, label="Scanner display deployment"
+            )), "--scanner-display-recording-directory", os.fspath(paths.recording_directory))
+            if scanner_display_config is not None else ()
+        ),
         *(
             ("--experimental-browser-devices", "--browser-device-config", os.fspath(
                 _require_absolute_path(browser_device_config, label="Browser-device configuration")

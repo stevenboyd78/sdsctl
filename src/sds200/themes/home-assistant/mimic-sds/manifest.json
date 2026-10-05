@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "interface": "home-assistant",
+  "id": "mimic-sds",
+  "label": "Mimic-SDS",
+  "order": 30,
+  "module": "sds200-mimic-card.js",
+  "custom_element": "sds200-mimic-card",
+  "installed_filename": "sds200-mimic-card.js",
+  "resource_url": "/local/sds200/sds200-mimic-card.js?v=99f26a46c6a5b07d6fe9319509ae8dd7a8193914d938ab0aa3702a38b68a8b74"
+}

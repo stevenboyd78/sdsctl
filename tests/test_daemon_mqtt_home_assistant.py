@@ -34,6 +34,10 @@ SNAPSHOT: dict[str, object] = {
         "service_type": "Fire Dispatch",
         "tone_out_tone_a": "600.9Hz",
         "tone_out_tone_b": "0.0Hz",
+        "talkgroup_id": "TGID:000123",
+        "unit_id": "UID:000045",
+        "p25_status": "unrecognized status",
+        "battery": 0,
         "signal": 4,
         "rssi": -83.0,
     },
@@ -123,6 +127,10 @@ def test_device_discovery_uses_stable_topic_identity_and_read_only_entities() ->
         "service_type",
         "tone_out_tone_a",
         "tone_out_tone_b",
+        "talkgroup_id",
+        "unit_id",
+        "p25_status",
+        "battery",
         "signal",
         "rssi",
         "audio_running",
@@ -197,6 +205,10 @@ def test_device_discovery_uses_stable_topic_identity_and_read_only_entities() ->
         ("service_type", "Service Type"),
         ("tone_out_tone_a", "Tone-Out Tone A"),
         ("tone_out_tone_b", "Tone-Out Tone B"),
+        ("talkgroup_id", "Talkgroup ID"),
+        ("unit_id", "Unit ID"),
+        ("p25_status", "P25 Status (Reported)"),
+        ("battery", "Battery (Raw)"),
     ):
         assert components[key] == {
             "availability": [
@@ -240,6 +252,10 @@ def test_optional_radio_sensors_are_fixed_when_current_fields_are_absent() -> No
         "service_type",
         "tone_out_tone_a",
         "tone_out_tone_b",
+        "talkgroup_id",
+        "unit_id",
+        "p25_status",
+        "battery",
     } <= set(components)
     assert all(
         components[key]["availability_mode"] == "all"
@@ -250,6 +266,10 @@ def test_optional_radio_sensors_are_fixed_when_current_fields_are_absent() -> No
             "service_type",
             "tone_out_tone_a",
             "tone_out_tone_b",
+            "talkgroup_id",
+            "unit_id",
+            "p25_status",
+            "battery",
         )
     )
     assert components["screen_kind"]["value_template"] == (
@@ -311,6 +331,10 @@ def test_discovery_adds_deliberate_home_assistant_control_entities() -> None:
         "service_type",
         "tone_out_tone_a",
         "tone_out_tone_b",
+        "talkgroup_id",
+        "unit_id",
+        "p25_status",
+        "battery",
         "signal",
         "rssi",
         "audio_running",

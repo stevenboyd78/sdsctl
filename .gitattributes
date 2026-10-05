@@ -1,2 +1,5 @@
 tests/fixtures/favorites/*.cfg -text whitespace=cr-at-eol
 tests/fixtures/favorites/*.hpd -text whitespace=cr-at-eol
+# Preserve the bundled third-party license verbatim, including upstream spacing.
+src/sds200/web_assets/fonts/antonio-OFL.txt -text whitespace=cr-at-eol,-blank-at-eol
+src/sds200/web_assets/fonts/*-OFL.txt -text whitespace=cr-at-eol,-blank-at-eol

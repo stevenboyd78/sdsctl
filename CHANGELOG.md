@@ -6,13 +6,121 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Added
+
+- Add an internal, read-only Favorites-sync display-profile acquisition
+  foundation. An explicitly selected copied Favorites tree and `profile.cfg`,
+  or the canonical pair on one explicitly selected already-mounted Linux USB
+  volume, must produce two identical complete observations before review; the
+  whole acquisition is checked again before atomic acceptance. The mounted path
+  requires current mount-namespace and USB block-device evidence, accepts a
+  read-only volume, and proves `profile.cfg` is on that same filesystem.
+  Endpoint/source binding, source-change confirmation, sanitized failures,
+  last-good retention and unknown restart freshness remain explicit. This adds
+  no sync trigger, scanner/Favorites write, path discovery, storage-mode switch,
+  CLI/API route or installed integration. A bounded physical SDS100 acceptance
+  remounted the exact volume read-only before file access, proved four identical
+  paired production observations, parsed the profile, bound all 15 Favorites
+  documents without unresolved records, preserved an exact before/after
+  content-and-metadata manifest, and safely unmounted the volume.
+- Add an internal one-review Favorites/profile synchronization coordinator. A
+  successful reviewed acquisition is durably accepted once, followed by at
+  most one local owner reload whose endpoint and exact revision must match.
+  Lost reload results and concurrently accepted different revisions remain
+  distinct from import failure and never authorize replaying the import. The
+  owner restores a Favorites-sourced accepted revision with honest unknown
+  freshness instead of comparing it to an unrelated manual source path. This
+  coordinator itself adds no source discovery, background job, daemon API/App
+  route or scanner write.
+- Add a local-administrator `scanner-display-profile import-mounted-usb`
+  command over that coordinator. It accepts one explicit existing mount path,
+  stable source UUID, profile manifest and local daemon socket; requires the
+  selected USB volume to be read-only; previews before explicit approval;
+  reacquires the complete Favorites/profile observation before acceptance; and
+  confirms the exact daemon endpoint/revision. It never discovers or mounts a
+  volume, switches scanner storage mode, writes scanner/Favorites data or adds
+  an App/browser route. Reload uncertainty preserves accepted state and directs
+  recovery through status/reload rather than repeating the acquisition.
+  The exact command then passed a bounded physical SDS100 gate: the selected
+  USB partition was mounted read-only, four complete observations agreed, one
+  private acceptance and one exact local owner reload were confirmed, the
+  relevant 17-file/1,411,024-byte content-and-metadata manifest was unchanged,
+  and the volume was safely unmounted.
+- Add a disabled-by-default, internal SDS200 front-panel qualification harness.
+  It accepts one typed inventory key only after exact firmware and two stable
+  visible-context preflights on the existing direct-UDP owner, requires a fresh
+  local operator signal, excludes active Waterfall and other research modes,
+  and records bounded post-acknowledgement display evidence. It adds no public
+  control/API, permission, sequence, retry, inferred key mode or enabled UI.
+- Add a separate default-off production boundary for the physically qualified
+  SDS200 `Version 1.26.01` Menu press. The direct-network owner requires two new
+  matching `Trunk Scan` / `trunk_scan` frames before one `KEY,M,P`, exposes one
+  typed daemon/client operation and one exact bodyless operator-Web route, and
+  provides a candidate-only Home Assistant option. It adds no general key
+  route, held gesture, sequence or retry; the Home Assistant card and daemon
+  TUI remain read-only, and the other 26 keys remain unavailable. A later
+  visual-only Home Assistant Ingress acceptance rendered the qualified Menu
+  control without sending the POST or another key and restored the exact normal
+  App and Home Assistant state afterward.
+- Add a redundant green/yellow/red relative-intensity treatment to the
+  daemon-backed TUI Waterfall while retaining its monochrome glyph ramp. Label
+  the bands as per-frame and uncalibrated, and keep raw scanner span fields
+  separate so the colors are not represented as absolute signal-strength units.
+  Present its timezone-aware source timestamp in the TUI host's local timezone
+  without changing the validated daemon record.
+- Bundle offline, licensed typography for First Responder, Amateur Radio,
+  Pip-Boy-inspired and Matrix, with per-theme font pairing and readable/system
+  fallback choices. Keep Mimic-SDS, System and terminal fonts independent;
+  exclude Rapid Response and OCR-A from shipped assets.
+- Add a read-only TUI Scanner details drawer (X / command palette) for existing
+  talkgroup/unit IDs, reported P25 status and raw battery telemetry, without
+  adding compact dashboard rows or issuing scanner commands. Clear unconfirmed
+  values through stale/disconnected states and wait for new data after reconnect.
+- Show the connected daemon's reported application version in the TUI Connection
+  panel, separately from the local client version and scanner firmware. Reuse
+  existing authenticated snapshots, show unavailable for older daemons, and
+  clear stale metadata on daemon disconnection without adding a Pi layout row.
+- Show the age of the current daemon event-stream link in the TUI without
+  fabricating daemon uptime. Begin only after the first authoritative stream
+  snapshot, clear the value during event loss, and restart it after a fresh
+  reconnect snapshot. Preserve direct sessions and scanner-only reconnects.
+
+### Changed
+
+- Update the reviewed immutable pins for Home Assistant builder 2026.09.0,
+  Docker build-push-action v7.4.0 and setup-qemu-action v4.4.0. Group future
+  monthly GitHub Actions version updates into one Dependabot pull request so
+  related workflow changes and their integrity assertions are reviewed and
+  validated atomically; security updates remain independently actionable.
+- Replace the original WebUI LCARS theme with the reviewed v2 design: six
+  palettes, bundled offline Antonio typography options, segmented rails, and
+  Site beneath System. Keep the stable `lcars` theme ID and migrate saved
+  `lcars-v2` preview selections without resetting palette or font preferences.
+  System remains the default; no live installation is updated by this change.
+
 ### Fixed
 
+- Keep ordinary daemon read operations independent of scanner-control capability
+  probing. Display-profile preflight and other non-control requests no longer
+  consult front-panel availability before dispatch; capability/Hello responses
+  and actual control operations retain their existing availability checks.
 - Keep Home Assistant Waterfall cards at a stable density-based height when an
   external theme applies generic percentage heights to an automatic grid row.
   Account for the history canvas border when sizing its bitmap, and fill the
   assigned Sections slot for default or explicitly fixed grid rows. Existing
   duration/history YAML and palettes remain unchanged.
+- Preserve phone recording-library title width across system fonts, keeping the
+  Play and Download buttons inside their rows. Give the current recording's
+  filename a full-width telemetry row so its label does not stack vertically.
+- Let phone-width recording capture panels size to their content so LCARS saved
+  recording Play and Download actions remain visible alongside the player controls.
+- Make the browser palette-focus audit select and verify a visible, enabled
+  control instead of mistakenly trying to focus hidden Mimic diagnostic controls.
+
+- Keep finalized recording reliability counters aligned with their saved
+  metadata when shared browser audio continues. Later transport faults no longer
+  change a stopped recording's status; starting another recording resumes live
+  cumulative counters without changing older files.
 
 ## [0.30.0] - 2026-09-14
 

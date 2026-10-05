@@ -107,6 +107,13 @@ the Home Assistant column, `R+C* / —` means an
 optional discovered switch presents and controls the value while the first-party
 Lovelace card remains read-only.
 
+The later read-only renderer closeout presents talkgroup ID, unit ID and raw
+reported P25 status in `scanner-info`, presents raw P25 status and battery in
+`monitor`, and presents all four values in the fail-closed Textual Scanner
+Details drawer. These surfaces preserve prefixes and leading zeroes, bound and
+neutralize terminal controls, clear unavailable values, and do not add scanner
+requests or infer P25/battery semantics.
+
 | Field | Source/evidence | Rich | Monitor | Textual TUI | Web UI | API/SSE/MQTT | HA discovery/card | Finding |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `mode` | GSI/PSI; `P200`, `F` | R | R | U/R* | R | J | — | R1: Home Assistant |
@@ -134,14 +141,14 @@ Lovelace card remains read-only.
 | `weather_mode` | Weather node; `P200`, `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
 | `weather_same` | Weather node; `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
 | `service_type` | Mode-selected node; `P200`, `F` | R | R | R* | R | J | R* | Covered when available |
-| `talkgroup_id` | GSI/PSI; `F` | — | R | — | R | J | — | R1: Rich, TUI, and Home Assistant |
-| `unit_id` | GSI/PSI; `F` | — | R | — | R | J | — | R1: Rich, TUI, and Home Assistant |
+| `talkgroup_id` | GSI/PSI; `F` | R | R | R* | R | J | R* | Covered when available/raw |
+| `unit_id` | GSI/PSI; `F` | R | R | R* | R | J | R* | Covered when available/raw |
 | `volume` | GSI/PSI; `P200`, `F` | — | R | R+C | R | J | — | R1: direct and daemon-owned UDP mutation physically accepted; Home Assistant remains |
 | `squelch` | GSI/PSI; `P200`, `F` | — | R | R+C | R | J | — | R1: direct and daemon-owned UDP mutation physically accepted; Home Assistant remains |
 | `signal` | GSI/PSI; `P200`, `F` | R | R | R | R | J | R | Covered |
 | `rssi` | GSI/PSI; `P200`, `F` | R | R | R* | R | J | R | R1: generic TUI panel |
-| `battery` | Optional GSI/PSI Property; `S`, `F`; `P100` absence | R | — | — | R | J | — | R1: monitor, TUI, and Home Assistant; raw value only |
-| `p25_status` | GSI/PSI; `F` | — | — | — | R | J | — | R1: CLI/TUI and Home Assistant |
+| `battery` | Optional GSI/PSI Property; `S`, `F`; `P100` absence | R | R | R* | R | J | R* | Covered when available/raw |
+| `p25_status` | GSI/PSI; `F` | R | R | R* | R | J | R* | Covered when available/raw |
 | `mute` | GSI/PSI; `P200`, `F` | R | R | R | R | J | — | R1: Home Assistant |
 | `recording` | Scanner GSI/PSI flag; `P200`, `F` | R | R | R | R | J | — | R1: Home Assistant; distinct from application recording |
 
@@ -158,8 +165,9 @@ new protocol semantics:
   new scanner state;
 - Milestone 26.9 adds fixed configured Tone-Out Tone A and Tone B sensors plus
   optional compact and display-card fields without new scanner polling or state;
-- Rich, monitor, TUI, and Home Assistant gaps remain surface-specific rather
-  than losses from the shared state; and
+- the later Home Assistant telemetry closeout adds fixed Talkgroup ID, Unit ID,
+  reported P25 status, and raw battery sensors plus optional compact and
+  display-card fields without new polling or inferred semantics; and
 - Home Assistant Discovery intentionally exposes a small stable core even though
   the generic MQTT topic carries the complete snapshot.
 
@@ -245,7 +253,7 @@ screen equivalent makes the underlying capabilities `R4`, not scanner defects.
 | URC scanner recording | Typed stopped/recording state and start/stop commands | None | `S`, `F`; no complete physical lifecycle record | R2/R3 |
 | MSI/MNU menus | Lossless menu records, selected values, inputs/locations, errors, and indexed menu open | None | `S`, `F`; MSV/MSB mutation and complete menu lifecycle are not evidenced | R2/R3 |
 | AST/APR analysis | Bounded starts, pause/resume, and ordered Current Activity/LCN records | None | `S`, `F`; ownership, stop/reconnect, correlation, and full output semantics remain incomplete | R3 |
-| GST/PWF/GWF waterfall | Exact typed GST plus variable PWF fields and exactly 240 uninterpreted GWF values, including the physically observed lowercase hexadecimal syntax and terminal separator; one demand-driven radio/daemon-owned, recurring-get session and private bounded local fanout | Authenticated demand-driven web spectrum and rolling-waterfall Canvas with semantic lifecycle/loss telemetry and preserved raw strings; the renderer validates and normalizes base-16 codes per frame for relative presentation only; bounded validating daemon-client diagnostic | `S`, `F`, `P`; SDS200 firmware 1.26.01 LAN qualification covers one-frame GWF gets, overlapping clients, reconnect, restart, cleanup, and normal-mode restoration; the observed syntax does not establish magnitude or calibration, and the web renderer remains explicitly relative and uncalibrated; FFT magnitude/calibration and other model/firmware semantics remain unknown | R3 |
+| GST/PWF/GWF waterfall | Exact typed GST plus variable PWF fields and exactly 240 uninterpreted GWF values, including the physically observed lowercase hexadecimal syntax and terminal separator; one demand-driven radio/daemon-owned, recurring-get session and private bounded local fanout | Authenticated demand-driven web spectrum and rolling-waterfall Canvas with semantic lifecycle/loss telemetry and preserved raw strings; bounded validating daemon-client diagnostic; unreleased daemon-backed TUI pane with strict per-frame base-16 relative normalization, bounded history and local pause/clear | `S`, `F`, `P`; SDS200 firmware 1.26.01 LAN qualification covers one-frame GWF gets, overlapping clients, reconnect, restart, cleanup, and normal-mode restoration; automated TUI lifecycle/layout coverage does not yet establish installed live scanner-mode appearance; the observed syntax does not establish magnitude or calibration, and both renderers remain explicitly relative and uncalibrated; FFT magnitude/calibration and other model/firmware semantics remain unknown | R3 |
 | System Status/RF Power Plot | Typed System Status projection and bounded start parameters | None | `S`, `F`; RF output parsing and richer field semantics remain incomplete | R1/R3 |
 | QSH exact-frequency search | No implemented exact-frequency form | None | Exact `FRQ` syntax is unresolved | R3 |
 | GW2 binary waterfall | Bounded exact-byte research probe only; no production framing implementation | None | `S`, `P`; exact `GW2,1,ON` returned `ERR` on SDS200 firmware 1.26.01 LAN control, while the contradictory `GWF,1,ON` form is the qualified text request; no binary frame, semantics, or material benefit was established | R3 |
@@ -299,7 +307,7 @@ absence from the scanner itself is expected.
 | `A01` | Add the first interactive Favorites Workspace editor over existing browse, edit, plan, and verified-executor contracts | R1/R2 | Completed in Milestone 26.3 without absorbing unrelated parity gaps |
 | `A02` | Decide whether battery and System Status need renderer-neutral state/services | R1/R3 | Completed in Milestone 26.5: SDS100 PSI/GSI battery joins shared state; GCS and System Status remain separate pending explicit lifecycle and physical evidence |
 | `A03` | Present shared hierarchy, RF, identifier, P25, and special-mode fields in the web dashboard | R1 | Completed in Milestone 26.4 without new scanner semantics |
-| `A04` | Evaluate additional stable Home Assistant entities, including site and selected mode-specific values | R1 | Completed in Milestone 26.6 with four fixed read-only sensors and matching optional card fields |
+| `A04` | Evaluate additional stable Home Assistant entities, including site and selected mode-specific values | R1 | Completed in Milestone 26.6 with four fixed read-only sensors and matching optional card fields; later compatibility reviews added configured Tone-Out values and closed the four raw-telemetry gaps without new polling or semantics |
 | `A05` | Align explicit hold/release and volume/squelch behavior across direct and daemon-backed CLI/TUI surfaces | R2/R3 | Completed in Milestone 26.8 with direct and daemon-owned native-UDP physical acceptance |
 | `A06` | Expose richer audio, recording, inventory, and sidecar diagnostics where operationally useful | R1/R4 | Later application-observability slice |
 | `A07` | Complete evidence, lifecycle, and physical validation for advanced protocol surfaces before adding controls | R3 | Blocked on protocol/hardware evidence, not on renderer construction |

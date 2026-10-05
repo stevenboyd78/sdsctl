@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import subprocess
@@ -38,10 +39,10 @@ def aggregate_text() -> str:
 
 
 def test_aggregate_resource_url_uses_exact_module_digest() -> None:
-    assert HOME_ASSISTANT_LOVELACE_AGGREGATE_RESOURCE_URL == (
+    assert (
         "/local/sds200/sds200-cards.js?v="
-        "f616e1be646237279372acbd46b3f4163024a467a8e429f2458ff09323526f9f"
-    )
+        + hashlib.sha256(aggregate_text().encode()).hexdigest()
+    ) == HOME_ASSISTANT_LOVELACE_AGGREGATE_RESOURCE_URL
 
 
 def test_aggregate_imports_every_registry_module_in_order() -> None:
@@ -140,11 +141,13 @@ process.stdout.write(JSON.stringify({{
             "sds200-card",
             "sds200-display-card",
             "sds200-waterfall-card",
+            "sds200-mimic-card",
         ],
         "cards": [
             "sds200-card",
             "sds200-display-card",
             "sds200-waterfall-card",
+            "sds200-mimic-card",
         ],
     }
 

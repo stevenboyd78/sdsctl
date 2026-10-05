@@ -83,6 +83,26 @@ const SDS200_ENTITY_FIELDS = Object.freeze([
     domain: "sensor",
   }),
   Object.freeze({
+    key: "talkgroup_id",
+    label: "Talkgroup ID",
+    domain: "sensor",
+  }),
+  Object.freeze({
+    key: "unit_id",
+    label: "Unit ID",
+    domain: "sensor",
+  }),
+  Object.freeze({
+    key: "p25_status",
+    label: "P25 status (reported)",
+    domain: "sensor",
+  }),
+  Object.freeze({
+    key: "battery",
+    label: "Battery (raw)",
+    domain: "sensor",
+  }),
+  Object.freeze({
     key: "signal",
     label: "Signal",
     domain: "sensor",
@@ -692,6 +712,10 @@ class Sds200Card extends HTMLElement {
       ["service_type", "Service type"],
       ["tone_out_tone_a", "Tone A"],
       ["tone_out_tone_b", "Tone B"],
+      ["talkgroup_id", "Talkgroup ID"],
+      ["unit_id", "Unit ID"],
+      ["p25_status", "P25 status (reported)"],
+      ["battery", "Battery (raw)"],
       ["recording_status", "Recording status"],
       ["daemon_state", "Daemon"],
     ]) {
@@ -702,6 +726,10 @@ class Sds200Card extends HTMLElement {
           "service_type",
           "tone_out_tone_a",
           "tone_out_tone_b",
+          "talkgroup_id",
+          "unit_id",
+          "p25_status",
+          "battery",
         ].includes(field) &&
         !this._config.entities[field]
       ) {

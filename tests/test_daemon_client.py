@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import socket
 import threading
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,7 @@ from sds200 import (
     DaemonSocketSource,
     DaemonUnavailableError,
 )
+from sds200.front_panel_keys import FrontPanelKey, front_panel_inventory_snapshot
 
 
 class FakeSnapshot:
@@ -195,6 +197,36 @@ def make_control_server(
     return server, path, runtime
 
 
+def make_front_panel_control_server(
+    tmp_path: Path,
+) -> tuple[DaemonApiServer, Path, FakeControlRuntime]:
+    path = tmp_path / "daemon-front-panel-control.sock"
+
+    class QualifiedMenuRuntime(FakeControlRuntime):
+        front_panel_control_available = True
+
+        def press_front_panel(
+            self,
+            key: FrontPanelKey,
+            *,
+            timeout: float = 2.0,
+        ) -> FakeControlResult:
+            return self._control(
+                "scanner.front_panel.press",
+                key,
+                timeout=timeout,
+            )
+
+    runtime = QualifiedMenuRuntime()
+    server = DaemonApiServer(
+        DaemonSocketListener(
+            DaemonSocketLocation(path, DaemonSocketSource.EXPLICIT)
+        ),
+        DaemonReadOnlyApi(runtime),
+    )
+    return server, path, runtime
+
+
 def start_scripted_server(
     path: Path,
     response: bytes | None,
@@ -266,6 +298,95 @@ def test_client_negotiates_and_reuses_one_real_socket(tmp_path: Path) -> None:
     assert server_snapshot.accepted_clients == 1
     assert server_snapshot.requests == 2
     assert server_snapshot.responses == 2
+
+
+def test_client_validates_fail_closed_front_panel_inventory(tmp_path: Path) -> None:
+    server, path = make_server(tmp_path)
+    location = DaemonSocketLocation(path, DaemonSocketSource.EXPLICIT)
+
+    with server, DaemonApiClient(location) as client:
+        inventory = client.front_panel_inventory()
+
+        assert inventory["controls_available"] is False
+        keys = inventory["keys"]
+        assert isinstance(keys, list)
+        assert len(keys) == 27
+        assert all(entry["available"] is False for entry in keys)
+        assert client.connected is True
+
+    server_snapshot = server.snapshot()
+    assert server_snapshot.accepted_clients == 1
+    assert server_snapshot.requests == 1
+    assert server_snapshot.responses == 1
+
+
+@pytest.mark.parametrize("malformation", ["missing", "reordered", "enabled"])
+def test_client_rejects_malformed_front_panel_inventory(
+    tmp_path: Path,
+    malformation: str,
+) -> None:
+    path = tmp_path / f"front-panel-{malformation}.sock"
+    inventory = deepcopy(front_panel_inventory_snapshot("SDS200"))
+    keys = inventory["keys"]
+    assert isinstance(keys, list)
+    if malformation == "missing":
+        keys.pop()
+    elif malformation == "reordered":
+        keys[0], keys[1] = keys[1], keys[0]
+    else:
+        keys[0]["available"] = True
+        inventory["controls_available"] = True
+    response = (
+        json.dumps(
+            {
+                "protocol": DAEMON_API_PROTOCOL,
+                "version": DAEMON_API_VERSION,
+                "request_id": "sdsctl-1",
+                "ok": True,
+                "result": inventory,
+            }
+        )
+        + "\n"
+    ).encode("utf-8")
+    thread = start_scripted_server(path, response)
+    client = DaemonApiClient(
+        DaemonSocketLocation(path, DaemonSocketSource.EXPLICIT)
+    )
+
+    with pytest.raises(DaemonProtocolError, match="front-panel"):
+        client.front_panel_inventory()
+
+    thread.join(timeout=1.0)
+    assert client.connected is False
+
+
+def test_client_accepts_exact_qualified_menu_inventory(tmp_path: Path) -> None:
+    path = tmp_path / "front-panel-qualified-menu.sock"
+    inventory = front_panel_inventory_snapshot("SDS200", qualified_menu=True)
+    response = (
+        json.dumps(
+            {
+                "protocol": DAEMON_API_PROTOCOL,
+                "version": DAEMON_API_VERSION,
+                "request_id": "sdsctl-1",
+                "ok": True,
+                "result": inventory,
+            }
+        )
+        + "\n"
+    ).encode("utf-8")
+    thread = start_scripted_server(path, response)
+    client = DaemonApiClient(
+        DaemonSocketLocation(path, DaemonSocketSource.EXPLICIT)
+    )
+
+    received = client.front_panel_inventory()
+
+    thread.join(timeout=1.0)
+    assert received == inventory
+    assert received["controls_available"] is True
+    client.close()
+    assert client.connected is False
 
 
 def test_client_hello_cache_isolated_from_caller_mutation(
@@ -365,6 +486,28 @@ def test_client_executes_typed_controls_on_one_negotiated_socket(
     assert server_snapshot.accepted_clients == 1
     assert server_snapshot.requests == 8
     assert server_snapshot.responses == 8
+
+
+def test_client_executes_only_typed_qualified_menu_control(tmp_path: Path) -> None:
+    server, path, runtime = make_front_panel_control_server(tmp_path)
+    location = DaemonSocketLocation(path, DaemonSocketSource.EXPLICIT)
+
+    with server, DaemonApiClient(location) as client:
+        result = client.press_front_panel(FrontPanelKey.MENU, timeout=1.5)
+
+        with pytest.raises(ValueError, match="qualified Menu"):
+            client.press_front_panel(FrontPanelKey.ENTER_YES)
+        with pytest.raises(ValueError, match="qualified Menu"):
+            client.press_front_panel("M")  # type: ignore[arg-type]
+
+    assert result["operation"] == "scanner.front_panel.press"
+    assert runtime.calls == [
+        (
+            "scanner.front_panel.press",
+            (FrontPanelKey.MENU,),
+            {"timeout": 1.5},
+        )
+    ]
 
 
 @pytest.mark.parametrize(
@@ -800,6 +943,9 @@ def test_client_rejects_malformed_runtime_snapshot(tmp_path: Path) -> None:
     [
         {},
         {"scanner_model": None, "scanner_firmware": None},
+        {"application_version": "99.2.3"},
+        {"application_version": None},
+        {"application_version": "not a safe version"},
     ],
 )
 def test_client_accepts_optional_runtime_identity(

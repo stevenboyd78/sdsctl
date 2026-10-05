@@ -36,6 +36,7 @@ from .web_auth import (
     WEB_DASHBOARD_SESSION_PATH,
     WebDashboardAuthentication,
     WebDashboardAuthenticationMiddleware,
+    _display_demand_allowed,
     _fetch_site_allowed,
     _origin_matches,
     _request_origin,
@@ -194,15 +195,18 @@ class BrowserDeviceHTTP:
     def __init__(
         self, app: ASGIApp, *, authentication: WebDashboardAuthentication,
         devices: BrowserDeviceSessions, display_theme_paths: frozenset[str] = frozenset(),
+        supplemental_demand: bool = False,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._app = app
         self._manual = WebDashboardAuthenticationMiddleware(
             app, authentication=authentication, display_theme_paths=display_theme_paths,
+            supplemental_demand=supplemental_demand,
         )
         self._origin = authentication.origin
         self._devices = devices
         self._paths = _DISPLAY_READ_PATHS | display_theme_paths
+        self._supplemental_demand = supplemental_demand
         self._workers = _Workers()
         # Cold dashboards fetch many protected assets concurrently. Do not make
         # their brief lease checks compete with exchange/logout/revocation work.
@@ -332,10 +336,11 @@ class BrowserDeviceHTTP:
             await self._manual(scope, receive, send)
             return
         logout = scope["path"] == WEB_DASHBOARD_LOGOUT_PATH and scope["method"] == "POST"
+        demand = _display_demand_allowed(scope["method"], scope["path"], self._supplemental_demand)
         if (not _fetch_site_allowed(headers) or headers.getlist("authorization")
-                or (logout and (not _origin_matches(headers, self._origin)
+                or ((logout or demand) and (not _origin_matches(headers, self._origin)
                                 or scope.get("query_string")))
-                or (not logout and (scope["method"] != "GET"
+                or (not logout and not demand and (scope["method"] != "GET"
                                     or (scope["path"] not in self._paths and not managed)))):
             await self._error(403, scope, receive, send)
             return

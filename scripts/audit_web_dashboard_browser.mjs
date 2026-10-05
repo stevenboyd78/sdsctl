@@ -91,6 +91,7 @@ theme × reference CSS viewport × workspace pane cases, all 189 explicit System
 palette responsive cases, plus media-preference, enlarged-text,
 pagination-focus, trusted Tab/Shift+Tab traversal, WCAG AA contrast, complete
 adaptive-presentation, DPR-transition, and prefixed-URL probes. It also covers
+phone recording controls with alternative system-font metrics, and
 the Home Assistant Ingress Diagnostics layout across all themes at desktop and
 phone widths, plus the authenticated waterfall card at desktop, 800x480, and
 phone widths; bounded frame-count and elapsed-time history; pointer, touch, and
@@ -211,7 +212,7 @@ function requireNode24() {
   }
 }
 
-async function availablePort() {
+export async function availablePort() {
   const listener = net.createServer();
   await new Promise((resolve, reject) => {
     listener.once("error", reject);
@@ -237,7 +238,7 @@ async function isExecutable(candidate) {
   }
 }
 
-async function findExecutable(explicit, candidates, description) {
+export async function findExecutable(explicit, candidates, description) {
   const requested = explicit === null ? candidates : [explicit];
   const searchDirectories = (process.env.PATH ?? "").split(path.delimiter);
 
@@ -319,7 +320,7 @@ export async function waitForHttp(url, timeoutMs, child = null, {
   throw new Error(`timed out waiting for ${url}: ${String(lastError)}; readiness=${diagnostic()}`);
 }
 
-async function stopChild(child) {
+export async function stopChild(child) {
   if (child === null || child.exitCode !== null) {
     return;
   }
@@ -345,7 +346,7 @@ async function websocketText(data) {
   return Buffer.from(data).toString("utf8");
 }
 
-class CdpClient {
+export class CdpClient {
   constructor(socket, timeoutMs) {
     this.socket = socket;
     this.timeoutMs = timeoutMs;
@@ -471,7 +472,7 @@ class CdpClient {
   }
 }
 
-async function evaluate(cdp, expression, {awaitPromise = true} = {}) {
+export async function evaluate(cdp, expression, {awaitPromise = true} = {}) {
   const response = await cdp.send("Runtime.evaluate", {
     awaitPromise,
     expression,
@@ -494,7 +495,9 @@ async function frames(cdp, count = 2) {
       let remaining = ${count};
       const next = () => {
         remaining -= 1;
-        if (remaining <= 0) resolve(true);
+        // Theme switching can load a bundled face after initial layout. Audit
+        // its final metrics, including trusted keyboard traversal, not fallback.
+        if (remaining <= 0) document.fonts.ready.then(() => requestAnimationFrame(() => resolve(true)));
         else requestAnimationFrame(next);
       };
       requestAnimationFrame(next);
@@ -847,7 +850,7 @@ async function activatePane(cdp, pane) {
   await clickElement(cdp, `#pane-tab-${pane}`);
 }
 
-function browserAuditLibrary() {
+export function browserAuditLibrary() {
   const tolerance = 1.5;
   // WCAG 2.x AA requires 4.5:1 for ordinary text and permits 3:1 only for
   // large text (24 CSS px, or 18.66 CSS px at bold weight). These thresholds
@@ -873,6 +876,7 @@ function browserAuditLibrary() {
     '[role="spinbutton"]',
     '[role="combobox"]',
     '[role="tab"]',
+    '[role="region"][tabindex="0"]',
   ].join(",");
 
   function label(element) {
@@ -941,6 +945,44 @@ function browserAuditLibrary() {
       }
     }
     return null;
+  }
+
+  function lcarsScrollableLayout() {
+    const {theme, lcarsV2Layout, kioskCompact} = document.documentElement.dataset;
+    return theme === "lcars" && lcarsV2Layout === "v2" && kioskCompact !== "true";
+  }
+
+  // LCARS deliberately keeps larger readouts in internal scroll panels. Test
+  // each target at a reachable scroll position, not all targets simultaneously.
+  // Only real vertical scrollers INSIDE the workspace qualify: hidden/clip
+  // ancestors, horizontal overflow and document escape still fail unchanged.
+  function withReachableLcarsTarget(element, check) {
+    const positions = [];
+    if (lcarsScrollableLayout() && element.closest(".workspace-pane") !== null) {
+      for (let current = element.parentElement;
+        current !== null && !current.matches(".workspace-pane");
+        current = current.parentElement) {
+        if (["auto", "scroll"].includes(getComputedStyle(current).overflowY) &&
+            current.scrollHeight > current.clientHeight + tolerance) {
+          positions.push([current, current.scrollTop]);
+        }
+      }
+    }
+    try {
+      for (const [scroller] of positions) {
+        const target = element.getBoundingClientRect();
+        const bounds = scroller.getBoundingClientRect();
+        scroller.scrollTo({
+          top: scroller.scrollTop + (target.top + target.bottom - bounds.top - bounds.bottom) / 2,
+          behavior: "instant",
+        });
+      }
+      return check();
+    } finally {
+      for (const [scroller, top] of positions.reverse()) {
+        scroller.scrollTo({top, behavior: "instant"});
+      }
+    }
   }
 
   function disabledOrInert(element) {
@@ -1138,14 +1180,16 @@ function browserAuditLibrary() {
       failures.push(`#${field.id} is unreadably small at ${fontSize}px`);
     }
     failures.push(...readabilityFailures(field, `#${field.id}`));
-    const rect = textRect(field);
-    const clipping = clippingAncestor(field, rect);
-    if (clipping !== null) {
-      failures.push(`#${field.id} is clipped by ${label(clipping)}`);
-    }
-    if (outside(rect, viewportRect())) {
-      failures.push(`#${field.id} is outside the viewport`);
-    }
+    withReachableLcarsTarget(field, () => {
+      const rect = textRect(field);
+      const clipping = clippingAncestor(field, rect);
+      if (clipping !== null) {
+        failures.push(`#${field.id} is clipped by ${label(clipping)}`);
+      }
+      if (outside(rect, viewportRect())) {
+        failures.push(`#${field.id} is outside the viewport`);
+      }
+    });
     return failures;
   }
 
@@ -1227,30 +1271,31 @@ function browserAuditLibrary() {
     for (const element of document.querySelectorAll(selectors)) {
       if (!rendered(element) || element.matches(".skip-link:not(:focus)")) continue;
       if (!directText(element) && element.children.length > 0) continue;
-      const rect = textRect(element);
-      if (rect.width <= 0 || rect.height <= 0) continue;
-
-      if (
-        element.clientWidth > 0 &&
-        element.scrollWidth > element.clientWidth + tolerance
-      ) {
-        failures.push(
-          `${label(element)} clips or ellipsizes horizontal semantic text ` +
-            `(${element.scrollWidth.toFixed(1)} > ${element.clientWidth.toFixed(1)})`,
-        );
-      }
-      const clipping = clippingAncestor(element, rect);
-      if (clipping !== null) {
-        failures.push(`${label(element)} text is clipped by ${label(clipping)}`);
-      }
-      if (!allowVerticalDocumentScroll && outside(rect, viewportRect())) {
-        failures.push(`${label(element)} text is outside the CSS viewport`);
-      } else if (
-        allowVerticalDocumentScroll &&
-        (rect.left < -tolerance || rect.right > innerWidth + tolerance)
-      ) {
-        failures.push(`${label(element)} text causes horizontal document escape`);
-      }
+      withReachableLcarsTarget(element, () => {
+        const rect = textRect(element);
+        if (rect.width <= 0 || rect.height <= 0) return;
+        if (
+          element.clientWidth > 0 &&
+          element.scrollWidth > element.clientWidth + tolerance
+        ) {
+          failures.push(
+            `${label(element)} clips or ellipsizes horizontal semantic text ` +
+              `(${element.scrollWidth.toFixed(1)} > ${element.clientWidth.toFixed(1)})`,
+          );
+        }
+        const clipping = clippingAncestor(element, rect);
+        if (clipping !== null) {
+          failures.push(`${label(element)} text is clipped by ${label(clipping)}`);
+        }
+        if (!allowVerticalDocumentScroll && outside(rect, viewportRect())) {
+          failures.push(`${label(element)} text is outside the CSS viewport`);
+        } else if (
+          allowVerticalDocumentScroll &&
+          (rect.left < -tolerance || rect.right > innerWidth + tolerance)
+        ) {
+          failures.push(`${label(element)} text causes horizontal document escape`);
+        }
+      });
     }
     return failures;
   }
@@ -1274,22 +1319,24 @@ function browserAuditLibrary() {
         element.getAttribute("aria-hidden") !== "true",
     );
     for (const control of controls) {
-      if (allowScroll) {
-        control.scrollIntoView({block: "center", inline: "nearest"});
-      }
-      control.focus({preventScroll: !allowScroll});
-      if (document.activeElement !== control) {
-        failures.push(`${label(control)} cannot receive focus`);
-        continue;
-      }
-      const rect = control.getBoundingClientRect();
-      if (outside(rect, viewportRect())) {
-        failures.push(`${label(control)} cannot be brought inside the viewport`);
-      }
-      const clipping = clippingAncestor(control, rect);
-      if (clipping !== null) {
-        failures.push(`${label(control)} is clipped by ${label(clipping)}`);
-      }
+      withReachableLcarsTarget(control, () => {
+        if (allowScroll) {
+          control.scrollIntoView({block: "center", inline: "nearest"});
+        }
+        control.focus({preventScroll: !allowScroll});
+        if (document.activeElement !== control) {
+          failures.push(`${label(control)} cannot receive focus`);
+          return;
+        }
+        const rect = control.getBoundingClientRect();
+        if (outside(rect, viewportRect())) {
+          failures.push(`${label(control)} cannot be brought inside the viewport`);
+        }
+        const clipping = clippingAncestor(control, rect);
+        if (clipping !== null) {
+          failures.push(`${label(control)} is clipped by ${label(clipping)}`);
+        }
+      });
     }
     return {count: controls.length, failures};
   }
@@ -1375,12 +1422,66 @@ function browserAuditLibrary() {
         }
       }
     }
+    const frontPanelStatus = document.querySelector("#front-panel-status");
+    const frontPanelDrawer = document.querySelector(".front-panel-group");
+    const frontPanelKeys = Array.from(
+      document.querySelectorAll("#front-panel-key-grid .front-panel-key"),
+    );
+    const expectedCodes = [
+      "M", "F", "L", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0",
+      ".", "E", ">", "<", "^", "V", "Q", "Y", "A", "B", "C", "Z", "T", "R",
+    ];
+    if (frontPanelKeys.length !== expectedCodes.length) {
+      failures.push(`front-panel inventory exposes ${frontPanelKeys.length} keys, expected 27`);
+    }
+    if (!frontPanelStatus?.textContent?.includes("all controls remain unavailable")) {
+      failures.push("front-panel status does not state that all controls are unavailable");
+    }
+    for (const [index, button] of frontPanelKeys.entries()) {
+      const code = button.querySelector(".front-panel-key-code")?.textContent;
+      const label = button.querySelector(".front-panel-key-label")?.textContent;
+      if (!(button instanceof HTMLButtonElement) || !button.disabled) {
+        failures.push(`front-panel key ${index} is not a disabled button`);
+      }
+      if (code !== expectedCodes[index]) {
+        failures.push(`front-panel key ${index} code is ${JSON.stringify(code)}`);
+      }
+      if (!label || !button.title || button.getAttribute("aria-describedby") !== "front-panel-status") {
+        failures.push(`front-panel key ${index} lacks its safe label, reason, or description`);
+      }
+    }
+    if (!(frontPanelDrawer instanceof HTMLDetailsElement)) {
+      failures.push("front-panel drawer is not a native details element");
+    } else {
+      frontPanelDrawer.open = true;
+      const drawer = frontPanelDrawer.getBoundingClientRect();
+      const panel = document.querySelector(".scanner-controls-panel")?.getBoundingClientRect();
+      if (!panel || drawer.left < panel.left - 1 || drawer.right > panel.right + 1 ||
+          drawer.top < panel.top - 1 || drawer.bottom > panel.bottom + 1) {
+        failures.push("open front-panel drawer is not bounded by the Controls panel");
+      }
+      if (!(frontPanelStatus instanceof HTMLElement) ||
+          frontPanelStatus.scrollWidth > frontPanelStatus.clientWidth + 1) {
+        failures.push("open front-panel status overflows horizontally");
+      }
+      if (frontPanelKeys.some(button => {
+        const key = button.getBoundingClientRect();
+        return key.left < drawer.left - 1 || key.right > drawer.right + 1;
+      })) {
+        failures.push("open front-panel key grid overflows horizontally");
+      }
+      frontPanelDrawer.open = false;
+    }
     return {failures};
   }
 
   function subpanelButtonGeometry(expectedPane) {
     const failures = [];
-    const reference = document.querySelector("#radio-view-auto");
+    // Prominent LCARS Scanner filters are a separate role from compact utility
+    // actions. Keep utility geometry consistent across every other pane.
+    const referenceSelector = lcarsScrollableLayout() && expectedPane !== "scanner"
+      ? "#scanner-reconnect" : "#radio-view-auto";
+    const reference = document.querySelector(referenceSelector);
     const pane = document.querySelector(
       `.workspace-pane[data-workspace-pane="${expectedPane}"]`,
     );
@@ -1414,7 +1515,7 @@ function browserAuditLibrary() {
         ) {
           failures.push(
             `${label(button)} ${property} ${style[property]} does not match ` +
-              `the Scanner sub-panel control ${referenceStyle[property]}`,
+              `the ${referenceSelector} reference control ${referenceStyle[property]}`,
           );
         }
       }
@@ -1422,7 +1523,7 @@ function browserAuditLibrary() {
         if (style[property] !== referenceStyle[property]) {
           failures.push(
             `${label(button)} ${property} ${style[property]} does not match ` +
-              `the Scanner sub-panel control ${referenceStyle[property]}`,
+              `the ${referenceSelector} reference control ${referenceStyle[property]}`,
           );
         }
       }
@@ -1442,26 +1543,49 @@ function browserAuditLibrary() {
     const messageStyle = getComputedStyle(message);
     const tracks = overviewStyle.gridTemplateColumns.trim().split(/\s+/);
     const overviewRect = overview.getBoundingClientRect();
+    // Grid tracks occupy the content box, excluding theme decoration (for
+    // example Pip-Boy's asymmetric left border). Do not count paint as a track.
+    const contentLeft = overviewRect.left + Number.parseFloat(overviewStyle.borderLeftWidth) +
+      Number.parseFloat(overviewStyle.paddingLeft);
+    const contentRight = overviewRect.right - Number.parseFloat(overviewStyle.borderRightWidth) -
+      Number.parseFloat(overviewStyle.paddingRight);
     const messageRect = message.getBoundingClientRect();
     const lineHeight = Number.parseFloat(messageStyle.lineHeight);
+    // The independently added typography layout intentionally centers controls
+    // in a third desktop column. Small layouts still require two columns.
+    const appearance = [
+      overview.querySelector('#theme-typography-pickers'),
+      overview.querySelector('#lcars-v2-appearance-pickers'),
+    ].find(rendered);
+    const centered = appearance !== undefined && !matchMedia('(max-width: 65rem)').matches;
+    const expectedColumns = centered ? 3 : 2;
     if (overviewStyle.display !== "grid") {
       failures.push(
         `non-System overview display is ${overviewStyle.display}, expected grid`,
       );
     }
-    if (tracks.length !== 2) {
+    if (tracks.length !== expectedColumns) {
       failures.push(
-        `non-System overview exposes ${tracks.length} columns instead of two: ` +
+        `non-System overview exposes ${tracks.length} columns instead of ${expectedColumns}: ` +
           overviewStyle.gridTemplateColumns,
       );
     }
-    if (messageStyle.gridColumnStart !== "2") {
+    if (messageStyle.gridColumnStart !== String(expectedColumns)) {
       failures.push(
         `non-System live daemon status starts in grid column ` +
-          `${messageStyle.gridColumnStart}, expected 2`,
+          `${messageStyle.gridColumnStart}, expected ${expectedColumns}`,
       );
     }
-    if (Math.abs(messageRect.right - overviewRect.right) > tolerance) {
+    if (centered) {
+      const rect = appearance.getBoundingClientRect();
+      const style = getComputedStyle(appearance);
+      if (style.gridColumnStart !== '2' || style.gridRowStart !== '1' ||
+          Math.abs((rect.left + rect.right) - (contentLeft + contentRight)) > 2 * tolerance ||
+          rect.right > messageRect.left + tolerance) {
+        failures.push('desktop typography controls are not centered in their own non-overlapping column');
+      }
+    }
+    if (Math.abs(messageRect.right - contentRight) > tolerance) {
       failures.push("non-System live daemon status is not right-aligned");
     }
     if (Number.isFinite(lineHeight) && messageRect.height > lineHeight * 1.5) {
@@ -1475,7 +1599,7 @@ function browserAuditLibrary() {
     const header = document.querySelector(".site-header");
     const brand = header?.querySelector(".brand");
     if (theme === "lcars" && rendered(header) && rendered(brand)) {
-      const railWidth = 1.4 * Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+      const railWidth = Number.parseFloat(getComputedStyle(header).borderLeftWidth);
       if (brand.getBoundingClientRect().left < header.getBoundingClientRect().left + railWidth + 4) {
         failures.push("LCARS brand intrudes into the decorative left rail");
       }
@@ -1754,10 +1878,16 @@ function browserAuditLibrary() {
   function switchSystemPalette(palette) {
     const failures = [];
     const currentPane = document.documentElement.dataset.workspacePane;
-    const sentinel = document.querySelector(
+    const sentinel = Array.from(document.querySelectorAll(
       `.workspace-pane[data-workspace-pane="${currentPane}"] button:not(:disabled)`,
-    );
-    sentinel?.focus({preventScroll: true});
+    )).find(element => rendered(element) && !disabledOrInert(element) && element.tabIndex >= 0);
+    if (!(sentinel instanceof HTMLElement)) {
+      return {failures: ["System palette focus probe has no visible enabled pane button"]};
+    }
+    sentinel.focus({preventScroll: true});
+    if (document.activeElement !== sentinel) {
+      return {failures: ["System palette focus probe could not focus its visible pane button"]};
+    }
     const select = document.querySelector("#system-palette-select");
     if (!(select instanceof HTMLSelectElement)) {
       return {failures: ["System palette select is unavailable"]};
@@ -1776,7 +1906,7 @@ function browserAuditLibrary() {
     if (document.documentElement.dataset.workspacePane !== currentPane) {
       failures.push("System palette switch changed the active workspace pane");
     }
-    if (sentinel instanceof HTMLElement && document.activeElement !== sentinel) {
+    if (document.activeElement !== sentinel) {
       failures.push("System palette switch displaced focus from the active pane");
     }
     return {failures};
@@ -2111,8 +2241,10 @@ function browserAuditLibrary() {
   return Object.freeze({
     clearSequentialFocus,
     controlContext,
+    decorativeClearanceFailures,
     enlargedText,
     focusInventory,
+    focusFailures,
     forcedColors,
     ingressDiagnosticsLayout,
     ingressHomeAssistantLayout,
@@ -2121,10 +2253,13 @@ function browserAuditLibrary() {
     paginationState,
     prefixedUrls,
     radioFields,
+    radioValueFailures,
     readabilityFailures,
     reducedMotion,
     resetPagination,
     sequentialFocusState,
+    semanticClipping,
+    subpanelButtonGeometry,
     switchSystemPalette,
     switchTheme,
   });
@@ -2447,7 +2582,7 @@ async function auditEnlargedText(cdp, collector, theme) {
   await frames(cdp);
 }
 
-async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
+export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
   const collector = new FailureCollector();
   await setViewport(cdp, VIEWPORTS[0]);
   await navigate(cdp, `${baseUrl}/`, timeoutMs);
@@ -2550,6 +2685,7 @@ async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
       );
     }
 
+    await auditPhoneRecordingFonts(cdp, collector, theme);
     await auditMediaPreferences(cdp, collector, theme);
     await auditEnlargedText(cdp, collector, theme);
   }
@@ -2634,6 +2770,34 @@ async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
     ingressHomeAssistantCases,
     systemPaletteCases,
   };
+}
+
+async function auditPhoneRecordingFonts(cdp, collector, theme) {
+  // Linux runners and desktop hosts resolve system-ui differently. Reuse the
+  // full geometry/focus check with common wider/narrower system fonts instead
+  // of assuming the developer's default font represents the CI host. Missing
+  // named fonts fall back normally; no fonts are downloaded or installed.
+  await setViewport(cdp, {width: 390, height: 844, dpr: 2});
+  await activatePane(cdp, "recordings");
+  const original = await evaluate(cdp, `({
+    value: document.documentElement.style.getPropertyValue("font-family"),
+    priority: document.documentElement.style.getPropertyPriority("font-family"),
+  })`);
+  try {
+    for (const family of ['"DejaVu Sans", sans-serif', '"Liberation Sans", sans-serif']) {
+      await evaluate(cdp,
+        `document.documentElement.style.setProperty("font-family", ${JSON.stringify(family)})`);
+      await frames(cdp);
+      await activatePane(cdp, "recordings");
+      collector.add(`${theme}/phone-recording-font/${family}`,
+        await evaluate(cdp,
+          `window.__sdsctlBrowserAudit.normal("recordings", ${JSON.stringify(theme)})`));
+    }
+  } finally {
+    await evaluate(cdp,
+      `document.documentElement.style.setProperty("font-family", ${JSON.stringify(original.value)}, ${JSON.stringify(original.priority)})`);
+    await frames(cdp);
+  }
 }
 
 async function homeAssistantWaterfallState(cdp) {
@@ -3348,6 +3512,27 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
           picker.value = theme;
           picker.dispatchEvent(new Event('change'));
           await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          await document.fonts.ready;
+          const typography = document.querySelector('#theme-typography-pickers');
+          const fontPicker = document.querySelector('#theme-font-picker');
+          for (const node of [typography, fontPicker]) {
+            if (node.hidden && getComputedStyle(node).display !== 'none') {
+              throw new Error('Hidden typography control is rendered: ' + node.id);
+            }
+          }
+          if (matchMedia('(max-width: 65rem)').matches) {
+            const menu = document.querySelector('#native-menu');
+            if (!menu.contains(typography)) throw new Error('Narrow display typography is outside menu');
+            document.querySelector('#native-menu-toggle').click();
+            const selectors = [...typography.querySelectorAll('select')]
+              .filter(node => node.getClientRects().length > 0);
+            if (!typography.hidden && (selectors.length === 0 || selectors.some(node => {
+              const rect = node.getBoundingClientRect();
+              const bounds = menu.getBoundingClientRect();
+              return rect.height < 44 || rect.left < bounds.left || rect.right > bounds.right + 1;
+            }))) throw new Error('Narrow typography menu controls are inaccessible or too small');
+            menu.close();
+          }
           const overview = document.querySelector('.overview').getBoundingClientRect();
           const banner = document.querySelector('#native-session-status').getBoundingClientRect();
           const workspace = document.querySelector('.workspace-shell').getBoundingClientRect();
@@ -3437,7 +3622,7 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
   }
 }
 
-async function openChrome(chrome, profileDirectory, remotePort) {
+export async function openChrome(chrome, profileDirectory, remotePort) {
   const child = spawn(
     chrome,
     [
@@ -3457,7 +3642,7 @@ async function openChrome(chrome, profileDirectory, remotePort) {
   return {child, output: captureChildOutput(child)};
 }
 
-async function pageWebSocketUrl(remotePort, timeoutMs, chrome) {
+export async function pageWebSocketUrl(remotePort, timeoutMs, chrome) {
   await waitForHttp(`http://127.0.0.1:${remotePort}/json/version`, timeoutMs, chrome);
   const response = await fetch(`http://127.0.0.1:${remotePort}/json/list`);
   const targets = await response.json();
@@ -3904,7 +4089,8 @@ async function run(options) {
       `PASS: ${result.caseCount} matrix cases plus theme switching, all 35 radio ` +
         "fields, Simple/Detail and adaptive screens, trusted Tab/Shift+Tab and " +
         "pagination focus, WCAG AA normal/forced-color contrast, reduced motion, " +
-        "enlarged-text scrolling escape, DPR changes, prefixed URLs, all 18 " +
+        "enlarged-text scrolling escape, DPR changes, 12 phone recording font " +
+        "variants, prefixed URLs, all 18 " +
         `Ingress-only Home Assistant workspaces, ${result.systemPaletteCases} ` +
         "responsive System-palette cases, all 18 read-only Ingress " +
         "Diagnostics layouts, browser Waterfall duration/pointer controls, and " +

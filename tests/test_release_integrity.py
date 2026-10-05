@@ -35,20 +35,20 @@ APPROVED_ACTIONS = {
         "pypa/gh-action-pypi-publish v1.14.2",
     ),
     "home-assistant/builder/actions/prepare-multi-arch-matrix": (
-        "4de35182ce1e329181bffcbcc84d33db5e2c7e10",
-        "home-assistant/builder 2026.06.0",
+        "7412f0023ea9b6e58e8bb5059f1660f51376f49a",
+        "home-assistant/builder 2026.09.0",
     ),
     "home-assistant/builder/actions/build-image": (
-        "4de35182ce1e329181bffcbcc84d33db5e2c7e10",
-        "home-assistant/builder 2026.06.0",
+        "7412f0023ea9b6e58e8bb5059f1660f51376f49a",
+        "home-assistant/builder 2026.09.0",
     ),
     "home-assistant/builder/actions/publish-multi-arch-manifest": (
-        "4de35182ce1e329181bffcbcc84d33db5e2c7e10",
-        "home-assistant/builder 2026.06.0",
+        "7412f0023ea9b6e58e8bb5059f1660f51376f49a",
+        "home-assistant/builder 2026.09.0",
     ),
     "docker/setup-qemu-action": (
-        "96fe6ef7f33517b61c61be40b68a1882f3264fb8",
-        "docker/setup-qemu-action v4.2.0",
+        "99012661954931238ded8c8b007157a8430204e1",
+        "docker/setup-qemu-action v4.4.0",
     ),
     "docker/setup-buildx-action": (
         "37fe631027851001ddb9b187196cc803df7f5f0e",
@@ -59,8 +59,8 @@ APPROVED_ACTIONS = {
         "docker/login-action v4.6.0",
     ),
     "docker/build-push-action": (
-        "53b7df96c91f9c12dcc8a07bcb9ccacbed38856a",
-        "docker/build-push-action v7.3.0",
+        "c3c9e263c25d99ce0380d002d59b67737d91b0dc",
+        "docker/build-push-action v7.4.0",
     ),
 }
 
@@ -182,6 +182,15 @@ def test_dependabot_retains_python_actions_and_both_docker_roots() -> None:
         ("docker", "/home-assistant/sds200", "monthly"),
     ]
     assert dependabot.count("  - package-ecosystem:") == len(updates)
+    assert (
+        '    groups:\n'
+        '      monthly-github-actions:\n'
+        '        applies-to: version-updates\n'
+        '        patterns:\n'
+        '          - "*"\n'
+        in dependabot
+    )
+    assert dependabot.count("      monthly-github-actions:") == 1
 
 
 def test_ci_and_release_workflows_share_the_measured_coverage_floor() -> None:

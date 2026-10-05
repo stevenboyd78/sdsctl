@@ -14,6 +14,7 @@ from textual.theme import BUILTIN_THEMES
 
 import sds200.web_dashboard as web_dashboard
 from sds200 import __version__
+from sds200.daemon_api import DaemonApiOperation
 from sds200.daemon_events import DaemonEvent, DaemonEventKind
 from sds200.daemon_recording_file_client import DaemonRecordingFileRequestError
 from sds200.daemon_recording_file_protocol import RecordingFileResponseStatus
@@ -26,6 +27,7 @@ from sds200.exceptions import (
     DaemonRequestError,
     DaemonUnavailableError,
 )
+from sds200.front_panel_keys import FrontPanelKey, front_panel_inventory_snapshot
 from sds200.pcmu import PcmuPacket
 from sds200.pcmu_protocol import encode_pcmu_delivery
 from sds200.pcmu_subscriptions import PcmuPacketDelivery, PcmuPublication
@@ -50,16 +52,21 @@ class FakeDaemonApiClient:
         error: BaseException | None = None,
         recording_error: BaseException | None = None,
         control_error: BaseException | None = None,
+        front_panel: Mapping[str, object] | None = None,
     ) -> None:
         self.hello_result = dict(hello or {})
         self.snapshot_result = dict(snapshot or {})
         self.error = error
         self.recording_error = recording_error
         self.control_error = control_error
+        self.front_panel_result = dict(
+            front_panel or front_panel_inventory_snapshot("SDS200")
+        )
         self.entered = False
         self.closed = False
         self.hello_calls = 0
         self.snapshot_calls = 0
+        self.front_panel_calls = 0
         self.recording_status_calls = 0
         self.recording_start_calls = 0
         self.recording_stop_calls = 0
@@ -90,6 +97,22 @@ class FakeDaemonApiClient:
         if self.error is not None:
             raise self.error
         return dict(self.snapshot_result)
+
+    def front_panel_inventory(self) -> dict[str, object]:
+        self.front_panel_calls += 1
+        if self.error is not None:
+            raise self.error
+        return dict(self.front_panel_result)
+
+    def press_front_panel(
+        self,
+        key: FrontPanelKey,
+        *,
+        timeout: float = 2.0,
+    ) -> dict[str, object]:
+        self.control_calls.append(("press_front_panel", key, timeout))
+        self._raise_control_error()
+        return self._control_result("scanner.front_panel.press")
 
     def recording_status(self) -> dict[str, object]:
         self.recording_status_calls += 1
@@ -568,6 +591,11 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
     assert 'id="saved-recording-player"' in response.text
     assert 'id="scanner-control-status"' in response.text
     assert "<h3>Hold / release</h3>" in response.text
+    assert 'id="front-panel-title"' in response.text
+    assert '<details class="scanner-control-group front-panel-group">' in response.text
+    assert 'id="front-panel-status"' in response.text
+    assert 'id="front-panel-key-grid"' in response.text
+    assert 'aria-label="Scanner front-panel key inventory"' in response.text
     assert 'id="scanner-hold-channel"' in response.text
     assert 'id="scanner-hold-system-state"' in response.text
     assert 'id="scanner-hold-department-state"' in response.text
@@ -635,7 +663,7 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
         'id="status-badge"'
     ) < response.text.index('class="header-actions"')
     assert '<option value="system">System</option>' in response.text
-    assert '<option value="lcars">LCARS-inspired</option>' in response.text
+    assert '<option value="lcars">LCARS</option>' in response.text
     assert '<option value="matrix">Matrix-inspired</option>' in response.text
     assert '<option value="first-responder">First Responder</option>' in response.text
     assert '<option value="amateur-radio">Amateur Radio</option>' in response.text
@@ -772,6 +800,21 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
         stylesheet_source.text
     )
     assert "grid-template-rows: auto minmax(0, 1fr)" in stylesheet_source.text
+    # A fixed phone capture/library split clips LCARS row actions when the
+    # library header wraps above the native and explicit saved-player controls.
+    # Keep the shared rule and the higher-priority viewport override aligned;
+    # the real-browser acceptance matrix verifies actual control containment.
+    for text in (stylesheet_source.text, viewport_stylesheet.text):
+        assert "minmax(0, 0.7fr) minmax(0, 1.3fr)" not in text
+    assert "grid-template-rows: auto minmax(0, 1fr) !important" in viewport_stylesheet.text
+    # Give the phone title its own full-width row below the kicker/Refresh row.
+    # This must not depend on the developer host's system-ui font metrics.
+    for text in (stylesheet_source.text, viewport_stylesheet.text):
+        assert ".recording-library-header > div {" in text
+        assert ".recording-library-header h2 {" in text
+        assert ".recording-library-header .panel-kicker {" in text
+        assert ".recording-telemetry > .recording-file-status {" in text
+        assert "grid-template-columns: minmax(0, 1fr) auto" in text
     assert "minmax(19rem, 0.42fr)" in viewport_stylesheet.text
     assert "grid-template-columns: max-content minmax(0, 1fr)" in (
         viewport_stylesheet.text
@@ -858,7 +901,7 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     )
     assert "color: var(--background);" in stylesheet_source.text
     assert "color: var(--background);" in theme_text["system"]
-    assert "--lcars-panel:" in theme_text["lcars"]
+    assert "--lcars-v2-rail:" in theme_text["lcars"]
     assert "--term-accent:" in theme_text["matrix"]
     assert "--dispatch-accent:" in theme_text["first-responder"]
     assert "--radio-accent:" in theme_text["amateur-radio"]
@@ -915,6 +958,19 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert "PCMU stream gap does not match daemon queue-loss counters" in script.text
     assert 'dashboardFetch(webUrl("api/v1/recording")' in script.text
     assert 'dashboardFetch(webUrl("api/v1/recordings")' in script.text
+    assert 'dashboardFetch(webUrl("api/v1/scanner/front-panel")' in script.text
+    assert "decodeFrontPanelInventory" in script.text
+    assert "FRONT_PANEL_CODES" in script.text
+    assert (
+        'clearFrontPanelInventory("Front-panel controls are hidden in display-only mode.")'
+        in script.text
+    )
+    assert "button.disabled = true" in script.text
+    assert 'button.setAttribute("aria-describedby", "front-panel-status")' in script.text
+    assert "label.textContent = entry.label" in script.text
+    assert '"front-panel/menu"' in script.text
+    assert '"Qualified Menu press"' in script.text
+    assert 'daemonControlSupported("scanner.front_panel.press")' in script.text
     assert 'performRecordingAction("start")' in script.text
     assert 'performRecordingAction("stop")' in script.text
     assert 'performScannerHoldState("channel")' in script.text
@@ -1023,6 +1079,7 @@ def test_web_dashboard_api_index_advertises_endpoints() -> None:
     assert response.json()["links"] == {
         "audio": "/api/v1/audio",
         "dashboard": "/",
+        "display_frame": "/api/v1/display-frame",
         "docs": "/api/v1/docs",
         "events": "/api/v1/events",
         "health": "/healthz",
@@ -1037,10 +1094,71 @@ def test_web_dashboard_api_index_advertises_endpoints() -> None:
         "scanner_previous": "/api/v1/scanner/previous",
         "scanner_previous_scope": "/api/v1/scanner/previous/{scope}",
         "scanner_reconnect": "/api/v1/scanner/reconnect",
+        "scanner_front_panel": "/api/v1/scanner/front-panel",
+        "scanner_front_panel_menu": "/api/v1/scanner/front-panel/menu",
         "snapshot": "/api/v1/snapshot",
         "status": "/api/v1/status",
         "waterfall": "/api/v1/waterfall",
     }
+
+
+def test_web_dashboard_front_panel_is_read_only_and_parameterless() -> None:
+    daemon_client = FakeDaemonApiClient(
+        hello={
+            "operations": [
+                DaemonApiOperation.SCANNER_FRONT_PANEL_INVENTORY.value,
+            ]
+        },
+        snapshot={"scanner_model": "private model value"},
+    )
+    app = create_web_dashboard_app(lambda: daemon_client)
+
+    with TestClient(app) as client:
+        response = client.get("/api/v1/scanner/front-panel")
+        rejected = client.get("/api/v1/scanner/front-panel?key=M")
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.json() == {
+        "protocol": WEB_DASHBOARD_API_PROTOCOL,
+        "version": WEB_DASHBOARD_API_VERSION,
+        "front_panel": front_panel_inventory_snapshot("SDS200"),
+    }
+    assert daemon_client.hello_calls == 1
+    assert daemon_client.front_panel_calls == 1
+    assert daemon_client.snapshot_calls == 0
+    assert "private model value" not in response.text
+    assert rejected.status_code == 422
+    assert rejected.json() == {
+        "detail": "Front-panel inventory does not accept parameters."
+    }
+
+
+def test_web_dashboard_dispatches_only_exact_bodyless_menu_control() -> None:
+    daemon_client = FakeDaemonApiClient(
+        hello=_web_control_hello("scanner.front_panel.press"),
+        snapshot=_web_control_snapshot(),
+        front_panel=front_panel_inventory_snapshot(
+            "SDS200",
+            qualified_menu=True,
+        ),
+    )
+    app = create_web_dashboard_app(lambda: daemon_client)
+
+    with TestClient(app) as client:
+        accepted = client.post("/api/v1/scanner/front-panel/menu")
+        body = client.post("/api/v1/scanner/front-panel/menu", json={})
+        query = client.post("/api/v1/scanner/front-panel/menu?key=M")
+        unqualified = client.post("/api/v1/scanner/front-panel/enter")
+
+    assert accepted.status_code == 200
+    assert accepted.json()["control"]["operation"] == "scanner.front_panel.press"
+    assert body.status_code == 400
+    assert query.status_code == 400
+    assert unqualified.status_code == 404
+    assert daemon_client.control_calls == [
+        ("press_front_panel", FrontPanelKey.MENU, 2.0),
+    ]
 
 
 def test_web_dashboard_status_negotiates_and_returns_snapshot() -> None:
@@ -2054,6 +2172,7 @@ def test_web_dashboard_serves_local_interactive_docs_without_daemon() -> None:
         in openapi_response.json()["paths"]
     )
     assert "/api/v1/scanner/reconnect" in openapi_response.json()["paths"]
+    assert "/api/v1/scanner/front-panel" in openapi_response.json()["paths"]
     assert "/api/v1/recordings" in openapi_response.json()["paths"]
     assert (
         "/api/v1/recordings/file/{identifier}"
@@ -2089,6 +2208,9 @@ def test_dashboard_layout_uses_dedicated_recording_library_panel() -> None:
     assert 'id="scanner-reconnect"' not in diagnostics_pane
     assert 'id="radio-activity-panel"' in scanner_pane
     assert 'id="scanner-reconnect"' in controls_pane
+    assert 'id="front-panel-title"' in controls_pane
+    assert 'id="front-panel-status"' in controls_pane
+    assert 'id="front-panel-key-grid"' in controls_pane
     assert 'id="runtime-title"' not in controls_pane
     assert 'class="recordings-layout"' in recordings_pane
     assert 'class="panel recording-capture-panel"' in recordings_pane

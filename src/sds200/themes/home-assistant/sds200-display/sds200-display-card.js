@@ -97,6 +97,26 @@ const SDS200_DISPLAY_ENTITY_FIELDS = Object.freeze([
     label: "Tone-Out Tone B",
     domain: "sensor",
   }),
+  Object.freeze({
+    key: "talkgroup_id",
+    label: "Talkgroup ID",
+    domain: "sensor",
+  }),
+  Object.freeze({
+    key: "unit_id",
+    label: "Unit ID",
+    domain: "sensor",
+  }),
+  Object.freeze({
+    key: "p25_status",
+    label: "P25 status (reported)",
+    domain: "sensor",
+  }),
+  Object.freeze({
+    key: "battery",
+    label: "Battery (raw)",
+    domain: "sensor",
+  }),
   Object.freeze({ key: "signal", label: "Signal", domain: "sensor" }),
   Object.freeze({ key: "rssi", label: "RSSI", domain: "sensor" }),
   Object.freeze({
@@ -594,7 +614,7 @@ class Sds200DisplayCard extends HTMLElement {
 
     const details = documentObject.createElement("div");
     details.className = "detail-grid";
-    for (const [label, field] of [
+    const detailFields = [
       ["Site", "site"],
       ["Frequency", "frequency"],
       ["Service", "service_type"],
@@ -605,7 +625,15 @@ class Sds200DisplayCard extends HTMLElement {
       ["Recording", "recording_active"],
       ["Capture", "recording_status"],
       ["Daemon", "daemon_state"],
-    ]) {
+    ];
+    const telemetryFields = [
+      ["Talkgroup ID", "talkgroup_id"],
+      ["Unit ID", "unit_id"],
+      ["P25 reported", "p25_status"],
+      ["Battery raw", "battery"],
+    ].filter(([, field]) => this._config.entities[field]);
+    details.dataset.telemetry = String(telemetryFields.length > 0);
+    for (const [label, field] of [...detailFields, ...telemetryFields]) {
       details.append(
         this._cell(documentObject, label, field, {
           className: "detail-cell",
@@ -918,6 +946,11 @@ class Sds200DisplayCard extends HTMLElement {
         grid-template-rows: repeat(5, minmax(0, 1fr));
         min-height: 0;
         background: var(--detail-bg);
+      }
+
+      .detail-grid[data-telemetry="true"] {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-rows: repeat(5, minmax(0, 1fr));
       }
 
       .detail-cell,

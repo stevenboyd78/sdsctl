@@ -1,0 +1,260 @@
+#!/usr/bin/env python3
+"""Read-only source evidence for the prospective recording host helper.
+
+The 14-file installed idle helper cannot import this recording mechanism graph.
+This separately tagged bundle includes its closed private imports AND the full
+product package used by the return verifier. It never imports the observed code.
+Interpreter, stdlib, third-party packages, loader environment, immutable image,
+mounts and the future service entrypoint remain independent qualification gates.
+"""
+
+from __future__ import annotations
+
+import math
+import os
+import stat
+import time
+from dataclasses import dataclass
+from pathlib import Path
+
+import supplemental_handoff_files as files
+from supplemental_handoff_policy import checksum, digest
+
+KIND = "finite-recording-host-source-v1"
+STARTUP_KIND = "finite-recording-startup-host-source-v1"
+PERMISSION_KIND = "finite-recording-permission-probe-host-source-v1"
+SERVICE_KIND = "finite-recording-service-preparation-host-source-v1"
+MAX_SECONDS = 8.0
+ROOTS = frozenset(
+    "supplemental_recording_" + name
+    for name in (
+        "host_source",
+        "service_input",
+        "service_operator",
+        "host_plan",
+        "host_launch",
+        "host_begin",
+        "normal_read",
+        "idle_observer",
+        "probe_exec",
+        "web_exec",
+        "runtime",
+        "bootstrap",
+        "ready",
+        "begin",
+        "relay",
+        "exit",
+        "reconcile",
+        "host",
+        "binding",
+    )
+)
+MODULES = frozenset(
+    {
+        "supplemental_handoff_" + name
+        for name in (
+            "app_read",
+            "cached",
+            "executor",
+            "files",
+            "host",
+            "guard_state",
+            "observer",
+            "policy",
+            "process",
+            "protected",
+            "recovery",
+        )
+    }
+    | {
+        "supplemental_recording_" + name
+        for name in (
+            "attachment",
+            "begin",
+            "binding",
+            "bootstrap",
+            "bridge",
+            "channel",
+            "checkpoints",
+            "clock",
+            "dispatch",
+            "engine",
+            "engine_sender",
+            "evidence",
+            "exec_stream",
+            "execution",
+            "exit",
+            "reconcile",
+            "handoff",
+            "host",
+            "host_plan",
+            "host_launch",
+            "host_begin",
+            "host_source",
+            "service_input",
+            "service_operator",
+            "idle_observer",
+            "monitor",
+            "namespace",
+            "normal_read",
+            "owner",
+            "preservation",
+            "projection",
+            "probe_exec",
+            "protected",
+            "ready",
+            "recovery",
+            "relay",
+            "retained",
+            "runtime",
+            "source",
+            "static",
+            "time_domain",
+            "wire",
+            "web_exec",
+        )
+    }
+)
+HELPER_FILES = frozenset(name + ".py" for name in MODULES)
+# Explicit, separately hashed profile for the new startup libraries. The
+# original 54-module policy remains the default; no graph is auto-detected.
+STARTUP_MODULES = MODULES | frozenset(
+    "supplemental_recording_service_" + name
+    for name in (
+        "template",
+        "offer",
+        "publish",
+        "acceptance",
+        "submit",
+        "clock_link",
+        "declaration",
+        "startup",
+    )
+)
+STARTUP_FILES = frozenset(name + ".py" for name in STARTUP_MODULES)
+STARTUP_ROOTS = ROOTS | frozenset(
+    "supplemental_recording_service_" + name for name in ("startup", "submit", "clock_link")
+)
+PERMISSION_MODULES = STARTUP_MODULES | frozenset(
+    {"supplemental_recording_service_permission", "supplemental_recording_permission_probe"}
+)
+PERMISSION_FILES = frozenset(name + ".py" for name in PERMISSION_MODULES)
+PERMISSION_ROOTS = STARTUP_ROOTS | frozenset({"supplemental_recording_permission_probe"})
+SERVICE_MODULES = PERMISSION_MODULES | frozenset({"supplemental_recording_service_command"})
+SERVICE_FILES = frozenset(name + ".py" for name in SERVICE_MODULES)
+SERVICE_ROOTS = PERMISSION_ROOTS | frozenset({"supplemental_recording_service_command"})
+REQUIRED_RUNTIME = frozenset({"__init__.py", "daemon_recording.py"})
+MESSAGE = "Recording host source is unconfirmed; do not launch the private host helper."
+
+
+class UnconfirmedSource(ValueError):
+    """A supplied source digest does not authenticate its own provenance."""
+
+
+def require(value):
+    if not value:
+        raise UnconfirmedSource(MESSAGE)
+
+
+@dataclass(frozen=True)
+class Evidence:
+    sha256: str
+    runtime_sha256: str
+    helper_sha256: str
+    file_count: int
+    total_bytes: int
+
+
+@dataclass(frozen=True)
+class Layout:
+    runtime: Path
+    helper: Path
+    startup: bool = False
+    permission_probe: bool = False
+    service_preparation: bool = False
+
+    def _profile(self):
+        flags = self.startup, self.permission_probe, self.service_preparation
+        require(all(type(flag) is bool for flag in flags) and sum(flags) <= 1)
+        if self.service_preparation:
+            return SERVICE_FILES, SERVICE_KIND
+        if self.permission_probe:
+            return PERMISSION_FILES, PERMISSION_KIND
+        return (STARTUP_FILES, STARTUP_KIND) if self.startup else (HELPER_FILES, KIND)
+
+    def _snapshot(self, *, deadline=None):
+        def timely():
+            require(deadline is None or time.monotonic() < deadline)
+
+        expected, kind = self._profile()
+        timely()
+        bound = {} if deadline is None else {"deadline": deadline}
+        runtime = files.inventory(self.runtime, source_directories=True, **bound)
+        timely()
+        helper = files.inventory(self.helper, source_directories=True, **bound)
+        timely()
+        require(set(runtime) >= REQUIRED_RUNTIME and set(helper) == expected)
+        # inventory() includes every file, but an extra empty namespace must
+        # also fail. This helper tree is deliberately flat and closed.
+        fd = os.open(self.helper, files.DIRECTORY)
+        try:
+            before, names = files.identity(os.fstat(fd)), set()
+            with os.scandir(fd) as entries:
+                for entry in entries:
+                    timely()
+                    require(entry.name in expected and entry.name not in names)
+                    require(
+                        stat.S_ISREG(os.stat(entry.name, dir_fd=fd, follow_symlinks=False).st_mode)
+                    )
+                    names.add(entry.name)
+            require(names == expected and files.identity(os.fstat(fd)) == before)
+        finally:
+            os.close(fd)
+        count, size = len(runtime) + len(helper), 0
+        require(count <= files.MAX_FILES)
+        for item in (*runtime.values(), *helper.values()):
+            timely()
+            require(item["mode"] & 0o7022 == 0)
+            size += item["size"]
+            require(size <= files.MAX_TOTAL_BYTES)
+        return {"schema": 1, "kind": kind, "runtime": runtime, "helper": helper}, count, size
+
+    def observe(self, *, deadline=None):
+        try:
+            self._profile()
+            for path in (self.runtime, self.helper):
+                require(type(path) is type(Path()) and path.is_absolute() and path != Path("/"))
+                require(".." not in path.parts)
+            require(not self.runtime.is_relative_to(self.helper))
+            require(not self.helper.is_relative_to(self.runtime))
+            outer_bound = deadline is not None
+            began = time.monotonic()
+            if outer_bound:
+                require(type(deadline) in (int, float) and math.isfinite(deadline))
+                deadline = min(began + MAX_SECONDS, deadline)
+            else:
+                deadline = began + MAX_SECONDS
+            require(began < deadline)
+            bound = {"deadline": deadline} if outer_bound else {}
+            first, count, size = self._snapshot(**bound)
+            require(time.monotonic() < deadline)
+            second, count2, size2 = self._snapshot(**bound)
+            require((first, count, size) == (second, count2, size2) and time.monotonic() < deadline)
+            return Evidence(
+                checksum(first), checksum(first["runtime"]), checksum(first["helper"]), count, size
+            )
+        except Exception:
+            raise UnconfirmedSource(MESSAGE) from None
+
+    def verify(self, expected_sha256, *, deadline=None):
+        try:
+            digest(expected_sha256)
+            result = self.observe() if deadline is None else self.observe(deadline=deadline)
+            require(result.sha256 == expected_sha256)
+            return result
+        except Exception:
+            raise UnconfirmedSource(MESSAGE) from None
+
+
+if __name__ == "__main__":
+    raise SystemExit("Read-only recording host source only; no host service or dispatch enabled.")

@@ -21,6 +21,7 @@ from sds200.favorites_storage_usb import (
     LinuxBlockDeviceEvidence,
     LinuxMountInfoEntry,
     LinuxMountInfoError,
+    _observe_favorites_usb_storage_path,
     _qualify_favorites_usb_storage_target_evidence,
     discover_favorites_usb_storage_candidates,
     qualify_favorites_usb_storage_path,
@@ -1820,6 +1821,24 @@ def test_explicit_read_only_path_fails_closed(
         captured.value.reason
         is FavoritesUsbStorageQualificationReason.READ_ONLY_MOUNT
     )
+
+
+def test_explicit_read_only_path_can_be_observed_without_write_qualification(
+    tmp_path: Path,
+) -> None:
+    mountinfo, dev_block, mount_directory, favorites_directory = (
+        _explicit_usb_path_fixture(tmp_path, writable=False)
+    )
+
+    candidate = _observe_favorites_usb_storage_path(
+        mount_directory,
+        mountinfo,
+        sys_dev_block_directory=dev_block,
+    )
+
+    assert candidate.mount_directory == mount_directory
+    assert candidate.favorites_directory == favorites_directory
+    assert candidate.is_read_only is True
 
 
 def test_explicit_path_must_be_absolute() -> None:

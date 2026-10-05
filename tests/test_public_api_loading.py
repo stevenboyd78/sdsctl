@@ -30,7 +30,7 @@ def test_import_version_and_discovery_do_not_load_public_implementation() -> Non
         import sys
         import sds200
         assert isinstance(sds200.__version__, str)
-        assert len(sds200.__all__) == len(set(sds200.__all__)) == 1004
+        assert len(sds200.__all__) == len(set(sds200.__all__)) == 1010
         assert set(sds200.__all__) <= set(dir(sds200))
         assert dir(sds200) == sorted(set(dir(sds200)))
         assert not any(name.startswith('sds200.') for name in sys.modules)
@@ -67,7 +67,7 @@ def test_every_export_resolves_to_its_original_module_object() -> None:
         imports = [node for node in ast.parse(source).body if isinstance(node, ast.ImportFrom)]
         expected = {alias.asname or alias.name: (node.module, alias.name)
                     for node in imports for alias in node.names}
-        assert len(expected) == 1004
+        assert len(expected) == 1010
         assert set(expected) == set(sds200.__all__)
         for name, (module, original) in expected.items():
             actual = getattr(sds200, name)

@@ -13,9 +13,11 @@ from sds200 import (
     DaemonRemoteReconnectPolicy,
     DaemonRemoteService,
     DaemonTuiRadio,
+    DaemonWaterfallClient,
     cli,
     resolve_configuration_paths,
 )
+from sds200.front_panel_keys import front_panel_inventory_snapshot
 from sds200.models import ScannerInfo
 from sds200.radio import SDSScanner
 from sds200.state import RadioStateSnapshot
@@ -78,6 +80,8 @@ def test_tui_cli_uses_replay_radio_and_selected_theme(
     assert captured["firmware"] == "Version 1.26.01"
     assert captured["connected"] is True
     assert captured.get("connection_target") is None
+    assert captured.get("daemon_version_source") is None
+    assert captured.get("daemon_link_since_source") is None
     assert captured["palette"] is DEFAULT_LIGHT_THEME
     assert captured["interval_ms"] == 250
     assert captured["stale_after"] == 1.5
@@ -144,6 +148,10 @@ def test_tui_parser_accepts_explicit_daemon_client_options() -> None:
             "2048",
             "--daemon-pcmu-max-frame-bytes",
             "16384",
+            "--daemon-waterfall-socket-path",
+            "/tmp/sdsctl-waterfall.sock",
+            "--daemon-waterfall-max-record-bytes",
+            "32768",
         ]
     )
 
@@ -156,11 +164,15 @@ def test_tui_parser_accepts_explicit_daemon_client_options() -> None:
     assert args.daemon_pcmu_socket_path == Path("/tmp/sdsctl-pcmu.sock")
     assert args.daemon_pcmu_max_endpoint_bytes == 2048
     assert args.daemon_pcmu_max_frame_bytes == 16384
+    assert args.daemon_waterfall_socket_path == Path("/tmp/sdsctl-waterfall.sock")
+    assert args.daemon_waterfall_max_record_bytes == 32768
 
 
+@pytest.mark.parametrize("display_capable", [False, True])
 def test_tui_cli_uses_daemon_without_opening_scanner_or_rtsp(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    display_capable: bool,
 ) -> None:
     captured: dict[str, object] = {}
     output = tmp_path / "daemon-tui.wav"
@@ -181,15 +193,30 @@ def test_tui_cli_uses_daemon_without_opening_scanner_or_rtsp(
             self.closed = False
             self.hello_calls = 0
             self.snapshot_calls = 0
+            self.front_panel_calls = 0
             self.instances.append(self)
 
         def hello(self) -> dict[str, object]:
             self.hello_calls += 1
-            return {"operations": ["runtime.snapshot"]}
+            return {
+                "operations": [
+                    "runtime.snapshot",
+                    "scanner.front_panel.inventory",
+                ]
+                + (["display.frame"] if display_capable else [])
+            }
+
+        def front_panel_inventory(self) -> dict[str, object]:
+            self.front_panel_calls += 1
+            return front_panel_inventory_snapshot("SDS200")
+
+        def display_frame(self) -> dict[str, object]:
+            return {"test_frame": True}
 
         def runtime_snapshot(self) -> dict[str, object]:
             self.snapshot_calls += 1
             return {
+                "application_version": "99.1.2",
                 "scanner_endpoint": "udp://192.0.2.25:50536",
                 "scanner_model": "SDS200",
                 "scanner_firmware": "Version 1.26.01",
@@ -275,6 +302,10 @@ def test_tui_cli_uses_daemon_without_opening_scanner_or_rtsp(
 
     def fake_run_tui(**kwargs: object) -> None:
         captured.update(kwargs)
+        version_source = kwargs["daemon_version_source"]
+        assert callable(version_source) and version_source() == "99.1.2"
+        link_source = kwargs["daemon_link_since_source"]
+        assert callable(link_source) and link_source() is None
 
     monkeypatch.setattr(cli, "DaemonApiClient", FakeApiClient)
     monkeypatch.setattr(cli, "DaemonEventClient", FakeEventClient)
@@ -308,6 +339,10 @@ def test_tui_cli_uses_daemon_without_opening_scanner_or_rtsp(
                 "2048",
                 "--daemon-pcmu-max-frame-bytes",
                 "16384",
+                "--daemon-waterfall-socket-path",
+                "/tmp/sdsctl-waterfall.sock",
+                "--daemon-waterfall-max-record-bytes",
+                "32768",
                 "--audio-output",
                 str(output),
                 "--audio-playback",
@@ -326,6 +361,9 @@ def test_tui_cli_uses_daemon_without_opening_scanner_or_rtsp(
     assert captured["firmware"] == "Version 1.26.01"
     assert captured["connected"] is True
     assert captured["connection_target"] is None
+    assert captured["front_panel_inventory"] == (
+        front_panel_inventory_snapshot("SDS200") if display_capable else None
+    )
     assert isinstance(captured["radio"], DaemonTuiRadio)
 
     snapshot = captured["snapshot"]
@@ -350,7 +388,25 @@ def test_tui_cli_uses_daemon_without_opening_scanner_or_rtsp(
     assert api_client.max_response_bytes == 8192
     assert api_client.hello_calls == 1
     assert api_client.snapshot_calls == 1
+    assert api_client.front_panel_calls == int(display_capable)
     assert api_client.closed is True
+
+    if display_capable:
+        from sds200.scanner_display_reader import DisplayFrameSource
+        source = captured["display_source"]
+        assert isinstance(source, DisplayFrameSource)
+        assert len(FakeApiClient.instances) == 2
+        display_client = FakeApiClient.instances[1]
+        assert display_client is not api_client
+        assert display_client.location is api_client.location
+        assert display_client.timeout == 1.5 and display_client.max_response_bytes == 8192
+        assert display_client.hello_calls == 0 and display_client.snapshot_calls == 0
+        assert source.read() == {"test_frame": True}
+        assert display_client.hello_calls == 1
+        source.close()
+        assert display_client.closed
+    else:
+        assert captured["display_source"] is None and len(FakeApiClient.instances) == 1
 
     assert event_client.location.path == Path("/tmp/sdsctl-events.sock")
     assert event_client.timeout == 1.5
@@ -365,6 +421,16 @@ def test_tui_cli_uses_daemon_without_opening_scanner_or_rtsp(
     assert pcmu_client.max_frame_bytes == 16384
     assert pcmu_client.connected is False
     assert pcmu_client.close_calls == 0
+
+    waterfall_factory = captured["waterfall_client_factory"]
+    assert callable(waterfall_factory)
+    waterfall_client = waterfall_factory()
+    assert isinstance(waterfall_client, DaemonWaterfallClient)
+    assert waterfall_client.location is not None
+    assert waterfall_client.location.path == Path("/tmp/sdsctl-waterfall.sock")
+    assert waterfall_client.timeout == 1.5
+    assert waterfall_client.max_record_bytes == 32768
+    assert not waterfall_client.connected
 
 
 def test_tui_cli_remote_profile_builds_independent_authenticated_services(
@@ -404,6 +470,7 @@ def test_tui_cli_remote_profile_builds_independent_authenticated_services(
 
         def runtime_snapshot(self) -> dict[str, object]:
             return {
+                "application_version": "99.2.3",
                 "scanner_model": "SDS200",
                 "scanner_firmware": "Version 1.26.01",
                 "scanner_connected": True,
@@ -445,6 +512,10 @@ def test_tui_cli_remote_profile_builds_independent_authenticated_services(
 
     def fake_run_tui(**kwargs: object) -> None:
         captured.update(kwargs)
+        version_source = kwargs["daemon_version_source"]
+        assert callable(version_source) and version_source() == "99.2.3"
+        link_source = kwargs["daemon_link_since_source"]
+        assert callable(link_source) and link_source() is None
 
     monkeypatch.setattr(cli, "DaemonApiClient", FakeApiClient)
     monkeypatch.setattr(cli, "DaemonEventClient", FakeEventClient)
@@ -470,6 +541,7 @@ def test_tui_cli_remote_profile_builds_independent_authenticated_services(
     assert callable(terminal_failure_subscribe)
     assert captured["endpoint"] == DAEMON_REMOTE_CLIENT_ENDPOINT
     assert captured["connection_target"] == "192.168.20.41:50443"
+    assert captured["front_panel_inventory"] is None
     assert captured["snapshot"].channel == "Remote Dispatch"
 
     api_transport = radio.api_client.location
@@ -483,6 +555,13 @@ def test_tui_cli_remote_profile_builds_independent_authenticated_services(
     assert event_transport.service is DaemonRemoteService.EVENTS
     assert audio_transport.client.transport.service is DaemonRemoteService.AUDIO
     assert isinstance(audio_transport.reconnect_policy, DaemonRemoteReconnectPolicy)
+    waterfall_factory = captured["waterfall_client_factory"]
+    assert callable(waterfall_factory)
+    waterfall_client = waterfall_factory()
+    assert isinstance(waterfall_client, DaemonWaterfallClient)
+    assert isinstance(waterfall_client.transport, DaemonRemoteClientTransport)
+    assert waterfall_client.transport.service is DaemonRemoteService.WATERFALL
+    assert waterfall_client.sanitizes_private_state
 
 
 @pytest.mark.parametrize(
@@ -507,6 +586,7 @@ def test_tui_daemon_client_rejects_scanner_selectors(
         "--daemon-socket-path",
         "--daemon-event-socket-path",
         "--daemon-pcmu-socket-path",
+        "--daemon-waterfall-socket-path",
         "--remote-profile",
     ],
 )
@@ -526,6 +606,24 @@ def test_tui_daemon_options_require_explicit_mode(
         == 2
     )
     assert "require --daemon-client" in capsys.readouterr().err
+
+
+def test_tui_waterfall_record_limit_is_bounded(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert (
+        cli.main(
+            [
+                "tui",
+                "--daemon-client",
+                "--daemon-waterfall-max-record-bytes",
+                "65537",
+            ],
+            environ={},
+        )
+        == 2
+    )
+    assert "must not exceed the TUI waterfall protocol limit" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(

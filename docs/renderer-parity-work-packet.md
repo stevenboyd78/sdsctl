@@ -7,7 +7,39 @@ guide. It supplements the historical
 `ffb3e101de7014d7513daef49d454c81bdc7c59b` on `main`. Recheck the selected
 implementation commit before starting. No physical scanner acceptance is added.
 
-## Four concrete TUI omissions
+## Development update — read-only scanner details
+
+The local development candidate implements the four fields below in an **X** /
+**Scanner details** command-palette drawer, not four additional dashboard rows.
+It reuses existing shared snapshots in direct and daemon sessions, preserves
+literal ID prefixes/zeroes and unknown P25 text, labels battery as raw and clears
+unconfirmed values. It waits for a fresh snapshot after reconnect. Action keys
+are isolated while this read-only view is open; returning restores the ordinary
+dashboard. Mimic-SDS keeps its separate X/runtime behavior.
+
+Parser-to-snapshot/daemon-to-renderer, missing/malformed fields, bounded literal
+text, mode transitions, loss/reconnect, scroll/resize and compact/wide light/dark
+tests are implemented. This does not add a new command, observation subscription,
+telemetry interpretation, TUI waterfall or physical/model qualification. Both Pi
+visual/keyboard checks passed on September 28, 2026, using installed candidate
+`824c417` and fictional offline snapshots. Original displays were restored;
+field-specific hardware evidence remains separate and pending. See the
+[TUI candidate guide](tui.md#unreleased-read-only-scanner-details).
+
+The later daemon-backed TUI waterfall candidate is also no longer waiting on
+its first physical presentation check. Exact head `85042e6` passed authenticated
+live 240-bin streaming and user-reported visual/interaction acceptance on the
+100x30 small Pi. The finite guardian restored the unchanged previous display
+service, and a post-termination checkpoint proved there was no stale waterfall
+consumer. The candidate was still active when closeout began, so a physical
+`Q`-triggered process exit is not independently claimed; exact offline Q cleanup
+and actual live guarded consumer release are separate retained evidence. The
+160x45 HDMI display remains outside this live claim.
+
+The following findings record the earlier baseline and motivation, not outstanding
+requests to add these same values again.
+
+## Four TUI omissions at the inspection baseline
 
 These values already cross the shared state boundary. Adding a renderer does
 not require a new scanner command, a second transport, or a new daemon poll.
@@ -33,9 +65,11 @@ Source locations:
 The web inventory maps all 35 shared fields to unique HTML targets. Adaptive
 profiles deliberately select field groups; a mapped field is not necessarily
 visible in every current mode or collapsed view. Preserve that distinction when
-comparing photographs. This packet does not update the historical audit's Home
-Assistant columns: discovery templates and each card need their own current
-review before any new entity or card-support claim.
+comparing photographs. The later independent Home Assistant review added fixed
+field-available Talkgroup ID, Unit ID, reported P25 status and raw battery
+sensors plus optional compact and Display-card selectors. That separate work
+reuses the existing generic radio topic and does not alter this packet's parser,
+TUI layout or physical-evidence boundary.
 
 ## Completed foundations to reuse
 
@@ -54,8 +88,12 @@ review before any new entity or card-support claim.
   [validating waterfall client](../src/sds200/daemon_waterfall_client.py) accepts
   a transport abstraction as well as a local socket. Its older local-only
   descriptive text is not evidence that the remote service is absent.
-  A future TUI renderer should consume that stream, not expose another port or
-  bypass the shared daemon owner. No TUI waterfall pane exists at this baseline.
+  The later unreleased TUI candidate now consumes that stream without exposing
+  another port or bypassing the shared daemon owner. It adds a bounded relative
+  pane only for daemon-backed sessions; the baseline statement that no pane
+  existed remains historical. The exact 100x30 live scanner-mode visual and
+  guarded-consumer-cleanup boundary passed; HDMI and independently observed
+  physical-Q termination remain unclaimed.
 
 ## Fixture and layout contract before implementing the four rows
 
@@ -92,7 +130,12 @@ review before any new entity or card-support claim.
 | [Daemon TUI](../tests/test_daemon_tui.py) | Authoritative snapshots, typed decoding, battery validation and reconnect behavior | Per-field decoder-to-panel checks with populated and cleared values |
 | [Web field parity](../tests/test_web_dashboard_field_parity.py) | All 35 fields have unique targets; complete projection and group hooks; zero/false-like formatting | Browser visibility depends on selected group; these source-contract tests are not screenshots or physical evidence |
 | [TUI](../tests/test_tui.py) | Current adaptive panels, Weather labels, recording distinction and USB audio omission | New rows, stable dimensions, long/raw values, mode changes and both Pi layouts |
-| [Remote observation](../tests/test_daemon_remote_observation.py), [transport](../tests/test_daemon_remote_transport.py), [reconnect](../tests/test_daemon_remote_reconnect.py) | Shared waterfall demand, existing routed record protocol and fresh-checkpoint reconnect | Future TUI consumer lifecycle, rendering/history bounds and physical mode acceptance |
+| [Remote observation](../tests/test_daemon_remote_observation.py), [transport](../tests/test_daemon_remote_transport.py), [reconnect](../tests/test_daemon_remote_reconnect.py), [TUI waterfall](../tests/test_tui_waterfall.py) | Shared waterfall demand, routed record protocol, fresh-checkpoint reconnect, strict relative normalization, bounded local history, responsive rendering and one-screen cleanup | Small-Pi live appearance and guarded cleanup passed at `85042e6`; HDMI and independently observed physical-Q termination remain unclaimed |
+
+For the final row, the exact installed 100x30 appearance and guarded live
+consumer cleanup have passed at `85042e6`. Retain the remaining HDMI and
+physical-Q limitations instead of treating that historical “still needed” cell
+as an unchecked request to repeat the accepted small-Pi pass.
 
 Run these unchanged baselines before editing; report their exact candidate and
 scope separately from any newly added tests. This packet itself adds no parser,

@@ -312,6 +312,10 @@ def build_home_assistant_device_discovery(
         ("service_type", "Service Type"),
         ("tone_out_tone_a", "Tone-Out Tone A"),
         ("tone_out_tone_b", "Tone-Out Tone B"),
+        ("talkgroup_id", "Talkgroup ID"),
+        ("unit_id", "Unit ID"),
+        ("p25_status", "P25 Status (Reported)"),
+        ("battery", "Battery (Raw)"),
     ):
         components[key] = {
             "platform": "sensor",

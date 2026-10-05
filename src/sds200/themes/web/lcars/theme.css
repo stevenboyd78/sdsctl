@@ -1,291 +1,281 @@
-/* LCARS-inspired presentation. Layout and pane lifecycle belong to dashboard.css. */
-
+/* LCARS v2: the canonical LCARS theme. Palette provenance: docs/lcars-v2.md. */
 :root[data-theme="lcars"] {
   color-scheme: dark;
-  --background: #0b0910;
-  --surface: #17121d;
-  --surface-emphasis: #241a2b;
-  --text: #fff4df;
-  --muted: #d2bfd7;
-  --border: #9b6fbd;
-  --accent: #e89547;
-  --accent-strong: #f3b45f;
-  --success: #9bd68b;
-  --warning: #f1c85f;
-  --danger: #ef8585;
-  --focus: #ffe28a;
+  --background: #000000;
+  --surface: #000000;
+  --surface-emphasis: #000000;
+  --text: #ffffff;
+  --muted: #baa4e5;
+  --border: #8a72a7;
+  --accent: var(--lcars-v2-apricot);
+  --accent-strong: #edb378;
+  --accent-soft: #000000;
+  --success: #b9d99c;
+  --warning: #ffd079;
+  --danger: #ff9999;
+  --focus: #ffffff;
   --shadow: none;
-  --radius-small: 0.85rem 0.3rem 0.85rem 0.3rem;
-  --radius-large: 1.6rem 0.45rem 1.6rem 0.45rem;
-  --lcars-panel: #e89547;
-  --lcars-panel-soft: rgb(232 149 71 / 0.1);
-  --lcars-pink: #d36b9b;
-  --lcars-blue: #91ace2;
-  --lcars-violet: #b781d1;
-  --lcars-ink: #100d14;
+  --radius-small: 1.2rem 0.2rem 0.2rem 1.2rem;
+  --radius-large: 0;
+  --lcars-v2-lilac: #baa4e5;
+  --lcars-v2-blue: #8899ff;
+  --lcars-v2-salmon: #cf4f4f;
+  --lcars-v2-apricot: #eb943a;
+  --lcars-v2-heading: var(--lcars-v2-apricot);
+  --lcars-v2-divider: #7a506d;
+  --lcars-v2-disabled-text: var(--muted);
+  --lcars-v2-disabled-surface: #000000;
+  --lcars-v2-ink: #000000;
+  --lcars-v2-rail: clamp(1.3rem, 4vw, 3.5rem);
+  font-family: "IBM Plex Sans Condensed", "Liberation Sans Narrow", Arial, sans-serif;
 }
 
 :root[data-theme="lcars"] body {
-  background:
-    linear-gradient(90deg, rgb(232 149 71 / 0.13), transparent 24rem),
-    radial-gradient(circle at 86% 14%, rgb(155 111 189 / 0.12), transparent 28rem),
-    var(--background);
+  background: var(--background);
 }
 
+/* Borders take real space. No decorative element is placed over a label. */
 :root[data-theme="lcars"] .site-header {
-  position: relative;
-  padding-left: clamp(2.4rem, 7vw, 6rem);
   border: 0;
-  border-bottom: 0.7rem solid var(--accent);
-  border-radius: 2.6rem 0.35rem 0.35rem 0;
-  background: var(--surface);
-  box-shadow: inset 1.4rem 0 var(--lcars-pink);
+  border-left: var(--lcars-v2-rail) solid var(--lcars-v2-lilac);
+  border-bottom: 0.7rem solid var(--lcars-v2-blue);
+  border-radius: 0 0 0 clamp(2rem, 5vw, 4.25rem);
+  background: var(--background);
+  box-shadow: none;
 }
 
-:root[data-theme="lcars"] .site-header::after {
-  position: absolute;
-  right: 0;
-  bottom: -0.7rem;
-  width: min(45%, 24rem);
-  height: 0.7rem;
-  content: "";
-  background:
-    linear-gradient(
-      90deg,
-      var(--lcars-pink) 0 42%,
-      transparent 42% 47%,
-      var(--lcars-blue) 47% 72%,
-      transparent 72% 77%,
-      var(--lcars-violet) 77%
-    );
-  border-radius: 999px 0 0 999px;
-}
-
-:root[data-theme="lcars"] .brand h1,
-:root[data-theme="lcars"] .panel h2 {
-  letter-spacing: 0.035em;
+:root[data-theme="lcars"] .brand h1 {
+  color: var(--lcars-v2-heading);
+  font-weight: 600;
+  letter-spacing: 0.025em;
   text-transform: uppercase;
 }
 
-:root[data-theme="lcars"] .eyebrow,
-:root[data-theme="lcars"] .panel-kicker {
-  color: var(--accent-strong);
-  letter-spacing: 0.16em;
+:root[data-theme="lcars"] :is(.eyebrow, .panel-kicker, .theme-picker label) {
+  color: var(--lcars-v2-lilac);
+  letter-spacing: 0.08em;
+}
+
+:root[data-theme="lcars"] :is(.subtitle, .dashboard-message) {
+  color: var(--muted);
+}
+
+:root[data-theme="lcars"] .overview {
+  border-top: 0.45rem solid transparent;
+}
+
+:root[data-theme="lcars"] .overview h2 {
+  color: var(--lcars-v2-lilac);
+  font-weight: 600;
+  text-transform: uppercase;
 }
 
 :root[data-theme="lcars"] .status-badge {
   border: 0;
-  border-radius: 999px 0.3rem 0.3rem 999px;
-  color: var(--lcars-ink);
+  border-radius: 999px;
+  color: var(--lcars-v2-ink);
   background: var(--warning);
-  box-shadow: inset 1rem 0 rgb(255 244 223 / 0.18);
+  box-shadow: none;
   text-transform: uppercase;
 }
 
+:root[data-theme="lcars"] .status-badge[data-state="online"] {
+  color: var(--lcars-v2-ink);
+  background: var(--success);
+}
+
+:root[data-theme="lcars"] .status-badge[data-state="offline"] {
+  color: var(--lcars-v2-ink);
+  background: var(--danger);
+}
+
+/* Segmented color rail, painted only in the reserved transparent border. */
 :root[data-theme="lcars"] .workspace-shell {
-  border: 0.65rem solid var(--border);
-  border-top-color: var(--lcars-pink);
-  border-right-width: 0.2rem;
-  border-bottom-color: var(--accent);
-  border-left-width: 1.15rem;
-  border-radius: 2.3rem 0.4rem 2.3rem 0.4rem;
-  background: var(--lcars-ink);
-  box-shadow: inset 1rem 0 var(--lcars-panel-soft);
+  border: 0;
+  border-left: var(--lcars-v2-rail) solid transparent;
+  border-top: 0.7rem solid var(--lcars-v2-salmon);
+  border-bottom: 0.45rem solid var(--lcars-v2-apricot);
+  border-radius: clamp(2rem, 5vw, 4.25rem) 0 0 0;
+  background:
+    linear-gradient(to bottom,
+      var(--lcars-v2-salmon) 0 27%,
+      var(--background) 27% calc(27% + 5px),
+      var(--lcars-v2-apricot) calc(27% + 5px) 57%,
+      var(--background) 57% calc(57% + 5px),
+      var(--lcars-v2-lilac) calc(57% + 5px) 83%,
+      var(--background) 83% calc(83% + 5px),
+      var(--lcars-v2-blue) calc(83% + 5px) 100%)
+      left top / var(--lcars-v2-rail) 100% no-repeat border-box,
+    var(--background);
+  box-shadow: none;
 }
 
 :root[data-theme="lcars"] .workspace-tabs {
   border: 0;
-  border-radius: 999px 0.35rem 0.35rem 999px;
-  background: var(--lcars-blue);
-  box-shadow:
-    inset 1.4rem 0 var(--lcars-pink),
-    inset -0.5rem 0 var(--lcars-violet);
+  border-radius: 0;
+  background: var(--background);
+  box-shadow: none;
 }
 
 :root[data-theme="lcars"] .workspace-tabs button {
   border: 0;
-  border-radius: 999px;
-  color: var(--lcars-ink);
-  background: var(--accent);
+  border-radius: 0.2rem 0.2rem 1.3rem 1.3rem;
+  color: var(--lcars-v2-ink);
+  background: var(--lcars-v2-lilac);
   box-shadow: none;
-  letter-spacing: 0.08em;
+  font-weight: 700;
   text-transform: uppercase;
-  transition:
-    background-color 120ms ease,
-    color 120ms ease,
-    transform 120ms ease;
+  letter-spacing: 0.025em;
 }
 
-:root[data-theme="lcars"] .workspace-tabs button:hover:not(:disabled) {
-  background: var(--accent-strong);
+:root[data-theme="lcars"] .workspace-tabs button:nth-child(2n) {
+  background: var(--lcars-v2-apricot);
+}
+
+:root[data-theme="lcars"] .workspace-tabs button:nth-child(3n) {
+  background: var(--lcars-v2-blue);
 }
 
 :root[data-theme="lcars"] .workspace-tabs button[aria-selected="true"] {
-  color: var(--lcars-ink);
-  background: #ffe28a;
-  box-shadow: inset 0 -0.25rem rgb(211 107 155 / 0.7);
+  color: var(--lcars-v2-ink);
+  background: var(--text);
+  box-shadow: inset 0 -0.25rem 0 var(--lcars-v2-apricot);
 }
 
-:root[data-theme="lcars"] .workspace-deck {
-  border: 2px solid var(--border);
-  border-left-width: 0.7rem;
-  border-radius: 1.8rem 0.3rem 1.8rem 0.3rem;
-  background:
-    linear-gradient(90deg, var(--lcars-panel-soft), transparent 12rem),
-    var(--surface);
-}
-
-:root[data-theme="lcars"] [data-workspace-pane] {
-  border-color: var(--border);
-  background: var(--surface);
-}
-
-:root[data-theme="lcars"] .panel {
-  --lcars-panel: #e89547;
-  --lcars-panel-soft: rgb(232 149 71 / 0.1);
-  position: relative;
+:root[data-theme="lcars"] :is(.workspace-deck, [data-workspace-pane], .panel, #radio-activity-panel) {
   border: 0;
-  border-left: 0.65rem solid var(--lcars-panel);
-  border-radius: 1.5rem 0.3rem 0.3rem 1.5rem;
-  background:
-    linear-gradient(90deg, var(--lcars-panel-soft), transparent 9rem),
-    var(--surface);
-  box-shadow: inset 0.65rem 0 rgb(255 244 223 / 0.025);
-}
-
-:root[data-theme="lcars"] .scanner-panel {
-  --lcars-panel: var(--lcars-violet);
-  --lcars-panel-soft: rgb(183 129 209 / 0.11);
-}
-
-:root[data-theme="lcars"] .scanner-controls-panel,
-:root[data-theme="lcars"] .radio-view-controls {
-  --lcars-panel: var(--lcars-pink);
-  --lcars-panel-soft: rgb(211 107 155 / 0.1);
-}
-
-:root[data-theme="lcars"] .browser-audio-panel {
-  --lcars-panel: var(--lcars-blue);
-  --lcars-panel-soft: rgb(145 172 226 / 0.1);
-}
-
-:root[data-theme="lcars"] .recording-capture-panel,
-:root[data-theme="lcars"] .recording-library-panel {
-  --lcars-panel: #d7b778;
-  --lcars-panel-soft: rgb(215 183 120 / 0.1);
-}
-
-:root[data-theme="lcars"] .panel::after {
-  position: absolute;
-  top: 0.65rem;
-  right: 0.7rem;
-  width: 3.8rem;
-  height: 0.38rem;
-  content: "";
-  border-radius: 999px;
-  background:
-    linear-gradient(
-      90deg,
-      var(--lcars-panel) 0 48%,
-      transparent 48% 56%,
-      var(--lcars-pink) 56% 74%,
-      transparent 74% 82%,
-      var(--lcars-blue) 82%
-    );
+  border-radius: 0;
+  color: var(--text);
+  background: var(--background);
+  box-shadow: none;
+  outline: none;
 }
 
 :root[data-theme="lcars"] .panel-header {
-  margin-right: 4.2rem;
-  /* Reserve the curved end for decoration, not text or controls. */
-  padding-right: 1.6rem;
-  border-bottom: 0.35rem solid var(--lcars-panel);
-  border-radius: 0 0 1.4rem 0;
+  border: 0;
+  border-bottom: 0.4rem solid var(--lcars-v2-lilac);
+  border-radius: 0;
 }
 
-:root[data-theme="lcars"] .panel-header h2,
-:root[data-theme="lcars"] .panel-header .panel-kicker {
-  color: var(--text);
+:root[data-theme="lcars"] .panel-header h2 {
+  color: var(--lcars-v2-heading);
+  text-transform: uppercase;
+  font-weight: 600;
 }
 
-:root[data-theme="lcars"] .recording-library-header > div {
-  min-width: 0;
-}
-
-:root[data-theme="lcars"] #recordings-refresh {
-  flex-shrink: 0;
-}
-
-:root[data-theme="lcars"] #radio-activity-panel {
-  --lcars-panel: #f3b45f;
-  --lcars-panel-soft: rgb(243 180 95 / 0.14);
-  border-left-width: 1rem;
-  outline: 2px solid var(--lcars-pink);
-  outline-offset: -0.35rem;
-  background:
-    linear-gradient(135deg, rgb(243 180 95 / 0.11), transparent 16rem),
-    var(--surface-emphasis);
-  box-shadow:
-    inset 1rem 0 rgb(243 180 95 / 0.05),
-    0 0 0 0.25rem var(--lcars-ink);
-}
-
-:root[data-theme="lcars"] #radio-activity-panel .primary-value {
-  color: #ffe28a;
-  letter-spacing: 0.035em;
-}
-
-:root[data-theme="lcars"] #radio-activity-panel .secondary-value {
-  color: #f0cfab;
+:root[data-theme="lcars"] :is(.waterfall-header, .recording-library-header) {
+  border-bottom-color: var(--lcars-v2-blue);
 }
 
 :root[data-theme="lcars"] .radio-view-controls {
   border: 0;
-  border-left: 0.55rem solid var(--lcars-pink);
-  border-radius: 999px 0.3rem 0.3rem 999px;
-  background: rgb(211 107 155 / 0.1);
+  border-radius: 0;
+  background: var(--background);
 }
 
-:root[data-theme="lcars"] .radio-field-groups {
-  border-color: var(--lcars-violet);
-  /* Keep the rectangular data grid inside its rounded clipping boundary. */
+:root[data-theme="lcars"] :is(button, .recording-action, select) {
+  border: 1px solid transparent;
   border-radius: var(--radius-small);
-  background: rgb(183 129 209 / 0.07);
+  color: var(--lcars-v2-ink);
+  background: var(--lcars-v2-apricot);
+  box-shadow: none;
+  font-family: inherit;
 }
 
-:root[data-theme="lcars"] .radio-field-group,
-:root[data-theme="lcars"] .scanner-control-group,
-:root[data-theme="lcars"] .recording-item {
-  border-color: color-mix(in srgb, var(--lcars-panel) 60%, var(--border));
-  background: var(--lcars-panel-soft);
-}
-
-:root[data-theme="lcars"] .status-list > div,
-:root[data-theme="lcars"] .radio-field-list > div {
-  border-bottom-color: rgb(232 149 71 / 0.34);
-}
-
-:root[data-theme="lcars"] button,
-:root[data-theme="lcars"] .recording-action,
-:root[data-theme="lcars"] select {
-  border: 0;
-  border-radius: 999px 0.3rem 0.3rem 999px;
-  color: var(--lcars-ink);
-  background: var(--accent);
-  box-shadow: inset 0.7rem 0 rgb(255 244 223 / 0.12);
-}
-
-:root[data-theme="lcars"] button:hover:not(:disabled),
-:root[data-theme="lcars"] .recording-action:hover {
-  color: var(--lcars-ink);
+:root[data-theme="lcars"] :is(button, .recording-action):hover:not(:disabled) {
+  color: var(--lcars-v2-ink);
   background: var(--accent-strong);
 }
 
-:root[data-theme="lcars"] #audio-stop,
-:root[data-theme="lcars"] #scanner-reconnect,
-:root[data-theme="lcars"] #recording-stop,
-:root[data-theme="lcars"] #recordings-refresh {
-  color: var(--lcars-ink);
-  background: var(--lcars-blue);
+:root[data-theme="lcars"] button[aria-pressed="true"] {
+  color: var(--lcars-v2-ink);
+  background: var(--text);
+  box-shadow: inset 0 -3px var(--lcars-v2-blue);
+}
+
+:root[data-theme="lcars"] button:disabled,
+:root[data-theme="lcars"] button[aria-disabled="true"] {
+  color: var(--lcars-v2-disabled-text);
+  background: var(--lcars-v2-disabled-surface);
+  box-shadow: none;
+  opacity: 1;
+}
+
+:root[data-theme="lcars"] :is(#audio-stop, #recording-stop, #recordings-refresh) {
+  color: var(--lcars-v2-ink);
+  background: var(--lcars-v2-blue);
+}
+
+:root[data-theme="lcars"] :is(.scanner-display-hierarchy, .radio-summary) {
+  border: 0;
+  border-radius: 0;
+  background: var(--background);
+  box-shadow: none;
+}
+
+:root[data-theme="lcars"] .scanner-display-hierarchy > div {
+  border: 0;
+  border-left: 0.35rem solid var(--lcars-v2-lilac);
+  padding-left: 0.7rem;
+}
+
+:root[data-theme="lcars"] .scanner-display-hierarchy > div:nth-child(2) {
+  border-left-color: var(--lcars-v2-apricot);
+}
+
+:root[data-theme="lcars"] .scanner-display-hierarchy > div:nth-child(3) {
+  border-left-color: var(--lcars-v2-blue);
+}
+
+:root[data-theme="lcars"] :is(.scanner-display-hierarchy dt, .radio-summary dt, .radio-field-list dt) {
+  color: var(--lcars-v2-lilac);
+}
+
+:root[data-theme="lcars"] :is(.primary-value, .secondary-value, .scanner-display-hierarchy dd) {
+  color: var(--text);
+}
+
+:root[data-theme="lcars"] :is(.radio-summary dd, .radio-field-list dd, .status-list dd) {
+  color: var(--lcars-v2-apricot);
+  font-variant-numeric: tabular-nums;
+}
+
+:root[data-theme="lcars"] :is(.radio-field-groups, .radio-field-group, .scanner-control-group, .recording-item) {
+  border: 0;
+  border-radius: 0;
+  background: var(--background);
+  box-shadow: none;
+}
+
+:root[data-theme="lcars"] .radio-field-groups {
+  border-top: 0.45rem solid var(--lcars-v2-blue);
+}
+
+:root[data-theme="lcars"] :is(.radio-field-group h3, .scanner-control-group h3, .panel-subsection-header h2) {
+  color: var(--lcars-v2-lilac);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+:root[data-theme="lcars"] :is(.status-list > div, .radio-field-list > div, .recording-item) {
+  border-bottom: 1px solid var(--lcars-v2-divider);
+}
+
+:root[data-theme="lcars"] .site-footer {
+  color: var(--muted);
+  border-top-color: var(--lcars-v2-lilac);
+}
+
+:root[data-theme="lcars"] :is(button, select, a):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -3px;
+}
+
+/* Rails recede on small/touch screens instead of taking space from controls. */
+@media (max-width: 850px), (max-height: 550px) {
+  :root[data-theme="lcars"] { --lcars-v2-rail: 0.85rem; }
+  :root[data-theme="lcars"] .workspace-shell { border-radius: 1.6rem 0 0 0; }
+  :root[data-theme="lcars"] .site-header { border-radius: 0 0 0 1.6rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -293,53 +283,173 @@
   :root[data-theme="lcars"] *::before,
   :root[data-theme="lcars"] *::after {
     animation: none !important;
-    transition-duration: 0.01ms !important;
+    transition: none !important;
   }
 }
 
 @media (forced-colors: active) {
-  :root[data-theme="lcars"] {
+  :root[data-theme="lcars"],
+  :root[data-theme="lcars"][data-lcars-v2-palette] {
     --background: Canvas;
     --surface: Canvas;
     --surface-emphasis: Canvas;
     --text: CanvasText;
     --muted: CanvasText;
-    --border: CanvasText;
     --accent: LinkText;
     --accent-strong: Highlight;
+    --lcars-v2-ink: ButtonText;
+    --lcars-v2-lilac: ButtonFace;
+    --lcars-v2-blue: ButtonFace;
+    --lcars-v2-salmon: ButtonFace;
+    --lcars-v2-apricot: ButtonFace;
+    --lcars-v2-heading: CanvasText;
+    --lcars-v2-divider: CanvasText;
+    --lcars-v2-disabled-text: GrayText;
+    --lcars-v2-disabled-surface: Canvas;
     --focus: Highlight;
-    --lcars-panel: CanvasText;
-    --lcars-panel-soft: Canvas;
-    --lcars-pink: CanvasText;
-    --lcars-blue: CanvasText;
-    --lcars-violet: CanvasText;
-    --lcars-ink: CanvasText;
   }
-
-  :root[data-theme="lcars"] .site-header,
-  :root[data-theme="lcars"] .workspace-shell,
-  :root[data-theme="lcars"] .workspace-tabs,
-  :root[data-theme="lcars"] .workspace-deck,
-  :root[data-theme="lcars"] [data-workspace-pane],
-  :root[data-theme="lcars"] .panel,
-  :root[data-theme="lcars"] #radio-activity-panel,
-  :root[data-theme="lcars"] .radio-view-controls,
-  :root[data-theme="lcars"] .radio-field-groups {
-    border-color: CanvasText;
-    outline-color: CanvasText;
-    color: CanvasText;
-    background: Canvas;
-    box-shadow: none;
+  :root[data-theme="lcars"] :is(button, select, .recording-action) {
+    border: 1px solid ButtonText;
   }
-
-  :root[data-theme="lcars"] .site-header::after,
-  :root[data-theme="lcars"] .panel::after {
-    content: none;
-  }
-
-  :root[data-theme="lcars"] .workspace-tabs button[aria-selected="true"] {
+  :root[data-theme="lcars"] button:is([aria-selected="true"], [aria-pressed="true"]) {
     color: HighlightText;
     background: Highlight;
     outline: 2px solid Highlight;
+  }
+}
+
+@media (forced-colors: none) {
+  :root[data-theme="lcars"][data-lcars-v2-source-colors="true"] {
+    --accent-soft: #000000;
+    --source-blue-ink: #000000;
+    --source-alternate-ink: #000000;
+    --lcars-v2-disabled-surface: #000000;
+    --lcars-v2-disabled-text: var(--muted);
+  }
+  :root[data-theme="lcars"][data-lcars-v2-source-colors="true"][data-lcars-v2-palette="classic"] {
+    --text: #ffffff;
+    --muted: #baa4e5;
+    --border: #8a72a7;
+    --accent-strong: #edb378;
+    --lcars-v2-lilac: #baa4e5;
+    --lcars-v2-blue: #8899ff;
+    --lcars-v2-salmon: #cf4f4f;
+    --lcars-v2-apricot: #eb943a;
+    --lcars-v2-heading: #eb943a;
+    --lcars-v2-divider: #7a506d;
+    --source-frame: #8899ff;
+    --source-sidebar: #d29b7f;
+    --source-nav-alternate: #ea9c72;
+  }
+  :root[data-theme="lcars"][data-lcars-v2-source-colors="true"][data-lcars-v2-palette="nemesis-blue"] {
+    --text: #ebf0ff;
+    --muted: #6699ff;
+    --border: #52526a;
+    --accent-strong: #ebf0ff;
+    --lcars-v2-lilac: #88bbff;
+    --lcars-v2-blue: #2266ff;
+    --lcars-v2-salmon: #0048f0;
+    --lcars-v2-apricot: #6699ff;
+    --lcars-v2-heading: #88bbff;
+    --lcars-v2-divider: #52526a;
+    --source-frame: #2266ff;
+    --source-sidebar: #2266ff;
+    --source-nav-alternate: #d1a16c;
+    --source-blue-ink: #ffffff;
+  }
+  :root[data-theme="lcars"][data-lcars-v2-source-colors="true"][data-lcars-v2-palette="lower-decks"] {
+    --text: #ffeecc;
+    --muted: #ff9911;
+    --border: #cc5500;
+    --accent-strong: #ffeecc;
+    --lcars-v2-lilac: #ffcc99;
+    --lcars-v2-blue: #ff7700;
+    --lcars-v2-salmon: #ff4400;
+    --lcars-v2-apricot: #ffaa44;
+    --lcars-v2-heading: #ffcc99;
+    --lcars-v2-divider: #cc5500;
+    --source-frame: #ff4400;
+    --source-sidebar: #ff7700;
+    --source-nav-alternate: #ff9911;
+  }
+  :root[data-theme="lcars"][data-lcars-v2-source-colors="true"][data-lcars-v2-palette="lower-decks-padd"] {
+    --text: #f3f3fc;
+    --muted: #7799dd;
+    --border: #344470;
+    --accent-strong: #f3f3fc;
+    --lcars-v2-lilac: #99ccff;
+    --lcars-v2-blue: #5588ee;
+    --lcars-v2-salmon: #344470;
+    --lcars-v2-apricot: #66ccff;
+    --lcars-v2-heading: #88eeff;
+    --lcars-v2-divider: #455580;
+    --source-frame: #5588ee;
+    --source-sidebar: #455580;
+    --source-nav-alternate: #7799dd;
+  }
+  :root[data-theme="lcars"][data-lcars-v2-source-colors="true"][data-lcars-v2-palette="voyager"] {
+    --text: #e6f2ff;
+    --muted: #70b5ff;
+    --border: #585a68;
+    --accent-strong: #ffe1ca;
+    --lcars-v2-lilac: #bec2cf;
+    --lcars-v2-blue: #2288ff;
+    --lcars-v2-salmon: #828cad;
+    --lcars-v2-apricot: #ffbb33;
+    --lcars-v2-heading: #ffbb33;
+    --lcars-v2-divider: #585a68;
+    --source-frame: #828cad;
+    --source-sidebar: #828cad;
+    --source-nav-alternate: #cc9966;
+  }
+  :root[data-theme="lcars"][data-lcars-v2-source-colors="true"][data-lcars-v2-palette="picard"] {
+    --text: #f3f4f7;
+    --muted: #9ea5ba;
+    --border: #52596e;
+    --accent-strong: #ff6753;
+    --lcars-v2-lilac: #d2d5df;
+    --lcars-v2-blue: #41c4f7;
+    --lcars-v2-salmon: #6d748c;
+    --lcars-v2-apricot: #e7442a;
+    --lcars-v2-heading: #ff977b;
+    --lcars-v2-divider: #2f3749;
+    --source-frame: #6d748c;
+    --source-sidebar: #6d748c;
+    --source-nav-alternate: #9ea5ba;
+  }
+
+  /* Match the source palette's major frame roles without changing geometry. */
+  :root[data-theme="lcars"][data-lcars-v2-source-colors="true"] .site-header {
+    border-left-color: var(--source-frame);
+    border-bottom-color: var(--source-frame);
+  }
+  :root[data-theme="lcars"][data-lcars-v2-source-colors="true"] .workspace-shell {
+    border-top-color: var(--source-frame);
+    border-bottom-color: var(--source-frame);
+  }
+  :root[data-theme="lcars"][data-lcars-v2-source-colors="true"] .workspace-tabs::after {
+    background: var(--source-sidebar);
+  }
+  :root[data-theme="lcars"][data-lcars-v2-source-colors="true"] .workspace-tabs button:nth-child(2n) {
+    background: var(--source-nav-alternate);
+    color: var(--source-alternate-ink);
+  }
+  :root[data-theme="lcars"][data-lcars-v2-source-colors="true"] .workspace-tabs button:nth-child(3n),
+  :root[data-theme="lcars"][data-lcars-v2-source-colors="true"] :is(#audio-stop, #recording-stop, #recordings-refresh) {
+    background: var(--lcars-v2-blue);
+    color: var(--source-blue-ink);
+  }
+  :root[data-theme="lcars"][data-lcars-v2-source-colors="true"] .workspace-tabs button:hover,
+  :root[data-theme="lcars"][data-lcars-v2-source-colors="true"] :is(#audio-stop, #recording-stop, #recordings-refresh):hover:not(:disabled) {
+    background: var(--accent-strong);
+    color: var(--lcars-v2-ink);
+  }
+  :root[data-theme="lcars"][data-lcars-v2-source-colors="true"] .workspace-tabs button[aria-selected="true"] {
+    background: var(--text);
+    color: var(--lcars-v2-ink);
+  }
+  :root[data-theme="lcars"][data-lcars-v2-source-colors="true"] :is(#audio-stop, #recording-stop, #recordings-refresh):disabled {
+    background: var(--lcars-v2-disabled-surface);
+    color: var(--lcars-v2-disabled-text);
   }
 }

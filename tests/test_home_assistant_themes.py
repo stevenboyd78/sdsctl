@@ -50,12 +50,7 @@ def _write_theme(
         encoding="utf-8",
     )
     module = manifest.get("module")
-    if (
-        write_module
-        and isinstance(module, str)
-        and "/" not in module
-        and "\\" not in module
-    ):
+    if write_module and isinstance(module, str) and "/" not in module and "\\" not in module:
         (directory / module).write_text("export {};\n", encoding="utf-8")
     return directory
 
@@ -64,43 +59,51 @@ def test_built_in_home_assistant_theme_registry_is_ordered_and_immutable() -> No
     registry = built_in_home_assistant_theme_registry()
 
     assert registry.identifiers == BUILT_IN_HOME_ASSISTANT_THEME_IDS
-    assert tuple(theme.order for theme in registry.themes) == (0, 10, 20)
+    assert tuple(theme.order for theme in registry.themes) == (0, 10, 20, 30)
     assert tuple(theme.label for theme in registry.themes) == (
         "SDS200 Scanner",
         "SDS200 Display",
         "SDS200 Waterfall",
+        "Mimic-SDS",
     )
     assert tuple(theme.custom_element for theme in registry.themes) == (
         "sds200-card",
         "sds200-display-card",
         "sds200-waterfall-card",
+        "sds200-mimic-card",
     )
     assert tuple(theme.resource_url for theme in registry.themes) == (
         "/local/sds200/sds200-card.js?v="
-        "beb1c6f22d62655caf4fc541a0cabfa4ed273b8fe22d6b3fe4324f5dc88ab9d8",
+        "263439642bea86b5f006d68e90ae3e938d4e2ddff9d49fb2be73168d9732a62d",
         "/local/sds200/sds200-display-card.js?v="
-        "b2d47c2b7abd19a92b2ee61b6b3de00362366f8df828d7786c54ae35aa0ada72",
+        "31e62f3d67b4d3a8577fbf69f3a5552a2880fb90984d1d15642a81ec58b15d1d",
         "/local/sds200/sds200-waterfall-card.js?v="
-        "9e696a9ed370a2b3c1aa1efa0422514658f98fccbbb2f3e0faf402e0edff672f",
+        + hashlib.sha256(
+            read_built_in_home_assistant_theme_module(registry.require("waterfall"))
+        ).hexdigest(),
+        "/local/sds200/sds200-mimic-card.js?v="
+        + hashlib.sha256(
+            read_built_in_home_assistant_theme_module(registry.require("mimic-sds"))
+        ).hexdigest(),
     )
 
     with pytest.raises(FrozenInstanceError):
         registry.themes[0].label = "Changed"  # type: ignore[misc]
 
 
-def test_built_in_modules_preserve_pre_extraction_bytes() -> None:
+def test_mqtt_modules_preserve_pre_extraction_bytes() -> None:
     registry = built_in_home_assistant_theme_registry()
     hashes = {
         theme.identifier: hashlib.sha256(
             read_built_in_home_assistant_theme_module(theme)
         ).hexdigest()
         for theme in registry.themes
+        if theme.identifier in {"compact", "sds200-display"}
     }
 
     assert hashes == {
-        "compact": "beb1c6f22d62655caf4fc541a0cabfa4ed273b8fe22d6b3fe4324f5dc88ab9d8",
-        "sds200-display": "b2d47c2b7abd19a92b2ee61b6b3de00362366f8df828d7786c54ae35aa0ada72",
-        "waterfall": "9e696a9ed370a2b3c1aa1efa0422514658f98fccbbb2f3e0faf402e0edff672f",
+        "compact": "263439642bea86b5f006d68e90ae3e938d4e2ddff9d49fb2be73168d9732a62d",
+        "sds200-display": "31e62f3d67b4d3a8577fbf69f3a5552a2880fb90984d1d15642a81ec58b15d1d",
     }
 
 

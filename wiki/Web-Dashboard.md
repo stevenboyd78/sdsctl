@@ -48,10 +48,16 @@ keyboard behavior, and security boundary.
 
 Every theme is captured in the same review order: 1920x1080 Full HD, 1366x768
 desktop, 800x480 compact landscape/Raspberry Pi display, and 390x844 portrait
-phone at DPR2. At normal zoom the document and active pane fit without
-scrolling at these reference sizes. When text enlargement or browser zoom needs
-more room, content reachability takes priority and conventional scrolling
-returns.
+phone at DPR2. At normal zoom the workspace fits these reference sizes. Compact
+LCARS panes can scroll internally to keep fields and controls reachable without
+shrinking them. When text enlargement or browser zoom needs more room, content
+reachability takes priority and conventional scrolling returns.
+
+The captures show theme-default typography, using locally bundled fonts where
+available; no internet font service is required. Appearance controls are centered
+above the workspace and wrap onto a centered row at narrower sizes. See the
+[typography guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/theme-typography.md)
+for the available pairings and readable/system-font alternatives.
 
 At phone width, one compact brand row sits above a shared connection-status and
 theme-selector row. The supporting subtitle and visible `Theme` label are
@@ -69,15 +75,20 @@ names.
 
 ![System theme at a 390x844 CSS viewport and DPR2](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-system-390x844-dpr2.png)
 
-### LCARS-inspired
+### LCARS
 
-![LCARS-inspired theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-lcars-1920x1080.png)
+LCARS now uses the replacement v2 design. These captures use the Classic palette
+and Antonio font, with Site directly beneath System and segmented frame rails.
+The stable theme choice remains **LCARS**; see
+[LCARS design and migration](https://github.com/stevenboyd78/sdsctl/blob/main/docs/lcars-v2.md).
 
-![LCARS-inspired theme at 1366x768](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-lcars-1366x768.png)
+![LCARS theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-lcars-1920x1080.png)
 
-![LCARS-inspired theme at 800x480](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-lcars-800x480.png)
+![LCARS theme at 1366x768](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-lcars-1366x768.png)
 
-![LCARS-inspired theme at a 390x844 CSS viewport and DPR2](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-lcars-390x844-dpr2.png)
+![LCARS theme at 800x480](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-lcars-800x480.png)
+
+![LCARS theme at a 390x844 CSS viewport and DPR2](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-lcars-390x844-dpr2.png)
 
 ### Matrix-inspired
 

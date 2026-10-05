@@ -38,6 +38,7 @@ from sds200.daemon_waterfall_protocol import (
     DaemonWaterfallRecordKind,
 )
 from sds200.exceptions import DaemonDisconnectedError
+from sds200.front_panel_keys import front_panel_inventory_snapshot
 from sds200.web_auth import _login_response
 from sds200.web_dashboard import (
     WEB_DASHBOARD_HOME_ASSISTANT_INGRESS_CLIENT,
@@ -588,6 +589,9 @@ class DemoDaemonApiClient:
 
     def runtime_snapshot(self) -> dict[str, object]:
         return dict(DEMO_SNAPSHOT)
+
+    def front_panel_inventory(self) -> dict[str, object]:
+        return front_panel_inventory_snapshot("SDS200")
 
     def remote_clients(self) -> dict[str, object]:
         return {
