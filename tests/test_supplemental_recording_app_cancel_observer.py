@@ -29,6 +29,30 @@ layout, image_umask, supervised, image, configured = (
 pytestmark = pristine.pytestmark
 
 
+def _retry_descheduled_clock_sample(monkeypatch):
+    """Keep this observer test focused on cancellation, not host scheduling.
+
+    The strict clock module has dedicated refusal tests.  A coverage-heavy CI
+    process can occasionally be descheduled inside its five-millisecond raw
+    sampling window, before this test reaches the cancellation boundary.  A
+    fresh raw sample still has to satisfy every production clock check.
+    """
+    clock = m.launch.plans.clock
+    read = clock.read
+
+    def sampled():
+        error = None
+        for _ in range(10):
+            try:
+                return read()
+            except clock.UnconfirmedClock as observed:
+                error = observed
+        assert error is not None
+        raise error
+
+    monkeypatch.setattr(clock, "read", sampled)
+
+
 @pytest.fixture
 def launch_case(native, monkeypatch):
     native.cancel_notices = []
@@ -54,6 +78,7 @@ def test_selected_pre_cancel_observation_never_constructs_start_or_renews_clock(
     driver_case, monkeypatch, close_lost
 ):
     s = driver_case
+    _retry_descheduled_clock_sample(monkeypatch)
     s.cancel_observe = lambda notice: notice.receipt
     original = s.plan.raw, s.plan.lease, s.startup.clock
 
