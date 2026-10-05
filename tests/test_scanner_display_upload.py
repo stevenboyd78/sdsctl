@@ -275,6 +275,24 @@ def test_admin_review_is_user_bound_one_use_and_reload_failure_is_distinct(admin
         admin.commit(UID, review["review_id"])
 
 
+def test_admin_status_separates_configured_source_from_accepted_provenance(admin, configured):
+    result = admin.status()
+    accepted = result["accepted"]
+
+    assert result["configured_source"] == {
+        "source_id": str(configured[1].binding.source_id),
+        "source_kind": "manual_import",
+        "path": str(configured[1].source_path),
+    }
+    assert result["source_status"] == "matches_import"
+    assert result["source_path"] == str(configured[1].source_path)
+    assert accepted["source_kind"] == "manual_import"
+    assert datetime.fromisoformat(accepted["acquired_at"]) <= datetime.fromisoformat(
+        accepted["imported_at"]
+    )
+    assert datetime.fromisoformat(result["status_checked_at"]).tzinfo is not None
+
+
 def test_admin_expiry_and_close_discard_without_writes(admin, configured):
     before = state(configured[1])
     moment = [0]
