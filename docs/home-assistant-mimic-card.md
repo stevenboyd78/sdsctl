@@ -1,10 +1,9 @@
-# Mimic-SDS Home Assistant card (unreleased candidate)
+# Mimic-SDS Home Assistant card (v0.31.0 release target)
 
-This is **local candidate functionality**, not part of the published 0.30.0
-installation instructions. It still needs a paired candidate App deployment and
-comparison with the user's scanner in Home Assistant. Do not add candidate App
-options to an older published image or replace working dashboard resources with
-unreviewed development files.
+Mimic-SDS is included in the matching v0.31.0 App/card contract. Before the
+immutable v0.31.0 artifacts are verified as published, it remains available only
+through a paired source-pinned candidate. Do not add v0.31.0 options to an older
+published image or replace working dashboard resources with unreviewed bytes.
 
 Mimic-SDS is an **additional, read-only card**, not a replacement for SDS200
 Scanner, SDS200 Display or SDS200 Waterfall. It reconstructs the scanner's
@@ -15,21 +14,22 @@ dashboard password or MQTT entity is required by the new card.
 
 ## Before adding the card
 
-Use a candidate App built with the same frame API and card assets. An
-administrator must configure the candidate's optional display-profile source,
+Use the matching v0.31.0 App after publication, or a candidate App built with
+the same frame API and card assets during controlled pre-release acceptance. An
+administrator must configure the App's optional display-profile source,
 initialize its accepted state, and import the scanner's `profile.cfg` using the
 [profile administration workflow](scanner-display-profile-import.md).
 The card cannot upload a profile, choose a filesystem path or edit scanner
 settings. All cards use the accepted profile for that App's scanner endpoint.
 
 The App installs `sds200-mimic-card.js` with the three existing card modules and
-the `sds200-cards.js` aggregate. Register the candidate aggregate's **complete
-digest-qualified resource URL** as a JavaScript Module. The reviewed deployment
-must supply that URL from the packaged manifest/aggregate bytes; do not reuse
-the older published aggregate digest. Individual resources remain supported,
-but update Waterfall and Mimic together. Reload every open dashboard tab after
-updating: an already-running older Waterfall class cannot adopt the new shared
-session manager merely because a second module was loaded beside it.
+the `sds200-cards.js` aggregate. Register the matching deployment's **complete
+digest-qualified aggregate resource URL** as a JavaScript Module. Copy that URL
+from the packaged manifest/aggregate bytes; do not reuse an older aggregate
+digest. Individual resources remain supported, but update Waterfall and Mimic
+together. Reload every open dashboard tab after updating: an already-running
+older Waterfall class cannot adopt the new shared session manager merely because
+a second module was loaded beside it.
 
 Home Assistant must provide an authenticated App context and exactly one
 discoverable, running sds200 App with Ingress enabled. Enable **Show in sidebar**

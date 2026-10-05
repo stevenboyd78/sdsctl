@@ -27,12 +27,30 @@ only for development builds.
 | `scanner_host` | yes | none |
 | `mqtt_topic_prefix` | no | `sdsctl` |
 | `recording_directory` | no | `sdsctl/recordings` |
+| `remote_daemon_enabled` | no | `false` |
+| `native_dashboard_enabled` | no | `false` |
+| `advanced_access_server_name` | advanced only | empty |
+| `advanced_access_host_address` | remote daemon only | empty |
+| `qualified_sds200_menu_control_enabled` | no | `false` |
+| `scanner_display_config` | no | empty |
 
 Set `scanner_host` to the SDS200 LAN hostname or IP address.
 
 Set `recording_directory` to a relative path below Home Assistant `/media`. The
 default `sdsctl/recordings` resolves to `/media/sdsctl/recordings`. Absolute
 paths and traversal components are rejected.
+
+Leave `qualified_sds200_menu_control_enabled` off for ordinary operation. Its
+only qualified boundary is one SDS200 `Version 1.26.01` Menu press after fresh
+`Trunk Scan` / `trunk_scan` evidence. It does not enable another key, held
+gesture, sequence, retry or post-acknowledgement state claim.
+
+Leave `scanner_display_config` empty unless the administrator has deliberately
+prepared the display-profile deployment TOML, immutable source selection and
+private accepted-state directory. A typical App path is
+`/data/scanner-display-deployment.toml`. Startup never searches, initializes,
+imports, repairs or changes that state. Enabling or changing it requires an App
+restart and does not create automatic Favorites List synchronization.
 
 The App automatically obtains the selected MQTT service from Supervisor and
 enables Home Assistant MQTT Discovery plus the dedicated Home Assistant control
@@ -206,31 +224,58 @@ topics are scanner-control inputs even though the generic daemon MQTT command
 topic remains disabled, so broker publish permissions for the dedicated control
 namespace should be limited to trusted Home Assistant publishers.
 
+## v0.31.0 upgrade and rollback
+
+The v0.31.0 catalog and image add the two default-off/empty options above as one
+matching contract. Save a private copy of the existing App options, Network
+mappings and current dashboard resource URL before upgrading. Do not manually
+add the new fields while an older strict-parser image is installed. Use the
+normal repository-managed update only after Home Assistant offers v0.31.0, then
+confirm the installed version and image before enabling either feature.
+
+An ordinary upgrade preserves the scanner host, MQTT namespace, recording
+directory, advanced service settings, credentials and persistent recordings.
+After upgrading, confirm that the App starts with both new options at their
+defaults, that Ingress reports the expected scanner, and that existing
+recordings remain present. If profile administration was deliberately prepared,
+enable its exact deployment path only after this baseline check.
+
+To roll back, first disable both new options and preserve the profile manifests,
+accepted state and recordings. Restore the prior reviewed App version through
+the normal Supervisor repository/backup mechanism and restore only its matching
+seven-field options. Do not delete profile state, recordings, credentials or
+Home Assistant Core integration files to make rollback succeed. The v0.31.0
+Mimic aggregate resource must likewise be replaced with the exact resource URL
+from the restored App; dashboard resources are not edited automatically.
+
 ## Bundled Lovelace cards
 
-The Home Assistant App installs three first-party SDS200 cards and one
+The Home Assistant App installs four first-party SDS200 cards and one
 declarative aggregate entry point:
 
 ```text
 /homeassistant/www/sds200/sds200-card.js
 /homeassistant/www/sds200/sds200-display-card.js
 /homeassistant/www/sds200/sds200-waterfall-card.js
+/homeassistant/www/sds200/sds200-mimic-card.js
 /homeassistant/www/sds200/sds200-cards.js
 ```
 
 Home Assistant serves them to the frontend as:
 
 ```text
-/local/sds200/sds200-card.js?v=beb1c6f22d62655caf4fc541a0cabfa4ed273b8fe22d6b3fe4324f5dc88ab9d8
-/local/sds200/sds200-display-card.js?v=b2d47c2b7abd19a92b2ee61b6b3de00362366f8df828d7786c54ae35aa0ada72
-/local/sds200/sds200-waterfall-card.js?v=d850fa81b04b1798dc7e7f947737525d3a58538f106202f66384eb4e028e62d8
-/local/sds200/sds200-cards.js?v=dffbeaa294773419eab0ce8dec4a32317c421faaba5cd74373b46829b6095cad
+/local/sds200/sds200-card.js?v=263439642bea86b5f006d68e90ae3e938d4e2ddff9d49fb2be73168d9732a62d
+/local/sds200/sds200-display-card.js?v=31e62f3d67b4d3a8577fbf69f3a5552a2880fb90984d1d15642a81ec58b15d1d
+/local/sds200/sds200-waterfall-card.js?v=9e398b169f4df0e11da8d94b4db1bdd0557aa2837b2131e77c5eb30885620626
+/local/sds200/sds200-mimic-card.js?v=99f26a46c6a5b07d6fe9319509ae8dd7a8193914d938ab0aa3702a38b68a8b74
+/local/sds200/sds200-cards.js?v=0c985e298974cce098702e0ce926df16b449da447cf767dac3b61904e0d5b387
 ```
 
-The three byte-identical modules are independently packaged under
+The four byte-identical modules are independently packaged under
 `sds200/themes/home-assistant/compact/` and
 `sds200/themes/home-assistant/sds200-display/`, and
-`sds200/themes/home-assistant/waterfall/`. The aggregate module is packaged at
+`sds200/themes/home-assistant/waterfall/`, and
+`sds200/themes/home-assistant/mimic-sds/`. The aggregate module is packaged at
 `sds200/themes/home-assistant/sds200-cards.js`. Versioned manifests and one
 validated immutable built-in registry drive their ordered installation while
 preserving the same flat installed filenames and public URLs. The App does not
@@ -252,8 +297,10 @@ follows valid scanner-reported span changes; the graphical editor normalizes
 60-second alternative, and accepts Home Assistant-owned section layout metadata
 without treating it as card configuration. An optional display-only frequency
 pointer interpolates the valid live span without sending scanner commands. All
-three graphical editors also offer the same 21 System web palettes as
-independent, presentation-only per-card choices.
+four graphical editors also offer the same 21 System web palettes as
+independent, presentation-only per-card choices. **Mimic-SDS** renders the
+accepted display profile and live PSI frame as a read-only reconstruction; it
+does not upload a profile or send a scanner command.
 
 If the App creates Home Assistant's `www` directory for the first time, restart
 Home Assistant Core once before registering the resource so `/local` becomes

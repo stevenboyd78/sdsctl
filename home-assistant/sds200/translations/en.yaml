@@ -37,3 +37,17 @@ configuration:
     description: >-
       Literal private Home Assistant host address used by remote daemon-client
       profiles. Required only when advanced remote daemon clients are enabled.
+  qualified_sds200_menu_control_enabled:
+    name: Qualified SDS200 Menu control
+    description: >-
+      Leave disabled unless the scanner is an SDS200 running Version 1.26.01
+      and the operator accepts the exact one-press Menu boundary. Every request
+      is rechecked from fresh Trunk Scan context. No retry, held gesture, key
+      sequence or other key is enabled.
+  scanner_display_config:
+    name: Mimic-SDS display-profile deployment
+    description: >-
+      Leave empty to keep Mimic-SDS profile administration disabled. Otherwise
+      select an already provisioned private deployment TOML for this scanner,
+      normally /data/scanner-display-deployment.toml. This option does not
+      initialize, import or repair accepted profile state.

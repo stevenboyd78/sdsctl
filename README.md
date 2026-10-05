@@ -67,7 +67,7 @@ For a container installation, select a published version rather than a source
 checkout. The version-specific image for this release is:
 
 ```bash
-docker pull theboyd78/sdsctl:0.30.0
+docker pull theboyd78/sdsctl:0.31.0
 ```
 
 `theboyd78/sdsctl:latest` follows the newest successfully published release.
@@ -205,20 +205,21 @@ workflow. Hardware-independent tests must not require a physical scanner.
 
 ## Project status
 
-Version `0.30.0` includes local-date TUI headers/status timestamps, readable
-Diagnostics connection ages, dashboard theme corrections, and remote TUI
-continuity while recordings start and stop. It also includes opt-in experimental
-managed-browser foundations. See the [release scope](docs/release-0.30.0.md)
-for included changes, acceptance evidence and deferred work.
+Version `0.31.0` includes Mimic-SDS Web, TUI and Home Assistant presentations,
+installed display-profile administration, Waterfall/TUI refinements and the
+physically qualified SDS200 Version 1.26.01 one-press Menu boundary. The App's
+new profile path remains empty and the Menu switch remains false by default.
+See the [release scope](docs/release-0.31.0.md) for included changes,
+pre-publication evidence, upgrade requirements and deferred work.
 
 The transport-aware Raspberry Pi TUI retains observe-only preflight and managed
 outage waiting/recovery. Scanner model/firmware presentation, ordinary
 Ingress and manual dashboard login remain separate from experimental browser
-enrollment. An upgrade does not enable automatic sign-in in existing
-installations. Secure unattended keyring, abrupt power-loss, cross-build and
-alternative-engine acceptance are not claimed. The repository App retains its
-existing option schema; experimental App activation remains an isolated lab
-workflow, not a production upgrade step.
+enrollment. An upgrade does not enable automatic sign-in, a display profile or
+Menu control in existing installations. Secure unattended keyring, abrupt
+power-loss, cross-build and alternative-engine acceptance are not claimed.
+The other 26 front-panel keys, other firmware/context combinations, held
+gestures, sequences and retries remain unavailable.
 See the
 [latest GitHub Release](https://github.com/stevenboyd78/sdsctl/releases/latest),
 [CHANGELOG.md](CHANGELOG.md), [ROADMAP.md](ROADMAP.md), and

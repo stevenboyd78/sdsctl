@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 0.31.0
+
+- Add the optional Mimic-SDS display-profile deployment and authenticated
+  Ingress administrator workflow. The configured source, durable accepted
+  source/revision, source-copy state and acquisition/acceptance/inspection
+  times remain separate and survive an App restart.
+- Install the Mimic-SDS card with the existing aggregate resource. It is an
+  additional read-only presentation driven by the accepted profile and current
+  daemon frames; it does not create another scanner owner or MQTT control path.
+- Add `scanner_display_config`, empty by default, and the separate
+  `qualified_sds200_menu_control_enabled` switch, false by default. The latter
+  exposes only the physically qualified SDS200 Version 1.26.01 one-press Menu
+  boundary after fresh Trunk Scan rechecks; it enables no other key, sequence,
+  held gesture or retry.
+- Preserve the App slug/image identity, scanner and recording ownership, MQTT
+  identities, credentials, ports, recordings, ordinary Ingress, disabled
+  advanced services and independently versioned Core integration artifacts.
+
 ## 0.30.0
 
 - Show connected-client ages in Diagnostics as hours/minutes/seconds and elapsed

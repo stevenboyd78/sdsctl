@@ -1117,10 +1117,11 @@ unqualified key or unenabled policy refuses before key I/O.
 The Home Assistant runtime accepts the separate strict boolean
 `qualified_sds200_menu_control_enabled`, defaults it to false, reconciles it
 against Supervisor's effective option state and translates only a true value to
-the daemon CLI flag. The published v0.30.0 App catalog remains on its reviewed
-seven-field contract. Only the source-pinned manual acceptance stager adds this
-candidate-only switch to a matching image and manifest; staging remains
-disabled by default and never installs, starts or presses the scanner.
+the daemon CLI flag. v0.31.0 publishes it in a matching nine-field runtime and
+catalog while older App images retain their reviewed seven-field contract. The
+source-pinned manual acceptance stager remains a separate pre-release path;
+staging defaults the switch off and never installs, starts or presses the
+scanner.
 
 On October 2, 2026, the exact source-pinned `d0389e7` candidate was temporarily
 installed for a bounded, no-press Home Assistant Ingress visual acceptance.

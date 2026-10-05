@@ -8,8 +8,9 @@ Use the [work packet](mimic-sds-work-packet.md) for scope and remaining limits.
 
 Supervisor can read a newer repository catalog while an installed App still
 runs an older image. Adding a new option to that catalog can therefore break
-an older strict options loader. The published seven-option contract stays
-unchanged until a reviewed release pairs its image and schema.
+an older strict options loader. v0.31.0 pairs its nine-option image and schema;
+older published images retain their seven-option contract. The candidate remains
+a separate pre-release acceptance path, not an alternate production install.
 
 `scripts/stage_mimic_app.py` creates a separate **sds200 Mimic-SDS acceptance**
 Local App from one exact clean commit. It removes the published image reference
@@ -71,7 +72,9 @@ Before switching the scanner owner:
 4. For browser Upload/Refresh, specify the exact trusted HTTPS Home Assistant
    origin and authorized HA user IDs in the deployment TOML. DNS or a literal
    IP can be used with valid HTTPS. Do not weaken origin/user checks to fit a
-   convenient HTTP tab. Configure `scanner_display_config` only in this candidate.
+   convenient HTTP tab. Before v0.31.0 publication, configure
+   `scanner_display_config` only in this candidate. After publication, configure
+   it only on the matching v0.31.0 App, never on an older strict-parser image.
 5. Stop the existing scanner-owning App before starting the candidate. For audio
    acceptance, explicitly map UDP 50000 during this switchover. Do not run two
    scanner owners or duplicate host-port bindings. Advanced listeners require
