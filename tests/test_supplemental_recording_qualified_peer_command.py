@@ -2297,6 +2297,11 @@ def test_authenticated_plan_then_source_drift_cancels_original_supervised_handof
     joined, monkeypatch, when
 ):
     s = joined
+    # Isolate the ordered source-drift assertion from coverage-runner scheduling.
+    # The production two-second cutoff and its non-renewal are exercised directly
+    # by test_supplemental_recording_peer_delivery; paired source comparisons
+    # retain their own unchanged two-second bounds here.
+    monkeypatch.setattr(delivery_tests.m, "SECONDS", 5.0)
     source = s.h.root / s.q.HELPER / "supplemental_recording_peer_preparation.py"
     sent, changed = [], []
     delivery_name = (
