@@ -21,9 +21,10 @@ fixes do not require a new milestone number. See the
 [milestone-to-release index](docs/release-tracking.md) for published history,
 partial publications and merged-but-unreleased work, and the
 [release policy](docs/releasing.md#0-choose-release-scope-and-version) for version
-selection. The [v0.30.0 release record](docs/release-0.30.0.md) records the
-published feature slices and their completed installed-release acceptance;
-its deferred work and experimental support limits remain explicit.
+selection. The [v0.31.0 release plan](docs/release-0.31.0.md) records the
+reviewed next-release boundary and remaining publication/installed-upgrade
+gates. The [v0.30.0 release record](docs/release-0.30.0.md) remains the latest
+completed public release and retains its explicit support limits.
 
 Keep `Released in vX.Y.Z` links on the applicable completed items. A closed
 implementation or successful test is not itself a publication, and an
@@ -67,6 +68,24 @@ in the versioned release notes; these TUI checks do not qualify browser enrollme
 
 ## Active milestone
 
+### v0.31.0 release preparation
+
+**Targeted for v0.31.0; not yet released.** The reviewed
+[release plan](docs/release-0.31.0.md) includes the read-only Mimic-SDS Web,
+TUI and Home Assistant presentations; installed display-profile administration;
+and only the physically qualified SDS200 Version 1.26.01 one-press Menu boundary
+behind a separate default-false Home Assistant option. It also versions the
+other merged changes recorded in the changelog while preserving every internal,
+experimental or deferred support label.
+
+The public App schema now pairs an empty `scanner_display_config` and false
+`qualified_sds200_menu_control_enabled` with the matching v0.31.0 runtime,
+translations, documentation and upgrade/rollback gates. These defaults preserve
+v0.30.0 behavior. General front-panel control, automatic profile/Favorites sync
+and unattended browser enrollment remain excluded. Publication, public artifact
+identity and repository-managed installed upgrade/rollback acceptance are still
+required before this target can be marked released.
+
 ### v0.30.0 release closure
 
 **Released in [v0.30.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.30.0):**
@@ -86,7 +105,7 @@ regressions for stable height over repeated redraws, density and theme changes,
 and automatic versus fixed grid rows. Keep this isolated from new renderer or
 control features; v0.30.0 acceptance remains complete.
 
-### Requested feature: Mimic-SDS screens and full front-panel controls
+### Requested feature: Mimic-SDS screens and bounded front-panel work
 
 Add optional **Mimic-SDS** layouts/themes for the TUI and WebUI, plus an additional
 Home Assistant card. A user-provided scanner `profile.cfg`, or one acquired during
@@ -105,8 +124,8 @@ observe-only displays. See the [Mimic-SDS work packet](docs/mimic-sds-work-packe
 for source findings, profile/privacy boundaries, layout mappings, the complete
 control inventory and staged acceptance. An offline display-only parser is the
 first foundation. The optional WebUI, daemon-backed TUI and additional HA card
-are now implemented as unreleased candidates; paired installed/live acceptance
-remains separate. Both Pi TUI geometries and the
+are now included in the reviewed v0.31.0 target; published-artifact and
+repository-managed upgrade acceptance remain separate. Both Pi TUI geometries and the
 [HA card layout](docs/home-assistant-mimic-card.md#offline-visual-acceptance--september-28-2026)
 passed offline fictional-data visual checks. The complete front-panel key
 inventory is implemented. An internal, disabled-by-default SDS200 qualification
@@ -127,18 +146,19 @@ firmware, requests two new matching GSI frames and sends one `KEY,M,P` without
 retry. The typed daemon/client operation and one exact bodyless operator-Web
 route are server-authorized; observe-only peers, the Home Assistant card and
 the TUI remain read-only, and the other 26 keys remain unavailable. This
-candidate's Home Assistant runtime has a separate strict default-false opt-in
-that maps only to the daemon flag. The published v0.30.0 seven-field catalog is
-unchanged; only the source-pinned manual acceptance stager adds the switch to a
-matching private manifest. Staging does not install, start or press the scanner.
+v0.31.0 Home Assistant runtime has a separate strict default-false opt-in that
+maps only to the daemon flag. The matching v0.31.0 catalog publishes that switch
+and an empty display-profile deployment option atomically with the runtime; the
+source-pinned manual stager remains a separate slug with manual boot and unmapped
+ports. Staging does not install, start or press the scanner.
 The exact source-pinned candidate later completed a bounded visual-only Home
 Assistant Ingress installation. Read-only live checks verified one enable flag,
 SDS200 firmware `Version 1.26.01`, `Trunk Scan` / `trunk_scan`, inactive
 recording and exactly `M` available; the user reported a visual pass. No Menu
 POST or scanner key was sent, and the exact normal App source, image, options,
 network settings, App data, media contents and Home Assistant Core state were
-restored. The closed physical press was not repeated. No milestone/release
-number is assigned, and the other 26 keys remain unavailable. Waterfall-screen
+restored. The closed physical press was not repeated. This bounded surface is
+targeted for v0.31.0, and the other 26 keys remain unavailable. Waterfall-screen
 fidelity remains a separate slice. The later exact
 `85042e6` daemon-backed TUI waterfall passed authenticated live 240-bin
 streaming and user-reported visual/interaction acceptance on the 100x30 small
@@ -177,8 +197,11 @@ acceptance and at most one exact-endpoint/exact-revision owner reload. It keeps
 accepted-but-unconfirmed distinct from failed acceptance, never replays an
 import merely to obtain reload confirmation, and reports a restored
 Favorites-sourced revision with unknown freshness rather than comparing the
-unrelated manual source path. Installed selection and App/administrator wiring
-remain pending. A development-only local-administrator
+unrelated manual source path. Installed source selection and authenticated
+App/administrator status wiring later passed a bounded private candidate
+acceptance, including one clean App restart with exact durable accepted revision,
+source and recording evidence preserved. Published repository upgrade acceptance
+remains part of the v0.31.0 release gate. A local-administrator
 `scanner-display-profile import-mounted-usb` command now selects one existing
 read-only USB mount and stable source UUID, previews and reacquires the complete
 pair, accepts once and requests the exact owner reload. It never discovers,
@@ -195,8 +218,8 @@ metadata identical, and the read-only volume was safely unmounted.
   header and scanner model/firmware in the Scanner panel. Use authenticated
   endpoint metadata rather than assuming the daemon matches the client version;
   handle unavailable version information explicitly. Direct USB connections
-  should not gain this remote-only field. Implemented in the unreleased local
-  candidate with additive snapshot metadata, reconnect clearing and both Pi
+  should not gain this remote-only field. Included in the v0.31.0 target with
+  additive snapshot metadata, reconnect clearing and both Pi
   layout tests. Both bench Pi geometries passed installed offline presentation
   checks; a real endpoint's version and live transport remain separate. This is
   not part of v0.30.0 or the active browser-device qualification.
@@ -212,7 +235,7 @@ metadata identical, and the read-only volume was safely unmounted.
   scanner model/firmware stay in the Scanner panel. Published-client acceptance
   also passed on both layouts. This is not a measured connection-start or
   socket-uptime feature.
-- An unreleased local candidate now adds `Link for` beside the daemon version.
+- The v0.31.0 target adds `Link for` beside the daemon version.
   It measures only this TUI client's current daemon event-stream link, beginning
   after the stream's first authoritative snapshot and resetting after a fresh
   reconnect snapshot. The initial API snapshot cannot invent an earlier start;
@@ -232,8 +255,8 @@ metadata identical, and the read-only volume was safely unmounted.
   event loss, the managed waiting screen, and a fresh authoritative connection
   restarting at `00:00:00` before advancing normally. The byte-identical Pi
   service and normal App ownership were restored afterward. The 160x45 physical
-  layout and release remain separate; this is not part of v0.30.0 or the
-  browser-device qualification.
+  layout remains separate historical evidence; this was not part of v0.30.0 or
+  the browser-device qualification.
 
 ### Managed-display enrollment and unattended recovery
 

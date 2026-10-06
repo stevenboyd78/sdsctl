@@ -71,17 +71,25 @@ The App exposes these options:
 | `native_dashboard_enabled` | no | `false` | Enable the password-authenticated native HTTPS dashboard after its matching Network mapping and private credentials are ready |
 | `advanced_access_server_name` | advanced only | empty | Private certificate identity used by both advanced services |
 | `advanced_access_host_address` | remote daemon only | empty | Literal private Home Assistant host address placed in downloaded daemon-client profiles |
+| `qualified_sds200_menu_control_enabled` | no | `false` | Enable only the physically qualified SDS200 `Version 1.26.01` one-press Menu boundary from fresh `Trunk Scan` / `trunk_scan` context |
+| `scanner_display_config` | no | empty | Absolute path to the administrator-managed display-profile deployment TOML, normally `/data/scanner-display-deployment.toml` |
 
-The published v0.30.0 catalog intentionally retains this seven-field contract.
-The source runtime also recognizes
-`qualified_sds200_menu_control_enabled`, defaulting to `false`, but only the
-source-pinned manual acceptance App may add that option to its matching private
-manifest. It must not be added to the published catalog while that catalog can
-select an older strict-parser image. When explicitly enabled in the matching
-candidate, it adds only the already qualified SDS200 `Version 1.26.01` one-press
-Menu boundary to the daemon. Every request still requires fresh `Trunk Scan` /
-`trunk_scan` evidence; it does not enable another key, a held gesture, a
-sequence, a retry, or a post-acknowledgement state claim.
+The v0.31.0 image and catalog publish this matching nine-field contract as one
+atomic release. Both new options default to disabled/empty, so an ordinary
+upgrade preserves existing behavior. Do not add either field to an older
+installed App whose strict parser still expects the seven-field v0.30.0
+contract. When explicitly enabled on the matching v0.31.0 image,
+`qualified_sds200_menu_control_enabled` adds only the already qualified SDS200
+`Version 1.26.01` one-press Menu boundary to the daemon. Every request still
+requires fresh `Trunk Scan` / `trunk_scan` evidence; it does not enable another
+key, a held gesture, a sequence, a retry, or a post-acknowledgement state claim.
+
+`scanner_display_config` never searches for, initializes, imports, repairs, or
+changes profile storage at startup. Configure it only after preparing the
+deployment manifest, source copy and private accepted-state directory with the
+[administrator workflow](scanner-display-profile-import.md). Empty keeps the
+feature disabled. A configuration change requires an App restart; it does not
+create a watcher or automatic Favorites List synchronization.
 
 On October 2, 2026, the exact source-pinned `d0389e7` candidate completed a
 bounded visual-only Home Assistant Ingress acceptance. Read-only checks inside
@@ -382,10 +390,13 @@ After installation:
 2. leave `mqtt_topic_prefix` at `sdsctl` unless a different namespace is needed;
 3. leave `recording_directory` at `sdsctl/recordings` unless another Home
    Assistant media subdirectory is preferred;
-4. start the App;
-5. open **Web UI**;
-6. confirm live scanner state;
-7. exercise browser audio or recording as needed.
+4. leave `qualified_sds200_menu_control_enabled` off and
+   `scanner_display_config` empty unless their bounded procedures have been
+   deliberately prepared;
+5. start the App;
+6. open **Web UI**;
+7. confirm live scanner state;
+8. exercise browser audio or recording as needed.
 
 Normal routine startup is intentionally quiet. App stdout/stderr is available
 from the Home Assistant App Logs tab when a failure occurs.
@@ -402,28 +413,27 @@ identity rules, automation syntax, target limitations, and test workflow.
 
 ## Bundled Lovelace cards
 
-The **published 0.30.0** Home Assistant App installs three first-party SDS200 cards and one
-declarative aggregate entry point:
-
-The unreleased Mimic-SDS candidate adds a fourth card and a shared Ingress session
-manager. Its changed resources must ship together with the candidate runtime;
-see the [candidate card guide](home-assistant-mimic-card.md). The published URLs
-below are not candidate resource URLs.
+The v0.31.0 Home Assistant App installs four first-party SDS200 cards and one
+declarative aggregate entry point. Mimic-SDS and the updated Waterfall card ship
+with one shared Ingress session manager and must be updated together; see the
+[Mimic-SDS card guide](home-assistant-mimic-card.md).
 
 ```text
 /homeassistant/www/sds200/sds200-card.js
 /homeassistant/www/sds200/sds200-display-card.js
 /homeassistant/www/sds200/sds200-waterfall-card.js
+/homeassistant/www/sds200/sds200-mimic-card.js
 /homeassistant/www/sds200/sds200-cards.js
 ```
 
 Home Assistant serves them to the frontend as:
 
 ```text
-/local/sds200/sds200-card.js?v=beb1c6f22d62655caf4fc541a0cabfa4ed273b8fe22d6b3fe4324f5dc88ab9d8
-/local/sds200/sds200-display-card.js?v=b2d47c2b7abd19a92b2ee61b6b3de00362366f8df828d7786c54ae35aa0ada72
-/local/sds200/sds200-waterfall-card.js?v=9e696a9ed370a2b3c1aa1efa0422514658f98fccbbb2f3e0faf402e0edff672f
-/local/sds200/sds200-cards.js?v=f616e1be646237279372acbd46b3f4163024a467a8e429f2458ff09323526f9f
+/local/sds200/sds200-card.js?v=263439642bea86b5f006d68e90ae3e938d4e2ddff9d49fb2be73168d9732a62d
+/local/sds200/sds200-display-card.js?v=31e62f3d67b4d3a8577fbf69f3a5552a2880fb90984d1d15642a81ec58b15d1d
+/local/sds200/sds200-waterfall-card.js?v=9e398b169f4df0e11da8d94b4db1bdd0557aa2837b2131e77c5eb30885620626
+/local/sds200/sds200-mimic-card.js?v=99f26a46c6a5b07d6fe9319509ae8dd7a8193914d938ab0aa3702a38b68a8b74
+/local/sds200/sds200-cards.js?v=0c985e298974cce098702e0ce926df16b449da447cf767dac3b61904e0d5b387
 ```
 
 The `v` value is the exact SHA-256 of the installed JavaScript module. Home
@@ -451,12 +461,13 @@ distribution as:
 sds200/themes/home-assistant/compact/
 sds200/themes/home-assistant/sds200-display/
 sds200/themes/home-assistant/waterfall/
+sds200/themes/home-assistant/mimic-sds/
 sds200/themes/home-assistant/sds200-cards.js
 ```
 
 Each card package contains a versioned manifest and its one declared JavaScript
 module. The top-level aggregate module contains only ordered imports of those
-three manifest-declared digest-qualified URLs. A validated immutable built-in
+four manifest-declared digest-qualified URLs. A validated immutable built-in
 registry supplies the installer order,
 module source, custom-element identity, installed filename, and public resource
 URL. Invalid or undeclared package content is rejected before installation.

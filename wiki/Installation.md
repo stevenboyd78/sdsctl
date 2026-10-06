@@ -175,6 +175,85 @@ Home Assistant OS users should follow [Home Assistant](Home-Assistant). The
 published App does not require `pip`, a source checkout, or a Local App under
 `/addons`.
 
+## Upgrade to v0.31.0
+
+Version 0.31.0 publishes the Mimic-SDS presentation and installed display-profile
+administrator workflow while preserving one daemon-owned scanner connection,
+existing MQTT identities, persistent recordings, credentials, ports and advanced
+service defaults. It also publishes one disabled-by-default SDS200 Menu boundary
+limited to firmware `Version 1.26.01` and fresh `Trunk Scan` / `trunk_scan`
+context. It does not add another key, held gesture, sequence, retry or
+post-acknowledgement state claim.
+
+The compatibility-sensitive Python distribution and import package remain
+`sds200`, while the command remains `sdsctl`. Activate the existing virtual
+environment and install the exact release only after PyPI shows both the reviewed
+wheel and source distribution:
+
+```bash
+python -m pip install --upgrade "sds200==0.31.0"
+python -m pip check
+sdsctl --version
+```
+
+Install or upgrade every optional Python runtime interface with:
+
+```bash
+python -m pip install --upgrade "sds200[all]==0.31.0"
+python -m pip check
+sdsctl --version
+```
+
+For the generic container, prefer the exact published multi-architecture image:
+
+```bash
+docker pull theboyd78/sdsctl:0.31.0
+```
+
+Verify the reviewed manifest digest before treating that mutable registry tag as
+an immutable deployment input. `theboyd78/sdsctl:latest` follows the newest
+successfully published release, but the exact version is preferred for a
+controlled upgrade.
+
+The Home Assistant App version also tracks 0.31.0. Save a private copy of its
+options, Network mappings and complete digest-qualified dashboard resource URL
+before updating. The matching image and catalog add
+`qualified_sds200_menu_control_enabled: false` and
+`scanner_display_config: ""`. Do not manually add those fields to a v0.30.0 or
+older installed App; its strict parser expects the previous seven-field schema.
+
+After Home Assistant offers the matching v0.31.0 update:
+
+1. update through the normal repository-managed App workflow;
+2. confirm the installed App version/image and both new defaults before opting
+   into either feature;
+3. open Ingress and confirm the expected scanner, existing MQTT entities and
+   persistent recordings;
+4. replace the dashboard aggregate resource with the exact URL shown by the
+   installed App, then reload all open dashboard tabs; and
+5. configure `scanner_display_config` only after preparing the private
+   deployment/profile manifests and accepted state with the documented
+   administrator workflow.
+
+The profile path never causes startup to search, initialize, import, repair or
+change state. Mimic-SDS is read-only, and this release does not implement
+automatic Favorites List synchronization. The qualified Menu option remains off
+unless the exact model/firmware/context procedure is deliberately required.
+
+For rollback, first turn both new options off. Preserve recordings, credentials,
+profile manifests, accepted state and original profile copies. Restore the prior
+reviewed Python/container/App version through its normal package, registry or
+Home Assistant backup/repository workflow, and restore only that release's
+matching options and aggregate resource URL. Do not uninstall the Home Assistant
+Core integration, delete App data or remove profile state merely to make rollback
+succeed. If a new resource was registered, replace it with the exact older URL
+instead of retaining mixed Waterfall/Mimic module generations.
+
+The independently versioned Home Assistant Core integration remains optional;
+the App does not install, activate, reload, remove or restart it automatically.
+A release upgrade does not authorize a Home Assistant Core restart, scanner
+command, profile import/reload or recording mutation.
+
 ## Upgrade to v0.30.0
 
 Version 0.30.0 adds local dates, a numeric timezone offset and 24-hour time to

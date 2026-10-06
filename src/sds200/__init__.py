@@ -1027,7 +1027,7 @@ __all__ = [
     "home_assistant_live_audio_encoder_config",
 ]
 
-__version__ = "0.30.0"
+__version__ = "0.31.0"
 
 
 def __getattr__(name: str) -> object:

@@ -21,6 +21,22 @@ Treat implementation, physical acceptance and publication as separate facts.
 When only a slice ships, name that slice instead of marking the parent milestone
 complete. Existing historical milestone IDs remain unchanged.
 
+## Targeted next release — v0.31.0
+
+**Targeted for v0.31.0; not yet released.** The reviewed
+[release scope and acceptance plan](release-0.31.0.md) includes Mimic-SDS
+presentations, installed display-profile administration and only the physically
+qualified SDS200 Version 1.26.01 one-press Menu boundary behind a default-off
+App option. It also carries the other merged changes listed in the versioned
+changelog while preserving their experimental/deferred labels.
+
+The release preparation pairs the new empty `scanner_display_config` and false
+`qualified_sds200_menu_control_enabled` catalog defaults with the matching
+runtime, schema, translations, documentation and upgrade/rollback gates. Source
+and private-candidate acceptance do not establish publication. Keep v0.30.0 as
+Latest until every tagged artifact and the repository-managed installed upgrade
+are verified and the GitHub Release is created.
+
 ## Latest release — v0.30.0
 
 **Released in [v0.30.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.30.0)**
@@ -40,11 +56,11 @@ remain distinct from the published artifacts.
 | [Managed-browser continuation and sign-out](browser-device-continuation-acceptance.md) | Released in v0.30.0; PR #250 | Experimental; scoped acceptance does not qualify secure unattended keyring, abrupt power-loss or cross-build recovery |
 | [Remote daemon version and actual connection duration](next-milestone-work-packets.md#1-tui-time-and-endpoint-identity) | Planned follow-ups | No release target; separate metadata/lifecycle and physical-layout gates |
 
-The release scope records included slices, deferred work and support limits.
+The v0.30.0 release scope records included slices, deferred work and support limits.
 Publication closes only the included slices, not the remaining managed-browser
-qualification or the parent milestone. No next release version is assigned.
-Never reuse a published tag or relabel private validation artifacts as a public
-release.
+qualification or the parent milestone. v0.31.0 is now the separately reviewed
+next-release target; it does not relabel v0.30.0 or private validation artifacts.
+Never reuse a published tag.
 
 ## Recent milestone-to-release history
 
@@ -68,6 +84,7 @@ milestone number.
 | [Manual-login kiosk publication recovery](../ROADMAP.md#closed-milestone-341--display-only-native-browser-kiosk) | [v0.29.4](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.29.4) | Released; does not qualify unattended production browser login |
 | [Managed-TUI outage waiting screen](../ROADMAP.md#v0295-maintenance-release) | [v0.29.5](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.29.5) | Released from the maintenance line; newer browser enrollment on main is excluded |
 | [Display improvements, recording continuity and experimental browser foundations](release-0.30.0.md) | [v0.30.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.30.0) | Released; published Pi/App upgrades and audio/recording acceptance passed; unattended browser qualification remains separate |
+| [Mimic-SDS displays and installed profiles](release-0.31.0.md) | Targeted for v0.31.0 | Preparation/publication authorized; tag artifacts and repository-managed installed upgrade remain pending |
 
 ## Keeping the mapping current
 

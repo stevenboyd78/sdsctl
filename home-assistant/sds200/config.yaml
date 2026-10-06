@@ -1,5 +1,5 @@
 name: "sds200"
-version: "0.30.0"
+version: "0.31.0"
 slug: "sds200"
 description: "Uniden SDS200 scanner daemon and web dashboard for Home Assistant"
 arch:
@@ -40,6 +40,8 @@ options:
   native_dashboard_enabled: false
   advanced_access_server_name: ""
   advanced_access_host_address: ""
+  qualified_sds200_menu_control_enabled: false
+  scanner_display_config: ""
 schema:
   scanner_host: "str(1,)"
   mqtt_topic_prefix: "str(1,)"
@@ -48,3 +50,5 @@ schema:
   native_dashboard_enabled: bool
   advanced_access_server_name: "str?"
   advanced_access_host_address: "str?"
+  qualified_sds200_menu_control_enabled: bool
+  scanner_display_config: "str?"

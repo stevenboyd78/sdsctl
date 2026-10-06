@@ -6,8 +6,28 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-10-05
+
+Mimic-SDS displays, installed display-profile administration, and the narrowly
+qualified SDS200 Menu control. See the [release scope and acceptance
+record](docs/release-0.31.0.md). Publication and installed-release acceptance
+remain pending until the tag artifacts and repository-managed upgrade are
+independently verified.
+
 ### Added
 
+- Add read-only Mimic-SDS presentations to the WebUI, daemon-backed TUI and
+  Home Assistant card bundle. They render the accepted display profile with
+  validated live frames, clear stale/disconnected values, share the existing
+  scanner/session boundaries and add no scanner command, MQTT entity, listener,
+  credential or second owner.
+- Add the optional installed display-profile administrator workflow behind the
+  empty-by-default `scanner_display_config` App option. The authenticated
+  Ingress page keeps configured source, durable accepted source/revision and
+  source-copy state separate; reports acquisition, successful acceptance and
+  inspection times; and preserves the exact accepted state through App restart.
+  Startup never searches, initializes, imports, repairs or deletes profile
+  state, and this is not automatic Favorites List synchronization.
 - Add an internal, read-only Favorites-sync display-profile acquisition
   foundation. An explicitly selected copied Favorites tree and `profile.cfg`,
   or the canonical pair on one explicitly selected already-mounted Linux USB
@@ -56,7 +76,7 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   SDS200 `Version 1.26.01` Menu press. The direct-network owner requires two new
   matching `Trunk Scan` / `trunk_scan` frames before one `KEY,M,P`, exposes one
   typed daemon/client operation and one exact bodyless operator-Web route, and
-  provides a candidate-only Home Assistant option. It adds no general key
+  provides a default-off Home Assistant option. It adds no general key
   route, held gesture, sequence or retry; the Home Assistant card and daemon
   TUI remain read-only, and the other 26 keys remain unavailable. A later
   visual-only Home Assistant Ingress acceptance rendered the qualified Menu
@@ -2255,7 +2275,8 @@ First planned GitHub prerelease.
 - Added serial discovery, transport, packet framing, core responses, CLI tools,
   examples, tests, and CI.
 
-[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.30.0...HEAD
+[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.31.0...HEAD
+[0.31.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.5...v0.30.0
 [0.29.5]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.4...v0.29.5
 [0.29.4]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.3...v0.29.4

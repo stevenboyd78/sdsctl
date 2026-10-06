@@ -1,12 +1,11 @@
 # Scanner display profiles: local administrator workflow
 
-Status: **development candidate, not available in the published release yet**.
-These commands connect the Mimic-SDS import engine to the standalone daemon.
-They do not install a Mimic theme/card. A separate, disabled-by-default browser
-Upload/Refresh adapter is implemented in this development branch, as described
-below. Explicit App/launcher wiring is implemented in the local candidate; use
-the [paired candidate procedure](mimic-sds-candidate-app.md), not guessed fields
-in the installed App's options.
+Status: **v0.31.0 release target**. These commands connect the Mimic-SDS import
+engine to the standalone daemon. They do not install a Mimic theme/card. The
+disabled-by-default browser Upload/Refresh adapter and App/launcher wiring ship
+only as a matching runtime/catalog contract. Before v0.31.0 is verified as
+published, use the [paired candidate procedure](mimic-sds-candidate-app.md), not
+guessed fields in an older installed App's options.
 
 ## What is stored where?
 
@@ -329,11 +328,12 @@ acquisition time, last successful acceptance time and the time of this status
 inspection in the browser's local timezone. None of those timestamps claims
 when scanner settings were last changed or triggers a background refresh.
 
-### Candidate App and command-line wiring
+### App and command-line wiring
 
-The local runtime now recognizes one optional `scanner_display_config` App
-option. Its empty/absent default leaves all current behavior unchanged. The
-option points to a separate, administrator-managed deployment TOML file:
+The v0.31.0 runtime and catalog recognize one optional
+`scanner_display_config` App option. Its empty/absent default leaves all current
+behavior unchanged. The option points to a separate, administrator-managed
+deployment TOML file:
 
 ```toml
 version = 1
@@ -365,7 +365,7 @@ private administrator storage; do not distribute them to remote displays.
 source but not browser file replacement. Set it to true only when the source
 is an explicitly managed upload copy with the private parent/file permissions
 described above. The administrator must provision and initialize the private
-state deliberately before enabling the candidate. Startup never initializes,
+state deliberately before enabling the feature. Startup never initializes,
 imports, repairs, or chmods profile files. A missing managed source file is
 allowed for a first upload; a missing private parent or accepted-state directory
 is not.
@@ -394,12 +394,17 @@ flags are required together. Loopback-only, generic container and native HTTPS
 web modes reject this administrator configuration; their normal operator/display
 authentication is not Home Assistant administrator authorization.
 
-**Release compatibility gate:** `scanner_display_config` is intentionally absent
-from the published catalog's options, schema and translations. Do not add it to
-an installed published App's options or publish a catalog-only change: older
-images reject unknown fields. A future candidate Local App must pair its schema
-with this runtime, and a release must update the runtime, catalog, documentation
-and upgrade/rollback checks together. Hardware acceptance has not occurred yet.
+**Release compatibility gate:** `scanner_display_config` is part of the matching
+v0.31.0 runtime, catalog, translations and upgrade/rollback contract. Do not add
+it to a v0.30.0 or older installed App: those strict images reject unknown
+fields. A source-pinned v0.31.0 candidate completed bounded installed Home
+Assistant acceptance with a real administrator session, durable accepted state,
+exact state/source/recording hashes across one App restart, and all three display
+frames current on the same accepted revision. That evidence did not restart Home
+Assistant Core, send a scanner command, import/reload another profile, mutate a
+recording, or prove automatic Favorites List synchronization. The published
+upgrade and rollback remain release gates until the immutable v0.31.0 artifacts
+are verified.
 
 ### What the administrator does
 

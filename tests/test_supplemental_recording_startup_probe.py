@@ -256,10 +256,15 @@ def test_probe_mode_requires_an_explicit_boolean(case, enabled):
 
 def test_zero_probe_has_local_cap_even_with_foreign_future_numeric_clock(case):
     value = m.plans.json.loads(case.plan.raw)
+    issued_at = value["deadlines"]["issued_at"]
     for name in ("before_ns", "boottime_ns", "after_ns"):
         value["original_clock"][name] += 100 * m.plans.clock.NS
     value["original_clock"]["namespace"] = [0, 123]
-    value["deadlines"] = {key: seconds + 100 for key, seconds in value["deadlines"].items()}
+    shifted_issued_at = value["original_clock"]["boottime_ns"] / m.plans.clock.NS
+    value["deadlines"] = {
+        key: shifted_issued_at + (seconds - issued_at)
+        for key, seconds in value["deadlines"].items()
+    }
     raw = m.plans.base.encode(value)
     (case.root / "plan.json").write_bytes(raw)
     case.plan = m.plans.load_bytes(raw, m.plans.base.checksum(value))

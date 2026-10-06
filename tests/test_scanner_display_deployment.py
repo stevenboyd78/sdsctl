@@ -220,7 +220,7 @@ def test_app_option_rejects_bad_config_path(value):
         HomeAssistantAppOptions(scanner_host="192.0.2.25", scanner_display_config=value)
 
 
-def test_default_app_and_published_catalog_do_not_enable_feature(tmp_path):
+def test_default_app_and_published_catalog_keep_feature_disabled(tmp_path):
     options = tmp_path / "options.json"
     options.write_text('{"scanner_host":"192.0.2.25"}')
     assert load_home_assistant_app_options(options).scanner_display_config == ""
@@ -230,7 +230,9 @@ def test_default_app_and_published_catalog_do_not_enable_feature(tmp_path):
     ) + build_home_assistant_web_command(paths)
     assert all("scanner-display" not in argument for argument in commands)
     catalog = Path(__file__).resolve().parents[1] / "home-assistant/sds200/config.yaml"
-    assert "scanner_display_config" not in catalog.read_text()
+    catalog_text = catalog.read_text()
+    assert '  scanner_display_config: ""' in catalog_text
+    assert '  scanner_display_config: "str?"' in catalog_text
 
 
 def launch(configured, tmp_path, monkeypatch, *, host="192.0.2.25", display=True):

@@ -138,32 +138,41 @@ def test_home_assistant_app_manifest_uses_ingress_and_required_mqtt_service() ->
     assert "  native_dashboard_enabled: false\n" in manifest
     assert '  advanced_access_server_name: ""\n' in manifest
     assert '  advanced_access_host_address: ""\n' in manifest
+    assert "  qualified_sds200_menu_control_enabled: false\n" in manifest
+    assert '  scanner_display_config: ""\n' in manifest
     assert "  remote_daemon_enabled: bool\n" in manifest
     assert "  native_dashboard_enabled: bool\n" in manifest
     assert '  advanced_access_server_name: "str?"\n' in manifest
     assert '  advanced_access_host_address: "str?"\n' in manifest
-    assert "qualified_sds200_menu_control_enabled" not in manifest
+    assert "  qualified_sds200_menu_control_enabled: bool\n" in manifest
+    assert '  scanner_display_config: "str?"\n' in manifest
     assert "hassio_api: true\n" not in manifest
     assert "host_network: true\n" not in manifest
 
 
-def test_catalog_retains_reviewed_seven_field_option_contract() -> None:
+def test_catalog_retains_reviewed_release_option_contract() -> None:
     """Supervisor reads main's catalog even when its image is an older release.
 
     Match the strict loader in v0.29.4 and its v0.29.5 maintenance backport,
     not just the newer source-tree loader. The v0.30.0 release scope deliberately
-    retains these same seven public options despite its experimental runtime.
-    Keep this contract while advertising that image; a version bump can select
-    a different published contract, but merely merging runtime code cannot.
+    retained those seven public options. v0.31.0 atomically pairs the matching
+    runtime with two new disabled-by-default options. Keep each advertised image
+    on its explicitly reviewed contract.
     """
     manifest = _APP_MANIFEST.read_text(encoding="utf-8")
-    if _quoted_scalar(manifest, "version") not in {"0.29.4", "0.29.5", "0.30.0"}:
-        return  # Keep each release's explicitly reviewed catalog contract.
+    version = _quoted_scalar(manifest, "version")
     released = {
         "scanner_host", "mqtt_topic_prefix", "recording_directory",
         "remote_daemon_enabled", "native_dashboard_enabled",
         "advanced_access_server_name", "advanced_access_host_address",
     }
+    if version == "0.31.0":
+        released |= {
+            "qualified_sds200_menu_control_enabled",
+            "scanner_display_config",
+        }
+    elif version not in {"0.29.4", "0.29.5", "0.30.0"}:
+        return  # A later release must add its own reviewed contract here.
     options = manifest.partition("options:\n")[2].partition("schema:\n")[0]
     schema = manifest.partition("schema:\n")[2]
     keys = r"^  ([a-z][a-z0-9_]*):"
@@ -217,6 +226,12 @@ def test_home_assistant_app_configuration_translations_cover_schema() -> None:
     assert "name: Advanced native HTTPS dashboard\n" in translations
     assert "name: Advanced access server name\n" in translations
     assert "name: Advanced access host address\n" in translations
+    assert "name: Qualified SDS200 Menu control\n" in translations
+    assert "fresh Trunk Scan context" in translations
+    assert "No retry, held gesture, key" in translations
+    assert "name: Mimic-SDS display-profile deployment\n" in translations
+    assert "/data/scanner-display-deployment.toml" in translations
+    assert "initialize, import or repair accepted profile state" in translations
 
 
 def test_home_assistant_app_image_includes_packaged_lovelace_card() -> None:

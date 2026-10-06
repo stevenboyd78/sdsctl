@@ -352,7 +352,7 @@ def test_candidate_is_paired_manual_and_disabled_by_default(snapshot):
     manifest = output["config.yaml"].decode()
     assert snapshot == before
     assert 'slug: "sds200_mimic_acceptance"' in manifest
-    assert 'version: "0.30.0-mimic-aaaaaaaaaaaa"' in manifest
+    assert 'version: "0.31.0-mimic-aaaaaaaaaaaa"' in manifest
     assert "image:" not in manifest
     assert "boot: manual\n" in manifest and "boot: auto\n" not in manifest
     for port in ("50000/udp", "50443/tcp", "8443/tcp"):
@@ -363,7 +363,7 @@ def test_candidate_is_paired_manual_and_disabled_by_default(snapshot):
     assert "native_dashboard_enabled: false" in manifest
     assert "qualified_sds200_menu_control_enabled: false" in manifest
     options, _, schema = manifest.partition("options:\n")[2].partition("schema:\n")
-    expected = stager.PUBLIC_OPTIONS | stager.ACCEPTANCE_OPTIONS
+    expected = stager.PUBLIC_OPTIONS
     assert keys(schema) == expected
     assert keys(options) == expected - {"scanner_host"}
     assert 'scanner_display_config: ""' in options
@@ -375,11 +375,9 @@ def test_candidate_is_paired_manual_and_disabled_by_default(snapshot):
         output["src/sds200/daemon_display_frames.py"]
         == snapshot["src/sds200/daemon_display_frames.py"]
     )
-    assert "scanner_display_config" not in before["home-assistant/sds200/config.yaml"].decode()
-    assert (
-        "qualified_sds200_menu_control_enabled"
-        not in before["home-assistant/sds200/config.yaml"].decode()
-    )
+    public_manifest = before["home-assistant/sds200/config.yaml"].decode()
+    assert 'scanner_display_config: ""' in public_manifest
+    assert "qualified_sds200_menu_control_enabled: false" in public_manifest
 
 
 def test_candidate_inventory_is_deterministic_and_excludes_unrelated_files(snapshot):
@@ -408,7 +406,7 @@ def test_changed_source_contract_requires_review(snapshot, change):
         replacements = {
             "schema": (b"schema:\n", b"schema:\n  unexpected_option: bool\n"),
             "image": (b"ghcr.io/stevenboyd78/sds200-home-assistant", b"other/image"),
-            "version": (b'version: "0.30.0"', b'version: "0.30.1"'),
+            "version": (b'version: "0.31.0"', b'version: "0.31.1"'),
             "boot": (b"boot: auto", b"boot: manual"),
         }
         old, new = replacements[change]

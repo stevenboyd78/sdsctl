@@ -22,13 +22,20 @@ It provides:
   reported P25 status, and raw battery sensors, plus
   seven bounded scanner-control entities: four Hold switches and Previous
   Channel, Next Channel, and Reconnect Scanner buttons; and
-- three optional read-only Lovelace presentations: the compact SDS200 Scanner
+- four optional read-only Lovelace presentations: the compact SDS200 Scanner
   card; a responsive 4:3 SDS200 Display card with five explicit layouts, opt-in
   automatic layout selection, and scanner palettes; and an authenticated
-  responsive SDS200 Waterfall card with bounded relative spectrum history. All
-  three also offer the 21 System web palettes as per-card presentation choices;
-  one aggregate resource can register all three while the individual resources
-  remain supported for selective and existing installations.
+  responsive SDS200 Waterfall card with bounded relative spectrum history; plus
+  Mimic-SDS, a read-only reconstruction of accepted display-profile layout and
+  live PSI data. All four also offer the 21 System web palettes as per-card
+  presentation choices; one aggregate resource can register all four while the
+  individual resources remain supported for selective and existing installations.
+
+v0.31.0 adds two matching catalog/runtime options. The qualified SDS200 Menu
+boundary defaults off, and the administrator-managed display-profile deployment
+path defaults empty. Ordinary upgrades preserve current behavior; neither option
+creates automatic profile import, Favorites List synchronization or a broader
+front-panel control surface.
 
 The App requires a LAN-connected SDS200 and publishes UDP port `50000` for the
 scanner's inbound RTP audio. It does not enable host networking or expose the
