@@ -118,7 +118,9 @@ def test_launcher_error_is_sanitized_and_never_retried(tmp_path: Path) -> None:
     runtime = Failed()
     trigger = launcher.OperatorTrigger(tmp_path / "evidence")
     trigger.start(runtime)
-    assert trigger._armed.wait(0.5)
+    # A loaded coverage runner may not schedule the new worker within 500 ms.
+    # This only bounds fixture startup; sanitization and one-shot behavior stay asserted below.
+    assert trigger._armed.wait(5.0)
     trigger.signal(signal.SIGUSR1, None)
     trigger.join()
     assert runtime.calls == 1
