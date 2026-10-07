@@ -10,9 +10,10 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 Mimic-SDS displays, installed display-profile administration, and the narrowly
 qualified SDS200 Menu control. See the [release scope and acceptance
-record](docs/release-0.31.0.md). Publication and installed-release acceptance
-remain pending until the tag artifacts and repository-managed upgrade are
-independently verified.
+record](docs/release-0.31.0.md). Public Python and multi-platform container
+artifacts, the repository-managed Home Assistant upgrade, managed Pi clients
+and approved system installations were independently verified before the normal
+GitHub Release was published.
 
 ### Added
 

@@ -1,7 +1,7 @@
 # v0.31.0 release scope — Mimic-SDS displays and installed profiles
 
-Status: **Targeted for v0.31.0; preparation and publication authorized, not yet
-released**
+Status: **Released in
+[v0.31.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.31.0)**
 
 This record defines the reviewed release boundary before an immutable tag is
 created. Passing source, pull-request, image or private-candidate checks does not
@@ -15,9 +15,12 @@ after those gates complete.
 - Release title: **sdsctl v0.31.0 — Mimic-SDS displays and installed profiles**.
 - Base accepted main before release preparation:
   `2b220923d05d57eb18151d5e89675124aaec08f7` (PR #266).
-- Candidate and final release commits: pending controlled preparation PR and
-  post-merge verification.
-- Publication: pending; no `v0.31.0` tag or artifact is claimed by this record.
+- Final release commit:
+  `13385c59be1047474d1adf31680ec7e00d831c1d`.
+- Immutable annotated tag object:
+  `5a30b8f2075afd81c29caca2c88ad3e6234b79b3`, peeling to that release commit.
+- Publication and installed acceptance: verified; the normal GitHub Release was
+  published on October 7, 2026.
 
 ## Included user-visible scope
 
@@ -129,6 +132,46 @@ copy either field into an older installed App schema.
 - Offline Mimic card layout, real-browser lifecycle, TUI/Pi geometry, live frame
   and installed candidate checks are recorded in the linked roadmap/work-packet
   evidence. They remain distinct from public-artifact acceptance.
+
+## Published release and installed acceptance — October 7, 2026
+
+All exact-main and tag workflows passed without cancellation or replacement.
+Independent public verification established:
+
+- PyPI wheel SHA-256
+  `554e4208948e3064233bb8263e4ef982bc6fed0484ec5929a934c2a1f9c2cb80`
+  and source archive SHA-256
+  `89a97f8d3664a272d0440a69b8484dc4839becec20897be7558e9fe4d1643f51`;
+- matching `0.31.0` and `latest` Docker Hub indexes at
+  `sha256:5c7bf2e054768a511ecf96e67f553fd7632d4b696db240c81fc7464607141a44`
+  with linux/amd64 and linux/arm64 manifests; and
+- matching `0.31.0` and `latest` Home Assistant GHCR indexes at
+  `sha256:87605406b932931345895388100a5744f469b82e46a492db41c4ec4b6f4ed5ec`
+  with amd64 and aarch64 manifests.
+
+The repository-managed Home Assistant App upgraded from v0.30.0 and passed
+exact public image/package identity, single scanner ownership, Ingress, live
+scanner/PSI state, current Detail/Preferred/Simple frames, durable accepted
+profile revision, card assets, zero restart/OOM state and an unchanged 1,073-file
+media inventory. A protected App-only rollback attempt was rejected at progress
+zero because the supplied backup password was invalid; no payload was restored.
+The operator explicitly waived a second live rollback/re-upgrade exercise after
+the accepted v0.31.0 state was recovered and reverified. This release does not
+claim that the rejected backup was restored.
+
+Two production Raspberry Pi displays were backed up and upgraded one at a time
+from v0.30.0 to exact public `sds200[tui,playback]==0.31.0`. Package, dependency,
+service, original-daemon TLS/readback and zero-restart/error checks passed while
+preserving the 100x30 and 160x45 console boundaries. The operator physically
+accepted both displays; audio was not applicable. Two additional approved
+system-level installations passed exact public `sds200[all]==0.31.0` package,
+dependency and interface checks without adding scanner ownership.
+
+No release-acceptance step sent a scanner command, repeated profile import or
+reload, changed credentials, deleted a recording, restarted Home Assistant
+Core, or inferred audible success. General operational acceptance uses the Home
+Assistant GUI or ordinary SSH; private HAOS diagnostic access is not a user
+prerequisite.
 
 ## Pre-tag gates
 

@@ -1,11 +1,12 @@
 # Scanner display profiles: local administrator workflow
 
-Status: **v0.31.0 release target**. These commands connect the Mimic-SDS import
+Status: **Released in v0.31.0**. These commands connect the Mimic-SDS import
 engine to the standalone daemon. They do not install a Mimic theme/card. The
 disabled-by-default browser Upload/Refresh adapter and App/launcher wiring ship
-only as a matching runtime/catalog contract. Before v0.31.0 is verified as
-published, use the [paired candidate procedure](mimic-sds-candidate-app.md), not
-guessed fields in an older installed App's options.
+only as a matching runtime/catalog contract. Use the matching published v0.31.0
+or later App, not guessed fields in an older installed App's options. The
+[paired candidate procedure](mimic-sds-candidate-app.md) remains limited to
+controlled development acceptance.
 
 ## What is stored where?
 

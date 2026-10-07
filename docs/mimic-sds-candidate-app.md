@@ -72,9 +72,10 @@ Before switching the scanner owner:
 4. For browser Upload/Refresh, specify the exact trusted HTTPS Home Assistant
    origin and authorized HA user IDs in the deployment TOML. DNS or a literal
    IP can be used with valid HTTPS. Do not weaken origin/user checks to fit a
-   convenient HTTP tab. Before v0.31.0 publication, configure
-   `scanner_display_config` only in this candidate. After publication, configure
-   it only on the matching v0.31.0 App, never on an older strict-parser image.
+   convenient HTTP tab. For production, configure `scanner_display_config` only
+   on the matching published v0.31.0 or later App, never on an older strict-
+   parser image. Use this candidate field only during controlled development
+   acceptance.
 5. Stop the existing scanner-owning App before starting the candidate. For audio
    acceptance, explicitly map UDP 50000 during this switchover. Do not run two
    scanner owners or duplicate host-port bindings. Advanced listeners require
