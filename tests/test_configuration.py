@@ -192,6 +192,7 @@ def test_application_configuration_defaults_include_provenance() -> None:
     resolved = resolve_application_configuration()
 
     assert resolved.configuration == ApplicationConfiguration()
+    assert resolved.configuration.tui_startup_view == "dashboard"
     assert all(
         resolved.source_for(field) == "default"
         for field in APPLICATION_CONFIGURATION_FIELDS
@@ -220,6 +221,7 @@ def test_application_configuration_uses_fixed_layer_precedence(
                 {
                     "theme": "dark",
                     "health_history_limit": 250,
+                    "tui_startup_view": "mimic",
                 },
                 str(tmp_path / "config.toml"),
             ),
@@ -248,6 +250,7 @@ def test_application_configuration_uses_fixed_layer_precedence(
     assert config.health_history_limit == 250
     assert config.log_level == "INFO"
     assert config.reconnect_attempts == 0
+    assert config.tui_startup_view == "mimic"
     assert config.reconnect_policy.max_attempts is None
     assert resolved.origin_for("theme").source == "command-line"
     assert resolved.origin_for("theme").location == "command line"
@@ -363,6 +366,7 @@ def test_application_configuration_normalizes_operational_values(
         theme=" LIGHT ",
         log_level=" debug ",
         log_file=tmp_path / "sdsctl.log",
+        tui_startup_view=" MIMIC ",
     )
 
     assert config.reconnect_initial_delay == 2.0
@@ -373,6 +377,7 @@ def test_application_configuration_normalizes_operational_values(
     assert config.theme == "light"
     assert config.log_level == "DEBUG"
     assert config.log_file == tmp_path / "sdsctl.log"
+    assert config.tui_startup_view == "mimic"
 
 
 def test_application_configuration_accepts_managed_theme_identifier() -> None:
@@ -401,6 +406,7 @@ def test_application_configuration_accepts_managed_theme_identifier() -> None:
         ({"color": "sometimes"}, "Color mode must be one of"),
         ({"theme": "Bad Theme"}, "lowercase kebab-case identifier"),
         ({"log_level": "TRACE"}, "Log level must be one of"),
+        ({"tui_startup_view": "favorites"}, "TUI startup view must be one of"),
     ],
 )
 def test_application_configuration_rejects_invalid_values(

@@ -189,6 +189,7 @@ from .logging_config import LOG_LEVEL_NAMES, configure_logging
 from .managed_display import (
     MANAGED_DISPLAY_CONFIGURATION_EXIT,
     MANAGED_DISPLAY_TEMPORARY_EXIT,
+    ManagedDisplayConfigurationError,
     inspect_managed_display_terminal,
     managed_display_failure_status,
     managed_display_service_template,
@@ -2096,6 +2097,19 @@ def build_parser(
         help=(
             "Use observe-only service-manager exit semantics; requires an "
             "authenticated remote profile"
+        ),
+    )
+    tui.add_argument(
+        "--startup-view",
+        dest="tui_startup_view",
+        choices=("dashboard", "mimic"),
+        default=_configuration_parser_default(
+            "dashboard",
+            suppress=suppress_configuration_defaults,
+        ),
+        help=(
+            "Initial TUI view; overrides application configuration for this "
+            "invocation (default: dashboard)"
         ),
     )
     tui.add_argument(
@@ -5830,6 +5844,19 @@ def _run_tui(
             )
             if args.managed_display:
                 require_observe_only_display(hello)
+            daemon_operations = hello.get("operations")
+            display_capable = (
+                isinstance(daemon_operations, list)
+                and DaemonApiOperation.DISPLAY_FRAME.value in daemon_operations
+            )
+            if args.tui_startup_view == "mimic" and not display_capable:
+                message = (
+                    "The Mimic-SDS startup view requires a negotiated daemon "
+                    "display source."
+                )
+                if args.managed_display:
+                    raise ManagedDisplayConfigurationError(message)
+                raise ValueError(message)
             initial = radio.initialize(api_client.runtime_snapshot())
             daemon_audio_session = TuiAudioSession(
                 AudioStream(
@@ -5864,11 +5891,6 @@ def _run_tui(
                 history_limit=args.audio_history_limit,
                 metadata=args.audio_metadata,
                 scanner=initial.model,
-            )
-            daemon_operations = hello.get("operations")
-            display_capable = (
-                isinstance(daemon_operations, list)
-                and DaemonApiOperation.DISPLAY_FRAME.value in daemon_operations
             )
             front_panel_capable = (
                 isinstance(daemon_operations, list)
@@ -5920,6 +5942,7 @@ def _run_tui(
                 psi_recovery_cooldown=args.psi_recovery_cooldown,
                 connected=initial.connected,
                 display_source=display_source,
+                startup_view=args.tui_startup_view,
                 front_panel_inventory=front_panel_inventory,
                 waterfall_client_factory=waterfall_client_factory,
                 palette=palette,
@@ -5939,6 +5962,10 @@ def _run_tui(
         return 0
 
     _reject_standalone_tui_daemon_options(args)
+    if args.tui_startup_view == "mimic":
+        raise ValueError(
+            "The Mimic-SDS startup view requires a negotiated daemon display source."
+        )
 
     audio_requested = args.host is not None or any(
         (
@@ -6009,6 +6036,7 @@ def _run_tui(
             palette=palette,
             screen_class=theme_asset.manifest.screen_class,
             managed_stylesheet=managed_stylesheet,
+            startup_view=args.tui_startup_view,
             log_buffer=log_buffer,
         )
     return 0

@@ -39,6 +39,7 @@ ConfigurationSource: TypeAlias = Literal[
 FileConfigurationSource: TypeAlias = Literal["system", "user"]
 ColorMode: TypeAlias = Literal["auto", "always", "never"]
 ThemeName: TypeAlias = str
+TuiStartupView: TypeAlias = Literal["dashboard", "mimic"]
 
 CONFIGURATION_SOURCE_PRECEDENCE: tuple[ConfigurationSource, ...] = (
     "default",
@@ -58,6 +59,7 @@ APPLICATION_CONFIGURATION_FIELDS: tuple[str, ...] = (
     "theme",
     "log_level",
     "log_file",
+    "tui_startup_view",
 )
 ENVIRONMENT_CONFIGURATION_VARIABLES: tuple[tuple[str, str], ...] = (
     ("max_xml_retries", "SDSCTL_MAX_XML_RETRIES"),
@@ -72,6 +74,7 @@ ENVIRONMENT_CONFIGURATION_VARIABLES: tuple[tuple[str, str], ...] = (
     ("log_file", "SDSCTL_LOG_FILE"),
 )
 _COLOR_MODES: tuple[ColorMode, ...] = ("auto", "always", "never")
+_TUI_STARTUP_VIEWS: tuple[TuiStartupView, ...] = ("dashboard", "mimic")
 _THEME_NAME_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 
 
@@ -172,6 +175,7 @@ class ApplicationConfiguration:
     theme: ThemeName = "dark"
     log_level: str | None = None
     log_file: Path | None = None
+    tui_startup_view: TuiStartupView = "dashboard"
 
     def __post_init__(self) -> None:
         _require_integer(
@@ -248,6 +252,14 @@ class ApplicationConfiguration:
             if isinstance(self.log_file, str) and not self.log_file.strip():
                 raise ValueError("Log file path must not be empty.")
             object.__setattr__(self, "log_file", Path(self.log_file))
+
+        if not isinstance(self.tui_startup_view, str):
+            raise TypeError("TUI startup view must be a string.")
+        normalized_startup_view = self.tui_startup_view.strip().lower()
+        if normalized_startup_view not in _TUI_STARTUP_VIEWS:
+            choices = ", ".join(_TUI_STARTUP_VIEWS)
+            raise ValueError(f"TUI startup view must be one of: {choices}.")
+        object.__setattr__(self, "tui_startup_view", normalized_startup_view)
 
     @property
     def reconnect_policy(self) -> ReconnectPolicy:

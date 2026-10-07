@@ -296,6 +296,9 @@ def test_standard_parser_preserves_existing_managed_defaults() -> None:
     assert args.log_level is None
     assert args.log_file is None
 
+    tui_args = cli.build_parser().parse_args(["tui"])
+    assert tui_args.tui_startup_view == "dashboard"
+
 
 def test_runtime_parser_preserves_absent_managed_values() -> None:
     from sds200 import APPLICATION_CONFIGURATION_FIELDS
@@ -333,7 +336,8 @@ def test_cli_configuration_applies_files_environment_and_explicit_options(
     paths.user_config_file.write_text(
         "version = 1\n\n"
         "[application]\n"
-        "health_history_limit = 250\n",
+        "health_history_limit = 250\n"
+        'tui_startup_view = "mimic"\n',
         encoding="utf-8",
     )
 
@@ -364,6 +368,7 @@ def test_cli_configuration_applies_files_environment_and_explicit_options(
     assert args.theme == "light"
     assert args.color == "auto"
     assert args.reconnect_attempts == 0
+    assert args.tui_startup_view == "mimic"
     assert args.log_level == "DEBUG"
     assert args.verbose == 2
     assert resolved.source_for("max_xml_retries") == "system"
@@ -372,6 +377,7 @@ def test_cli_configuration_applies_files_environment_and_explicit_options(
     assert resolved.source_for("color") == "command-line"
     assert resolved.source_for("reconnect_attempts") == "command-line"
     assert resolved.source_for("log_level") == "command-line"
+    assert resolved.source_for("tui_startup_view") == "user"
 
 
 def test_explicit_log_level_overrides_verbose_for_configuration(

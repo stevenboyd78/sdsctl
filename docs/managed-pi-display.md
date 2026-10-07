@@ -86,6 +86,55 @@ Delete the three staging copies only after preflight and one interactive test
 have passed. Never copy the daemon's private TLS key or another client's secret
 to the Pi.
 
+### Select the initial TUI view without changing the service
+
+The packaged unit fixes
+`XDG_CONFIG_HOME=/var/lib/sdsctl-display/.config`, so this service account's
+ordinary versioned application file is:
+
+```text
+/var/lib/sdsctl-display/.config/sdsctl/config.toml
+```
+
+The default remains the standard dashboard. To make this client request
+Mimic-SDS at startup, edit the file, preserving any existing settings, then
+normalize its owner and mode:
+
+```bash
+sudoedit /var/lib/sdsctl-display/.config/sdsctl/config.toml
+sudo chown sdsctl-display:sdsctl-display \
+  /var/lib/sdsctl-display/.config/sdsctl/config.toml
+sudo chmod 0600 /var/lib/sdsctl-display/.config/sdsctl/config.toml
+```
+
+A minimal document is:
+
+```toml
+version = 1
+
+[application]
+tui_startup_view = "mimic"
+```
+
+Keep the file owned by `sdsctl-display:sdsctl-display`. The setting is
+non-secret, but mode `0600` is appropriate inside this private service-account
+configuration directory. Do not put it in `daemon-remote-clients.toml`, which
+retains only named authenticated client profiles and their protected file
+references.
+
+No systemd drop-in, daemon reload, or `ExecStart` edit is needed. The source and
+packaged `sdsctl-display@.service` files remain byte-for-byte unchanged. The
+next deliberate start of the exact instance reads the application file through
+the existing `XDG_CONFIG_HOME`. For a temporary diagnostic override, append
+`--startup-view dashboard` or `--startup-view mimic` to an interactive command;
+do not make that override part of the managed unit.
+
+An explicit `mimic` selection is fail-closed. The authenticated daemon must
+negotiate the read-only display-frame operation; otherwise the managed process
+reports a permanent configuration failure before displaying the dashboard.
+Once Mimic-SDS is open, `M` or `Esc` returns to the normal dashboard, and `Q`
+retains the existing managed-display shutdown behavior.
+
 ## 3. Run the managed-display preflight
 
 Keep the daemon's private-LAN listener disabled until its complete server

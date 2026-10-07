@@ -6,6 +6,16 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Added
+
+- Add a default-off `tui_startup_view` application setting, with a temporary
+  `tui --startup-view` override, so a display-capable daemon TUI can open the
+  read-only Mimic-SDS screen through the normal Textual lifecycle. The ordinary
+  dashboard remains the default; explicit Mimic-SDS startup fails closed when
+  capability negotiation does not provide a display source. Managed display
+  services can use their existing service-account `config.toml` without a
+  systemd unit or `ExecStart` change.
+
 ## [0.31.0] - 2026-10-05
 
 Mimic-SDS displays, installed display-profile administration, and the narrowly
