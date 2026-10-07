@@ -514,6 +514,43 @@ def test_actual_tui_screen_drawer_palette_and_return(packets, size):
     asyncio.run(exercise())
 
 
+def test_actual_tui_can_open_mimic_through_startup_lifecycle(packets):
+    async def exercise():
+        baseline = _app()
+        app = ScannerTuiApp(
+            ScannerIdentity("sdsctl-remote-daemon", "SDS200", "fixture"),
+            baseline._snapshot,
+            display_source=DisplayFrameSource(
+                lambda: packets["held_trunk"],
+                lambda: None,
+            ),
+            startup_view="mimic",
+        )
+        try:
+            async with app.run_test(size=(100, 30)) as pilot:
+                await pilot.pause(0.3)
+                assert isinstance(app.screen, MimicScreen)
+                await pilot.press("escape")
+                await pilot.pause()
+                assert app._mimic_screen is None
+                assert not isinstance(app.screen, MimicScreen)
+        finally:
+            app._mimic_reader.close(wait=True)
+
+    asyncio.run(exercise())
+
+
+def test_mimic_startup_requires_a_display_source():
+    baseline = _app()
+
+    with pytest.raises(ValueError, match="requires a negotiated display source"):
+        ScannerTuiApp(
+            ScannerIdentity("sdsctl-remote-daemon", "SDS200", "fixture"),
+            baseline._snapshot,
+            startup_view="mimic",
+        )
+
+
 def test_old_daemon_or_direct_usb_tui_has_no_mimic_action():
     app = _app()
     assert not app.check_action("mimic", ())

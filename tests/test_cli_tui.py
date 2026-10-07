@@ -85,6 +85,7 @@ def test_tui_cli_uses_replay_radio_and_selected_theme(
     assert captured["palette"] is DEFAULT_LIGHT_THEME
     assert captured["interval_ms"] == 250
     assert captured["stale_after"] == 1.5
+    assert captured["startup_view"] == "dashboard"
     assert captured["audio_session"] is None
     radio = captured["radio"]
     assert isinstance(radio, SDSScanner)
@@ -93,6 +94,74 @@ def test_tui_cli_uses_replay_radio_and_selected_theme(
     assert isinstance(snapshot, RadioStateSnapshot)
     assert snapshot.system == "Example P25 System"
     assert snapshot.channel == "Example Dispatch"
+
+
+def test_tui_startup_view_cli_override_wins_over_application_file(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    paths = resolve_configuration_paths(
+        environ={},
+        home=tmp_path / "home",
+        system_config_dir=tmp_path / "etc",
+    )
+    paths.user_config_dir.mkdir(parents=True)
+    paths.user_config_file.write_text(
+        "version = 1\n\n"
+        "[application]\n"
+        'tui_startup_view = "mimic"\n',
+        encoding="utf-8",
+    )
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        "sds200.tui.run_tui",
+        lambda **kwargs: captured.update(kwargs),
+    )
+
+    assert cli.main(
+        [
+            "--replay",
+            str(FIXTURE),
+            "tui",
+            "--startup-view",
+            "dashboard",
+        ],
+        configuration_paths=paths,
+        environ={},
+    ) == 0
+
+    assert captured["startup_view"] == "dashboard"
+
+
+def test_mimic_startup_view_rejects_a_tui_without_daemon_display_source(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    paths = resolve_configuration_paths(
+        environ={},
+        home=tmp_path / "home",
+        system_config_dir=tmp_path / "etc",
+    )
+    paths.user_config_dir.mkdir(parents=True)
+    paths.user_config_file.write_text(
+        "version = 1\n\n"
+        "[application]\n"
+        'tui_startup_view = "mimic"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        cli,
+        "selected_radio",
+        lambda *args, **kwargs: pytest.fail("scanner access must not begin"),
+    )
+
+    assert cli.main(
+        ["--replay", str(FIXTURE), "tui"],
+        configuration_paths=paths,
+        environ={},
+    ) == 2
+    assert "requires a negotiated daemon display source" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
@@ -152,6 +221,8 @@ def test_tui_parser_accepts_explicit_daemon_client_options() -> None:
             "/tmp/sdsctl-waterfall.sock",
             "--daemon-waterfall-max-record-bytes",
             "32768",
+            "--startup-view",
+            "mimic",
         ]
     )
 
@@ -166,6 +237,7 @@ def test_tui_parser_accepts_explicit_daemon_client_options() -> None:
     assert args.daemon_pcmu_max_frame_bytes == 16384
     assert args.daemon_waterfall_socket_path == Path("/tmp/sdsctl-waterfall.sock")
     assert args.daemon_waterfall_max_record_bytes == 32768
+    assert args.tui_startup_view == "mimic"
 
 
 @pytest.mark.parametrize("display_capable", [False, True])
@@ -360,6 +432,7 @@ def test_tui_cli_uses_daemon_without_opening_scanner_or_rtsp(
     assert captured["model"] == "SDS200"
     assert captured["firmware"] == "Version 1.26.01"
     assert captured["connected"] is True
+    assert captured["startup_view"] == "dashboard"
     assert captured["connection_target"] is None
     assert captured["front_panel_inventory"] == (
         front_panel_inventory_snapshot("SDS200") if display_capable else None
@@ -455,6 +528,12 @@ def test_tui_cli_remote_profile_builds_independent_authenticated_services(
         f'credential_file = "{tmp_path / "private-client.secret"}"\n',
         encoding="utf-8",
     )
+    paths.user_config_file.write_text(
+        "version = 1\n\n"
+        "[application]\n"
+        'tui_startup_view = "mimic"\n',
+        encoding="utf-8",
+    )
 
     class FakeApiClient:
         def __init__(self, location: object, **kwargs: object) -> None:
@@ -464,9 +543,12 @@ def test_tui_cli_remote_profile_builds_independent_authenticated_services(
 
         def hello(self) -> dict[str, object]:
             return {
-                "operations": ["runtime.snapshot"],
+                "operations": ["runtime.snapshot", "display.frame"],
                 "control_operations": [],
             }
+
+        def display_frame(self) -> dict[str, object]:
+            return {"test_frame": True}
 
         def runtime_snapshot(self) -> dict[str, object]:
             return {
@@ -541,6 +623,8 @@ def test_tui_cli_remote_profile_builds_independent_authenticated_services(
     assert callable(terminal_failure_subscribe)
     assert captured["endpoint"] == DAEMON_REMOTE_CLIENT_ENDPOINT
     assert captured["connection_target"] == "192.168.20.41:50443"
+    assert captured["startup_view"] == "mimic"
+    assert captured["display_source"] is not None
     assert captured["front_panel_inventory"] is None
     assert captured["snapshot"].channel == "Remote Dispatch"
 

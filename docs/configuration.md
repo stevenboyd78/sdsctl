@@ -95,6 +95,7 @@ color = "auto"
 theme = "dark"
 log_level = "INFO"
 log_file = "/var/log/sdsctl.log"
+tui_startup_view = "dashboard"
 ```
 
 Unknown top-level fields, unsupported application fields, malformed TOML,
@@ -116,6 +117,7 @@ path without including unsupported field values.
 | `theme` | `dark` | `SDSCTL_THEME` | `--theme` |
 | `log_level` | unset | `SDSCTL_LOG_LEVEL` | `--log-level`, `-v`, `-vv` |
 | `log_file` | unset | `SDSCTL_LOG_FILE` | `--log-file` |
+| `tui_startup_view` | `dashboard` | none | `tui --startup-view` |
 
 `reconnect_attempts = 0` means retry indefinitely. Delay values must be positive,
 the multiplier must be at least `1`, and the maximum delay must be at least the
@@ -145,6 +147,47 @@ web` process automatically discovers valid packages under its resolved
 `themes/web/` directory; web selection stays browser-local. Managed Home
 Assistant packages remain inactive. Logging levels are `CRITICAL`, `ERROR`,
 `WARNING`, `INFO`, or `DEBUG`.
+
+`tui_startup_view` accepts `dashboard` or `mimic`. `dashboard` preserves the
+ordinary TUI startup behavior. `mimic` opens the read-only Mimic-SDS screen
+through the Textual screen lifecycle after the root TUI mounts. It is accepted
+only when daemon capability negotiation supplies a display source; an older or
+non-display daemon fails before the normal dashboard starts. `M` or `Esc`
+returns from Mimic-SDS to the dashboard. The optional `tui --startup-view`
+argument is a temporary highest-precedence override and is not required for a
+managed service.
+
+There is intentionally no environment-variable spelling for this setting.
+Durable selection belongs in the ordinary versioned application file, and a
+temporary selection belongs on the command line.
+
+## Startup and runtime configuration coverage
+
+Safe, durable, non-secret preferences should ultimately be expressible in a
+versioned configuration document. Command-line forms remain useful as
+temporary higher-precedence overrides. This first slice adds only the bounded
+TUI startup-view preference; it does not convert every runtime option at once.
+
+The remaining long-running CLI surface was inventoried for staged follow-up:
+
+| Surface | Configuration-coverage gaps to evaluate | Boundary |
+| --- | --- | --- |
+| TUI timing and recovery | `--interval`, `--stale-after`, `--psi-auto-recover`, `--psi-recover-after`, `--psi-recovery-cooldown` | Safe non-secret preferences; candidates for the application file |
+| TUI audio and recording | playback device, buffer/history limits, recording directory/template/organization/metadata, and RTSP/RTP timing | Split durable preferences from overwrite requests and machine-specific endpoints before adding fields |
+| Daemon runtime | PSI timing/recovery, RTSP/RTP timing, recording directory, and API/event/audio client, queue, size, send, and shutdown limits | Prefer typed daemon configuration; retain conservative bounds and validation |
+| Native web runtime | loopback listener port and access-log policy, plus daemon-client timeouts and size limits | Bind/exposure, TLS, authentication, password, experimental-device, and Home Assistant/container modes remain deliberate security boundaries |
+| Asterisk MOH | RTSP/RTP, buffering, and shutdown timing | Candidate only where it cannot weaken transport or shutdown bounds |
+
+This inventory does not make credentials, secret values, one-shot actions,
+destructive requests, enrollment/bootstrap operations, or explicit safety and
+authority opt-ins persistable. In particular, scanner connection/profile
+selection, authenticated remote-profile selection, managed-display mode,
+qualified Menu control, remote/container exposure, TLS key and password
+selection, experimental browser-device enablement, overwrite flags, and
+bounded-duration commands retain their existing explicit boundaries. Separate
+strict destination, MQTT, remote-listener, remote-client, display-profile, and
+browser-device documents also remain separate rather than becoming flat
+`[application]` fields.
 
 ## Environment examples
 

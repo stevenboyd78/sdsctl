@@ -27,6 +27,7 @@ from .audio_session import (
     AudioSessionStatus,
 )
 from .commands import NavigationTarget
+from .configuration import TuiStartupView
 from .presentation import ScannerPresentation, present_radio_state
 from .rich_cli import rich_style
 from .scanner import capabilities_for_model
@@ -503,6 +504,7 @@ class ScannerTuiApp(App[None]):
         daemon_version_source: Callable[[], str | None] | None = None,
         daemon_link_since_source: Callable[[], float | None] | None = None,
         waterfall_client_factory: TuiWaterfallClientFactory | None = None,
+        startup_view: TuiStartupView = "dashboard",
         clock: Clock = monotonic,
         now: WallClock = _local_now,
     ) -> None:
@@ -516,6 +518,16 @@ class ScannerTuiApp(App[None]):
             raise ValueError("PSI recovery cooldown must not be negative")
         if display_source is not None and supplemental_display_source is not None:
             raise ValueError("Choose one Mimic-SDS display source.")
+        if startup_view not in {"dashboard", "mimic"}:
+            raise ValueError("TUI startup view must be dashboard or mimic.")
+        if (
+            startup_view == "mimic"
+            and display_source is None
+            and supplemental_display_source is None
+        ):
+            raise ValueError(
+                "The Mimic-SDS startup view requires a negotiated display source."
+            )
         if daemon_version_source is not None and not callable(daemon_version_source):
             raise TypeError("Daemon version source must be a non-blocking callable or None.")
         if daemon_link_since_source is not None and not callable(
@@ -592,6 +604,7 @@ class ScannerTuiApp(App[None]):
             else None
         )
         self._mimic_screen: MimicScreen | None = None
+        self._startup_view = startup_view
         self._front_panel_inventory = front_panel_inventory
         self._details_screen: ScannerDetailsScreen | None = None
         self._waterfall_client_factory = waterfall_client_factory
@@ -783,6 +796,8 @@ class ScannerTuiApp(App[None]):
                         self._tui_audio_session.open_audio,
                     )
                 )
+        if self._startup_view == "mimic":
+            self.call_after_refresh(self.action_mimic)
 
     def on_resize(self, event: Resize) -> None:
         """Refresh size-dependent summaries after terminal resizing."""
@@ -2720,6 +2735,7 @@ def run_tui(
     daemon_version_source: Callable[[], str | None] | None = None,
     daemon_link_since_source: Callable[[], float | None] | None = None,
     waterfall_client_factory: TuiWaterfallClientFactory | None = None,
+    startup_view: TuiStartupView = "dashboard",
     log_buffer: TuiLogBuffer | None = None,
 ) -> None:
     """Launch the Textual interface from one renderer-neutral initial snapshot."""
@@ -2751,6 +2767,7 @@ def run_tui(
         supplemental_display_source=supplemental_display_source,
         front_panel_inventory=front_panel_inventory,
         waterfall_client_factory=waterfall_client_factory,
+        startup_view=startup_view,
     )
     try:
         app.run()

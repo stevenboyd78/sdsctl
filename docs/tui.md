@@ -243,12 +243,18 @@ the offline render alone.
 ## Unreleased Mimic-SDS candidate
 
 Mimic-SDS is a separate, read-only screen in the local development candidate.
-The ordinary TUI remains the startup view. When a configured daemon advertises
-the shared display-frame service, press **M** or choose **Mimic-SDS** in the
-command palette to open it. The existing daemon client profile, identity and
-permissions are reused; there is no new scanner connection or credential.
-Older daemons and direct-USB sessions keep their existing interface without this
-action. Direct-USB profile configuration remains a separate delivery item.
+The ordinary dashboard remains the default startup view. When a configured
+daemon advertises the shared display-frame service, press **M** or choose
+**Mimic-SDS** in the command palette to open it. A durable non-secret
+`tui_startup_view = "mimic"` setting in the versioned application
+`config.toml`, or a temporary `tui --startup-view mimic` override, opens the
+same screen after the root Textual app mounts; no key event is injected. The
+existing daemon client profile, identity and permissions are reused; there is
+no new scanner connection or credential. An explicit Mimic-SDS startup request
+fails before the dashboard starts when capability negotiation does not provide
+a display source. Older daemons and direct-USB sessions otherwise keep their
+existing interface without this action. Direct-USB profile configuration
+remains a separate delivery item.
 
 Inside Mimic-SDS:
 
@@ -675,7 +681,8 @@ complete Keyboard Reference remains scrollable by design at 30 rows.
 For an already qualified observe-only remote profile, the
 [managed Raspberry Pi display guide](managed-pi-display.md) adds physical-console
 preflight, stable service-manager exit classes, and an opt-in systemd template.
-It does not change ordinary interactive TUI startup.
+Its ordinary application configuration can select the initial dashboard or
+Mimic-SDS view without changing the packaged service command.
 
 ## Network audio playback, recording, and library
 

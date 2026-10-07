@@ -89,6 +89,21 @@ acceptance all passed before release closure. The protected Home Assistant
 rollback attempt restored no payload and the operator waived a second live
 rollback/re-upgrade exercise after public v0.31.0 was reverified.
 
+### Post-release display preference follow-up
+
+Add one bounded application-configuration setting that keeps the TUI dashboard
+as the default but lets a display-capable daemon client request Mimic-SDS as its
+initial screen. The managed Pi must use its existing service-account
+`config.toml`; do not change the packaged unit or place presentation state in
+the authenticated remote-client manifest. A temporary CLI override retains
+higher precedence. Reject explicit Mimic-SDS startup before normal display when
+capability negotiation does not supply a display source, and open the screen
+through Textual lifecycle callbacks rather than injected input. Preserve return
+to dashboard, shutdown and managed-display failure semantics. Record the wider
+safe non-secret runtime configuration gaps for later slices without making
+credentials, one-shot actions, destructive requests, enrollment/bootstrap or
+authority opt-ins persistable.
+
 ### v0.30.0 release closure
 
 **Released in [v0.30.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.30.0):**
