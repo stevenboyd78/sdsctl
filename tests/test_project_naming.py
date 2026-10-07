@@ -132,16 +132,16 @@ def test_all_optional_dependency_extra_is_exact_runtime_union() -> None:
     assert len(optional["all"]) == len(runtime_union)
 
 
-def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> None:
+def test_roadmap_records_current_release_and_completed_release_boundaries() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
-    active_milestone = roadmap.split("## Active milestone", 1)[1].split(
+    current_release = roadmap.split("## Current release", 1)[1].split(
         "## Deferred hardware validation", 1
     )[0]
-    normalized_active_milestone = " ".join(active_milestone.split())
+    normalized_current_release = " ".join(current_release.split())
     normalized_roadmap = " ".join(roadmap.split())
 
     expected_heading = "### Managed-display enrollment and unattended recovery"
-    assert expected_heading in active_milestone
+    assert expected_heading in current_release
     for required in (
         "first-time private native-profile import and read-only offline check",
         "rotation handoffs without clearing a saved pause or terminal error",
@@ -332,7 +332,7 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
         "No new runtime capability enters Milestone 29.3",
         "public or anonymous live-audio URLs",
     ):
-        assert required in normalized_active_milestone
+        assert required in normalized_current_release
 
     for required in (
         "### Milestone 28 complete — v0.24.0 release candidate",
@@ -412,7 +412,7 @@ def test_roadmap_records_completed_milestone_27_4_web_waterfall_boundary() -> No
 
 def test_roadmap_preserves_completed_milestone_26_1_security_boundary() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
-    active_milestone = roadmap.split("## Active milestone", 1)[1].split(
+    current_release = roadmap.split("## Current release", 1)[1].split(
         "## Deferred hardware validation", 1
     )[0]
     milestone_group = roadmap.split(
@@ -421,7 +421,7 @@ def test_roadmap_preserves_completed_milestone_26_1_security_boundary() -> None:
     )[1].split("## Completed milestone groups", 1)[0]
     normalized_group = " ".join(milestone_group.split())
 
-    assert "### Milestone 26.1 —" not in active_milestone
+    assert "### Milestone 26.1 —" not in current_release
     for required in (
         "Milestone 26.1 completed explicit authenticated direct-TLS LAN access",
         "loopback-only operation as the default",
