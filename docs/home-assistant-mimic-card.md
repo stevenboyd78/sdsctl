@@ -1,9 +1,10 @@
-# Mimic-SDS Home Assistant card (v0.31.0 release target)
+# Mimic-SDS Home Assistant card
 
-Mimic-SDS is included in the matching v0.31.0 App/card contract. Before the
-immutable v0.31.0 artifacts are verified as published, it remains available only
-through a paired source-pinned candidate. Do not add v0.31.0 options to an older
-published image or replace working dashboard resources with unreviewed bytes.
+Mimic-SDS is included in the published matching v0.31.0 App/card contract. Use
+the repository-managed v0.31.0 or later App; do not add v0.31.0 options to an
+older image or replace working dashboard resources with unreviewed bytes. The
+paired source-pinned candidate remains a development/acceptance path, not an
+alternate production installation.
 
 Mimic-SDS is an **additional, read-only card**, not a replacement for SDS200
 Scanner, SDS200 Display or SDS200 Waterfall. It reconstructs the scanner's
@@ -14,8 +15,8 @@ dashboard password or MQTT entity is required by the new card.
 
 ## Before adding the card
 
-Use the matching v0.31.0 App after publication, or a candidate App built with
-the same frame API and card assets during controlled pre-release acceptance. An
+Use the published matching v0.31.0 or later App. A candidate App built with the
+same frame API and card assets is only for controlled development acceptance. An
 administrator must configure the App's optional display-profile source,
 initialize its accepted state, and import the scanner's `profile.cfg` using the
 [profile administration workflow](scanner-display-profile-import.md).
