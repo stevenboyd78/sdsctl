@@ -188,6 +188,15 @@ def test_web_led_width_uses_the_surrounding_panel_on_all_display_sizes():
     assert "--mimic-screen-min-height: 220px;" in compact
 
 
+def test_mimic_only_picker_hidden_rule_outranks_toolbar_label_layout():
+    with TestClient(create_web_dashboard_app(lambda: None)) as client:
+        css = client.get("/assets/mimic-sds.css").text
+
+    assert "#pane-scanner .mimic-toolbar label[hidden]" in css
+    hidden_rule = css.split("#pane-scanner .mimic-toolbar label[hidden]", 1)[1].split("}", 1)[0]
+    assert "display: none !important;" in hidden_rule
+
+
 def test_javascript_controller_freshness_identity_and_session_lifecycle():
     node = shutil.which("node")
     if node is None:

@@ -56,6 +56,27 @@ function harness() {
   };
 }
 (async () => {
+  // Dashboard is the initial presentation.  Mimic-only choices stay hidden,
+  // retain their page-local values while hidden, and return with Mimic-SDS.
+  const visibility = harness(); visibility.context();
+  assert.equal(visibility.find('mimic-mode').parentElement.hidden, true);
+  assert.equal(visibility.find('mimic-led').parentElement.hidden, true);
+  visibility.choose('mimic-presentation', 'mimic'); await flush();
+  assert.equal(visibility.find('mimic-mode').parentElement.hidden, false);
+  assert.equal(visibility.find('mimic-led').parentElement.hidden, false);
+  visibility.choose('mimic-mode', 'detail');
+  visibility.choose('mimic-led', 'strips');
+  visibility.choose('mimic-presentation', 'standard');
+  assert.equal(visibility.find('mimic-mode').parentElement.hidden, true);
+  assert.equal(visibility.find('mimic-led').parentElement.hidden, true);
+  assert.equal(visibility.find('mimic-mode').value, 'detail');
+  assert.equal(visibility.find('mimic-led').value, 'strips');
+  visibility.choose('mimic-presentation', 'mimic'); await flush();
+  assert.equal(visibility.find('mimic-mode').parentElement.hidden, false);
+  assert.equal(visibility.find('mimic-led').parentElement.hidden, false);
+  assert.equal(visibility.find('mimic-mode').value, 'detail');
+  assert.equal(visibility.find('mimic-led').value, 'strips');
+  visibility.controller.stop();
   // WebUI defaults to a surrounding alert border; the visible picker and DOM
   // must agree, and either presentation remains selectable without new reads.
   const led = harness();

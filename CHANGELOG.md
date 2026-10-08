@@ -16,6 +16,12 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   services can use their existing service-account `config.toml` without a
   systemd unit or `ExecStart` change.
 
+### Fixed
+
+- Keep the Mimic layout and alert-LED treatment selectors hidden while the
+  ordinary WebUI Dashboard presentation is selected. Switching presentations
+  still preserves the page-local Mimic choices.
+
 ## [0.31.0] - 2026-10-05
 
 Mimic-SDS displays, installed display-profile administration, and the narrowly

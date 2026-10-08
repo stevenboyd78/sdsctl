@@ -14,6 +14,11 @@
     display: flex !important; flex-direction: column !important;
     gap: 3px !important; min-width: 0 !important; font: 12px system-ui !important;
   }
+  /* This must outrank the label display rule above.  Theme layers otherwise
+     turn a semantically hidden Mimic-only picker back into a visible flex box. */
+  #pane-scanner .mimic-toolbar label[hidden] {
+    display: none !important;
+  }
   #pane-scanner .mimic-toolbar select {
     min-height: 36px !important; max-width: 100% !important;
     font: 14px system-ui !important; padding: 4px 8px !important;
