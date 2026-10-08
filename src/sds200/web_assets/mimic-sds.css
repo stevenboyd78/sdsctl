@@ -45,7 +45,8 @@
   }
   #pane-scanner .mimic-surround {
     --mimic-led: #3b4654;
-    --mimic-led-width: 3cqmin;
+    --mimic-led-block-width: 3cqmin;
+    --mimic-led-inline-width: calc(100cqw / 15);
     --mimic-screen-min-height: 280px;
     position: relative !important; border: 0 !important; padding: 0 !important;
     min-height: var(--mimic-screen-min-height) !important; min-width: 0 !important; background: #000 !important;
@@ -60,9 +61,10 @@
     position: absolute !important; inset: 0 !important;
     width: 100% !important; height: 100% !important; min-height: 0 !important;
     box-sizing: border-box !important; container-type: size !important;
-    border: var(--mimic-led-width) solid transparent !important;
-    border-top-color: var(--mimic-led) !important;
-    border-bottom-color: var(--mimic-led) !important;
+    border-style: solid !important; border-color: transparent !important;
+    border-block-width: var(--mimic-led-block-width) !important;
+    border-inline-width: var(--mimic-led-inline-width) !important;
+    border-block-color: var(--mimic-led) !important;
     background: #000 !important; overflow: hidden !important;
   }
   #pane-scanner .mimic-cell {

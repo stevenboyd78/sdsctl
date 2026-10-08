@@ -106,7 +106,13 @@
     const value = region.text ?? "—";
     return prefix && !value.toLowerCase().startsWith(prefix.toLowerCase() + ":") ? `${prefix}: ${value}` : value;
   }
-  function presentIndicator(region, current = true) {
+  function signalReceptionState(region, current = true) {
+    const status = current ? region?.value_status : "not_current";
+    if (status === "raw_source" && /^[0-5]$/.test(region?.text ?? ""))
+      return region.text === "0" ? "off" : "on";
+    return "unknown";
+  }
+  function presentIndicator(region, current = true, receptionState = "unknown") {
     if (!["fixed", "configured"].includes(region.selection)) return null;
     const spec = contract.indicator_presentation;
     const status = current ? region.value_status : "not_current";
@@ -115,6 +121,12 @@
       return status === "raw_source" && /^[0-5]$/.test(region.text ?? "")
         ? {text: spec.signal_bars.slice(0, Number(region.text)), state: `level_${region.text}`}
         : unknown;
+    }
+    if (region.id.startsWith("icon_") && region.token === "Modulation") {
+      if (status !== "raw_source" || !(region.text ?? "") || !["on", "off", "unknown"].includes(receptionState)) return unknown;
+      if (receptionState === "on") return {text: region.text, state: "on"};
+      if (receptionState === "off") return {text: region.text, state: "off", foreground: spec.inactive_color, background: "000000"};
+      return unknown;
     }
     const label = Object.hasOwn(spec.regions, region.id) ? spec.regions[region.id]
       : region.id.startsWith("icon_") && Object.hasOwn(spec.tokens, region.token) ? spec.tokens[region.token] : null;
@@ -134,6 +146,8 @@
       return;
     }
     grid.dataset.mode = frame.screen.mode;
+    const reception = signalReceptionState(
+      frame.screen.regions.find(region => region.id === "signal"), frame.status === "current");
     for (const region of frame.screen.regions) {
       const cell = make("div", undefined, "mimic-cell");
       cell.dataset.region = region.id;
@@ -141,7 +155,7 @@
       cell.dataset.lines = String(region.name_lines);
       cell.dataset.alignment = region.alignment;
       cell.dataset.valueStatus = region.value_status;
-      const indicator = presentIndicator(region, frame.status === "current");
+      const indicator = presentIndicator(region, frame.status === "current", reception);
       if (indicator !== null) cell.dataset.indicator = indicator.state;
       cell.style.gridArea = `${region.row + 1} / ${region.column + 1} / span ${region.rows} / span ${region.columns}`;
       const held = frame.indicators[region.token === "SiteName" ? "site_hold" : `${region.id}_hold`];
@@ -560,5 +574,5 @@
       stop() { stopSession("Session stopped — scanner values cleared."); },
     });
   }
-  window.sdsctlMimic = Object.freeze({create, decode, presentValue, presentIndicator});
+  window.sdsctlMimic = Object.freeze({create, decode, presentValue, presentIndicator, signalReceptionState});
 })();

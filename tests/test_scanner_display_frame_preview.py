@@ -21,8 +21,10 @@ from sds200.scanner_display_frame_preview import (
     render_scanner_display_frame,
     render_scanner_display_gallery,
 )
+from sds200.scanner_display_layout import DisplaySlotSelection
 from sds200.scanner_display_profile import ScannerDisplayColor
 from sds200.scanner_display_profile_state import DisplayProfileStatus
+from sds200.scanner_display_values import ScannerDisplayValueStatus
 
 
 class Document(HTMLParser):
@@ -113,6 +115,41 @@ def test_named_led_colors_not_animation_or_field_colors(scenarios, led):
     assert "animation" not in source
     regions = region_elements(source)
     assert "color:#ff3030;background:#000000" in regions["system"]["style"]
+    if led is ScannerAlertLed.OFF:
+        assert "--alert-color:#707070" in source
+
+
+def test_modulation_icon_activation_follows_signal_level(scenarios):
+    frame = scenarios["released_trunk"]["detail"]
+    slots = list(frame.screen.regions)
+    values = list(frame.values)
+    modulation_index = next(i for i, slot in enumerate(slots) if slot.region.id == "icon_1")
+    signal_index = next(i for i, slot in enumerate(slots) if slot.region.id == "signal")
+    slots[modulation_index] = replace(
+        slots[modulation_index],
+        token="Modulation",
+        selection=DisplaySlotSelection.CONFIGURED,
+        stored_color=ScannerDisplayColor("ffffff", "000000"),
+    )
+    values[modulation_index] = replace(
+        values[modulation_index], status=ScannerDisplayValueStatus.RAW_SOURCE, text="NFM"
+    )
+    values[signal_index] = replace(
+        values[signal_index], status=ScannerDisplayValueStatus.RAW_SOURCE, text="0"
+    )
+    frame = replace(
+        frame,
+        screen=replace(frame.screen, regions=tuple(slots)),
+        values=tuple(values),
+    )
+    inactive = region_elements(render_scanner_display_frame(frame))["icon_1"]
+    assert "color:#707070;background:#000000" in inactive["style"]
+
+    values[signal_index] = replace(values[signal_index], text="3")
+    active_frame = replace(frame, values=tuple(values))
+    active = region_elements(render_scanner_display_frame(active_frame))["icon_1"]
+    pair = slots[modulation_index].stored_color
+    assert f"color:#{pair.text};background:#{pair.background}" in active["style"]
 
 
 def test_missing_invalid_and_stale_led_never_mean_off(scenarios):
