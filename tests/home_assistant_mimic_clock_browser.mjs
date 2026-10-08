@@ -119,7 +119,7 @@ try{
   assert.equal(await evaluate(cdp,"globalThis[Symbol.for('sdsctl.home-assistant.ingress.v1')]._leases"),0);
   assert.deepEqual(await evaluate(cdp,'fixture.errors'),[]);assert.deepEqual(errors,[]);
   assert.ok(requests.every(url=>new URL(url).origin===origin),'Unexpected external page request.');
-  console.log(`PASS: ${layouts} actual-browser clock layouts, normal-card isolation, 3% frame, DTM expiry/recovery, terminal lost demand and cleanup.`);
+  console.log(`PASS: ${layouts} actual-browser clock layouts, normal-card isolation, 3% block/two-column inline frame, DTM expiry/recovery, terminal lost demand and cleanup.`);
 }finally{
   cdp?.close();await stopChild(browser?.child??null);
   server.closeAllConnections();await new Promise(resolve=>server.close(resolve));
