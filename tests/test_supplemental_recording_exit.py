@@ -74,13 +74,15 @@ def finished(prepared, actors, calibration, ledger, files, monkeypatch, *, respo
             relay = m.returned.Relay(ledger, ready)
             engine_tests.attached.begun(peers[0])
             case = relay_tests.SimpleNamespace(
-                relay=relay, ready=ready, peer=peers[0], requests=requests
+                relay=relay,
+                ready=ready,
+                peer=peers[0],
+                requests=requests,
+                fixture_patch=monkeypatch,
             )
-            expected, _plan, start = relay_tests.startup(case, files)
-            relay_tests.send(case, start)
-            relay.started()
+            expected, _plan, _start = relay_tests.fixture_started(case, files)
             relay_tests.send(case, relay_tests.finish(case, files, expected))
-            relay.completed()
+            relay_tests.fixture_call(case, relay.completed)
             yield case
         finally:
             ready.close()

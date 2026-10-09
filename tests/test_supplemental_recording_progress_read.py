@@ -49,9 +49,7 @@ def active(prepared, actors, calibration, ledger, files, monkeypatch, tmp_path):
     alternate = tmp_path / "alternate"
     alternate.mkdir(mode=0o700)
     with relay_tests.joined(prepared, actors, calibration, ledger, monkeypatch) as case:
-        _expected, _plan, value = relay_tests.startup(case, files)
-        relay_tests.send(case, value)
-        case.relay.started()
+        relay_tests.fixture_started(case, files)
         files.wav.write_bytes(b"")
         files.wav.chmod(0o600)
         case.progress = progress
@@ -283,7 +281,11 @@ def test_completion_preserves_the_original_observed_and_acknowledged_progress(ac
     sample = relay.read_progress(case.progress)
     tip = publish(case, sample)
     relay_tests.send(case, relay_tests.finish(case, case.files, relay.expected))
-    result = relay.completed(progress_directory=case.progress)
+    result = relay_tests.fixture_call(
+        case,
+        relay.completed,
+        progress_directory=case.progress,
+    )
     assert relay.ledger.state.closed and relay.ledger.state.tip == tip
     assert result.collected.artifact.samples == 800
     assert relay.recheck_completed() == result.collected
@@ -310,5 +312,12 @@ def test_completion_cannot_forget_or_replace_observed_progress(active, fault):
     value = relay_tests.finish(case, case.files, relay.expected)
     relay_tests.send(case, value)
     directory = None if fault == "omitted" else case.progress
-    relay_tests.refused(case, lambda: relay.completed(progress_directory=directory))
+    relay_tests.refused(
+        case,
+        lambda: relay_tests.fixture_call(
+            case,
+            relay.completed,
+            progress_directory=directory,
+        ),
+    )
     assert not relay.ledger.state.closed and relay.ready.client.attachment.reads == 2

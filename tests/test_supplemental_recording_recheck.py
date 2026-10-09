@@ -41,11 +41,9 @@ m = relay_tests.m
 @pytest.fixture
 def completed(prepared, actors, calibration, ledger, files, monkeypatch):
     with relay_tests.joined(prepared, actors, calibration, ledger, monkeypatch) as case:
-        expected, _plan, value = relay_tests.startup(case, files)
-        relay_tests.send(case, value)
-        case.relay.started()
+        expected, _plan, _value = relay_tests.fixture_started(case, files)
         relay_tests.send(case, relay_tests.finish(case, files, expected))
-        case.result = case.relay.completed()
+        case.result = relay_tests.fixture_call(case, case.relay.completed)
         case.files = files
         yield case
 
@@ -138,9 +136,7 @@ def test_unchanged_files_cannot_substitute_for_missing_actual_completed_return(
     prepared, actors, calibration, ledger, files, monkeypatch
 ):
     with relay_tests.joined(prepared, actors, calibration, ledger, monkeypatch) as case:
-        expected, _plan, value = relay_tests.startup(case, files)
-        relay_tests.send(case, value)
-        case.relay.started()
+        expected, _plan, _value = relay_tests.fixture_started(case, files)
         relay_tests.finish(case, files, expected)  # Deliberately do not send/receive completion.
         relay_tests.refused(case, case.relay.recheck_completed)
         assert ledger.state.acknowledgment is None and case.ready.client.attachment.reads == 2
@@ -216,9 +212,7 @@ def test_original_progress_directory_and_exact_tip_rechecked(
     alternate = ledger.directory.with_name("PRIVATE_alternate")
     alternate.mkdir(mode=0o700)  # Create before original Engine path ancestry is pinned.
     with relay_tests.joined(prepared, actors, calibration, ledger, monkeypatch) as case:
-        expected, _plan, value = relay_tests.startup(case, files)
-        relay_tests.send(case, value)
-        case.relay.started()
+        expected, _plan, _value = relay_tests.fixture_started(case, files)
         files.wav.write_bytes(relay_tests.evidence.wav_bytes(samples=160))
         files.wav.chmod(0o600)
         collector = m.local.protected.Collector(ledger.binding.projection.host)
@@ -228,7 +222,11 @@ def test_original_progress_directory_and_exact_tip_rechecked(
         )
         ledger.progress(progress, collector, tip, now=time.monotonic())
         relay_tests.send(case, relay_tests.finish(case, files, expected))
-        result = case.relay.completed(progress_directory=progress)
+        result = relay_tests.fixture_call(
+            case,
+            case.relay.completed,
+            progress_directory=progress,
+        )
         if fault == "changed":
             path = progress / "0000.json"
             path.write_bytes(path.read_bytes() + b"\n")

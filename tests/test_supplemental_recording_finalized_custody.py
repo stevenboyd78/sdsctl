@@ -91,10 +91,9 @@ def completed(prepared, actors, calibration, plan, files, family, monkeypatch, t
                 files=files,
                 plan=plan,
                 progress=progress,
+                fixture_patch=monkeypatch,
             )
-            expected, _, start = r.startup(case, files)
-            r.send(case, start)
-            relay.started()
+            expected, _, _start = r.fixture_started(case, files)
             if progress is not None:
                 files.wav.write_bytes(r.evidence.wav_bytes(samples=160))
                 files.wav.chmod(0o600)
@@ -105,7 +104,7 @@ def completed(prepared, actors, calibration, plan, files, family, monkeypatch, t
                 )
                 ledger.progress(progress, collector, tip, now=time.monotonic())
             r.send(case, r.finish(case, files, expected))
-            relay.completed(progress_directory=progress)
+            r.fixture_call(case, relay.completed, progress_directory=progress)
             case.reader = m.Finalized(relay, operator)
             yield case
         finally:
