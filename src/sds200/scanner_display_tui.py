@@ -35,6 +35,10 @@ _STATES = {
     "override": "Scanner menu / popup / replay — values cleared",
     "ambiguous_records": "Conflicting scanner data — values cleared",
 }
+# A Linux console may render ANSI bright-black exactly like black. The sparse
+# foreground shade keeps an Off rail perceptible without lightening active data.
+_INACTIVE_RAIL_SHADE = "░"
+_INACTIVE_RAIL_SHADE_COLOR = "808080"
 
 
 def safe_terminal_text(value: str) -> str:
@@ -266,22 +270,30 @@ def render_mimic_terminal(
             line.truncate(size, overflow="ellipsis")
             line.align(region["alignment"], size)
             content[row].append((left, line))
-    led = _CONTRACT["leds"].get(frame["indicators"]["alert_led"], "3b4654")
-    led_style = Style(bgcolor=f"#{led}")
+    led_state = frame["indicators"]["alert_led"]
+    led = _CONTRACT["leds"].get(led_state, "3b4654")
+    inactive_rail = led_state == "Off"
+    led_fill = _INACTIVE_RAIL_SHADE if inactive_rail else " "
+    led_style = (
+        Style(color=f"#{_INACTIVE_RAIL_SHADE_COLOR}", bgcolor="#000000")
+        if inactive_rail
+        else Style(bgcolor=f"#{led}")
+    )
+    edge_fill = led_fill if treatment == "border" else " "
     edge_style = led_style if treatment == "border" else Style(bgcolor="#000000")
-    output = Text(" " * width, style=led_style, no_wrap=True, overflow="crop")
+    output = Text(led_fill * width, style=led_style, no_wrap=True, overflow="crop")
     for row_segments in content:
         output.append("\n")
-        output.append(" " * edge_width, style=edge_style)
+        output.append(edge_fill * edge_width, style=edge_style)
         column = 0
         for start, segment in sorted(row_segments, key=lambda item: item[0]):
             output.append(" " * max(0, start - column), style="on #000000")
             output.append(segment)
             column = start + segment.cell_len
         output.append(" " * max(0, inner_width - column), style="on #000000")
-        output.append(" " * edge_width, style=edge_style)
+        output.append(edge_fill * edge_width, style=edge_style)
     output.append("\n")
-    output.append(" " * width, style=led_style)
+    output.append(led_fill * width, style=led_style)
     return output
 
 
