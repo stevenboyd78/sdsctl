@@ -91,7 +91,8 @@ class Sds200MimicCard extends HTMLElement {
       h2 { margin:0; font:500 20px/1.2 var(--paper-font-headline_-_font-family,system-ui); overflow-wrap:anywhere; }
       .mimic-status { margin:0; border-left:4px solid #f29b9b; padding:5px 8px; font:600 13px/1.3 system-ui; }
       ha-card[data-state="current"] .mimic-status { border-color:#37b88f; }
-      .mimic-surround { --mimic-led:#3b4654; --mimic-led-width:3cqmin;
+      .mimic-surround { --mimic-led:#3b4654; --mimic-led-block-width:3cqmin;
+        --mimic-led-inline-width:calc(100cqw / 15);
         height:360px; flex:0 0 auto; min-width:0; background:#000;
         position:relative; border:0; padding:0; container-type:size; }
       :host([data-density="compact"]) .mimic-surround { height:280px; }
@@ -101,7 +102,9 @@ class Sds200MimicCard extends HTMLElement {
       /* Query this card's surrounding panel, reserving the same frame for either treatment. */
       .mimic-grid { display:grid; grid-template-columns:repeat(30,minmax(0,1fr)); grid-template-rows:repeat(20,minmax(0,1fr));
         position:absolute; inset:0; width:100%; height:100%; min-height:0; container-type:size;
-        border:var(--mimic-led-width) solid transparent; border-block-color:var(--mimic-led); overflow:hidden; }
+        border-style:solid; border-color:transparent;
+        border-block-width:var(--mimic-led-block-width); border-inline-width:var(--mimic-led-inline-width);
+        border-block-color:var(--mimic-led); overflow:hidden; }
       .mimic-cell { min-width:0; min-height:0; padding:0 3px; overflow:hidden; display:flex; align-items:center;
         /* Leave ascent/descent room within each of the 20 scanner rows. */
         color:#cbd5e1; background:#18212d; font:clamp(9px,min(1.7cqw,4cqh),24px)/1 monospace; }

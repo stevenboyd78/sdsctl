@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from sds200.scanner_display_frame import project_scanner_display_frame
+from sds200.scanner_display_presentation import INACTIVE_COLOR
 from sds200.scanner_display_web import scanner_display_browser_contract
 from sds200.web_auth import WebDashboardAuthentication
 from sds200.web_dashboard import create_web_dashboard_app
@@ -59,6 +60,7 @@ def test_browser_contract_uses_only_canonical_source_geometry():
         "Yellow",
         "White",
     }
+    assert contract["leds"]["Off"] == INACTIVE_COLOR
     assert "source_path" not in json.dumps(contract)
     assert all(
         layout["rows"] == 20 and layout["columns"] == 30 for layout in contract["layouts"].values()
@@ -170,13 +172,15 @@ console.log(JSON.stringify({accepted: Object.keys(input.scenarios).length, rejec
     assert json.loads(result.stdout) == {"accepted": 33, "rejected": 26}
 
 
-def test_web_led_width_uses_the_surrounding_panel_on_all_display_sizes():
+def test_web_led_rails_use_the_surrounding_panel_on_all_display_sizes():
     with TestClient(create_web_dashboard_app(lambda: None)) as client:
         css = client.get("/assets/mimic-sds.css").text
     desktop, compact = css.split("@media (max-height: 600px)")
-    assert "--mimic-led-width: 3cqmin;" in desktop
+    assert "--mimic-led-block-width: 3cqmin;" in desktop
+    assert "--mimic-led-inline-width: calc(100cqw / 15);" in desktop
     assert "--mimic-screen-min-height: 280px;" in desktop
-    assert "border: var(--mimic-led-width) solid transparent !important;" in desktop
+    assert "border-block-width: var(--mimic-led-block-width) !important;" in desktop
+    assert "border-inline-width: var(--mimic-led-inline-width) !important;" in desktop
     surround, grid = desktop.split("#pane-scanner .mimic-surround {", 1)[1].split(
         "#pane-scanner .mimic-grid {", 1
     )
@@ -184,7 +188,8 @@ def test_web_led_width_uses_the_surrounding_panel_on_all_display_sizes():
     assert "position: relative !important; border: 0 !important; padding: 0 !important;" in surround
     assert "position: absolute !important; inset: 0 !important;" in grid
     assert "box-sizing: border-box !important; container-type: size !important;" in grid
-    assert "--mimic-led-width:" not in compact
+    assert "--mimic-led-block-width:" not in compact
+    assert "--mimic-led-inline-width:" not in compact
     assert "--mimic-screen-min-height: 220px;" in compact
 
 

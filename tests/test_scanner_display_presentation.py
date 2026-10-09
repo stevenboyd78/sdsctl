@@ -15,6 +15,7 @@ from sds200.scanner_display_presentation import (
     TOGGLE_TOKENS,
     UNKNOWN_COLOR,
     present_indicator,
+    signal_reception_state,
 )
 from sds200.web_dashboard import create_web_dashboard_app
 
@@ -44,7 +45,7 @@ def test_temporary_avoid_is_not_permanent_and_other_values_are_not_toggle_icons(
         == "temporary"
     )
     assert present_indicator("function", None, "fixed", "raw_source", "T-AVOID").state == "unknown"
-    for token in ("Modulation", "LVL", "GPS", "SCR", "REP"):
+    for token in ("LVL", "GPS", "SCR", "REP"):
         assert present_indicator("icon_1", token, "configured", "blank", None) is None
     assert present_indicator("option_1", "REC", "configured", "raw_source", "Off") is None
 
@@ -57,6 +58,25 @@ def test_signal_uses_reported_level_only(level):
     assert present_indicator("signal", None, "fixed", "not_current", str(level)).state == "unknown"
 
 
+def test_modulation_icon_uses_reported_signal_only_for_activation():
+    assert signal_reception_state("raw_source", "0") == "off"
+    assert all(signal_reception_state("raw_source", str(level)) == "on" for level in range(1, 6))
+    assert signal_reception_state("data_unavailable", "5") == "unknown"
+    assert signal_reception_state("raw_source", "6") == "unknown"
+
+    active = present_indicator("icon_2", "Modulation", "configured", "raw_source", "NFM", "on")
+    assert active.text == "NFM" and active.state == "on"
+    assert active.foreground is active.background is None
+    inactive = present_indicator("icon_2", "Modulation", "configured", "raw_source", "NFM", "off")
+    assert inactive.text == "NFM" and inactive.state == "off"
+    assert inactive.foreground == INACTIVE_COLOR and inactive.background == "000000"
+    unknown = present_indicator(
+        "icon_2", "Modulation", "configured", "raw_source", "NFM", "unknown"
+    )
+    assert unknown.text == "?" and unknown.state == "unknown"
+    assert unknown.foreground == UNKNOWN_COLOR and unknown.background == "000000"
+
+
 def test_javascript_and_python_presentations_agree_for_all_states():
     node = shutil.which("node")
     if node is None:
@@ -67,6 +87,7 @@ def test_javascript_and_python_presentations_agree_for_all_states():
         ("signal", None, "fixed", "3"),
         ("icon_2", "Modulation", "configured", "NFM"),
     ]:
+        receptions = ("on", "off", "unknown") if token == "Modulation" else ("unknown",)
         for source in (label, None, "T-AVOID", "0", "5", "6", "invalid"):
             for status in (
                 "raw_source",
@@ -77,24 +98,28 @@ def test_javascript_and_python_presentations_agree_for_all_states():
                 "not_current",
             ):
                 for selected in (selection, "empty", "blank", "missing_group"):
-                    result = present_indicator(identifier, token, selected, status, source)
-                    expected = (
-                        None
-                        if result is None
-                        else {k: v for k, v in asdict(result).items() if v is not None}
-                    )
-                    cases.append(
-                        {
-                            "region": {
-                                "id": identifier,
-                                "token": token,
-                                "selection": selected,
-                                "value_status": status,
-                                "text": source,
-                            },
-                            "expected": expected,
-                        }
-                    )
+                    for reception in receptions:
+                        result = present_indicator(
+                            identifier, token, selected, status, source, reception
+                        )
+                        expected = (
+                            None
+                            if result is None
+                            else {k: v for k, v in asdict(result).items() if v is not None}
+                        )
+                        cases.append(
+                            {
+                                "region": {
+                                    "id": identifier,
+                                    "token": token,
+                                    "selection": selected,
+                                    "value_status": status,
+                                    "text": source,
+                                },
+                                "reception": reception,
+                                "expected": expected,
+                            }
+                        )
     with TestClient(create_web_dashboard_app(lambda: None)) as client:
         script = client.get("/assets/mimic-sds.js").text
     runner = """
@@ -103,7 +128,8 @@ const input = JSON.parse(require('node:fs').readFileSync(0, 'utf8'));
 const window = {};
 require('node:vm').runInNewContext(input.script, {window});
 for (const item of input.cases) {
-  const actual = JSON.parse(JSON.stringify(window.sdsctlMimic.presentIndicator(item.region)));
+  const actual = JSON.parse(JSON.stringify(
+    window.sdsctlMimic.presentIndicator(item.region, true, item.reception)));
   assert.deepEqual(actual, item.expected);
 }
 console.log(input.cases.length);

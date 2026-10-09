@@ -48,7 +48,7 @@ test('aggregate fixture refuses unqualified URLs and HTML attribute injection', 
 });
 
 const panel = Object.freeze({
-  width: 600, height: 360, border: 10, edges: [10, 10, 10, 10],
+  width: 600, height: 360, border: 10.8, edges: [10.8, 40, 10.8, 40],
   top: 'rgb(255, 225, 50)', right: 'rgb(255, 225, 50)',
   outside: 0, gridFits: true, overlap: 0, overflow: false, cells: 30, columns: 30, rows: 20,
 });
@@ -67,7 +67,7 @@ test('only bounded standalone audit options are accepted', () => {
 test('accepts device-pixel rounding and either LED treatment without geometry changes', () => {
   checkGeometry(panel, 'border');
   checkGeometry({...panel,right:'rgba(0, 0, 0, 0)'}, 'strips');
-  checkGeometry({...panel,border:10.5,edges:[10.5,10.5,10.5,10.5]}, 'border');
+  checkGeometry({...panel,border:11.3,edges:[11.3,40.5,11.3,40.5]}, 'border');
   // Waiting uses the same sized container, but deliberately not a CSS grid.
   checkGeometry({...panel,cells:0,columns:2,rows:2}, 'border');
 });
@@ -82,8 +82,9 @@ test('fixture embeds data without allowing script tags to terminate the JSON', (
 });
 
 for (const [name, change] of Object.entries({
-  zero_width:{width:0}, zero_height:{height:0}, pixel_frame:{border:12,edges:[12,12,12,12]},
-  unequal_edges:{edges:[10,10,9,10]}, wrong_treatment:{right:'rgba(0, 0, 0, 0)'},
+  zero_width:{width:0}, zero_height:{height:0}, wrong_block_width:{border:12,edges:[12,40,12,40]},
+  unequal_block_rails:{edges:[10.8,40,9,40]}, wrong_inline_width:{edges:[10.8,35,10.8,35]},
+  unequal_inline_rails:{edges:[10.8,40,10.8,38]}, wrong_treatment:{right:'rgba(0, 0, 0, 0)'},
   outside_cells:{outside:1}, outside_grid:{gridFits:false}, overlaps:{overlap:1}, horizontal_overflow:{overflow:true},
   wrong_columns:{columns:29}, wrong_rows:{rows:21},
 })) {

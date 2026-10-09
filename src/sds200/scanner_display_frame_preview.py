@@ -20,7 +20,11 @@ from .scanner_display_adapter import (
     ScannerDisplayIndicators,
 )
 from .scanner_display_layout import DisplayRegionKind, scanner_display_layout
-from .scanner_display_presentation import present_indicator
+from .scanner_display_presentation import (
+    INACTIVE_COLOR,
+    present_indicator,
+    signal_reception_state,
+)
 from .scanner_display_profile_state import DisplayProfileStatus
 from .scanner_display_values import ScannerDisplayValueStatus
 
@@ -55,7 +59,7 @@ _PROFILES = {
 
 # Presentation accents, not calibrated physical LED RGB measurements.
 _LED_COLORS = {
-    ScannerAlertLed.OFF: "151a20",
+    ScannerAlertLed.OFF: INACTIVE_COLOR,
     ScannerAlertLed.BLUE: "0066ff",
     ScannerAlertLed.RED: "ff2424",
     ScannerAlertLed.MAGENTA: "ff30df",
@@ -140,6 +144,11 @@ def render_scanner_display_frame(frame: ScannerDisplayFrame) -> str:
     if len(ids) != len(set(ids)) or set(ids) != {slot.region.id for slot in screen.regions}:
         raise ValueError("Frame values must match the selected regions exactly once.")
     values = {value.region_id: value for value in frame.values}
+    signal = values["signal"]
+    reception = signal_reception_state(
+        signal.status.value if frame.status is DisplayObservationStatus.CURRENT else "not_current",
+        signal.text,
+    )
     mode = screen.layout.requested_mode.value
     indicators = (
         frame.indicators
@@ -184,6 +193,7 @@ def render_scanner_display_frame(frame: ScannerDisplayFrame) -> str:
             slot.selection.value,
             state.value if frame.status is DisplayObservationStatus.CURRENT else "not_current",
             value.text,
+            reception,
         )
         color = slot.stored_color
         held = indicators.site_hold if slot.token == "SiteName" else holds.get(region.id)
@@ -272,8 +282,9 @@ button,select,summary { cursor:pointer }
 .provenance { display:flex; gap:4px 24px; flex-wrap:wrap; font-size:12px;
 padding:8px 0; color:#c6d2e2 }
 .screen-caption { margin:0 0 6px; font-size:14px; font-weight:600 }
-.scanner-surround { --alert-color:#3b4654; border:6px solid transparent;
-border-top-color:var(--alert-color); border-bottom-color:var(--alert-color); background:#000 }
+.scanner-surround { --alert-color:#3b4654; border-style:solid; border-color:transparent;
+border-block-width:6px; border-inline-width:2ch; border-block-color:var(--alert-color);
+background:#000 }
 .consumer[data-led-treatment=border] .scanner-surround { border-color:var(--alert-color) }
 .scanner-surround[data-led=unknown] { border-top-style:dashed; border-bottom-style:dashed }
 .consumer[data-led-treatment=border] .scanner-surround[data-led=unknown] { border-style:dashed }

@@ -63,15 +63,17 @@ def test_generated_cards_share_exact_browser_projection_and_session_owner():
         assert forbidden not in module()
 
 
-def test_mimic_led_width_is_relative_to_each_cards_scanner_panel():
+def test_mimic_led_rails_are_relative_to_each_cards_scanner_panel():
     script = module()
-    assert "--mimic-led-width:3cqmin;" in script
+    assert "--mimic-led-block-width:3cqmin;" in script
+    assert "--mimic-led-inline-width:calc(100cqw / 15);" in script
     assert "position:relative; border:0; padding:0; container-type:size;" in script
     assert (
         "position:absolute; inset:0; width:100%; height:100%; min-height:0; container-type:size;"
         in script
     )
-    assert "border:var(--mimic-led-width) solid transparent;" in script
+    assert "border-block-width:var(--mimic-led-block-width);" in script
+    assert "border-inline-width:var(--mimic-led-inline-width);" in script
     assert ':host([data-led-treatment="border"]) .mimic-grid' in script
 
 

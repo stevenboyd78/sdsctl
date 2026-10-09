@@ -100,10 +100,15 @@ function harness() {
       region.value_status = status; region.text = text;
     }
   }
+  for (const frame of Object.values(indicators.frame.display.frames)) {
+    const modulation = frame.screen.regions.find(r => r.id === 'icon_1');
+    modulation.token = 'Modulation'; modulation.selection = 'configured';
+    modulation.value_status = 'raw_source'; modulation.text = 'NFM';
+  }
   setIndicator('function', 'blank', null);
   setIndicator('system_avoid', 'blank', null);
   setIndicator('department_avoid', 'raw_source', 'T-AVOID');
-  setIndicator('signal', 'raw_source', '3');
+  setIndicator('signal', 'raw_source', '0');
   await indicators.start();
   const cell = id => indicators.cells().find(c => c.dataset.region === id);
   assert.equal(cell('function').children.length, 0);
@@ -112,22 +117,35 @@ function harness() {
   assert.equal(cell('system_avoid').style.color, '#707070');
   assert.equal(cell('department_avoid').children[0].textContent, 'T-AVOID');
   assert.equal(cell('department_avoid').dataset.indicator, 'temporary');
-  assert.equal(cell('signal').children[0].textContent, '▁▂▃');
+  assert.equal(cell('signal').children.length, 0);
+  assert.equal(cell('icon_1').children[0].textContent, 'NFM');
+  assert.equal(cell('icon_1').dataset.indicator, 'off');
+  assert.equal(cell('icon_1').style.color, '#707070');
   for (const id of ['system_option', 'department_option', 'channel_option'])
     assert.equal(cell(id).dataset.alignment, 'left');
   setIndicator('function', 'raw_source', 'F');
+  setIndicator('signal', 'raw_source', '3');
   indicators.newer(); await indicators.tick(250);
   assert.equal(cell('function').children[0].textContent, 'F');
   const pair = indicators.frame.display.frames.preferred.screen.regions.find(r => r.id === 'function').stored_color;
   assert.equal(cell('function').style.color, `#${pair.background}`);
   assert.equal(cell('function').style.backgroundColor, `#${pair.text}`);
+  assert.equal(cell('signal').children[0].textContent, '▁▂▃');
+  assert.equal(cell('icon_1').children[0].textContent, 'NFM');
+  assert.equal(cell('icon_1').dataset.indicator, 'on');
+  const modulationPair = indicators.frame.display.frames.preferred.screen.regions.find(r => r.id === 'icon_1').stored_color;
+  assert.equal(cell('icon_1').style.color, `#${modulationPair.text}`);
   setIndicator('function', 'data_unavailable', null);
   setIndicator('system_avoid', 'data_unavailable', null);
+  setIndicator('signal', 'data_unavailable', null);
   indicators.newer(); await indicators.tick(250);
   assert.equal(cell('function').dataset.indicator, 'unknown');
   assert.equal(cell('function').style.backgroundColor, '#000000');
   assert.equal(cell('system_avoid').children[0].textContent, '?');
   assert.equal(cell('system_avoid').style.color, '#9aa6b2');
+  assert.equal(cell('icon_1').children[0].textContent, '?');
+  assert.equal(cell('icon_1').dataset.indicator, 'unknown');
+  assert.equal(cell('icon_1').style.color, '#9aa6b2');
   indicators.controller.stop();
   const h = harness(); await h.start(); assert.ok(h.raw().length);
   // Ordinary status/events must not restart polling or clear an unchanged view.

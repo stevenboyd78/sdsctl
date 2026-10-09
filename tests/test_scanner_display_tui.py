@@ -280,6 +280,32 @@ def test_renderer_holds_led_and_terminal_color_fallback(packets, color_system, m
     assert rendered.get_style_at_offset(console, 0).bgcolor is not None
 
 
+def test_renderer_uses_two_column_inactive_rails_and_signal_qualified_modulation(packets):
+    frame = copy.deepcopy(packets["released_trunk"]["frames"]["preferred"])
+    frame["indicators"]["alert_led"] = "Off"
+    modulation = next(region for region in frame["screen"]["regions"] if region["id"] == "icon_1")
+    modulation.update(
+        token="Modulation", selection="configured", value_status="raw_source", text="NFM"
+    )
+    signal = next(region for region in frame["screen"]["regions"] if region["id"] == "signal")
+    signal.update(value_status="raw_source", text="0")
+
+    console = Console(width=100, color_system="truecolor", force_terminal=True)
+    inactive = render_mimic_terminal(frame, width=100, height=26, treatment="border")
+    first_interior = 101
+    assert inactive.get_style_at_offset(console, first_interior).bgcolor.name == "#707070"
+    assert inactive.get_style_at_offset(console, first_interior + 1).bgcolor.name == "#707070"
+    inactive_style = inactive.get_style_at_offset(console, inactive.plain.index("NFM"))
+    assert inactive_style.color.name == "#707070"
+    assert inactive_style.bgcolor.name == "#000000"
+
+    signal.update(text="3")
+    active = render_mimic_terminal(frame, width=100, height=26, treatment="border")
+    active_style = active.get_style_at_offset(console, active.plain.index("NFM"))
+    assert active_style.color.name == "#" + modulation["stored_color"]["text"]
+    assert active_style.bgcolor.name == "#" + modulation["stored_color"]["background"]
+
+
 def test_renderer_wide_unicode_and_markup_are_literal(packets):
     packet = copy.deepcopy(packets["held_trunk"])
     for frame in packet["frames"].values():
@@ -298,8 +324,7 @@ def test_front_panel_inventory_renderer_is_complete_disabled_and_fail_closed(mod
     rendered = render_front_panel_inventory_terminal(inventory).plain
 
     assert (
-        "Inventory v1 | 27 codes | qualified elsewhere: 0 | "
-        "controls enabled here: no"
+        "Inventory v1 | 27 codes | qualified elsewhere: 0 | controls enabled here: no"
     ) in rendered
     assert "not TUI shortcuts" in rendered
     assert rendered.count("— unavailable (") == 27
@@ -478,8 +503,7 @@ def test_actual_tui_screen_drawer_palette_and_return(packets, size):
                 )
                 runtime = _plain(app.screen.query_one("#mimic-runtime", Static))
                 assert (
-                    "Inventory v1 | 27 codes | qualified elsewhere: 0 | "
-                    "controls enabled here: no"
+                    "Inventory v1 | 27 codes | qualified elsewhere: 0 | controls enabled here: no"
                 ) in runtime
                 assert runtime.count("— unavailable (") == 27
                 assert "No scanner-key dispatch is installed" in runtime

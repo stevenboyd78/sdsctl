@@ -19,7 +19,7 @@ from textual.widgets import Static
 
 from . import __version__
 from .front_panel_keys import FRONT_PANEL_INVENTORY_VERSION, FrontPanelKey
-from .scanner_display_presentation import present_indicator
+from .scanner_display_presentation import present_indicator, signal_reception_state
 from .scanner_display_reader import DisplayFrameReader
 from .scanner_display_supplemental_reader import SupplementalFrameReader
 from .scanner_display_web import scanner_display_browser_contract, scanner_display_empty_message
@@ -113,9 +113,7 @@ def render_front_panel_inventory_terminal(
             and available is True
         )
         expected_control_status = (
-            "unsupported"
-            if reference_status == "absent_for_model"
-            else "unqualified"
+            "unsupported" if reference_status == "absent_for_model" else "unqualified"
         )
         if (
             code != expected_code
@@ -126,10 +124,7 @@ def render_front_panel_inventory_terminal(
             or type(available) is not bool
             or (
                 not qualified_menu
-                and (
-                    control_status != expected_control_status
-                    or available is not False
-                )
+                and (control_status != expected_control_status or available is not False)
             )
         ):
             return unavailable
@@ -205,9 +200,15 @@ def render_mimic_terminal(
                 frame["status"], has_profile=frame["profile_revision"] is not None
             )
         )
-    inner_width, inner_height = width - 2, height - 2
+    edge_width = 2
+    inner_width, inner_height = width - (edge_width * 2), height - 2
     console = Console(width=inner_width)
     content: list[list[tuple[int, Text]]] = [[] for _ in range(inner_height)]
+    signal = next(region for region in screen["regions"] if region["id"] == "signal")
+    reception = signal_reception_state(
+        signal["value_status"] if frame["status"] == "current" else "not_current",
+        signal["text"],
+    )
     for region in screen["regions"]:
         left = region["column"] * inner_width // 30
         right = (region["column"] + region["columns"]) * inner_width // 30
@@ -221,6 +222,7 @@ def render_mimic_terminal(
             region["selection"],
             region["value_status"] if frame["status"] == "current" else "not_current",
             region["text"],
+            reception,
         )
         pair = region["stored_color"]
         if screen["color_mode"] == "COLOR" and pair is not None:
@@ -270,14 +272,14 @@ def render_mimic_terminal(
     output = Text(" " * width, style=led_style, no_wrap=True, overflow="crop")
     for row_segments in content:
         output.append("\n")
-        output.append(" ", style=edge_style)
+        output.append(" " * edge_width, style=edge_style)
         column = 0
         for start, segment in sorted(row_segments, key=lambda item: item[0]):
             output.append(" " * max(0, start - column), style="on #000000")
             output.append(segment)
             column = start + segment.cell_len
         output.append(" " * max(0, inner_width - column), style="on #000000")
-        output.append(" ", style=edge_style)
+        output.append(" " * edge_width, style=edge_style)
     output.append("\n")
     output.append(" " * width, style=led_style)
     return output

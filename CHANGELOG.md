@@ -21,6 +21,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 - Keep the Mimic layout and alert-LED treatment selectors hidden while the
   ordinary WebUI Dashboard presentation is selected. Switching presentations
   still preserves the page-local Mimic choices.
+- Give the Mimic-SDS surrounding alert treatment two-column side rails and a
+  visible inactive-gray `Off` state across WebUI, TUI and Home Assistant. A
+  configured bottom-row Modulation label now follows the reported signal
+  level: profile color while receiving, inactive gray at level zero and an
+  explicit unknown state when reception cannot be qualified.
 
 ## [0.31.0] - 2026-10-05
 

@@ -162,9 +162,13 @@ window.scenarioNames=Object.keys(scenarios);
 
 export function checkGeometry(value, treatment) {
   assert.ok(value.width > 0 && value.height > 0, "Scanner panel has no size.");
-  assert.ok(Math.abs(value.border - .03 * Math.min(value.width, value.height)) < 1.01,
-    "LED frame must be 3% of this panel's shorter dimension.");
-  assert.ok(value.edges.every(edge => edge === value.border), "LED edges have unequal thickness.");
+  const [top, right, bottom, left] = value.edges;
+  assert.ok(Math.abs(top - .03 * Math.min(value.width, value.height)) < 1.01,
+    "LED block rails must be 3% of this panel's shorter dimension.");
+  assert.ok(Math.abs(bottom - top) < 1.01, "LED block rails have unequal thickness.");
+  assert.ok(Math.abs(right - value.width / 15) < 1.01,
+    "LED inline rails must each span two of the 30 scanner columns.");
+  assert.ok(Math.abs(left - right) < 1.01, "LED inline rails have unequal thickness.");
   assert.equal(value.right, treatment === "border" ? value.top : "rgba(0, 0, 0, 0)", "LED treatment mismatch.");
   assert.equal(value.outside, 0, "Scanner cells escape the grid's content area.");
   assert.equal(value.gridFits, true, "Scanner grid escapes its surrounding panel.");
@@ -421,7 +425,7 @@ async function run(options) {
     assert.deepEqual(await evaluate(cdp, 'fixture.errors'), []);assert.deepEqual(errors, []);
     assert.deepEqual(failures, [], 'A packaged browser resource failed to load.');
     assert.ok(requests.every(url=>new URL(url).origin===origin), 'Audit reached a non-fixture origin.');
-    console.log(`PASS: exact versioned four-card aggregate and duplicate registration, ${frames} Mimic frame/layout cases, ${sizes} sizing cases, held profile colors, 3% LED geometry, stable rows, trusted keyboard details, exact disabled 27-key inventory, shared session and complete removal cleanup.`);
+    console.log(`PASS: exact versioned four-card aggregate and duplicate registration, ${frames} Mimic frame/layout cases, ${sizes} sizing cases, held profile colors, 3% block/two-column inline LED geometry, stable rows, trusted keyboard details, exact disabled 27-key inventory, shared session and complete removal cleanup.`);
   } finally {
     cdp?.close();await stopChild(browser?.child ?? null);
     server.closeAllConnections();await new Promise(resolve=>server.close(resolve));
