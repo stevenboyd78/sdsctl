@@ -16,6 +16,7 @@ from types import SimpleNamespace
 import pytest
 
 from . import test_supplemental_recording_app_active_qualification as phases
+from ._supplemental_fixture_clock import compressed_scheduler_time
 
 a = phases.app_begins
 candidate, app, native, launch_case, execution, joined = (
@@ -46,7 +47,16 @@ begin, launch, denied = m.begin, m.launch, a.denied
 def observing(joined, monkeypatch):
     s = joined
     s.start = s.make_start()
-    s.relay = s.start.start_once()
+    # The direct begin suites retain the exact two-second observation-age
+    # oracle.  This deeper worker/finalization composition needs an ordered
+    # synthetic phase, independent of an unrelated CI scheduler pause between
+    # its real journal and inventory operations.
+    with compressed_scheduler_time(
+        monkeypatch,
+        clock_module=begin.plans.clock,
+        witness=s.startup.clock,
+    ):
+        s.relay = s.start.start_once()
     expected = begin.binding.protected.evidence.RecordingExpectation(
         s.plan.case,
         s.idle.generation,
