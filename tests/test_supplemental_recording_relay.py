@@ -21,6 +21,7 @@ import pytest
 from . import test_supplemental_recording_bridge as local_tests
 from . import test_supplemental_recording_evidence as evidence
 from . import test_supplemental_recording_retained as continuity
+from ._supplemental_fixture_clock import compressed_scheduler_time
 
 NAME = "supplemental_recording_relay"
 SPEC = importlib.util.spec_from_file_location(
@@ -86,9 +87,41 @@ def joined(prepared, actors, calibration, ledger, monkeypatch):
             relay = m.Relay(ledger, ready)
             sent = begin.ready_tests.joined.engine.attached.begun(peers[0])
             assert sent["body"]["intent_sha256"] == relay.intent_sha256
-            yield SimpleNamespace(relay=relay, ready=ready, peer=peers[0], requests=requests)
+            yield SimpleNamespace(
+                relay=relay,
+                ready=ready,
+                peer=peers[0],
+                requests=requests,
+                fixture_patch=monkeypatch,
+            )
         finally:
             ready.close()
+
+
+def fixture_call(case, action, *args, **kwargs):
+    """Run a non-timing synthetic phase without measuring CI scheduling."""
+
+    with compressed_scheduler_time(case.fixture_patch):
+        return action(*args, **kwargs)
+
+
+def fixture_started(case, tree):
+    """Construct, deliver and accept one ordered synthetic start phase."""
+
+    with compressed_scheduler_time(case.fixture_patch):
+        expected, plan, value = startup(case, tree)
+        send(case, value)
+        assert case.relay.started() == expected
+        return expected, plan, value
+
+
+def fixture_start_message(case, tree):
+    """Construct and deliver a start for a separately faulted receiver."""
+
+    with compressed_scheduler_time(case.fixture_patch):
+        expected, plan, value = startup(case, tree)
+        send(case, value)
+        return expected, plan, value
 
 
 def message(case, phase, body):
@@ -184,15 +217,14 @@ def test_actual_wire_returns_and_original_files_required_separately_from_exit(
 ):
     assert m.local is local_tests.m
     with joined(prepared, actors, calibration, ledger, monkeypatch) as case:
-        expected, plan, value = startup(case, files)
-        send(case, value)
-        assert case.relay.started() == expected and case.relay.plan == plan
+        expected, plan, _value = fixture_started(case, files)
+        assert case.relay.plan == plan
         completed = finish(case, files, expected)
         send(case, completed)
         if exit_before_completion:
             family.process.stdin.close()
             family.process.wait(timeout=3)
-        result = case.relay.completed()
+        result = fixture_call(case, case.relay.completed)
         assert ledger.state.closed and ledger.state.acknowledgment == result.acknowledgment
         assert (
             result.collected.files.stage == "finalized" and result.collected.artifact.samples == 800
@@ -293,7 +325,7 @@ def test_unmatched_or_untimely_start_return_consumes_without_a_started_entry(
                 raw["body"]["expected"]["generation"] = "e" * 64
             receipt["raw"] = m.host.encode(raw).decode("ascii")
         send(case, value)
-        refused(case, case.relay.started)
+        refused(case, lambda: fixture_call(case, case.relay.started))
         assert ledger.state.count == 2 and ledger.state.expected is None
         refused(case, case.relay.started)
         assert len(case.requests) == 5
@@ -306,9 +338,7 @@ def test_completion_cannot_hide_file_changes_or_false_native_artifact(
     prepared, actors, calibration, ledger, files, monkeypatch, fault
 ):
     with joined(prepared, actors, calibration, ledger, monkeypatch) as case:
-        expected, _plan, start = startup(case, files)
-        send(case, start)
-        case.relay.started()
+        expected, _plan, _start = fixture_started(case, files)
         completed = finish(case, files, expected)
         if fault == "old":
             (files.root / "older/old.wav").write_bytes(b"PRIVATE changed old file")
@@ -326,7 +356,7 @@ def test_completion_cannot_hide_file_changes_or_false_native_artifact(
                 raw["body"]["stopped"]["active"] = True
             completed["body"]["received"]["raw"] = m.host.encode(raw).decode()
         send(case, completed)
-        refused(case, case.relay.completed)
+        refused(case, lambda: fixture_call(case, case.relay.completed))
         assert ledger.state.expected == expected and ledger.state.acknowledgment is None
         assert files.wav.exists() and files.sidecar.exists()
 
@@ -337,11 +367,11 @@ def test_returned_publication_is_required_even_if_entry_exists_on_disk(
     prepared, actors, calibration, ledger, files, monkeypatch, phase, fault
 ):
     with joined(prepared, actors, calibration, ledger, monkeypatch) as case:
-        expected, _plan, start = startup(case, files)
-        send(case, start)
         if phase == "completed":
-            case.relay.started()
+            expected, _plan, _start = fixture_started(case, files)
             send(case, finish(case, files, expected))
+        else:
+            expected, _plan, _start = fixture_start_message(case, files)
         original = getattr(ledger, phase)
 
         def publish(*args, **kwargs):
@@ -365,10 +395,10 @@ def test_returned_publication_is_required_even_if_entry_exists_on_disk(
         monkeypatch.setattr(ledger, phase, publish)
         if fault == "cancelled":
             with pytest.raises(KeyboardInterrupt):
-                getattr(case.relay, phase)()
+                fixture_call(case, getattr(case.relay, phase))
             assert case.relay.phase == "unconfirmed" and case.ready.failed
         else:
-            refused(case, getattr(case.relay, phase))
+            refused(case, lambda: fixture_call(case, getattr(case.relay, phase)))
         assert ledger.state.expected == expected
         assert (ledger.state.acknowledgment is not None) is (phase == "completed")
         refused(case, case.relay.completed)
@@ -380,12 +410,10 @@ def test_lost_transport_never_uses_receipt_files_or_process_exit(
 ):
     with joined(prepared, actors, calibration, ledger, monkeypatch) as case:
         if phase == "completed":
-            expected, _plan, value = startup(case, files)
-            send(case, value)
-            case.relay.started()
+            expected, _plan, _value = fixture_started(case, files)
             finish(case, files, expected)  # Correct files, deliberately NO return.
         case.peer.shutdown(2)
-        refused(case, getattr(case.relay, phase))
+        refused(case, lambda: fixture_call(case, getattr(case.relay, phase)))
         assert ledger.state.acknowledgment is None and len(case.requests) == 5
         assert not case.ready.processes.exited("init")
 
@@ -407,9 +435,7 @@ def test_completion_keeps_the_independent_original_progress_tip(
     progress = ledger.directory.with_name("PRIVATE_progress")
     progress.mkdir(mode=0o700)  # Before binding the original Engine socket parent.
     with joined(prepared, actors, calibration, ledger, monkeypatch) as case:
-        expected, _plan, value = startup(case, files)
-        send(case, value)
-        case.relay.started()
+        expected, _plan, _value = fixture_started(case, files)
         files.wav.write_bytes(evidence.wav_bytes(samples=160))
         files.wav.chmod(0o600)
         collector = m.local.protected.Collector(ledger.binding.projection.host)
@@ -428,7 +454,11 @@ def test_completion_keeps_the_independent_original_progress_tip(
         send(case, finish(case, files, expected))
 
         def action():
-            return case.relay.completed(progress_directory=None if fault == "missing" else progress)
+            return fixture_call(
+                case,
+                case.relay.completed,
+                progress_directory=None if fault == "missing" else progress,
+            )
 
         if fault:
             refused(case, action)
@@ -446,9 +476,7 @@ def test_completion_after_original_ready_does_not_refresh_any_dispatch_time(
         command=replace(prepared.pins.command, ready_by=time.monotonic() + 4),
     )
     with joined(prepared, actors, calibration, ledger, monkeypatch) as case:
-        expected, _plan, value = startup(case, files)
-        send(case, value)
-        case.relay.started()
+        expected, _plan, _value = fixture_started(case, files)
         original = case.ready.ready_by, case.relay.native_binding, case.relay.guard.state
         monotonic, monotonic_ns = time.monotonic, time.monotonic_ns
         with monkeypatch.context() as patch:
@@ -468,9 +496,7 @@ def test_completion_checks_original_deadline_after_blocking_work(
     prepared, actors, calibration, ledger, files, monkeypatch, when
 ):
     with joined(prepared, actors, calibration, ledger, monkeypatch) as case:
-        expected, _plan, value = startup(case, files)
-        send(case, value)
-        case.relay.started()
+        expected, _plan, _value = fixture_started(case, files)
         send(case, finish(case, files, expected))
         target = m.local.protected.Collector if when == "verification" else ledger
         name = "finalized" if when == "verification" else "completed"

@@ -19,6 +19,7 @@ import pytest
 
 from . import test_supplemental_recording_app_ready_qualification as readers
 from . import test_supplemental_recording_host_begin as begins
+from ._supplemental_fixture_clock import compressed_scheduler_time
 
 candidate, app, native, launch_case = (
     readers.candidate,
@@ -64,7 +65,16 @@ def setup_execution(
 def _execution_boundaries(launch_case, tmp_path, monkeypatch, *, prepared, publish, service):
     s, p = launch_case, launch_case.plan
     if publish:
-        s.prelaunch = s.publish()
+        # This broad composition verifies ordering and custody, while the
+        # direct publication suite separately verifies the exact two-second
+        # production deadline.  Do not let shared-runner scheduling between
+        # its real fsync/readback operations select which oracle is exercised.
+        with compressed_scheduler_time(
+            monkeypatch,
+            clock_module=launch.plans.clock,
+            witness=s.startup.clock,
+        ):
+            s.prelaunch = s.publish()
         s.other = m.inputs.NativeLaunchQualification(
             s.startup, s.original, s.prelaunch.launch_inputs
         )

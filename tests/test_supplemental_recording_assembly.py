@@ -35,6 +35,7 @@ from sds200.pcmu_stream import PcmuStream
 from sds200.scanner_display_supplemental_transport import SupplementalDeliveryService
 
 from ._supplemental_failure_diagnostics import failure_locations
+from ._supplemental_fixture_clock import compressed_scheduler_time
 from .test_audio_sinks import CollectingSink
 from .test_daemon_api_recording import request
 from .test_daemon_display_frames import configured as configured
@@ -170,7 +171,16 @@ def rig(native, tmp_path, monkeypatch):
     # alter success-path reads, clocks or retries.
     monkeypatch.setenv("SDSCTL_TEST_FAILURE_LOCATIONS", "1")
     original = n.FiniteRecordingSchedule.run
+    original_observe = s.observe
     reported = set()
+
+    def observed_files(*args, **kwargs):
+        # The native process, owner, acquisition window and recording duration
+        # retain their original monotonic clocks.  Only exclude shared-runner
+        # scheduling from each broad read-only filesystem composition; the
+        # direct monitor suites retain the exact two-second production oracle.
+        with compressed_scheduler_time(monkeypatch):
+            return original_observe(*args, **kwargs)
 
     def observed_schedule(owner, cancel):
         try:
@@ -183,6 +193,7 @@ def rig(native, tmp_path, monkeypatch):
             raise
 
     monkeypatch.setattr(n.FiniteRecordingSchedule, "run", observed_schedule)
+    monkeypatch.setattr(s, "observe", observed_files)
     with native_bundle(native, tmp_path) as value:
         try:
             yield value
