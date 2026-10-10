@@ -293,8 +293,14 @@ def test_renderer_uses_two_column_inactive_rails_and_signal_qualified_modulation
     console = Console(width=100, color_system="truecolor", force_terminal=True)
     inactive = render_mimic_terminal(frame, width=100, height=26, treatment="border")
     first_interior = 101
-    assert inactive.get_style_at_offset(console, first_interior).bgcolor.name == "#707070"
-    assert inactive.get_style_at_offset(console, first_interior + 1).bgcolor.name == "#707070"
+    assert inactive.plain[:100] == "░" * 100
+    assert inactive.plain[first_interior : first_interior + 2] == "░░"
+    inactive_rail_style = inactive.get_style_at_offset(console, first_interior)
+    assert inactive_rail_style.color.name == "#808080"
+    assert inactive_rail_style.bgcolor.name == "#000000"
+    strips = render_mimic_terminal(frame, width=100, height=26, treatment="strips")
+    assert strips.plain[:100] == "░" * 100
+    assert strips.plain[first_interior : first_interior + 2] == "  "
     inactive_style = inactive.get_style_at_offset(console, inactive.plain.index("NFM"))
     assert inactive_style.color.name == "#707070"
     assert inactive_style.bgcolor.name == "#000000"
@@ -304,6 +310,26 @@ def test_renderer_uses_two_column_inactive_rails_and_signal_qualified_modulation
     active_style = active.get_style_at_offset(console, active.plain.index("NFM"))
     assert active_style.color.name == "#" + modulation["stored_color"]["text"]
     assert active_style.bgcolor.name == "#" + modulation["stored_color"]["background"]
+
+    frame["indicators"]["alert_led"] = "Red"
+    alerted = render_mimic_terminal(frame, width=100, height=26, treatment="border")
+    assert "░" not in alerted.plain
+    assert alerted.plain[first_interior : first_interior + 2] == "  "
+    assert alerted.get_style_at_offset(console, first_interior).bgcolor.name == "#ff2424"
+
+
+@pytest.mark.parametrize("color_system", ["truecolor", "256", "standard", None])
+def test_inactive_rail_shade_survives_terminal_color_capabilities(
+    packets, color_system, monkeypatch
+):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    frame = copy.deepcopy(packets["released_trunk"]["frames"]["preferred"])
+    frame["indicators"]["alert_led"] = "Off"
+    rendered = render_mimic_terminal(frame, width=100, height=26, treatment="border")
+    output = io.StringIO()
+    console = Console(file=output, width=100, color_system=color_system, force_terminal=True)
+    console.print(rendered, end="")
+    assert output.getvalue().count("░") == (100 * 2) + (2 * 24 * 2)
 
 
 def test_renderer_wide_unicode_and_markup_are_literal(packets):
