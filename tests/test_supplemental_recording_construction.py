@@ -12,6 +12,7 @@ from dataclasses import replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Event
+from time import monotonic
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -137,6 +138,16 @@ def refused(action):
 def enter(prepared, **changes):
     with build(prepared, **changes):
         pass
+
+
+def wait_for_loopback_read(
+    scanner: LoopbackScanner, *, timeout: float = 10.0
+) -> None:
+    """Allow loaded runners to schedule the on-demand loopback read."""
+    deadline = monotonic() + timeout
+    while not scanner.reads:
+        assert monotonic() < deadline, "Loopback scanner read did not complete"
+        Event().wait(0.005)
 
 
 def test_construction_is_passive_and_closes_only_unstarted_resources(prepared, monkeypatch):
@@ -453,7 +464,7 @@ def test_constructed_native_run_records_real_loopback_rtp_and_obeys_explicit_gat
                             wait_for(lambda: trial.manager.snapshot().samples == 1280)
                             samples.append(trial.manager.snapshot().samples)
                             if demand:
-                                wait_for(lambda: bool(scanner.reads))
+                                wait_for_loopback_read(scanner)
                         finished.wait(6)
                     except BaseException:
                         trial.cancel()
