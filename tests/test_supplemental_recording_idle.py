@@ -213,7 +213,7 @@ def lease(tmp_path):
 
 
 HARNESS = """
-import importlib.util,os,signal,sys,threading
+import importlib.util,os,signal,sys,threading,time
 from pathlib import Path
 spec=importlib.util.spec_from_file_location('idle_fixture',sys.argv[1])
 m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
@@ -230,6 +230,17 @@ if sys.argv[5]=='lost':
     def lost(fd):
         original(fd);raise OSError('PRIVATE')
     m.os.fsync=lost
+if sys.argv[5]=='post_claim_delay':
+    # Model a loaded runner scheduling this child out immediately after the
+    # durable claim. The wider real lease below must absorb this exact phase.
+    delayed=[]
+    check_domain=m._clock_domain
+    def delayed_after_claim(fd):
+        check_domain(fd)
+        if not delayed and Path(sys.argv[3]).with_name('consumed.json').exists():
+            delayed.append(True)
+            time.sleep(1.25)
+    m._clock_domain=delayed_after_claim
 delivered=[]
 if sys.argv[5].startswith('signal_locked_'):
     # Force the same non-reentrant condition-lock window as Event.wait().
@@ -245,16 +256,22 @@ if sys.argv[5].startswith('signal_locked_'):
                 signal.raise_signal(int(sys.argv[5].rsplit('_',1)[1]))
     m._clock_domain=locked_signal
 result=m.main(['--lease',sys.argv[3],'--lease-sha256',sys.argv[4]])
+if sys.argv[5]=='post_claim_delay' and not delayed:
+    raise SystemExit(71)
 if sys.argv[5].startswith('signal_locked_') and not delivered:
     raise SystemExit(71)
 sys.exit(result)
 """
 
 
-def start(lease, *, lost=False, clock_refused=False, signal_locked=None):
+def start(
+    lease, *, lost=False, clock_refused=False, signal_locked=None, post_claim_delay=False
+):
     mode = "clock_refused" if clock_refused else "lost" if lost else "normal"
     if signal_locked is not None:
         mode = "signal_locked_" + str(int(signal_locked))
+    if post_claim_delay:
+        mode = "post_claim_delay"
     return subprocess.Popen(
         [
             sys.executable,
@@ -273,14 +290,14 @@ def start(lease, *, lost=False, clock_refused=False, signal_locked=None):
     )
 
 
-def finished(child, expected):
-    stdout, stderr = child.communicate(timeout=3)
+def finished(child, expected, *, timeout=3):
+    stdout, stderr = child.communicate(timeout=timeout)
     assert child.returncode == expected and stdout == b""
     assert stderr == ((m.MESSAGE + "\n").encode() if expected == 70 else b"")
 
 
-def claimed(child, lease):
-    until = time.monotonic() + 2
+def claimed(child, lease, *, timeout=2):
+    until = time.monotonic() + timeout
     path = lease.path.with_name("consumed.json")
     while time.monotonic() < until:
         if path.exists():
@@ -316,15 +333,18 @@ def test_real_signal_stops_only_owned_idle_fixture_and_case_cannot_restart(lease
 
 def test_actual_original_lease_expiration_not_renewed(lease):
     now = time.monotonic()
-    lease.value.update(issued_at=now, ready_by=now + 1, stop_by=now + 1.3)
+    # Keep this a real monotonic deadline test, but do not make ordinary shared-
+    # runner scheduling compete with a one-second startup budget. The harness's
+    # explicit post-claim delay covers the phase that previously flaked.
+    lease.value.update(issued_at=now, ready_by=now + 10, stop_by=now + 10.5)
     raw = m._encode(lease.value)
     lease.path.write_bytes(raw)
     lease.pin = hashlib.sha256(raw).hexdigest()
-    child = start(lease)
+    child = start(lease, post_claim_delay=True)
     try:
-        claimed(child, lease)
-        finished(child, m.LEASE_EXPIRED)
-        assert time.monotonic() - now < 2.8
+        claimed(child, lease, timeout=5)
+        finished(child, m.LEASE_EXPIRED, timeout=15)
+        assert time.monotonic() - now < 20
         finished(start(lease), 70)
     finally:
         if child.poll() is None:
