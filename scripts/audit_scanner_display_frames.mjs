@@ -60,7 +60,7 @@ async function select(cdp, consumer, scenario, style) {
   })()`);
 }
 
-async function audit(source, output, chrome) {
+async function audit(source, output, chrome, expectedScenarios) {
   // A path, not a URL; the generator is the intended input. Isolated new profile.
   const url = pathToFileURL(await realpath(source)).href;
   await mkdir(output, {recursive: true});
@@ -84,7 +84,7 @@ async function audit(source, output, chrome) {
     assert.equal(await evaluate(cdp, 'document.documentElement.dataset.previewReady'), 'true');
     const scenarios = await evaluate(cdp,
       '[...document.querySelector(".scenario").options].map(option => option.value)');
-    assert.equal(scenarios.length, 33);
+    assert.equal(scenarios.length, expectedScenarios);
     const expansion = [];
     for (const [width, height] of [[800, 480], [1920, 1080], [390, 844], [2560, 1440]]) {
       await cdp.send('Emulation.setDeviceMetricsOverride', {
@@ -228,6 +228,12 @@ async function audit(source, output, chrome) {
   }
 }
 
-const [source, output, chrome = '/usr/bin/google-chrome'] = process.argv.slice(2);
-if (!source || !output) throw new Error('Usage: node audit_scanner_display_frames.mjs INDEX OUTPUT [CHROME]');
-await audit(source, output, chrome);
+const [source, output, chrome = '/usr/bin/google-chrome', expectedText = '33'] =
+  process.argv.slice(2);
+const expectedScenarios = Number(expectedText);
+if (!source || !output || !Number.isSafeInteger(expectedScenarios) || expectedScenarios < 1) {
+  throw new Error(
+    'Usage: node audit_scanner_display_frames.mjs INDEX OUTPUT [CHROME] [EXPECTED_SCENARIOS]',
+  );
+}
+await audit(source, output, chrome, expectedScenarios);
