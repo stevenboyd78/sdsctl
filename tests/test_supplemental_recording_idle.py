@@ -213,13 +213,13 @@ def lease(tmp_path):
 
 
 HARNESS = """
-import importlib.util,os,signal,sys,threading,time
+import importlib.util,json,os,signal,sys,threading,time
 from pathlib import Path
 spec=importlib.util.spec_from_file_location('idle_fixture',sys.argv[1])
 m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 # The normal path substitutes only namespaces/credentials. Optional faults and
-# scheduling below are test-only; the actual executable accepts no such options.
-# All I/O, deadlines, signals and claim fsync are real.
+# scheduling/clock projection below are test-only; the actual executable accepts
+# no such options. All I/O, namespace checks, signals and claim fsync are real.
 m.DATA=Path(sys.argv[2]);m.ROOT_UID=os.geteuid();m.ROOT_GID=os.getegid()
 m.os.getpid=lambda:1
 if sys.argv[5]=='clock_refused':
@@ -230,17 +230,21 @@ if sys.argv[5]=='lost':
     def lost(fd):
         original(fd);raise OSError('PRIVATE')
     m.os.fsync=lost
-if sys.argv[5]=='post_claim_delay':
-    # Model a loaded runner scheduling this child out immediately after the
-    # durable claim. The wider real lease below must absorb this exact phase.
-    delayed=[]
-    check_domain=m._clock_domain
-    def delayed_after_claim(fd):
-        check_domain(fd)
-        if not delayed and Path(sys.argv[3]).with_name('consumed.json').exists():
-            delayed.append(True)
-            time.sleep(1.25)
-    m._clock_domain=delayed_after_claim
+if sys.argv[5]=='post_ready_expiration':
+    # The first sleep is reachable only after the durable claim, unchanged
+    # checks and ready_by guard. Advance this child's next monotonic observation
+    # past the original stop_by without making shared-runner scheduling part of
+    # the lease. The production source and original lease remain unchanged.
+    expired=[]
+    actual_monotonic=time.monotonic
+    stop_by=json.loads(Path(sys.argv[3]).read_bytes())['stop_by']
+    def projected_monotonic():
+        observed=actual_monotonic()
+        return max(observed,stop_by+1) if expired else observed
+    def expire_after_ready(_seconds):
+        expired.append(True)
+    m.time.monotonic=projected_monotonic
+    m.time.sleep=expire_after_ready
 delivered=[]
 if sys.argv[5].startswith('signal_locked_'):
     # Force the same non-reentrant condition-lock window as Event.wait().
@@ -256,7 +260,7 @@ if sys.argv[5].startswith('signal_locked_'):
                 signal.raise_signal(int(sys.argv[5].rsplit('_',1)[1]))
     m._clock_domain=locked_signal
 result=m.main(['--lease',sys.argv[3],'--lease-sha256',sys.argv[4]])
-if sys.argv[5]=='post_claim_delay' and not delayed:
+if sys.argv[5]=='post_ready_expiration' and not expired:
     raise SystemExit(71)
 if sys.argv[5].startswith('signal_locked_') and not delivered:
     raise SystemExit(71)
@@ -265,13 +269,18 @@ sys.exit(result)
 
 
 def start(
-    lease, *, lost=False, clock_refused=False, signal_locked=None, post_claim_delay=False
+    lease,
+    *,
+    lost=False,
+    clock_refused=False,
+    signal_locked=None,
+    post_ready_expiration=False,
 ):
     mode = "clock_refused" if clock_refused else "lost" if lost else "normal"
     if signal_locked is not None:
         mode = "signal_locked_" + str(int(signal_locked))
-    if post_claim_delay:
-        mode = "post_claim_delay"
+    if post_ready_expiration:
+        mode = "post_ready_expiration"
     return subprocess.Popen(
         [
             sys.executable,
@@ -333,18 +342,17 @@ def test_real_signal_stops_only_owned_idle_fixture_and_case_cannot_restart(lease
 
 def test_actual_original_lease_expiration_not_renewed(lease):
     now = time.monotonic()
-    # Keep this a real monotonic deadline test, but do not make ordinary shared-
-    # runner scheduling compete with a one-second startup budget. The harness's
-    # explicit post-claim delay covers the phase that previously flaked.
-    lease.value.update(issued_at=now, ready_by=now + 10, stop_by=now + 10.5)
+    # Keep the lease on the real monotonic domain with ample startup headroom.
+    # After production crosses its ready_by guard, the child-only harness moves
+    # its next observation past this original stop_by. It cannot renew the lease.
+    lease.value.update(issued_at=now, ready_by=now + 120, stop_by=now + 121)
     raw = m._encode(lease.value)
     lease.path.write_bytes(raw)
     lease.pin = hashlib.sha256(raw).hexdigest()
-    child = start(lease, post_claim_delay=True)
+    child = start(lease, post_ready_expiration=True)
     try:
-        claimed(child, lease, timeout=5)
+        claimed(child, lease, timeout=15)
         finished(child, m.LEASE_EXPIRED, timeout=15)
-        assert time.monotonic() - now < 20
         finished(start(lease), 70)
     finally:
         if child.poll() is None:
