@@ -250,7 +250,13 @@ def test_active_app_read_continues_after_ready_expiry_not_after_recording_stop(
     with monkeypatch.context() as patch:
         a.continuity_tests.advance(patch, 125)
         assert time.monotonic() > s.run.ready.ready_by
-        assert s.sampler().read().observation.files.stage == "active"
+        worker_reads = len(s.worker_reads)
+        # Retain the post-ready clock advance while insulating the bounded
+        # asynchronous observation from an unrelated loaded-runner pause.
+        with compressed_scheduler_time(patch):
+            result = s.sampler().read()
+        assert result.observation.files.stage == "active"
+        assert len(s.worker_reads) == worker_reads + 1
     with monkeypatch.context() as patch:
         a.continuity_tests.advance(patch, 155)
         denied(s.sampler)
