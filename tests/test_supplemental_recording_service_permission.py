@@ -7,6 +7,7 @@ echo protocol deliberately does not purport to qualify either peer's source.
 
 import importlib.util
 import json
+import math
 import os
 import select
 import socket
@@ -304,13 +305,46 @@ def test_refused_reply_is_sticky_and_never_closes_borrowed_handles(peer):
 
 @pytest.mark.parametrize("peer", ["partial", "silent"], indirect=True)
 def test_lost_or_incomplete_reply_cannot_renew_original_cutoff(peer, monkeypatch):
-    # A short fixture window exercises real nonblocking timeout without a 13s wait.
+    # Give construction scheduler-independent time, then exercise the real
+    # nonblocking timeout without a 13s wait. The qualified original clock and
+    # production deadlines are unchanged; only this test's visible monotonic
+    # time is compressed until the permission reaches its ready boundary.
+    actual_monotonic, actual_poll = m.time.monotonic, m.select.poll
+    origin = peer.timer.original.after_ns / m.clock.NS
+    projected, elapsed = origin, [0.0]
+
+    def monotonic():
+        nonlocal projected
+        projected = max(math.nextafter(projected, math.inf), origin + elapsed[0])
+        return projected
+
+    class MeasuredPoll:
+        def __init__(self):
+            self.poller = actual_poll()
+
+        def register(self, *args):
+            return self.poller.register(*args)
+
+        def poll(self, timeout=None):
+            began = actual_monotonic()
+            try:
+                return self.poller.poll(timeout)
+            finally:
+                elapsed[0] += actual_monotonic() - began
+
     monkeypatch.setattr(m, "WAIT_SECONDS", 0.7)
     monkeypatch.setattr(m, "IO_SECONDS", 0.15)
+    monkeypatch.setattr(m.time, "monotonic", monotonic)
+    monkeypatch.setattr(m.select, "poll", MeasuredPoll)
     obj = peer.make()
+    assert not obj.requested and not obj.failed
     original = obj.deadline
     denied(obj.wait)
-    assert obj.failed and not obj.approved and obj.deadline == original
+    assert elapsed[0] >= m.WAIT_SECONDS - m.IO_SECONDS
+    assert obj.requested and obj.failed and not obj.approved and obj.deadline == original
+    challenge = json.loads(line(peer.child))
+    assert line(peer.child) == b"sent\n"
+    assert m.plans.base.checksum(challenge) == obj.challenge_sha256
     peer.borrowed()
 
 
