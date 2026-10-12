@@ -8,6 +8,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add a headless, additive-only Favorites FTP write executor with a separately
+  referenced writable credential, exact stable-target and case-insensitive
+  collision checks, owner-only verified host backup, bounded staged readback,
+  catalog-last activation, automatic exact-baseline rollback, durable terminal
+  reporting and a per-target lock within the selected private host-state root.
+  Existing HPDs cannot be replaced or deleted through this boundary, and it
+  adds no editor/CLI action or physical scanner-write authorization.
+
 - Add a default-off `tui_startup_view` application setting, with a temporary
   `tui --startup-view` override, so a display-capable daemon TUI can open the
   read-only Mimic-SDS screen through the normal Textual lifecycle. The ordinary
