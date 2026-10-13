@@ -38,6 +38,7 @@ from ._supplemental_failure_diagnostics import (
     child_result_failure_locations,
     failure_locations,
 )
+from ._supplemental_fixture_clock import compressed_scheduler_time
 
 writer, p, m = command_tests.writer, command_tests.m, qualification.m
 transport, grants = writer.transport, qualification.grants
@@ -1045,7 +1046,9 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
     options = selection if type(selection) is dict else dict(mode=selection)
     mode = options["mode"]
     automatic = options.get("automatic_observer", False)
+    compressed_handoff_time = options.get("compress_handoff_scheduler_time", False)
     assert not automatic or (mode == "release-command-pair" and options.get("observer_join", False))
+    assert not compressed_handoff_time or automatic
     retained_scope = mode == "retained-scope-pair"
     fixed_release = mode == "release-command-pair"
     authenticated_release = mode in ("released-pair", "release-command-pair")
@@ -1276,6 +1279,12 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
             plan_socket.mkdir(mode=0o700)
             observer_handoff.mkdir(mode=0o700)
             if automatic:
+                if compressed_handoff_time:
+                    # This one broad composition performs several real process
+                    # and filesystem checks after creating its single shared
+                    # cutoff. Keep runner scheduling out of that non-timing
+                    # fixture without renewing or widening the cutoff itself.
+                    stack.enter_context(compressed_scheduler_time(monkeypatch))
                 pipeline_end = time.monotonic() + 2
                 staged_plan = stack.enter_context(
                     closing(p.listeners.Listener(plan_socket, counterpart, deadline=pipeline_end))
