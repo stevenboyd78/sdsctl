@@ -4,7 +4,12 @@ import time
 import pytest
 
 from sds200.analysis_subscriptions import AnalysisSubscriptionClosed
-from sds200.commands import GetMsi, OpenIndexedMenu, StartRfPowerPlotAnalysis
+from sds200.commands import (
+    GetMsi,
+    OpenIndexedMenu,
+    StartRfPowerPlotAnalysis,
+    StartScannerInfoPush,
+)
 from sds200.exceptions import (
     CommandRejectedError,
     CommandTimeoutError,
@@ -1829,7 +1834,9 @@ def test_psi_renewal_discards_frame_seen_before_ack(
     radio.close()
 
 
-def test_psi_renewal_keeps_transaction_lock_until_frame_after_ack() -> None:
+def test_psi_renewal_keeps_transaction_lock_until_frame_after_ack(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     transport = FakeTransport("udp://scanner")
     radio = SDS200.from_transport(transport, expected_model="SDS200")
     radio.connect()
@@ -1844,6 +1851,20 @@ def test_psi_renewal_keeps_transaction_lock_until_frame_after_ack() -> None:
     )
     renewal_results: list[bool] = []
     command_errors: list[BaseException] = []
+    acknowledgement_processed = threading.Event()
+    release_after_acknowledgement = threading.Event()
+    post_ack_frame_seen = threading.Event()
+    request_started = threading.Event()
+    original_execute = radio.execute
+
+    def controlled_execute(command: object, *, timeout: float = 2.0) -> object:
+        result = original_execute(command, timeout=timeout)  # type: ignore[arg-type]
+        if isinstance(command, StartScannerInfoPush):
+            acknowledgement_processed.set()
+            assert release_after_acknowledgement.wait(timeout=5.0)
+        return result
+
+    monkeypatch.setattr(radio, "execute", controlled_execute)
 
     renewal = threading.Thread(
         target=lambda: renewal_results.append(radio._renew_psi_if_idle()),
@@ -1857,26 +1878,44 @@ def test_psi_renewal_keeps_transaction_lock_until_frame_after_ack() -> None:
 
     assert transport.writes == ["PSI,500"]
     transport.feed_line("PSI,OK")
+    assert acknowledgement_processed.wait(timeout=5.0)
+
+    def observe_post_ack_frame(response: object) -> None:
+        if isinstance(response, ScannerInfo) and response.command == "PSI":
+            post_ack_frame_seen.set()
+
+    unsubscribe = radio.events.subscribe("psi", observe_post_ack_frame)
 
     def request_scanner_info() -> None:
         try:
-            radio.get_scanner_info(timeout=0.5)
+            request_started.set()
+            radio.get_scanner_info(timeout=5.0)
         except BaseException as error:
             command_errors.append(error)
 
     request = threading.Thread(target=request_scanner_info, daemon=True)
-    request.start()
-    time.sleep(0.02)
+    try:
+        request.start()
+        assert request_started.wait(timeout=5.0)
 
-    assert transport.writes == ["PSI,500"]
-    assert renewal.is_alive()
-    assert request.is_alive()
+        command_lock_acquired = radio._command_lock.acquire(blocking=False)
+        if command_lock_acquired:
+            radio._command_lock.release()
 
-    transport.feed_line("PSI,<XML>,")
-    for line in xml.splitlines():
-        transport.feed_line(line)
+        assert not command_lock_acquired
+        assert transport.writes == ["PSI,500"]
+        assert renewal.is_alive()
+        assert request.is_alive()
 
-    deadline = time.monotonic() + 1.0
+        transport.feed_line("PSI,<XML>,")
+        for line in xml.splitlines():
+            transport.feed_line(line)
+        assert post_ack_frame_seen.wait(timeout=5.0)
+    finally:
+        release_after_acknowledgement.set()
+        unsubscribe()
+
+    deadline = time.monotonic() + 5.0
     while transport.writes != ["PSI,500", "GSI"] and time.monotonic() < deadline:
         time.sleep(0.001)
 
@@ -1885,8 +1924,8 @@ def test_psi_renewal_keeps_transaction_lock_until_frame_after_ack() -> None:
     for line in xml.splitlines():
         transport.feed_line(line)
 
-    renewal.join(timeout=1.0)
-    request.join(timeout=1.0)
+    renewal.join(timeout=5.0)
+    request.join(timeout=5.0)
 
     assert not renewal.is_alive()
     assert not request.is_alive()
