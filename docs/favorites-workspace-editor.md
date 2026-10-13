@@ -40,6 +40,16 @@ The verified USB executor rejects state beneath scanner media and creates or
 checks private host directories with its existing ownership and permission
 rules. `--usb-host-state` is invalid with `--copied-tree`.
 
+The library also exposes a separate headless additive-only FTP write executor.
+It is not wired into this editor or a public CLI command. The caller must supply
+an exact reviewed FavoritesWritePlan, explicitly separate write credential,
+stable preflight, and new owner-only host artifact directory. Existing HPDs
+cannot be replaced or deleted through that executor; it is limited to a bounded
+set of collision-checked new HPDs with catalog-last activation, exact readback,
+and automatic baseline rollback. See
+[favorites-ftp-research.md](favorites-ftp-research.md) for the complete
+contract and remaining FTP limitations.
+
 ## Browse and edit
 
 The left side contains the eight-kind hierarchy navigation and a complete exact
@@ -283,7 +293,8 @@ hashes remain untracked.
 ## Deliberate limits
 
 The editor does not expose arbitrary positional fields, hierarchy or catalog
-container creation/deletion/reordering, writable FTP, live-scanner GLT/FQK
+container creation/deletion/reordering, editor-integrated writable FTP,
+live-scanner GLT/FQK
 mutation, daemon or web execution, Home Assistant Ingress execution, or
 automatic/background synchronization. Assisted execution remains a local,
 explicit, one-shot copied-tree or freshly qualified USB workflow. Use only

@@ -1,8 +1,10 @@
 # Favorites FTP research
 
 This document records transport, security, and storage evidence for the
-Milestone 22.6 read-only Favorites FTP backend. It does not define or authorize
-scanner-side mutation.
+Favorites FTP read backend and the separate verified additive write executor.
+Constructing a write plan or configuration does not authorize scanner-side
+mutation; execution remains one explicit call with a private host artifact
+destination.
 
 ## Scope
 
@@ -31,9 +33,10 @@ For the read-only FTP source:
 - passwords do not appear in exceptions, logs, diagnostics, snapshots, reports,
   or public API values.
 
-Writable credential resolution belongs only inside a later explicit write
-workflow after backup, staging, validation, target-identity, conflict, and
-operator-intent checks have succeeded.
+Writable credential resolution belongs only inside the explicit write
+preflight and execution workflow. The write password environment-variable
+reference must differ from the read reference. The write path never resolves
+the read secret and neither credential is a fallback for the other.
 
 ## Read-only transport contract
 
@@ -126,10 +129,83 @@ scanner credential values are intentionally not recorded in repository
 documentation or fixtures; automated tests continue to use synthetic credential
 values.
 
-## Deferred write boundary
+## Verified additive write boundary
 
-A later FTP write slice must preserve the project-wide mandatory
-backup-before-write rule. It must define remote target identity, exclusivity or
-conflict detection, complete verified host backup, host staging, exact intended
-readback, activation semantics, rollback/recovery, durable reporting, and
-explicit writable-secret resolution without silent last-writer-wins behavior.
+The write preflight accepts an already reviewed FavoritesWritePlan and a
+FavoritesFtpWriteConfiguration. It uses only the explicit writable secret and
+performs two complete bounded observations in one session. The exact managed
+baseline and complete immediate-name listing must be stable and must match the
+plan. All final and operation-owned names are checked case-insensitively
+because scanner storage may not preserve case distinctions.
+
+The FTP executor is intentionally additive-only:
+
+- existing HPD documents cannot be modified or deleted;
+- at most 16 new HPD documents may be added, with a lower configurable bound;
+- the intended catalog, each added HPD, complete intended snapshot, staging
+  listing, and existing target remain within the read configuration's bounds;
+- blocked, ambiguous, invalid, stale, or colliding plans fail before mutation;
+  and
+- the catalog must change when documents are added.
+
+This limit is a safety property, not a missing convenience feature. It makes
+catalog-last activation useful: newly renamed HPDs are unreferenced until the
+new catalog is installed, while every previously referenced HPD remains
+byte-identical.
+
+## Backup, staging, activation, and recovery
+
+The write executor requires a new absolute operation directory beneath an
+existing current-user-owned directory with no group or other access. Before
+opening its mutation-capable session, it creates and verifies:
+
+- a target-derived exclusive lock in that private host-state root, preventing
+  another cooperating operation using the same root from overlapping;
+- an owner-only complete managed baseline backup;
+- a canonical rollback manifest binding the endpoint, exact listing,
+  baseline/intended snapshot identities, additions, and reserved names; and
+- an owner-only operation-report path that is atomically replaced at terminal
+  transitions.
+
+Execution then repeats two complete target observations in the same write
+session. Only an exact match can proceed. Each HPD and the intended catalog is
+uploaded under a collision-resistant operation-owned temporary name and retrieved
+byte-for-byte. The executor verifies that the active target still equals the
+baseline plus only those owned staging names.
+
+Activation renames each new HPD to its final collision-checked name, preserves
+the old catalog under an operation-owned backup name, and installs the staged
+catalog last. The complete intended snapshot and exact expected listing must be
+stable across two passes before the remote catalog backup is deleted. A second
+two-pass observation then proves the final intended snapshot and clean listing.
+
+Any failure after the first possible mutation starts automatic rollback in the
+same session. The executor restores the catalog from the verified host backup,
+removes every added final HPD and operation-owned temporary file, and requires
+the exact baseline snapshot and listing across two passes. A verified rollback
+terminates as recovered and still raises an execution error so the intended
+change cannot be mistaken for success. If rollback cannot be verified, the
+terminal state is recovery_required; the complete host backup and manifest
+remain available for manual recovery. A verified final remote state followed
+by session-close failure is reported separately as cleanup_required.
+
+FTP cannot provide filesystem inodes, cross-file atomicity, durable server
+flush acknowledgements, or a portable advisory lock. The executor therefore
+does not claim those guarantees and does not support replacing or deleting
+existing HPDs. It prevents silent last-writer-wins behavior with exact
+same-session observations immediately before staging and before/after
+activation. A concurrent writer that changes managed bytes or immediate names
+causes refusal or recovery rather than acceptance.
+
+## Write-side physical status
+
+The automated suite exercises the production STOR, RETR, RNFR/RNTO, DELE, and
+cleanup adapter behind a stateful failure-injection transport. It verifies
+successful catalog-last activation, pre-mutation drift refusal,
+case-insensitive collision refusal, automatic rollback, retained evidence when
+rollback cannot be verified, and credential separation.
+
+No physical scanner write is authorized merely by this implementation. A
+physical run still requires an independently reviewed exact source, fresh
+collision check and target snapshot, private host artifact destination, and an
+explicit bounded operator-approved write plan.
