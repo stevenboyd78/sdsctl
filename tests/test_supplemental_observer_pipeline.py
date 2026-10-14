@@ -294,7 +294,17 @@ def test_observer_command_drift_stops_originals_without_release_or_deadline_rene
     }
 
 
-@pytest.mark.parametrize("joined", [SELECTION | dict(exit_after_result=False)], indirect=True)
+@pytest.mark.parametrize(
+    "joined",
+    [
+        SELECTION
+        | dict(
+            exit_after_result=False,
+            compress_handoff_scheduler_time=True,
+        )
+    ],
+    indirect=True,
+)
 @pytest.mark.parametrize("after", ["writer", "observer"])
 def test_native_loss_during_automatic_handoff_keeps_original_cutoff_and_refuses_release(
     binary, direct_launcher, reviewed_binary, joined, monkeypatch, after
