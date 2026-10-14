@@ -196,15 +196,25 @@ class DaemonSupplementalAcquisition:
             self._attempted = True
         # Runtime reservation is acquired without any feed/cache/window lock.
         with self._runtime._supplemental_read_scope(self._scanner) as available:
-            if not available or not self._qualified():
+            if not available:
                 self._end("preflight_refused")
                 return False
-            with self._lock:
-                if self._ended:
-                    return False
-                self._deadline = self._now() + self._policy.window_seconds
-                self._armed = True
-        return True
+            qualified = self._qualified()
+            if qualified is False:
+                self._end("preflight_refused")
+                return False
+            if qualified is True:
+                with self._lock:
+                    if self._ended:
+                        return False
+                    self._deadline = self._now() + self._policy.window_seconds
+                    self._armed = True
+                return True
+        # Release the runtime reservation before exposing an explicit retry.
+        with self._lock:
+            if not self._ended:
+                self._attempted = False
+        return False
 
     def _allow(self) -> bool:
         with self._lock:
