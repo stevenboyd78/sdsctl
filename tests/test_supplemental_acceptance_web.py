@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+from threading import Event
+from time import monotonic
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,7 +15,6 @@ from sds200.web_auth import WebDashboardAuthentication
 from sds200.web_supplemental import CONTEXT_PATH, DEMAND_PATH, FRAME_PATH
 
 from .test_daemon_display_frames import configured as configured
-from .test_daemon_quick_key_worker import wait_for
 from .test_daemon_supplemental_acquisition import rig as rig
 from .test_scanner_display_supplemental_transport import ORIGIN, PASSWORD, headers, login
 from .test_supplemental_demand_transport import api as api
@@ -28,6 +29,14 @@ assert SPEC is not None and SPEC.loader is not None
 adapter = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(adapter)
 PEER = web_dashboard.WEB_DASHBOARD_HOME_ASSISTANT_INGRESS_CLIENT
+
+
+def wait_for_loopback_read(peer, expected, *, timeout: float = 10.0) -> None:
+    """Allow loaded runners to schedule the on-demand loopback read."""
+    deadline = monotonic() + timeout
+    while peer.reads != expected:
+        assert monotonic() < deadline, "Loopback scanner read did not complete"
+        Event().wait(0.005)
 
 
 @pytest.mark.parametrize("mode", ["ingress", "native"])
@@ -76,7 +85,7 @@ def test_real_adapter_auth_demand_and_native_owner(mode, rig, service, api, tmp_
                 assert rig.peer.reads == []
             reply = client.post(DEMAND_PATH, headers=renewal_headers(context))
             assert reply.status_code == 200
-            wait_for(lambda: rig.peer.reads == ["FQK"])
+            wait_for_loopback_read(rig.peer, ["FQK"])
             if mode == "native":
                 assert client.post("/api/v1/recordings/start").status_code == 403
 

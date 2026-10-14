@@ -212,6 +212,7 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         'history_mode: "duration"',
         "show_pointer: true",
         'pointerType: "touch"',
+        'card.status !== "live" || card.history > 0',
         "state.fixture.sessionCreates !== 1",
         "state.fixture.streamsAborted !== state.fixture.streamsStarted",
         "canvas.width > 2048",
