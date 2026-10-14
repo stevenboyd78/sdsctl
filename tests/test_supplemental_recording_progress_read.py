@@ -80,10 +80,15 @@ def test_original_owner_schedule_selects_stage_without_writes_or_success(
 ):
     case, relay = active, active.relay
     original = relay.ledger.state, relay.ready.client.attachment.reads, len(case.requests)
+    observed_at = relay.plan.stop_at + (0.01 if finalizing else -0.01)
     with monkeypatch.context() as patch:
-        if finalizing:
-            advance(patch, relay.plan.stop_at + 0.01 - time.monotonic())
-        result = relay.read_progress(case.progress)
+        # This composition checks original-plan phase selection, not scheduler
+        # latency after synthetic startup. Seed the existing compressed clock
+        # on the intended side of the unchanged stop boundary so every nested
+        # filesystem and receipt check observes one ordered phase window.
+        patch.setattr(time, "monotonic", lambda: observed_at)
+        with relay_tests.compressed_scheduler_time(patch):
+            result = relay.read_progress(case.progress)
     assert result.files.stage == ("finalizing" if finalizing else "active")
     assert result.artifact is None and result.progress.metadata is None
     assert list(case.progress.iterdir()) == []

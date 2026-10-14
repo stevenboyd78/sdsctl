@@ -2858,10 +2858,14 @@ async function waitForHomeAssistantWaterfall(
   while (Date.now() < deadline) {
     state = await homeAssistantWaterfallState(cdp);
     const actualStatuses = state.cards.map((card) => card.status);
+    const liveCardsHaveHistory = state.cards.every(
+      (card) => card.status !== "live" || card.history > 0,
+    );
     if (
       state.readyState === "complete" &&
       state.cards.length === cards &&
       state.fixture.streamsActive === active &&
+      liveCardsHaveHistory &&
       JSON.stringify(actualStatuses) === JSON.stringify(statuses)
     ) {
       await frames(cdp);
