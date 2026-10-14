@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import queue
 import socket
+import threading
 import time
 from collections.abc import Callable
 
@@ -55,13 +56,17 @@ class FakeAudioDatagramSocket:
     ) -> None:
         self.incoming.put((data, source))
 
+    def fail(self, error: OSError) -> None:
+        self.incoming.put(error)
+
 
 class FakeRtspClient:
-    def __init__(self) -> None:
+    def __init__(self, *, keepalive_error: OSError | None = None) -> None:
         self.started_ports: list[int] = []
         self.keepalives = 0
         self.teardowns = 0
         self.closed = False
+        self.keepalive_error = keepalive_error
 
     def start(self, client_port: int) -> RtpTransportInfo:
         self.started_ports.append(client_port)
@@ -73,6 +78,8 @@ class FakeRtspClient:
 
     def get_parameter(self) -> object:
         self.keepalives += 1
+        if self.keepalive_error is not None:
+            raise self.keepalive_error
         return object()
 
     def teardown(self) -> object:
@@ -185,6 +192,210 @@ def test_network_audio_performs_handshake_and_emits_pcmu_payload() -> None:
     assert packet.expected_timestamp is None
     assert not packet.discontinuous
     assert packet.observed_at == chunks[0].received_at
+
+
+@pytest.mark.parametrize("failed_worker", ("receiver", "keepalive"))
+def test_fatal_worker_stops_session_and_allows_manual_restart(
+    failed_worker: str,
+) -> None:
+    first_datagram = FakeAudioDatagramSocket()
+    second_datagram = FakeAudioDatagramSocket()
+    first_rtsp = FakeRtspClient(
+        keepalive_error=(
+            OSError("simulated keepalive failure")
+            if failed_worker == "keepalive"
+            else None
+        )
+    )
+    second_rtsp = FakeRtspClient()
+    datagrams = iter((first_datagram, second_datagram))
+    rtsp_clients = iter((first_rtsp, second_rtsp))
+    chunks: list[AudioChunk] = []
+    transport = NetworkAudioTransport(
+        "192.0.2.25",
+        read_timeout=0.01,
+        keepalive_interval=0.01,
+        datagram_socket_factory=lambda _family, _type: next(datagrams),
+        rtsp_client_factory=lambda _host, _port, _path, _timeout: next(
+            rtsp_clients
+        ),
+        local_address_resolver=lambda _host, _port: "192.0.2.10",
+    )
+
+    transport.start(chunks.append)
+    try:
+        if failed_worker == "receiver":
+            first_datagram.fail(OSError("simulated receive failure"))
+
+        def first_session_stopped() -> bool:
+            statistics = transport.statistics
+            failure_count = (
+                statistics.receive_errors
+                if failed_worker == "receiver"
+                else statistics.keepalive_failures
+            )
+            return (
+                failure_count == 1
+                and not transport.running
+                and first_datagram.closed
+                and first_rtsp.closed
+            )
+
+        wait_until(first_session_stopped)
+        assert first_rtsp.teardowns == 1
+
+        transport.start(chunks.append)
+        assert transport.running
+        restarted_statistics = transport.statistics
+        assert restarted_statistics.sessions_started == 1
+        assert restarted_statistics.receive_errors == 0
+        assert restarted_statistics.keepalive_failures == 0
+        second_datagram.feed(
+            make_rtp(
+                b"restarted",
+                sequence=742,
+                timestamp=1242,
+            )
+        )
+        wait_until(lambda: [chunk.data for chunk in chunks] == [b"restarted"])
+    finally:
+        transport.stop()
+
+    assert second_rtsp.teardowns == 1
+    assert second_rtsp.closed
+    assert second_datagram.closed
+    assert not transport.running
+
+
+def test_bounded_stop_survivor_cannot_enter_replacement_session() -> None:
+    first_datagram = FakeAudioDatagramSocket()
+    second_datagram = FakeAudioDatagramSocket()
+    first_rtsp = FakeRtspClient()
+    second_rtsp = FakeRtspClient()
+    datagrams = iter((first_datagram, second_datagram))
+    rtsp_clients = iter((first_rtsp, second_rtsp))
+    first_chunks: list[AudioChunk] = []
+    second_chunks: list[AudioChunk] = []
+    packet_entered = threading.Event()
+    release_packet = threading.Event()
+    packet_returned = threading.Event()
+
+    def block_old_packet(packet: PcmuPacket) -> None:
+        if packet.payload != b"old":
+            return
+        packet_entered.set()
+        release_packet.wait()
+        packet_returned.set()
+
+    transport = NetworkAudioTransport(
+        "192.0.2.25",
+        read_timeout=0.01,
+        keepalive_interval=60.0,
+        datagram_socket_factory=lambda _family, _type: next(datagrams),
+        rtsp_client_factory=lambda _host, _port, _path, _timeout: next(
+            rtsp_clients
+        ),
+        local_address_resolver=lambda _host, _port: "192.0.2.10",
+    )
+    transport.on_packet(block_old_packet)
+
+    transport.start(first_chunks.append)
+    try:
+        first_datagram.feed(make_rtp(b"old"))
+        assert packet_entered.wait(timeout=1.0)
+
+        transport.stop()
+        assert first_datagram.closed
+        assert first_rtsp.closed
+        assert first_rtsp.teardowns == 1
+
+        transport.start(second_chunks.append)
+        assert transport.statistics.packets_delivered == 0
+        release_packet.set()
+        assert packet_returned.wait(timeout=1.0)
+        survivor_statistics = transport.statistics
+        assert survivor_statistics.sessions_started == 1
+        assert survivor_statistics.datagrams_received == 0
+        assert survivor_statistics.packets_delivered == 0
+        assert survivor_statistics.duplicate_packets == 0
+        assert survivor_statistics.receive_errors == 0
+        assert survivor_statistics.keepalive_failures == 0
+
+        second_datagram.feed(make_rtp(b"new"))
+        wait_until(lambda: [chunk.data for chunk in second_chunks] == [b"new"])
+    finally:
+        release_packet.set()
+        transport.stop()
+
+    assert first_chunks == []
+    assert [chunk.data for chunk in second_chunks] == [b"new"]
+    replacement_statistics = transport.statistics
+    assert replacement_statistics.sessions_started == 1
+    assert replacement_statistics.datagrams_received == 1
+    assert replacement_statistics.packets_delivered == 1
+    assert replacement_statistics.first_sequence == 741
+    assert replacement_statistics.last_sequence == 741
+    assert replacement_statistics.last_timestamp == 1234
+    assert replacement_statistics.duplicate_packets == 0
+    assert replacement_statistics.receive_errors == 0
+    assert replacement_statistics.keepalive_failures == 0
+    assert second_rtsp.teardowns == 1
+    assert second_rtsp.closed
+    assert second_datagram.closed
+
+
+def test_partial_worker_start_failure_cleans_session_and_allows_restart(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first_datagram = FakeAudioDatagramSocket()
+    second_datagram = FakeAudioDatagramSocket()
+    first_rtsp = FakeRtspClient()
+    second_rtsp = FakeRtspClient()
+    datagrams = iter((first_datagram, second_datagram))
+    rtsp_clients = iter((first_rtsp, second_rtsp))
+    chunks: list[AudioChunk] = []
+    transport = NetworkAudioTransport(
+        "192.0.2.25",
+        read_timeout=0.01,
+        keepalive_interval=60.0,
+        datagram_socket_factory=lambda _family, _type: next(datagrams),
+        rtsp_client_factory=lambda _host, _port, _path, _timeout: next(
+            rtsp_clients
+        ),
+        local_address_resolver=lambda _host, _port: "192.0.2.10",
+    )
+    original_start = threading.Thread.start
+
+    def start_or_fail(thread: threading.Thread) -> None:
+        if thread.name == "sds200-audio-rtsp-keepalive":
+            raise RuntimeError("simulated keepalive thread start failure")
+        original_start(thread)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(threading.Thread, "start", start_or_fail)
+        with pytest.raises(
+            RuntimeError,
+            match="simulated keepalive thread start failure",
+        ):
+            transport.start(chunks.append)
+
+    assert not transport.running
+    assert first_datagram.closed
+    assert first_rtsp.closed
+    assert first_rtsp.teardowns == 1
+
+    transport.start(chunks.append)
+    try:
+        assert transport.running
+        second_datagram.feed(make_rtp(b"restarted"))
+        wait_until(lambda: [chunk.data for chunk in chunks] == [b"restarted"])
+    finally:
+        transport.stop()
+
+    assert second_rtsp.teardowns == 1
+    assert second_rtsp.closed
+    assert second_datagram.closed
+    assert not transport.running
 
 
 def test_network_audio_discards_duplicate_and_out_of_order_packets() -> None:
