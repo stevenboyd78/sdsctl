@@ -148,6 +148,21 @@ class _MutableNetworkAudioStatistics:
         )
 
 
+@dataclass(slots=True, eq=False)
+class _NetworkAudioSession:
+    rtp_socket: AudioDatagramSocketLike
+    rtsp_client: RtspSessionClientLike
+    handler: AudioChunkHandler
+    stop: threading.Event
+    statistics: _MutableNetworkAudioStatistics
+    sequence_tracker: RtpSequenceTracker
+    timestamp_tracker: RtpTimestampTracker
+    expected_source: tuple[str, int]
+    expected_ssrc: int | None
+    receiver_thread: threading.Thread | None = None
+    keepalive_thread: threading.Thread | None = None
+
+
 def default_audio_datagram_socket_factory(
     family: int,
     socket_type: int,
@@ -215,20 +230,12 @@ class NetworkAudioTransport:
         self._rtsp_client_factory = rtsp_client_factory
         self._local_address_resolver = local_address_resolver
         self.events = EventBus()
-        self._rtp_socket: AudioDatagramSocketLike | None = None
-        self._rtsp_client: RtspSessionClientLike | None = None
-        self._handler: AudioChunkHandler | None = None
-        self._receiver_thread: threading.Thread | None = None
-        self._keepalive_thread: threading.Thread | None = None
-        self._stop = threading.Event()
+        self._session: _NetworkAudioSession | None = None
+        self._lifecycle_lock = threading.RLock()
         self._state_lock = threading.RLock()
         self._rtsp_lock = threading.Lock()
         self._statistics_lock = threading.RLock()
         self._statistics = _MutableNetworkAudioStatistics()
-        self._sequence_tracker = RtpSequenceTracker()
-        self._timestamp_tracker = RtpTimestampTracker()
-        self._expected_source: tuple[str, int] | None = None
-        self._expected_ssrc: int | None = None
 
     @property
     def endpoint(self) -> str:
@@ -240,7 +247,17 @@ class NetworkAudioTransport:
     @property
     def running(self) -> bool:
         with self._state_lock:
-            return self._rtp_socket is not None and self._rtsp_client is not None
+            session = self._session
+            if session is None:
+                return False
+            receiver = session.receiver_thread
+            keepalive = session.keepalive_thread
+            return (
+                receiver is not None
+                and receiver.is_alive()
+                and keepalive is not None
+                and keepalive.is_alive()
+            )
 
     @property
     def statistics(self) -> NetworkAudioStatistics:
@@ -256,15 +273,19 @@ class NetworkAudioTransport:
         return self.events.subscribe("packet", callback)
 
     def start(self, handler: AudioChunkHandler) -> None:
-        with self._state_lock:
-            if self._rtp_socket is not None:
+        with self._lifecycle_lock:
+            if self.running:
                 return
-            self._handler = handler
-            self._stop.clear()
-            self._sequence_tracker.reset()
-            self._timestamp_tracker.reset()
+            with self._state_lock:
+                stale_session = self._session
+            if stale_session is not None:
+                self._stop_session(stale_session)
+            self._start_session(handler)
+
+    def _start_session(self, handler: AudioChunkHandler) -> None:
+        statistics = _MutableNetworkAudioStatistics()
         with self._statistics_lock:
-            self._statistics = _MutableNetworkAudioStatistics()
+            self._statistics = statistics
 
         rtp_socket: AudioDatagramSocketLike | None = None
         rtsp_client: RtspSessionClientLike | None = None
@@ -306,85 +327,116 @@ class NetworkAudioTransport:
         assert rtp_socket is not None
         assert rtsp_client is not None
         assert negotiated is not None
-        self._expected_source = (negotiated.source, negotiated.server_port)
-        self._expected_ssrc = negotiated.ssrc
         with self._statistics_lock:
-            self._statistics.sessions_started += 1
-            self._statistics.ssrc = negotiated.ssrc
+            statistics.sessions_started += 1
+            statistics.ssrc = negotiated.ssrc
+        session = _NetworkAudioSession(
+            rtp_socket=rtp_socket,
+            rtsp_client=rtsp_client,
+            handler=handler,
+            stop=threading.Event(),
+            statistics=statistics,
+            sequence_tracker=RtpSequenceTracker(),
+            timestamp_tracker=RtpTimestampTracker(),
+            expected_source=(negotiated.source, negotiated.server_port),
+            expected_ssrc=negotiated.ssrc,
+        )
+        receiver = threading.Thread(
+            target=self._receiver_loop,
+            args=(session,),
+            name="sds200-audio-rtp-reader",
+            daemon=True,
+        )
+        keepalive = threading.Thread(
+            target=self._keepalive_loop,
+            args=(session,),
+            name="sds200-audio-rtsp-keepalive",
+            daemon=True,
+        )
+        session.receiver_thread = receiver
+        session.keepalive_thread = keepalive
         with self._state_lock:
-            self._rtp_socket = rtp_socket
-            self._rtsp_client = rtsp_client
-            self._receiver_thread = threading.Thread(
-                target=self._receiver_loop,
-                name="sds200-audio-rtp-reader",
-                daemon=True,
-            )
-            self._keepalive_thread = threading.Thread(
-                target=self._keepalive_loop,
-                name="sds200-audio-rtsp-keepalive",
-                daemon=True,
-            )
-            receiver = self._receiver_thread
-            keepalive = self._keepalive_thread
-        assert receiver is not None
-        assert keepalive is not None
-        receiver.start()
-        keepalive.start()
+            self._session = session
+        try:
+            receiver.start()
+            keepalive.start()
+        except BaseException:
+            self._stop_session(session)
+            raise
 
     def stop(self) -> None:
-        self._stop.set()
-        with self._state_lock:
-            rtp_socket, self._rtp_socket = self._rtp_socket, None
-            rtsp_client, self._rtsp_client = self._rtsp_client, None
-            receiver, self._receiver_thread = self._receiver_thread, None
-            keepalive, self._keepalive_thread = self._keepalive_thread, None
+        with self._lifecycle_lock:
+            self._stop_session()
 
-        if rtsp_client is not None:
-            with self._rtsp_lock:
-                with suppress(Exception):
-                    rtsp_client.teardown()
-                    with self._statistics_lock:
-                        self._statistics.teardowns_sent += 1
-                with suppress(Exception):
-                    rtsp_client.close()
-        if rtp_socket is not None:
-            with suppress(OSError):
-                rtp_socket.close()
+    def _stop_session(
+        self,
+        expected: _NetworkAudioSession | None = None,
+    ) -> None:
+        with self._state_lock:
+            session = self._session
+            if session is None or (expected is not None and session is not expected):
+                return
+            session.stop.set()
+            self._session = None
+
+        with self._rtsp_lock:
+            with suppress(Exception):
+                session.rtsp_client.teardown()
+                with self._statistics_lock:
+                    session.statistics.teardowns_sent += 1
+            with suppress(Exception):
+                session.rtsp_client.close()
+        with suppress(OSError):
+            session.rtp_socket.close()
 
         current = threading.current_thread()
-        for thread in (receiver, keepalive):
-            if thread is not None and thread is not current:
+        for thread in (session.receiver_thread, session.keepalive_thread):
+            if (
+                thread is not None
+                and thread is not current
+                and thread.ident is not None
+            ):
                 thread.join(timeout=max(1.0, self.read_timeout * 4))
-        self._handler = None
-        self._sequence_tracker.reset()
-        self._timestamp_tracker.reset()
-        self._expected_source = None
-        self._expected_ssrc = None
 
-    def _receiver_loop(self) -> None:
-        while not self._stop.is_set():
+    def _stop_failed_worker_session(self, session: _NetworkAudioSession) -> None:
+        current = threading.current_thread()
+        with self._lifecycle_lock:
             with self._state_lock:
-                rtp_socket = self._rtp_socket
-            if rtp_socket is None:
-                return
+                if (
+                    self._session is not session
+                    or (
+                        current is not session.receiver_thread
+                        and current is not session.keepalive_thread
+                    )
+                ):
+                    return
+            self._stop_session(session)
+
+    def _receiver_loop(self, session: _NetworkAudioSession) -> None:
+        while not session.stop.is_set():
             try:
-                datagram, source = rtp_socket.recvfrom(MAX_RTP_DATAGRAM_SIZE)
+                datagram, source = session.rtp_socket.recvfrom(
+                    MAX_RTP_DATAGRAM_SIZE
+                )
             except TimeoutError:
                 continue
             except OSError:
-                if not self._stop.is_set():
+                if not session.stop.is_set():
                     with self._statistics_lock:
-                        self._statistics.receive_errors += 1
+                        session.statistics.receive_errors += 1
                     logger.exception("SDS200 RTP socket failed for %s", self.endpoint)
+                    self._stop_failed_worker_session(session)
                 return
-            if self._stop.is_set() or not datagram:
+            if session.stop.is_set():
+                return
+            if not datagram:
                 continue
             with self._statistics_lock:
-                self._statistics.datagrams_received += 1
-                self._statistics.bytes_received += len(datagram)
-            if source != self._expected_source:
+                session.statistics.datagrams_received += 1
+                session.statistics.bytes_received += len(datagram)
+            if source != session.expected_source:
                 with self._statistics_lock:
-                    self._statistics.unexpected_source_packets += 1
+                    session.statistics.unexpected_source_packets += 1
                 logger.warning(
                     "Discarding SDS200 RTP packet from unexpected source %s:%s",
                     source[0],
@@ -395,28 +447,28 @@ class NetworkAudioTransport:
                 packet = RtpPacket.parse(datagram)
             except RtpProtocolError:
                 with self._statistics_lock:
-                    self._statistics.malformed_packets += 1
+                    session.statistics.malformed_packets += 1
                 logger.warning("Discarding invalid SDS200 RTP packet", exc_info=True)
                 continue
 
-            if self._expected_ssrc is None:
-                self._expected_ssrc = packet.ssrc
+            if session.expected_ssrc is None:
+                session.expected_ssrc = packet.ssrc
                 with self._statistics_lock:
-                    self._statistics.ssrc = packet.ssrc
-            elif packet.ssrc != self._expected_ssrc:
+                    session.statistics.ssrc = packet.ssrc
+            elif packet.ssrc != session.expected_ssrc:
                 with self._statistics_lock:
-                    self._statistics.ssrc_mismatch_packets += 1
+                    session.statistics.ssrc_mismatch_packets += 1
                 logger.warning(
                     "Discarding SDS200 RTP packet with unexpected SSRC %s",
                     packet.ssrc,
                 )
                 continue
 
-            observation = self._sequence_tracker.observe(packet.sequence)
+            observation = session.sequence_tracker.observe(packet.sequence)
             if observation.missing:
                 with self._statistics_lock:
-                    self._statistics.sequence_gaps += 1
-                    self._statistics.packets_lost += observation.missing
+                    session.statistics.sequence_gaps += 1
+                    session.statistics.packets_lost += observation.missing
                 logger.warning(
                     "SDS200 RTP sequence gap: expected %s, received %s (%s missing)",
                     observation.expected,
@@ -425,23 +477,23 @@ class NetworkAudioTransport:
                 )
             elif observation.duplicate:
                 with self._statistics_lock:
-                    self._statistics.duplicate_packets += 1
+                    session.statistics.duplicate_packets += 1
                 logger.debug("Discarding duplicate SDS200 RTP packet %s", packet.sequence)
                 continue
             elif observation.out_of_order:
                 with self._statistics_lock:
-                    self._statistics.late_packets += 1
+                    session.statistics.late_packets += 1
                 logger.debug("Discarding late SDS200 RTP packet %s", packet.sequence)
                 continue
 
-            timestamp = self._timestamp_tracker.observe(
+            timestamp = session.timestamp_tracker.observe(
                 packet.timestamp,
                 len(packet.payload),
             )
             if timestamp.missing_samples:
                 with self._statistics_lock:
-                    self._statistics.timestamp_discontinuities += 1
-                    self._statistics.timestamp_samples_missing += (
+                    session.statistics.timestamp_discontinuities += 1
+                    session.statistics.timestamp_samples_missing += (
                         timestamp.missing_samples
                     )
                 logger.warning(
@@ -453,8 +505,8 @@ class NetworkAudioTransport:
                 )
             elif timestamp.backwards:
                 with self._statistics_lock:
-                    self._statistics.timestamp_discontinuities += 1
-                    self._statistics.timestamp_backwards += 1
+                    session.statistics.timestamp_discontinuities += 1
+                    session.statistics.timestamp_backwards += 1
                 logger.warning(
                     "SDS200 RTP timestamp moved backwards: expected %s, received %s",
                     timestamp.expected,
@@ -462,7 +514,7 @@ class NetworkAudioTransport:
                 )
 
             with self._statistics_lock:
-                statistics = self._statistics
+                statistics = session.statistics
                 statistics.packets_delivered += 1
                 statistics.payload_bytes_delivered += len(packet.payload)
                 if statistics.first_sequence is None:
@@ -489,34 +541,31 @@ class NetworkAudioTransport:
                 ),
             )
 
-            handler = self._handler
-            if handler is not None:
-                try:
-                    handler(
-                        AudioChunk(
-                            packet.payload,
-                            received_at=observed_at,
-                        )
-                    )
-                except Exception:
-                    with self._statistics_lock:
-                        self._statistics.callback_errors += 1
-                    logger.exception("Unhandled exception in audio chunk callback")
-
-    def _keepalive_loop(self) -> None:
-        while not self._stop.wait(self.keepalive_interval):
-            with self._state_lock:
-                rtsp_client = self._rtsp_client
-            if rtsp_client is None:
+            if session.stop.is_set():
                 return
             try:
-                with self._rtsp_lock:
-                    rtsp_client.get_parameter()
+                session.handler(
+                    AudioChunk(
+                        packet.payload,
+                        received_at=observed_at,
+                    )
+                )
+            except Exception:
                 with self._statistics_lock:
-                    self._statistics.keepalives_sent += 1
+                    session.statistics.callback_errors += 1
+                logger.exception("Unhandled exception in audio chunk callback")
+
+    def _keepalive_loop(self, session: _NetworkAudioSession) -> None:
+        while not session.stop.wait(self.keepalive_interval):
+            try:
+                with self._rtsp_lock:
+                    session.rtsp_client.get_parameter()
+                with self._statistics_lock:
+                    session.statistics.keepalives_sent += 1
             except (OSError, RtspProtocolError, ScannerConnectionError):
-                if not self._stop.is_set():
+                if not session.stop.is_set():
                     with self._statistics_lock:
-                        self._statistics.keepalive_failures += 1
+                        session.statistics.keepalive_failures += 1
                     logger.exception("SDS200 RTSP keepalive failed for %s", self.endpoint)
+                    self._stop_failed_worker_session(session)
                 return

@@ -19,6 +19,7 @@ from . import test_supplemental_recording_exit as exit_tests  # noqa: F401
 from . import test_supplemental_recording_host_launch as launches
 from . import test_supplemental_recording_normal_read as normal_reads  # noqa: F401
 from . import test_supplemental_recording_relay as relay_tests  # noqa: F401
+from ._supplemental_fixture_clock import compressed_scheduler_time
 
 NAME = "supplemental_recording_host_begin"
 SPEC = importlib.util.spec_from_file_location(
@@ -39,6 +40,20 @@ layout, tree, routing, projection, binding, directory, prepared, setup = (
 )
 
 
+def fixture_start_confirmed(run, monkeypatch):
+    """Compress only the synthetic dispatch publications in this composition."""
+
+    original_append = m.launch.engine.dispatch.Claim._append
+
+    def append(claim, values):
+        with compressed_scheduler_time(monkeypatch):
+            return original_append(claim, values)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(m.launch.engine.dispatch.Claim, "_append", append)
+        return run.start_confirmed()
+
+
 @pytest.fixture
 def joined(setup, monkeypatch):
     s = setup
@@ -49,7 +64,7 @@ def joined(setup, monkeypatch):
     path = s.plan.root / "recording-ledger"
     path.mkdir(mode=0o700)
     ledger = m.binding.Ledger(path, run.pins.host, now=time.monotonic())
-    assert run.start_confirmed().healthy is True
+    assert fixture_start_confirmed(run, monkeypatch).healthy is True
     run.ready.context_raw = m.binding.encode(
         m.launch.received._context(run.pins, run.profile_sha256)
     )
@@ -90,6 +105,30 @@ def denied(callback):
     with pytest.raises(m.UnconfirmedHostBegin) as caught:
         callback()
     assert str(caught.value) == m.MESSAGE and caught.value.__suppress_context__
+
+
+def test_joined_setup_compresses_scheduler_pause_inside_dispatch_fsync(setup, monkeypatch):
+    s = setup
+    qualifier = launches.combined_qualifier(s, monkeypatch)
+    host = launches.prepared_host_ordering(s, monkeypatch)
+    host.docker = qualifier.docker = m.plans.ordinary.Docker()
+    run = s.launch(qualify=qualifier, read=host)
+    began = time.monotonic()
+    original_fsync = os.fsync
+    paused = False
+
+    def fsync(fd):
+        nonlocal paused
+        if not paused and s.trace and s.trace[-1] == "create":
+            paused = True
+            time.sleep(2.1)
+        return original_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", fsync)
+    assert fixture_start_confirmed(run, monkeypatch).healthy is True
+
+    assert paused and time.monotonic() >= began + 2.0
+    assert "host_join" in s.trace and "probe" in s.trace
 
 
 def test_fresh_health_then_policy_fsync_ledger_fsync_and_one_existing_relay(joined):
