@@ -92,6 +92,7 @@ def remote_config(
     *,
     secrets: Mapping[str, EnvironmentSecret] | None = None,
     buffer_seconds: float = 0.01,
+    stop_timeout: float = 1.0,
     reconnect_policy: ReconnectPolicy | None = None,
 ) -> RemoteDestinationConfig:
     return RemoteDestinationConfig(
@@ -99,7 +100,7 @@ def remote_config(
         endpoint="test://audio/feed",
         secrets={} if secrets is None else secrets,
         buffer_seconds=buffer_seconds,
-        stop_timeout=1.0,
+        stop_timeout=stop_timeout,
         reconnect_policy=(
             ReconnectPolicy(initial_delay=0.01, multiplier=1.0, max_delay=0.01)
             if reconnect_policy is None
@@ -314,6 +315,54 @@ def test_remote_sink_shutdown_interrupts_blocked_write() -> None:
     snapshot = sink.snapshot()
     assert snapshot.statistics.bytes_dropped == len(pcm)
     assert snapshot.failures == 0
+
+
+def test_remote_sink_can_finalize_after_stop_timeout() -> None:
+    class NonReleasingConnection(RecordingConnection):
+        def interrupt(self) -> None:
+            self.interrupted = True
+
+    write_gate = threading.Event()
+    write_started = threading.Event()
+    connection = NonReleasingConnection(
+        write_gate=write_gate,
+        write_started=write_started,
+    )
+    sink = RemotePcmSink(
+        remote_config(stop_timeout=0.02),
+        SequenceFactory(connection),
+    )
+    observed: list[RemotePcmSinkTransition] = []
+    sink.on_transition(observed.append)
+
+    sink.start()
+    sink.submit_pcm(b"\x01\x00")
+    assert write_started.wait(timeout=1.0)
+
+    try:
+        with pytest.raises(AudioOutputError, match="Timed out while stopping"):
+            sink.stop()
+        assert connection.interrupted
+        assert sink.running
+        assert sink.snapshot().state == "stopping"
+    finally:
+        write_gate.set()
+
+    wait_until(lambda: connection.closed and not sink.running)
+    sink.stop()
+
+    snapshot = sink.snapshot()
+    assert snapshot.state == "stopped"
+    assert not snapshot.running
+    assert [transition.state for transition in observed] == [
+        "connecting",
+        "connected",
+        "stopping",
+        "stopped",
+    ]
+
+    sink.stop()
+    assert sink.snapshot().transition_sequence == 4
 
 
 def test_remote_sink_shutdown_interrupts_backoff() -> None:
