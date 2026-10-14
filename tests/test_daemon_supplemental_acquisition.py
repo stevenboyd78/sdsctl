@@ -1,6 +1,7 @@
 """Source-pinned bounded owner on native loopback UDP; never live hardware."""
 
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import replace
 from threading import Event, get_ident
 from types import SimpleNamespace
@@ -171,6 +172,84 @@ def test_preflight_fails_without_probe_or_rearm(rig, change, tmp_path):
     finally:
         rig.scanner.trace = TrafficTrace()
         rig.runtime._state = DaemonRuntimeState.RUNNING
+
+
+def test_transient_identity_lock_contention_preserves_arm_retry(rig, monkeypatch):
+    before = list(rig.peer.commands)
+    original_qualified = rig.owner._qualified
+    original_scope = rig.runtime._supplemental_read_scope
+    exiting, release_exit = Event(), Event()
+    caller = None
+
+    def contended():
+        with hold_elsewhere(rig.runtime._state_lock):
+            return original_qualified()
+
+    @contextmanager
+    def delayed_scope(scanner):
+        with original_scope(scanner) as available:
+            try:
+                yield available
+            finally:
+                if get_ident() == caller:
+                    exiting.set()
+                    assert release_exit.wait(2)
+
+    def first_arm():
+        nonlocal caller
+        caller = get_ident()
+        return rig.owner.arm()
+
+    monkeypatch.setattr(rig.owner, "_qualified", contended)
+    monkeypatch.setattr(rig.runtime, "_supplemental_read_scope", delayed_scope)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(first_arm)
+        assert exiting.wait(1)
+        try:
+            assert not rig.owner.arm()
+            assert not rig.owner.status().ended
+        finally:
+            release_exit.set()
+        assert not future.result(timeout=1)
+    status = rig.owner.status()
+    assert not status.armed and not status.ended
+    assert status.reason is None and status.read_attempts == 0
+    assert rig.peer.commands == before
+
+    rig.clock.now = 11
+    monkeypatch.setattr(rig.owner, "_qualified", original_qualified)
+    monkeypatch.setattr(rig.runtime, "_supplemental_read_scope", original_scope)
+    assert rig.owner.arm()
+    assert not rig.owner.arm()
+
+
+@pytest.mark.parametrize(
+    "action,reason",
+    [("close", "closed"), ("disconnect", "connection_ended")],
+)
+def test_terminal_race_wins_over_transient_arm_retry(rig, monkeypatch, action, reason):
+    entered, release = Event(), Event()
+
+    def contended():
+        entered.set()
+        assert release.wait(2)
+        return None
+
+    monkeypatch.setattr(rig.owner, "_qualified", contended)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(rig.owner.arm)
+        assert entered.wait(1)
+        try:
+            if action == "close":
+                rig.owner.close()
+            else:
+                rig.owner._connection(False)
+        finally:
+            release.set()
+        assert not future.result(timeout=1)
+
+    assert rig.owner.status().reason == reason
+    assert not rig.owner.arm()
 
 
 def test_identity_pin_is_checked_again_for_each_attempt(rig):
