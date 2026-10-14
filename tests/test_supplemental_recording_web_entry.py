@@ -12,7 +12,6 @@ import subprocess
 import sys
 import time
 from contextlib import suppress
-from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -23,6 +22,7 @@ from sds200.exceptions import DaemonUnavailableError
 
 from . import test_supplemental_recording_probe_entry as probe_entry
 from .test_supplemental_recording_probe_entry import wire
+from .test_supplemental_recording_web_peer import m as peer
 from .test_supplemental_recording_web_service import m as service
 from .test_supplemental_recording_web_service import tree as tree
 
@@ -331,10 +331,20 @@ def test_entry_main_always_reports_fixed_failure_and_no_recording_success(monkey
 
 
 @pytest.mark.parametrize("fault", ["extra", "server_exit", "deadline"])
-def test_after_listening_no_reuse_or_original_lifetime_extension(runtime, fault):
+def test_after_listening_no_reuse_or_original_lifetime_extension(runtime, fault, monkeypatch):
+    fixture_clock = original_deadline = None
     if fault == "deadline":
-        runtime.prepared.expected = replace(
-            runtime.prepared.expected, deadline=time.monotonic() + 0.2
+        # Keep asyncio and the test's own bounded wait on real monotonic time.
+        # Only the synthetic peer/probe composition receives a stable clock
+        # during listener startup, then observes the unchanged original cutoff.
+        fixture_clock = [time.monotonic()]
+        original_deadline = runtime.prepared.expected.deadline
+        clock = SimpleNamespace(monotonic=lambda: fixture_clock[0])
+        monkeypatch.setattr(peer, "time", clock)
+        monkeypatch.setattr(
+            sys.modules["supplemental_recording_probe"],
+            "time",
+            clock,
         )
 
     async def run():
@@ -347,6 +357,11 @@ def test_after_listening_no_reuse_or_original_lifetime_extension(runtime, fault)
             os.write(runtime.channel.writer, b"second request")
         elif fault == "server_exit":
             runtime.server.should_exit = True
+        else:
+            assert fixture_clock is not None and original_deadline is not None
+            assert runtime.prepared.expected.deadline == original_deadline
+            assert runtime.config.app.service._peers._deadline == original_deadline
+            fixture_clock[0] = original_deadline
         with pytest.raises((ValueError, DaemonUnavailableError)):
             await asyncio.wait_for(task, 2)
         assert runtime.channel.stream.writes == 1
