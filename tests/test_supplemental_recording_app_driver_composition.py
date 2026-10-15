@@ -20,6 +20,7 @@ import pytest
 from . import test_supplemental_recording_app_phase_composition as phases
 from . import test_supplemental_recording_candidate_qualification as candidates
 from . import test_supplemental_recording_finalized_recovery as platform
+from ._supplemental_fixture_clock import compressed_scheduler_time
 
 m, r = phases.m, phases.r
 launch, base = m.launch, m.base
@@ -243,9 +244,24 @@ def handoff(s, monkeypatch, *, record=True):
     path = s.plan.root / "recording-ledger"
     path.mkdir(mode=0o700)
     s.ledger = launch.binding.Ledger(path, binding, now=time.monotonic())
-    assert s.driver.start_native(
-        s.ledger, s.endpoint, s.audit, specification=s.spec, profile_sha256="a" * 64
-    )
+    publication = m.inputs.publish_launch
+
+    def publish_launch(*args, **kwargs):
+        # This broad composition verifies ownership and recovery routing. Direct
+        # publication suites retain the exact production deadlines; compress only
+        # this synthetic publication boundary so later Ready ordering stays real.
+        with compressed_scheduler_time(
+            monkeypatch,
+            clock_module=launch.plans.clock,
+            witness=s.startup.clock,
+        ):
+            return publication(*args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(m.inputs, "publish_launch", publish_launch)
+        assert s.driver.start_native(
+            s.ledger, s.endpoint, s.audit, specification=s.spec, profile_sha256="a" * 64
+        )
     s.run = s.driver.native.run
     if not record:
         return
@@ -358,6 +374,39 @@ def test_original_driver_runs_actual_app_handoffs_and_original_session_recovery(
     assert s.driver.recording.reader.closed and s.candidate_owner.closed
     assert s.journal.fd >= 0
     assert_owners(s)
+
+
+def test_native_handoff_compresses_scheduler_pause_inside_publication(driver_case, monkeypatch):
+    s = driver_case
+    monotonic = time.monotonic
+    clock_read = launch.plans.clock.read
+    witness_read = s.startup.clock.read
+    fsync = os.fsync
+    paused = []
+
+    def delayed(fd):
+        result = fsync(fd)
+        if not paused and s.driver.native_attempted:
+            before = time.monotonic()
+            direct = launch.plans.clock.read()
+            witnessed = s.startup.clock.read()
+            stable = s.startup.clock._last
+            time.sleep(2.1)
+            after = time.monotonic()
+            paused.append((before, after, direct, witnessed, stable))
+        return result
+
+    monkeypatch.setattr(os, "fsync", delayed)
+    result = run(s, monkeypatch, lambda: prepare_recovery(s, monkeypatch))
+    assert result.phase == "complete"
+    assert len(paused) == 1
+    before, after, direct, witnessed, stable = paused[0]
+    assert before < after < before + 0.001
+    assert direct is witnessed is stable
+    assert time.monotonic is monotonic
+    assert launch.plans.clock.read is clock_read
+    assert s.startup.clock.read == witness_read
+    assert s.transitions == ["native", "begin", "finish"]
 
 
 @pytest.mark.parametrize("fault", ["relay", "start_return", "lost_started_ack"])
