@@ -11,6 +11,7 @@ from math import floor
 from time import monotonic
 from typing import Protocol
 
+from .exceptions import CommandTimeoutError
 from .models import GstResponse, GwfResponse, PwfResponse
 from .waterfall_subscriptions import (
     WaterfallDelivery,
@@ -417,9 +418,7 @@ class WaterfallSession:
 
             self._transition_locked(WaterfallSessionState.STARTING)
             try:
-                self._record_gst_request_locked()
-                status = self.radio.get_waterfall_status(timeout=self.start_timeout)
-                self.radio.start_waterfall_publication(timeout=self.start_timeout)
+                status = self._start_publication_locked(timeout=self.start_timeout)
             except BaseException as error:
                 self._leases.discard(lease)
                 subscription.close()
@@ -557,9 +556,7 @@ class WaterfallSession:
                 )
             self._transition_locked(WaterfallSessionState.STARTING)
             try:
-                self._record_gst_request_locked()
-                status = self.radio.get_waterfall_status(timeout=start_timeout)
-                self.radio.start_waterfall_publication(timeout=start_timeout)
+                status = self._start_publication_locked(timeout=start_timeout)
             except BaseException as error:
                 self._record_failure_locked(error)
                 raise
@@ -569,6 +566,25 @@ class WaterfallSession:
             self._record_gwf_request_locked()
             self._record_gst_success_locked(status)
             self._transition_locked(WaterfallSessionState.RUNNING)
+
+    def _start_publication_locked(self, *, timeout: float) -> GstResponse:
+        deadline = monotonic() + timeout
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise CommandTimeoutError(
+                "Waterfall session startup timed out before GST request."
+            )
+
+        self._record_gst_request_locked()
+        status = self.radio.get_waterfall_status(timeout=remaining)
+
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise CommandTimeoutError(
+                "Waterfall session startup timed out before publication start."
+            )
+        self.radio.start_waterfall_publication(timeout=remaining)
+        return status
 
     def close(self) -> None:
         with self._lock:
