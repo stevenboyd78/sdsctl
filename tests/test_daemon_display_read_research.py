@@ -377,7 +377,22 @@ def test_scope_or_mode_change_and_return_cannot_revalidate_a_read(scanner, kind,
         (DisplayReadKind.DEPARTMENT, "DQK,1,23"),
     ],
 )
-def test_uncertain_read_stops_without_retry_or_follow_on_get(scanner, error, failure, kind, wire):
+def test_uncertain_read_stops_without_retry_or_follow_on_get(
+    scanner, error, failure, kind, wire, monkeypatch
+):
+    # This checks selected-read failure handling, not PSI producer scheduling
+    # or elapsed I/O. Reach the selected fault deterministically without
+    # spending its 0.1s test budget on starting an unrelated background thread.
+    ticks = count(10.0, 0.001)
+    monkeypatch.setattr("sds200.daemon_display_read_research.monotonic", lambda: next(ticks))
+
+    def model(*, timeout):
+        scanner._stage("MDL", timeout)
+        scanner.bus.emit("psi", scanner.frame)
+        return scanner.model
+
+    monkeypatch.setattr(scanner, "get_model", model)
+
     def fail():
         raise error
 
@@ -385,7 +400,10 @@ def test_uncertain_read_stops_without_retry_or_follow_on_get(scanner, error, fai
     probe = attempt(kind)
     result = probe.run(scanner, operator_ready=True, timeout=0.1)
     assert result.status == "read_unconfirmed" and result.failure == failure
+    assert result.read_reserved
     assert scanner.commands == [wire] and scanner.hooks == 0
+    assert scanner.stages == ["scope", "MDL", "VER", wire.split(",")[0]]
+    assert scanner.producer is None
     assert "PRIVATE" not in str(asdict(result))
     with pytest.raises(DisplayReadRefused):
         probe.run(scanner, operator_ready=True, timeout=0.1)

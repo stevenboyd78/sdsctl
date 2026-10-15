@@ -330,6 +330,56 @@ def test_pcmu_client_disconnect_is_not_an_operational_error(
         server.stop()
 
 
+def test_pcmu_server_reaps_idle_disconnect_and_reclaims_capacity(
+    tmp_path: Path,
+) -> None:
+    stream = FakePcmuStream()
+    server, path = make_server(
+        tmp_path,
+        stream,
+        max_clients=1,
+        accept_poll_interval=0.01,
+    )
+    server.start()
+    first = connect(path)
+
+    try:
+        wait_until(
+            lambda: server.connected_clients == 1
+            and stream.subscriber_count == 1
+        )
+        first.shutdown(socket.SHUT_RDWR)
+        first.close()
+
+        wait_until(
+            lambda: server.connected_clients == 0
+            and stream.subscriber_count == 0
+        )
+        replacement = connect(path)
+        try:
+            wait_until(
+                lambda: server.connected_clients == 1
+                and stream.subscriber_count == 1
+                and server.snapshot().accepted_clients == 2
+            )
+
+            packet = make_packet(744)
+            publication = stream.publish(packet)
+            delivery = decode_pcmu_delivery(read_frame(replacement))
+
+            assert delivery.stream_sequence == publication.stream_sequence
+            assert delivery.packet == packet
+            snapshot = server.snapshot()
+            assert snapshot.accepted_clients == 2
+            assert snapshot.rejected_clients == 0
+            assert snapshot.last_error is None
+        finally:
+            replacement.close()
+    finally:
+        first.close()
+        server.stop()
+
+
 def test_pcmu_server_startup_preserves_error_and_cleans_all_owners(
     caplog: pytest.LogCaptureFixture,
 ) -> None:

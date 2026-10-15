@@ -39,6 +39,26 @@ SPEC.loader.exec_module(m)
 begin, launch, denied = m.begin, m.launch, executions.begins.denied
 
 
+def fixture_start_confirmed(run, monkeypatch):
+    """Retry only strict raw clock samples interrupted by host scheduling."""
+    clock = launch.plans.clock
+    read = clock.read
+
+    def sampled():
+        error = None
+        for _ in range(10):
+            try:
+                return read()
+            except clock.UnconfirmedClock as observed:
+                error = observed
+        assert error is not None
+        raise error
+
+    with monkeypatch.context() as patch:
+        patch.setattr(clock, "read", sampled)
+        return run.start_confirmed()
+
+
 @pytest.fixture
 def joined(execution, monkeypatch):
     s = execution
@@ -46,7 +66,7 @@ def joined(execution, monkeypatch):
     path = s.plan.root / "recording-ledger"
     path.mkdir(mode=0o700)
     s.ledger = begin.binding.Ledger(path, s.run.pins.host, now=time.monotonic())
-    assert s.run.start_confirmed().healthy is True
+    assert fixture_start_confirmed(s.run, monkeypatch).healthy is True
     setup_relay(s, monkeypatch)
 
     def make(**kwargs):
@@ -108,6 +128,30 @@ def setup_relay(s, monkeypatch):
 
     monkeypatch.setattr(begin.relayed.Relay, "__init__", relay_init)
     monkeypatch.setattr(begin.relayed.retained.Retained, "check", guard_check)
+
+
+def test_joined_setup_retries_one_descheduled_raw_clock_sample(execution, monkeypatch):
+    s = execution
+    run = s.make()
+    clock = launch.plans.clock
+    read = clock.read
+    samples = []
+
+    def descheduled():
+        samples.append(None)
+        if len(samples) == 1:
+            raise clock.UnconfirmedClock(clock.MESSAGE)
+        return read()
+
+    with monkeypatch.context() as patch:
+        patch.setattr(clock, "read", descheduled)
+        assert fixture_start_confirmed(run, patch).healthy is True
+        assert clock.read is descheduled
+
+    assert len(samples) > 1
+    assert clock.read is read
+    assert not run.failed and run.ready is not None
+    assert s.journal.machine.state.phase == "candidate_running"
 
 
 def test_fresh_app_ready_then_durable_permission_and_original_begin(joined):
