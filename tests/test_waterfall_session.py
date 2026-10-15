@@ -6,6 +6,7 @@ from collections.abc import Callable
 
 import pytest
 
+from sds200.exceptions import CommandTimeoutError
 from sds200.models import DisplayLine, GstResponse, GwfResponse, Packet, PwfResponse
 from sds200.parser import PacketParser
 from sds200.waterfall_session import (
@@ -139,8 +140,8 @@ def test_first_lease_starts_one_session_and_last_lease_stops_it() -> None:
     first = session.subscribe()
     second = session.subscribe()
 
-    assert radio.start_calls == [1.5]
-    assert radio.status_calls == [1.5]
+    assert len(radio.start_calls) == len(radio.status_calls) == 1
+    assert 0 < radio.start_calls[0] <= radio.status_calls[0] <= 1.5
     assert session.snapshot().state is WaterfallSessionState.RUNNING
     assert session.snapshot().consumer_count == 2
     assert isinstance(first.get(0).response, PwfResponse)
@@ -162,6 +163,56 @@ def test_first_lease_starts_one_session_and_last_lease_stops_it() -> None:
     assert session.snapshot().consumer_count == 0
 
 
+def test_first_start_shares_one_timeout_budget_across_gst_and_publication(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = [100.0]
+    monkeypatch.setattr("sds200.waterfall_session.monotonic", lambda: clock[0])
+    radio = FakeWaterfallRadio()
+    original_get_status = radio.get_waterfall_status
+
+    def delayed_get_status(*, timeout: float = 2.0) -> GstResponse:
+        status = original_get_status(timeout=timeout)
+        clock[0] += 0.2
+        return status
+
+    monkeypatch.setattr(radio, "get_waterfall_status", delayed_get_status)
+    session = WaterfallSession(radio, start_timeout=0.5)
+
+    lease = session.subscribe()
+
+    assert radio.status_calls == pytest.approx([0.5])
+    assert radio.start_calls == pytest.approx([0.3])
+    lease.close()
+
+
+def test_first_start_does_not_begin_publication_after_gst_exhausts_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = [100.0]
+    monkeypatch.setattr("sds200.waterfall_session.monotonic", lambda: clock[0])
+    radio = FakeWaterfallRadio()
+    original_get_status = radio.get_waterfall_status
+
+    def expired_get_status(*, timeout: float = 2.0) -> GstResponse:
+        status = original_get_status(timeout=timeout)
+        clock[0] += 0.5
+        return status
+
+    monkeypatch.setattr(radio, "get_waterfall_status", expired_get_status)
+    session = WaterfallSession(radio, start_timeout=0.5)
+
+    with pytest.raises(CommandTimeoutError, match="before publication start"):
+        session.subscribe()
+
+    assert radio.status_calls == pytest.approx([0.5])
+    assert radio.start_calls == []
+    snapshot = session.snapshot()
+    assert snapshot.state is WaterfallSessionState.FAILED
+    assert snapshot.consumer_count == 0
+    assert snapshot.publisher.subscriber_count == 0
+
+
 def test_failed_first_start_releases_lease_and_allows_retry() -> None:
     radio = FakeWaterfallRadio()
     radio.start_error = RuntimeError("synthetic start failure")
@@ -178,8 +229,15 @@ def test_failed_first_start_releases_lease_and_allows_retry() -> None:
     radio.start_error = None
     lease = session.subscribe()
 
-    assert radio.start_calls == [3.0, 3.0]
-    assert radio.status_calls == [3.0, 3.0]
+    assert len(radio.start_calls) == len(radio.status_calls) == 2
+    assert all(
+        0 < start_timeout <= status_timeout <= 3.0
+        for start_timeout, status_timeout in zip(
+            radio.start_calls,
+            radio.status_calls,
+            strict=True,
+        )
+    )
     assert session.snapshot().state is WaterfallSessionState.RUNNING
     lease.close()
 
@@ -200,7 +258,11 @@ def test_last_lease_stop_failure_is_reported_without_leaking_demand() -> None:
     assert snapshot.last_error == "OSError: synthetic stop failure"
 
 
-def test_transport_interruption_retains_demand_and_recovery_restarts_once() -> None:
+def test_transport_interruption_retains_demand_and_recovery_restarts_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = [100.0]
+    monkeypatch.setattr("sds200.waterfall_session.monotonic", lambda: clock[0])
     radio = FakeWaterfallRadio()
     session = WaterfallSession(radio)
     lease = session.subscribe()
@@ -210,12 +272,60 @@ def test_transport_interruption_retains_demand_and_recovery_restarts_once() -> N
     assert session.snapshot().state is WaterfallSessionState.INTERRUPTED
     assert session.snapshot().consumer_count == 1
 
+    original_get_status = radio.get_waterfall_status
+
+    def delayed_get_status(*, timeout: float = 2.0) -> GstResponse:
+        status = original_get_status(timeout=timeout)
+        clock[0] += 0.2
+        return status
+
+    monkeypatch.setattr(radio, "get_waterfall_status", delayed_get_status)
     session.recover(timeout=0.5)
 
-    assert radio.start_calls == [3.0, 0.5]
-    assert radio.status_calls == [3.0, 0.5]
+    assert radio.status_calls == pytest.approx([3.0, 0.5])
+    assert radio.start_calls == pytest.approx([3.0, 0.3])
     assert session.snapshot().state is WaterfallSessionState.RUNNING
     lease.close()
+
+
+def test_recovery_retains_demand_when_gst_exhausts_startup_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = [100.0]
+    monkeypatch.setattr("sds200.waterfall_session.monotonic", lambda: clock[0])
+    radio = FakeWaterfallRadio()
+    session = WaterfallSession(radio)
+    lease = session.subscribe()
+    session.mark_interrupted()
+    original_get_status = radio.get_waterfall_status
+
+    def expired_get_status(*, timeout: float = 2.0) -> GstResponse:
+        status = original_get_status(timeout=timeout)
+        clock[0] += 0.5
+        return status
+
+    monkeypatch.setattr(radio, "get_waterfall_status", expired_get_status)
+
+    with pytest.raises(CommandTimeoutError, match="before publication start"):
+        session.recover(timeout=0.5)
+
+    assert radio.status_calls == pytest.approx([3.0, 0.5])
+    assert radio.start_calls == pytest.approx([3.0])
+    snapshot = session.snapshot()
+    assert snapshot.state is WaterfallSessionState.FAILED
+    assert snapshot.consumer_count == 1
+    assert snapshot.publisher.subscriber_count == 1
+    assert snapshot.last_error == (
+        "CommandTimeoutError: Waterfall session startup timed out "
+        "before publication start."
+    )
+    assert not lease.closed
+
+    lease.close()
+    snapshot = session.snapshot()
+    assert snapshot.state is WaterfallSessionState.IDLE
+    assert snapshot.consumer_count == 0
+    assert snapshot.publisher.subscriber_count == 0
 
 
 def test_recovery_is_a_noop_without_an_interrupted_session() -> None:
@@ -225,8 +335,8 @@ def test_recovery_is_a_noop_without_an_interrupted_session() -> None:
 
     session.recover(timeout=0.5)
 
-    assert radio.start_calls == [3.0]
-    assert radio.status_calls == [3.0]
+    assert len(radio.start_calls) == len(radio.status_calls) == 1
+    assert 0 < radio.start_calls[0] <= radio.status_calls[0] <= 3.0
     assert session.snapshot().state is WaterfallSessionState.RUNNING
     lease.close()
 
@@ -369,7 +479,9 @@ def test_low_rate_gst_refresh_updates_changed_frequency_range() -> None:
     assert session.poll() is True
 
     refreshed = session.snapshot()
-    assert radio.status_calls == [3.0, 0.4]
+    assert len(radio.status_calls) == 2
+    assert 0 < radio.status_calls[0] <= 3.0
+    assert radio.status_calls[1] == 0.4
     assert refreshed.gst_requests == 2
     assert refreshed.gst_skipped_poll_deadlines == 0
     assert refreshed.gst_poll_failures == 0
@@ -401,7 +513,9 @@ def test_late_unchanged_gst_refresh_skips_expired_slots_without_revision() -> No
     assert refreshed.waterfall_status_revision == 1
 
     assert session.poll() is False
-    assert radio.status_calls == [3.0, 1.0]
+    assert len(radio.status_calls) == 2
+    assert 0 < radio.status_calls[0] <= 3.0
+    assert radio.status_calls[1] == 1.0
     lease.close()
 
 
