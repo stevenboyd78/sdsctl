@@ -371,7 +371,12 @@ class RemotePcmSink:
         with self._condition:
             if not self._started or self._stopped:
                 return
-            if self._stopping and self._state == "stopping":
+            if (
+                self._stopping
+                and self._state == "stopping"
+                and self._thread is not None
+                and self._thread.is_alive()
+            ):
                 return
             if not self._stopping:
                 self._stopping = True
