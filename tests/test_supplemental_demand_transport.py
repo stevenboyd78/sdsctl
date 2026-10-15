@@ -87,6 +87,56 @@ def renewal_headers(context, nonce=None):
     return {**headers(context), RENEWAL_HEADER: nonce or str(uuid4()), "Origin": ORIGIN}
 
 
+def arm_when_runtime_state_ready(rig, state_lock_contended=None):
+    acquired = rig.runtime._state_lock.acquire(blocking=False)
+    if not acquired:
+        if state_lock_contended is not None:
+            state_lock_contended.set()
+        acquired = rig.runtime._state_lock.acquire(timeout=2)
+    assert acquired, "Runtime state did not settle for fixture arm"
+    try:
+        return rig.owner.arm()
+    finally:
+        rig.runtime._state_lock.release()
+
+
+def test_positive_arm_handoff_waits_out_inflight_psi_callback(rig, monkeypatch):
+    entered, release = Event(), Event()
+    callback_released, state_lock_contended = Event(), Event()
+    original_clock = rig.runtime._clock
+
+    def blocked_clock():
+        if not entered.is_set():
+            entered.set()
+            if release.wait(2):
+                callback_released.set()
+        return original_clock()
+
+    monkeypatch.setattr(rig.runtime, "_clock", blocked_clock)
+    try:
+        assert entered.wait(1)
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            armed = pool.submit(arm_when_runtime_state_ready, rig, state_lock_contended)
+            try:
+                assert state_lock_contended.wait(1)
+                assert not armed.done()
+                status = rig.owner.status()
+                assert not status.armed and not status.ended
+                assert status.reason is None and status.read_attempts == 0
+                assert rig.peer.reads == []
+            finally:
+                release.set()
+            assert callback_released.wait(1)
+            assert armed.result(timeout=1)
+    finally:
+        release.set()
+
+    status = rig.owner.status()
+    assert status.armed and not status.ended
+    assert status.reason is None and status.read_attempts == 0
+    assert rig.peer.reads == []
+
+
 def test_exact_owner_runtime_and_feed_required(rig, service):
     for owner in (object(), SimpleNamespace(frames=rig.owner.frames)):
         with pytest.raises(TypeError):
@@ -118,7 +168,7 @@ def test_only_explicit_owner_advertises_mutation_with_observe_grant(rig, service
 
 def test_passive_reads_then_initial_epoch_ack_and_coalesced_renewal(rig, service):
     before = decode_context_response(service.context())
-    assert rig.owner.arm()
+    assert arm_when_runtime_state_ready(rig)
     for _ in range(3):
         service.context()
         service.frame(asdict(before))
@@ -139,7 +189,7 @@ def test_passive_reads_then_initial_epoch_ack_and_coalesced_renewal(rig, service
 
 
 def test_expired_lease_advances_once_and_no_cached_read_can_extend(rig, service):
-    assert rig.owner.arm()
+    assert arm_when_runtime_state_ready(rig)
     first = service.demand(service.context()["context"], str(uuid4()))["context"]
     wait_for(lambda: rig.peer.reads == ["FQK"])
     # Peer receipt precedes native completion. Jumping the fake clock while
@@ -170,7 +220,7 @@ def test_expired_lease_advances_once_and_no_cached_read_can_extend(rig, service)
 
 
 def test_expiry_during_pending_read_quarantines_and_cannot_be_renewed(rig, service):
-    assert rig.owner.arm()
+    assert arm_when_runtime_state_ready(rig)
     with rig.peer.hold("FQK") as gate:
         service.demand(service.context()["context"], str(uuid4()))
         assert gate.entered.wait(1)
@@ -191,7 +241,7 @@ def test_expiry_during_pending_read_quarantines_and_cannot_be_renewed(rig, servi
 def test_ended_window_rejects_both_current_and_newly_retired_context(
     rig, service, monkeypatch, retire_between_calls
 ):
-    assert rig.owner.arm()
+    assert arm_when_runtime_state_ready(rig)
     service.demand(service.context()["context"], str(uuid4()))
     wait_for(lambda: rig.peer.reads == ["FQK"])
     wait_for(lambda: rig.owner._cache._pending is None)
@@ -227,7 +277,7 @@ def test_ended_window_rejects_both_current_and_newly_retired_context(
     ],
 )
 def test_stale_context_cannot_mutate_any_binding_field(rig, service, field):
-    assert rig.owner.arm()
+    assert arm_when_runtime_state_ready(rig)
     context = service.context()["context"]
     context[field] = (
         context[field] + 1
@@ -251,7 +301,7 @@ def test_bad_nonce_rejected(nonce):
 
 
 def test_authorization_and_shapes_checked_before_mutation(rig, service, api):
-    assert rig.owner.arm()
+    assert arm_when_runtime_state_ready(rig)
     context = service.context()["context"]
     params = {"context": context, "renewal_id": str(uuid4())}
     payload = DaemonApiRequest("demand", Op.DISPLAY_SUPPLEMENTAL_DEMAND, params).as_dict()
@@ -269,7 +319,7 @@ def test_authorization_and_shapes_checked_before_mutation(rig, service, api):
 
 @pytest.mark.parametrize("damage", ["nonce", "epoch", "identity", "shape", "version", "lease"])
 def test_ack_replay_or_context_mismatch_rejected(rig, service, damage):
-    assert rig.owner.arm()
+    assert arm_when_runtime_state_ready(rig)
     binding = decode_context_response(service.context())
     nonce = str(uuid4())
     ack = deepcopy(service.demand(asdict(binding), nonce))
@@ -290,7 +340,7 @@ def test_ack_replay_or_context_mismatch_rejected(rig, service, damage):
 
 
 def test_post_mutation_capture_failure_is_uncertain_not_clean_refusal(rig, service, monkeypatch):
-    assert rig.owner.arm()
+    assert arm_when_runtime_state_ready(rig)
     context = service.context()["context"]
     capture = service._capture
     called = []
@@ -319,7 +369,7 @@ def test_native_display_http_unix_roundtrip_and_admission(rig, service, api, tmp
         good = renewal_headers(context)
         assert client.post(DEMAND_PATH, headers=good).status_code == 401
         login(client)
-        assert rig.owner.arm()
+        assert arm_when_runtime_state_ready(rig)
         for bad in (
             {},
             {**good, "Origin": "https://evil.example"},
@@ -376,7 +426,7 @@ def test_both_demand_gates_required(rig, service, api, tmp_path, web_enabled, da
         ) as client,
     ):
         login(client)
-        assert rig.owner.arm()
+        assert arm_when_runtime_state_ready(rig)
         result = client.post(DEMAND_PATH, headers=renewal_headers(service.context()["context"]))
         assert result.status_code == (503 if web_enabled else 403)
         assert rig.peer.reads == []
@@ -416,7 +466,7 @@ def test_trusted_ingress_only(rig, service, api, tmp_path):
                 ).status_code
                 == 403
             )
-        assert rig.owner.arm()
+        assert arm_when_runtime_state_ready(rig)
         with TestClient(app, client=(WEB_DASHBOARD_HOME_ASSISTANT_INGRESS_CLIENT, 1234)) as client:
             reply = client.post(DEMAND_PATH, headers=renewal_headers(service.context()["context"]))
             assert reply.status_code == 200
@@ -460,7 +510,7 @@ def test_managed_cookie_requires_origin_and_live_session(rig, service, api, tmp_
         assert client.get("/assets/mimic-supplemental.js").status_code == (200 if consumer else 403)
         assert rig.peer.reads == []
         good = renewal_headers(service.context()["context"])
-        assert rig.owner.arm()
+        assert arm_when_runtime_state_ready(rig)
         assert client.post(DEMAND_PATH, headers={**good, "Origin": "null"}).status_code == 403
         assert (
             client.post(DEMAND_PATH, headers={**good, "Sec-Fetch-Site": "cross-site"}).status_code
@@ -483,7 +533,7 @@ def test_managed_cookie_requires_origin_and_live_session(rig, service, api, tmp_
 def test_two_actual_unix_tui_consumers_share_lease_without_cancelling_sibling(
     rig, service, api, tmp_path
 ):
-    assert rig.owner.arm()
+    assert arm_when_runtime_state_ready(rig)
     with unix(tmp_path, api) as factory:
         first = SupplementalFrameReader(daemon_supplemental_source(factory(), demand=True))
         second = SupplementalFrameReader(daemon_supplemental_source(factory(), demand=True))
@@ -531,7 +581,7 @@ def test_http_lost_daemon_ack_reports_uncertainty_without_replaying(rig, service
             web(LostAck, supplemental_delivery=True, supplemental_demand=True), base_url=ORIGIN
         ) as client:
             login(client)
-            assert rig.owner.arm()
+            assert arm_when_runtime_state_ready(rig)
             response = client.post(
                 DEMAND_PATH, headers=renewal_headers(service.context()["context"])
             )
