@@ -187,16 +187,19 @@ def test_accept_loop_retries_timeout_but_stops_after_socket_failure(
     with server._state_lock:
         server._active = True
 
-    server._accept_loop(cast(socket.socket, acceptor))
+    try:
+        server._accept_loop(cast(socket.socket, acceptor))
 
-    snapshot = server.snapshot()
-    assert acceptor.calls == 2
-    assert not snapshot.active
-    assert snapshot.connected_clients == 0
-    assert snapshot.accepted_clients == 0
-    assert snapshot.rejected_clients == 0
-    assert snapshot.last_error == "OSError"
-    assert pipeline.starts == 0
+        snapshot = server.snapshot()
+        assert acceptor.calls == 2
+        assert not snapshot.active
+        assert snapshot.connected_clients == 0
+        assert snapshot.accepted_clients == 0
+        assert snapshot.rejected_clients == 0
+        assert snapshot.last_error == "OSError"
+        assert pipeline.starts == 0
+    finally:
+        server.stop()
 
 
 def test_shutdown_refuses_client_that_has_not_reached_admission(
