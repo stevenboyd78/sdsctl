@@ -198,7 +198,7 @@ class DaemonLiveAudioServer:
                     if self._stop_event.is_set():
                         return
                     self._record_error(error)
-                    continue
+                    return
                 self._accept_client(client)
         finally:
             with self._state_lock:
@@ -206,32 +206,38 @@ class DaemonLiveAudioServer:
 
     def _accept_client(self, client: socket_module.socket) -> None:
         client.settimeout(self.send_timeout)
+        start_error: BaseException | None = None
         with self._state_lock:
-            at_capacity = len(self._clients) >= self.max_clients
-            if at_capacity:
+            stopping = self._stop_event.is_set()
+            at_capacity = not stopping and len(self._clients) >= self.max_clients
+            if stopping:
+                thread = None
+            elif at_capacity:
                 self._rejected_clients += 1
-        if at_capacity:
-            with suppress(OSError):
-                client.sendall(DAEMON_LIVE_AUDIO_UNAVAILABLE)
-            _close_socket(client)
-            return
+                thread = None
+            else:
+                thread = threading.Thread(
+                    target=self._serve_client,
+                    args=(client,),
+                    name="daemon-live-audio-client",
+                    daemon=True,
+                )
+                self._clients[client] = thread
+                try:
+                    thread.start()
+                except BaseException as error:
+                    self._clients.pop(client, None)
+                    start_error = error
+                else:
+                    self._accepted_clients += 1
 
-        thread = threading.Thread(
-            target=self._serve_client,
-            args=(client,),
-            name="daemon-live-audio-client",
-            daemon=True,
-        )
-        with self._state_lock:
-            self._clients[client] = thread
-            self._accepted_clients += 1
-        try:
-            thread.start()
-        except BaseException as error:
-            with self._state_lock:
-                self._clients.pop(client, None)
+        if thread is None or start_error is not None:
+            if at_capacity:
+                with suppress(OSError):
+                    client.sendall(DAEMON_LIVE_AUDIO_UNAVAILABLE)
             _close_socket(client)
-            self._record_error(error)
+        if start_error is not None:
+            self._record_error(start_error)
 
     def _serve_client(self, client: socket_module.socket) -> None:
         lease: _LiveAudioLease | None = None
