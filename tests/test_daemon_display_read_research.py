@@ -84,6 +84,11 @@ class Scanner(FakeControlScanner):
 
     def get_model(self, *, timeout):
         self._stage("MDL", timeout)
+        # Establish the selected-read precondition before returning the model;
+        # the periodic producer is only post-response continuity evidence.
+        frame = self.frame
+        if frame is not None:
+            self.bus.emit("psi", frame)
         if self.producer is None:
 
             def publish():
@@ -226,6 +231,39 @@ def test_corrected_conventional_labels_work_through_one_shot_lifecycle(scanner, 
     assert scanner.commands == [wire] and scanner.scope_depth == scanner.hooks == 0
     with pytest.raises(DisplayReadRefused, match="already attempted"):
         probe.run(scanner, operator_ready=True, timeout=0.15)
+
+
+def test_initial_psi_readiness_does_not_depend_on_periodic_producer(scanner, monkeypatch):
+    class DormantProducer:
+        def __init__(self, *, target, daemon):
+            self.target = target
+            self.daemon = daemon
+
+        def start(self):
+            pass
+
+        def join(self, *, timeout):
+            pass
+
+        def is_alive(self):
+            return False
+
+    monkeypatch.setattr(threading, "Thread", DormantProducer)
+    scanner.frame = ScannerInfoParser().parse(
+        "PSI",
+        '<ScannerInfo Mode="Scan Hold" V_Screen="conventional_scan">'
+        '<MonitorList Q_Key="01"/><System Q_Key="23"/><ConvFrequency/>'
+        '<Department/><Property/><DualWatch PRI="Off" CC="Off" WX="Priority"/>'
+        "<OverWrite/></ScannerInfo>",
+    )
+
+    result = attempt(DisplayReadKind.DEPARTMENT).run(scanner, operator_ready=True, timeout=0.025)
+
+    assert result.status == "reply_only" and result.failure == "timeout"
+    assert result.read_reserved and result.response_validated
+    assert result.normal_psi_after_response == 0
+    assert scanner.commands == ["DQK,1,23"]
+    assert scanner.stages == ["scope", "MDL", "VER", "DQK"]
 
 
 @pytest.mark.parametrize(
