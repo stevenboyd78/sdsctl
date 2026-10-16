@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from sds200.daemon_recording_file_protocol import RECORDING_FILE_RESPONSE_HEADER_BYTES
 from sds200.web_dashboard import WEB_DASHBOARD_HOME_ASSISTANT_INGRESS_CLIENT as PEER
 from sds200.web_supplemental import DEMAND_PATH
 
@@ -274,11 +275,23 @@ def test_quiet_browser_audio_disconnect_preserves_other_request(tree):
     asyncio.run(run())
 
 
-def test_browser_file_disconnect_wakes_read_before_native_close_lock(tree):
+def test_browser_file_disconnect_wakes_read_before_native_close_lock(tree, monkeypatch):
     app, owner = service(tree)
 
     async def run():
-        started, disconnect = asyncio.Event(), asyncio.Event()
+        started, read_waiting, disconnect = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        loop = asyncio.get_running_loop()
+        original_recv = peer._Peer.recv
+        received = {}
+
+        def recv(self, size, flags=0):
+            result = original_recv(self, size, flags)
+            received[self] = received.get(self, 0) + len(result)
+            if received[self] > RECORDING_FILE_RESPONSE_HEADER_BYTES:
+                loop.call_soon_threadsafe(read_waiting.set)
+            return result
+
+        monkeypatch.setattr(peer._Peer, "recv", recv)
 
         async def receive():
             await disconnect.wait()
@@ -292,9 +305,10 @@ def test_browser_file_disconnect_wakes_read_before_native_close_lock(tree):
         task = asyncio.create_task(app(http("/api/v1/recordings/file/blocked.wav"), receive, send))
         try:
             await asyncio.wait_for(started.wait(), 2)
-            # Let the real native download enter its locked read. This fixture
-            # intentionally supplies only half its declared body, no user file.
-            await asyncio.sleep(0.05)
+            # This fixture supplies only half its declared body, so receiving
+            # any body bytes proves the incomplete real native read still
+            # holds its download lock before the browser disconnects.
+            await asyncio.wait_for(read_waiting.wait(), 2)
             began = time.monotonic()
             disconnect.set()
             await asyncio.wait_for(task, 1)
