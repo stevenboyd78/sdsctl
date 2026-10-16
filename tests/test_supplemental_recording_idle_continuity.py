@@ -4,6 +4,7 @@ Retained's actual Engine/Ready/private-transport authentication is separately
 tested. This fixture cannot certify an installed namespace, source or service.
 """
 
+import math
 import os
 import time
 from dataclasses import replace
@@ -97,19 +98,174 @@ def test_original_owned_init_and_files_remain_only_continuity(joined):
 def advance(monkeypatch, seconds):
     # Explicit consistent elapsed-clock fixture, NOT actual time namespace proof.
     original_read, original_mono = m.host_plan.clock.read, time.monotonic
+    window = original_read()
+    current = original_mono() + seconds
+    amount = int(seconds * m.host_plan.clock.NS)
+    window = replace(
+        window,
+        before_ns=window.before_ns + amount,
+        after_ns=window.after_ns + amount,
+        boottime_ns=window.boottime_ns + amount,
+    )
+    step = max(window.after_ns - window.before_ns, 1)
 
     def read():
-        value = original_read()
-        amount = int(seconds * m.host_plan.clock.NS)
-        return replace(
-            value,
-            before_ns=value.before_ns + amount,
-            after_ns=value.after_ns + amount,
-            boottime_ns=value.boottime_ns + amount,
+        nonlocal window
+        result = window
+        window = replace(
+            result,
+            before_ns=result.before_ns + step,
+            after_ns=result.after_ns + step,
+            boottime_ns=result.boottime_ns + step,
         )
+        return result
+
+    def monotonic():
+        nonlocal current
+        current = math.nextafter(current, math.inf)
+        return current
 
     monkeypatch.setattr(m.host_plan.clock, "read", read)
-    monkeypatch.setattr(time, "monotonic", lambda: original_mono() + seconds)
+    monkeypatch.setattr(time, "monotonic", monotonic)
+
+
+def test_advance_samples_each_source_once_and_excludes_later_movement(monkeypatch):
+    clock = m.host_plan.clock
+    seed = clock.Window(
+        "a" * 32,
+        (4, 100),
+        10 * clock.NS,
+        110 * clock.NS,
+        10 * clock.NS + 3,
+    )
+    moved = replace(
+        seed,
+        before_ns=20 * clock.NS,
+        boottime_ns=120 * clock.NS,
+        after_ns=20 * clock.NS + 3,
+    )
+    external, clock_calls, monotonic_calls = [seed], [], []
+
+    def source_read():
+        clock_calls.append(None)
+        return external[0]
+
+    def source_monotonic():
+        monotonic_calls.append(None)
+        return 10.0 if len(monotonic_calls) == 1 else 20.0
+
+    actual_read, actual_monotonic = clock.read, time.monotonic
+    with monkeypatch.context() as sources:
+        sources.setattr(clock, "read", source_read)
+        sources.setattr(time, "monotonic", source_monotonic)
+        with monkeypatch.context() as synthetic:
+            advance(synthetic, 7)
+            external[0] = moved
+            first, second, third = clock.read(), clock.read(), clock.read()
+            first_mono, second_mono = time.monotonic(), time.monotonic()
+            assert clock_calls == [None] and monotonic_calls == [None]
+            expected = replace(
+                seed,
+                before_ns=seed.before_ns + 7 * clock.NS,
+                boottime_ns=seed.boottime_ns + 7 * clock.NS,
+                after_ns=seed.after_ns + 7 * clock.NS,
+            )
+            assert first == expected
+            assert second == replace(
+                expected,
+                before_ns=expected.before_ns + 3,
+                boottime_ns=expected.boottime_ns + 3,
+                after_ns=expected.after_ns + 3,
+            )
+            assert third == replace(
+                second,
+                before_ns=second.before_ns + 3,
+                boottime_ns=second.boottime_ns + 3,
+                after_ns=second.after_ns + 3,
+            )
+            first.check_later(second)
+            second.check_later(third)
+            assert first.offset == second.offset == third.offset == seed.offset
+            assert first_mono == math.nextafter(17.0, math.inf)
+            assert second_mono == math.nextafter(first_mono, math.inf)
+        assert clock.read is source_read and time.monotonic is source_monotonic
+    assert clock.read is actual_read and time.monotonic is actual_monotonic
+
+
+def test_advance_nested_offsets_order_and_restore_sources(monkeypatch):
+    clock = m.host_plan.clock
+    seed = clock.Window(
+        "a" * 32,
+        (4, 100),
+        10 * clock.NS,
+        110 * clock.NS,
+        10 * clock.NS,
+    )
+    actual_read, actual_monotonic = clock.read, time.monotonic
+    with monkeypatch.context() as sources:
+        sources.setattr(clock, "read", lambda: seed)
+        sources.setattr(time, "monotonic", lambda: 10.0)
+        source_read, source_monotonic = clock.read, time.monotonic
+        with monkeypatch.context() as outer:
+            advance(outer, 5)
+            outer_read, outer_monotonic = clock.read, time.monotonic
+            first_outer, first_outer_mono = outer_read(), outer_monotonic()
+            with monkeypatch.context() as inner:
+                advance(inner, 7)
+                first_inner, second_inner = clock.read(), clock.read()
+                first_inner_mono, second_inner_mono = time.monotonic(), time.monotonic()
+                expected_inner = replace(
+                    first_outer,
+                    before_ns=first_outer.before_ns + 1 + 7 * clock.NS,
+                    boottime_ns=first_outer.boottime_ns + 1 + 7 * clock.NS,
+                    after_ns=first_outer.after_ns + 1 + 7 * clock.NS,
+                )
+                assert first_inner == expected_inner
+                assert second_inner == replace(
+                    expected_inner,
+                    before_ns=expected_inner.before_ns + 1,
+                    boottime_ns=expected_inner.boottime_ns + 1,
+                    after_ns=expected_inner.after_ns + 1,
+                )
+                first_inner.check_later(second_inner)
+                assert first_inner.offset == second_inner.offset == seed.offset
+                captured_outer_mono = math.nextafter(first_outer_mono, math.inf)
+                assert first_inner_mono == math.nextafter(captured_outer_mono + 7, math.inf)
+                assert second_inner_mono == math.nextafter(first_inner_mono, math.inf)
+            assert clock.read is outer_read and time.monotonic is outer_monotonic
+            next_outer, next_outer_mono = clock.read(), time.monotonic()
+            first_outer.check_later(next_outer)
+            assert next_outer == replace(
+                first_outer,
+                before_ns=first_outer.before_ns + 2,
+                boottime_ns=first_outer.boottime_ns + 2,
+                after_ns=first_outer.after_ns + 2,
+            )
+            assert next_outer_mono == math.nextafter(captured_outer_mono, math.inf)
+        assert clock.read is source_read and time.monotonic is source_monotonic
+    assert clock.read is actual_read and time.monotonic is actual_monotonic
+
+
+def test_advance_propagates_first_seed_refusal_without_retry(monkeypatch):
+    clock = m.host_plan.clock
+    clock_calls, monotonic_calls = [], []
+
+    def refuse():
+        clock_calls.append(None)
+        raise clock.UnconfirmedClock(clock.MESSAGE)
+
+    def source_monotonic():
+        monotonic_calls.append(None)
+        return 10.0
+
+    with monkeypatch.context() as sources:
+        sources.setattr(clock, "read", refuse)
+        sources.setattr(time, "monotonic", source_monotonic)
+        with monkeypatch.context() as attempted:
+            with pytest.raises(clock.UnconfirmedClock, match=clock.MESSAGE):
+                advance(attempted, 7)
+            assert clock.read is refuse and time.monotonic is source_monotonic
+        assert clock_calls == [None] and monotonic_calls == []
 
 
 def test_expired_readiness_is_not_renewed_by_post_begin_observation(joined, monkeypatch):
