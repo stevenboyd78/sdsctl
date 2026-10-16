@@ -1,5 +1,6 @@
 import threading
 import time
+from typing import Protocol, Self
 
 import pytest
 
@@ -35,6 +36,40 @@ from sds200.transport import TransportDiagnostic
 from sds200.xml_protocol import XmlResponseAssembler
 
 from .fakes import FakeSerial, FakeTransport
+
+
+class _RLock(Protocol):
+    def acquire(self, blocking: bool = True, timeout: float = -1) -> bool: ...
+
+    def release(self) -> None: ...
+
+
+class ObservedRLock:
+    def __init__(self, lock: _RLock) -> None:
+        self._lock = lock
+        self.contended = threading.Event()
+
+    def acquire(self, blocking: bool = True, timeout: float = -1) -> bool:
+        if self._lock.acquire(blocking=False):
+            return True
+
+        self.contended.set()
+        if not blocking:
+            return False
+        if timeout == -1:
+            return self._lock.acquire()
+        return self._lock.acquire(timeout=timeout)
+
+    def release(self) -> None:
+        self._lock.release()
+
+    def __enter__(self) -> Self:
+        assert self.acquire()
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        del args
+        self.release()
 
 
 def test_command_is_cr_terminated_and_matches_response() -> None:
@@ -235,6 +270,8 @@ def test_indexed_menu_snapshot_keeps_lock_between_mnu_and_msi(
 ) -> None:
     transport = FakeTransport()
     radio = SDS200.from_transport(transport)
+    command_lock = ObservedRLock(radio._command_lock)
+    radio._command_lock = command_lock
     original_execute = radio.execute
     mnu_completed = threading.Event()
     release_after_mnu = threading.Event()
@@ -299,7 +336,7 @@ def test_indexed_menu_snapshot_keeps_lock_between_mnu_and_msi(
         competing = threading.Thread(target=competitor, daemon=True)
         competing.start()
         assert competitor_started.wait(timeout=1.0)
-        time.sleep(0.02)
+        assert command_lock.contended.wait(timeout=1.0)
 
         assert transport.writes == ["MNU,SCAN_SYSTEM,000007"]
 
@@ -1939,6 +1976,8 @@ def test_psi_renewal_keeps_transaction_lock_until_frame_after_ack(
 def test_psi_start_keeps_transaction_lock_until_frame_after_ack() -> None:
     transport = FakeTransport("udp://scanner")
     radio = SDS200.from_transport(transport, expected_model="SDS200")
+    command_lock = ObservedRLock(radio._command_lock)
+    radio._command_lock = command_lock
     radio.connect()
     xml = (
         '<?xml version="1.0" encoding="utf-8"?>\n'
@@ -1974,7 +2013,7 @@ def test_psi_start_keeps_transaction_lock_until_frame_after_ack() -> None:
 
     request = threading.Thread(target=request_scanner_info, daemon=True)
     request.start()
-    time.sleep(0.02)
+    assert command_lock.contended.wait(timeout=1.0)
 
     assert transport.writes == ["PSI,500"]
     assert starter.is_alive()
@@ -2009,6 +2048,8 @@ def test_psi_start_keeps_transaction_lock_until_frame_after_ack() -> None:
 def test_waiting_second_psi_start_rechecks_active_state_after_lock() -> None:
     transport = FakeTransport("udp://scanner")
     radio = SDS200.from_transport(transport, expected_model="SDS200")
+    command_lock = ObservedRLock(radio._command_lock)
+    radio._command_lock = command_lock
     radio.connect()
     xml = (
         '<?xml version="1.0" encoding="utf-8"?>\n'
@@ -2050,7 +2091,7 @@ def test_waiting_second_psi_start_rechecks_active_state_after_lock() -> None:
 
     second = threading.Thread(target=second_start, daemon=True)
     second.start()
-    time.sleep(0.02)
+    assert command_lock.contended.wait(timeout=1.0)
 
     assert second.is_alive()
     assert transport.writes == ["PSI,500"]
@@ -2084,6 +2125,8 @@ def test_waiting_second_psi_start_rechecks_active_state_after_lock() -> None:
 def test_stop_waits_for_inflight_psi_start_before_stopping_renewal() -> None:
     transport = FakeTransport("udp://scanner")
     radio = SDS200.from_transport(transport, expected_model="SDS200")
+    command_lock = ObservedRLock(radio._command_lock)
+    radio._command_lock = command_lock
     radio.connect()
     xml = (
         '<?xml version="1.0" encoding="utf-8"?>\n'
@@ -2120,7 +2163,7 @@ def test_stop_waits_for_inflight_psi_start_before_stopping_renewal() -> None:
 
     stopper = threading.Thread(target=stop_push, daemon=True)
     stopper.start()
-    time.sleep(0.02)
+    assert command_lock.contended.wait(timeout=1.0)
 
     assert starter.is_alive()
     assert stopper.is_alive()
