@@ -618,6 +618,7 @@ def observer_child(path, *, retained=False):
                 closing(socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET))
             )
             channel.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
+            print("connecting", flush=True)
             channel.connect(path)
             channel.setblocking(False)
         timer = stack.enter_context(closing(p.domains.clock.ClockWitness(p.domains.clock.read())))
@@ -1123,6 +1124,8 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
 
         stack.callback(stop_observer)
         observer_channel = None
+        if plan_delivery and not retained_delivery:
+            assert transport.line(observer) == "connecting"
         if not retained_delivery:
             observer_channel = stack.enter_context(closing(final_server.accept()[0]))
             observer_channel.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
