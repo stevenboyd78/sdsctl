@@ -7,7 +7,7 @@ CandidateQualification hashing, Engine/Supervisor and idle evidence are fixtures
 
 import time
 from dataclasses import replace
-from threading import Event, Thread
+from threading import Event, Thread, current_thread
 
 import pytest
 
@@ -98,6 +98,26 @@ def at_idle(s, action):
     return resources.at_idle(s, prepared_action)
 
 
+def fixture_observe_candidate(observe, monkeypatch):
+    """Retry only strict raw clock samples interrupted by host scheduling."""
+    clock = m.plans.clock
+    read = clock.read
+
+    def sampled():
+        error = None
+        for _ in range(10):
+            try:
+                return read()
+            except clock.UnconfirmedClock as observed:
+                error = observed
+        assert error is not None
+        raise error
+
+    with monkeypatch.context() as patch:
+        patch.setattr(clock, "read", sampled)
+        return observe()
+
+
 def test_original_service_observes_without_phase_change_or_native_authority(observation):
     s = observation
     original_session = s.session
@@ -149,6 +169,8 @@ def test_prepared_read_overlaps_qualification_and_keeps_original_start(observati
     s = observation
     entered, release = Event(), Event()
     original = m.launch._PreparedHostRead._run
+    clock, original_clock_read = m.plans.clock, m.plans.clock.read
+    refusals, observations = [], []
 
     def blocked(self):
         entered.set()
@@ -166,16 +188,34 @@ def test_prepared_read_overlaps_qualification_and_keeps_original_start(observati
 
     s.before_join = during
 
-    def action():
-        result = s.service.observe_candidate()
-        assert result.observation.sampled_at <= s.original_read.began
-        assert not s.original_read.worker.is_alive()
-        services.publish(s, "cancel_idle")
+    def descheduled():
+        pending = getattr(s, "original_read", None)
+        if pending is not None and current_thread() is pending.worker and not refusals:
+            refusals.append(None)
+            raise clock.UnconfirmedClock(clock.MESSAGE)
+        return original_clock_read()
 
-    try:
-        assert at_idle(s, action).phase == "complete"
-    finally:
-        release.set()
+    with monkeypatch.context() as source:
+        source.setattr(clock, "read", descheduled)
+
+        def action():
+            def observe():
+                observations.append(None)
+                return s.service.observe_candidate()
+
+            result = fixture_observe_candidate(observe, source)
+            assert clock.read is descheduled
+            assert result.observation.sampled_at <= s.original_read.began
+            assert not s.original_read.worker.is_alive()
+            services.publish(s, "cancel_idle")
+
+        try:
+            assert at_idle(s, action).phase == "complete"
+        finally:
+            release.set()
+        assert refusals == [None] and observations == [None]
+        assert clock.read is descheduled
+    assert clock.read is original_clock_read
 
 
 @pytest.mark.parametrize("previously_run", [False, True])
