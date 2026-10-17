@@ -183,12 +183,11 @@ def test_dependabot_retains_python_actions_and_both_docker_roots() -> None:
     ]
     assert dependabot.count("  - package-ecosystem:") == len(updates)
     assert (
-        '    groups:\n'
-        '      monthly-github-actions:\n'
-        '        applies-to: version-updates\n'
-        '        patterns:\n'
-        '          - "*"\n'
-        in dependabot
+        "    groups:\n"
+        "      monthly-github-actions:\n"
+        "        applies-to: version-updates\n"
+        "        patterns:\n"
+        '          - "*"\n' in dependabot
     )
     assert dependabot.count("      monthly-github-actions:") == 1
 
@@ -204,6 +203,13 @@ def test_ci_and_release_workflows_share_the_measured_coverage_floor() -> None:
         "--only theme-system-waterfall-1920x1080.png "
         "--only theme-pip-boy-inspired-waterfall-800x480.png"
     )
+    ci_repeatability_command = (
+        "python scripts/generate_web_dashboard_screenshots.py --verify-repeatability "
+        '--repeatability-evidence-dir "$RUNNER_TEMP/same-chrome-repeatability" '
+        "--only theme-system-1920x1080.png "
+        "--only theme-system-waterfall-1920x1080.png "
+        "--only theme-pip-boy-inspired-waterfall-800x480.png"
+    )
     build_command = "python -m build"
     sdist_gallery_command = (
         "python scripts/generate_web_dashboard_screenshots.py --verify-sdist dist"
@@ -214,10 +220,15 @@ def test_ci_and_release_workflows_share_the_measured_coverage_floor() -> None:
     for workflow in (".github/workflows/ci.yml", ".github/workflows/release.yml"):
         executables = _workflow_executables(_read(workflow))
         assert coverage_command in executables
+        expected_repeatability_command = (
+            ci_repeatability_command
+            if workflow == ".github/workflows/ci.yml"
+            else repeatability_command
+        )
         ordered_commands = (
             gallery_command,
             audit_command,
-            repeatability_command,
+            expected_repeatability_command,
             build_command,
             sdist_gallery_command,
             twine_command,
@@ -240,6 +251,36 @@ def test_ci_and_release_workflows_share_the_measured_coverage_floor() -> None:
     assert audit_command in releasing
     assert repeatability_command in normalized_releasing
     assert sdist_gallery_command in releasing
+
+
+def test_ci_uploads_only_retained_same_chrome_mismatch_evidence() -> None:
+    ci = _read(".github/workflows/ci.yml")
+    release = _read(".github/workflows/release.yml")
+    detect = ci.split("- name: Detect Same-Chrome mismatch evidence", 1)[1].split(
+        "- name: Upload Same-Chrome mismatch evidence", 1
+    )[0]
+    upload = ci.split("- name: Upload Same-Chrome mismatch evidence", 1)[1].split(
+        "- name: Build distributions", 1
+    )[0]
+
+    assert "id: same_chrome_repeatability" in ci
+    assert '--repeatability-evidence-dir "$RUNNER_TEMP/same-chrome-repeatability"' in ci
+    assert "steps.same_chrome_repeatability.outcome == 'failure'" in detect
+    assert 'test -f "$RUNNER_TEMP/same-chrome-repeatability/report.json"' in detect
+    for contract in (
+        "failure()",
+        "steps.same_chrome_repeatability.outcome == 'failure'",
+        "steps.same_chrome_evidence.outcome == 'success'",
+        "steps.same_chrome_evidence.outputs.available == 'true'",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+        "path: ${{ runner.temp }}/same-chrome-repeatability/",
+        "if-no-files-found: error",
+        "retention-days: 30",
+        "compression-level: 0",
+    ):
+        assert contract in upload
+    assert "--repeatability-evidence-dir" not in release
+    assert "same_chrome_evidence" not in release
 
 
 def test_workflow_execution_parser_ignores_comments_and_labels() -> None:

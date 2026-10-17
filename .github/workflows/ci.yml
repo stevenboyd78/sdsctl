@@ -145,7 +145,35 @@ jobs:
         run: node scripts/audit_home_assistant_mimic.mjs --timeout-ms 30000
 
       - name: Same-Chrome screenshot repeatability
-        run: python scripts/generate_web_dashboard_screenshots.py --verify-repeatability --only theme-system-1920x1080.png --only theme-system-waterfall-1920x1080.png --only theme-pip-boy-inspired-waterfall-800x480.png
+        id: same_chrome_repeatability
+        run: python scripts/generate_web_dashboard_screenshots.py --verify-repeatability --repeatability-evidence-dir "$RUNNER_TEMP/same-chrome-repeatability" --only theme-system-1920x1080.png --only theme-system-waterfall-1920x1080.png --only theme-pip-boy-inspired-waterfall-800x480.png
+
+      - name: Detect Same-Chrome mismatch evidence
+        id: same_chrome_evidence
+        if: ${{ failure() && steps.same_chrome_repeatability.outcome == 'failure' }}
+        run: |
+          if test -f "$RUNNER_TEMP/same-chrome-repeatability/report.json"; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload Same-Chrome mismatch evidence
+        if: >-
+          ${{
+            failure() &&
+            steps.same_chrome_repeatability.outcome == 'failure' &&
+            steps.same_chrome_evidence.outcome == 'success' &&
+            steps.same_chrome_evidence.outputs.available == 'true'
+          }}
+        # actions/upload-artifact v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: same-chrome-repeatability-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/same-chrome-repeatability/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
 
       - name: Build distributions
         run: python -m build

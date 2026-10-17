@@ -323,6 +323,14 @@ class Capture:
     pane: str = "scanner"
 
 
+@dataclass(frozen=True, slots=True)
+class _ChromePngPixels:
+    width: int
+    height: int
+    color_type: int
+    rows: tuple[bytes, ...]
+
+
 _REFERENCE_VIEWPORTS = (
     ("1920x1080", 1920, 1080, 1),
     ("1366x768", 1366, 768, 1),
@@ -1161,11 +1169,20 @@ def _capture(
                 f"Node/CDP screenshot capture returned a non-object for {capture.filename}"
             )
         outer_html = result.get("outerHTML")
+        computed_font_sha256 = result.get("computedFontSha256")
         viewport = result.get("viewport")
         if not isinstance(outer_html, str) or not _capture_dom_is_ready(outer_html, capture):
             raise RuntimeError(
                 "Chrome captured the page before the deterministic dashboard state "
                 f"was ready: {capture.filename}"
+            )
+        if (
+            not isinstance(computed_font_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", computed_font_sha256) is None
+        ):
+            raise RuntimeError(
+                "Node/CDP screenshot capture did not return a valid computed-font "
+                f"fingerprint for {capture.filename}: {computed_font_sha256!r}"
             )
         if not _capture_viewport_is_exact(viewport, capture):
             raise RuntimeError(
@@ -1200,6 +1217,8 @@ def _capture(
                     "screenshot_attempts": screenshot_attempts,
                     "viewport": viewport,
                     "waterfall_canvas": waterfall_canvas,
+                    "dom_sha256": hashlib.sha256(outer_html.encode("utf-8")).hexdigest(),
+                    "computed_font_sha256": computed_font_sha256,
                 }
             )
         if not _valid_screenshot(staging, capture):
@@ -1504,6 +1523,130 @@ def _canonicalize_chrome_png(content: bytes) -> bytes:
         + _png_chunk(b"IDAT", compressed)
         + _png_chunk(b"IEND", b"")
     )
+
+
+def _decode_chrome_png_pixels(content: bytes) -> _ChromePngPixels:
+    """Decode validated canonical Chrome RGB/RGBA bytes for diagnostics only."""
+
+    dimensions = _png_dimensions_bytes(content)
+    if dimensions is None:
+        raise RuntimeError("cannot diagnose an invalid Chrome PNG")
+
+    offset = len(_PNG_SIGNATURE)
+    ihdr = b""
+    compressed_parts: list[bytes] = []
+    while offset < len(content):
+        chunk_length = unpack(">I", content[offset : offset + 4])[0]
+        chunk_type = content[offset + 4 : offset + 8]
+        chunk_data_start = offset + 8
+        chunk_data_end = chunk_data_start + chunk_length
+        chunk_data = content[chunk_data_start:chunk_data_end]
+        if chunk_type == b"IHDR":
+            ihdr = chunk_data
+        elif chunk_type == b"IDAT":
+            compressed_parts.append(chunk_data)
+        elif chunk_type == b"IEND":
+            break
+        offset = chunk_data_end + 4
+
+    width, height, bit_depth, color_type, compression, filtering, interlace = unpack(
+        ">IIBBBBB", ihdr
+    )
+    if (
+        (width, height) != dimensions
+        or bit_depth != 8
+        or color_type not in {2, 6}
+        or compression != 0
+        or filtering != 0
+        or interlace != 0
+    ):
+        raise RuntimeError("Chrome PNG diagnostics require non-interlaced 8-bit RGB or RGBA")
+
+    bytes_per_pixel = 3 if color_type == 2 else 4
+    row_bytes = width * bytes_per_pixel
+    decoded = zlib.decompress(b"".join(compressed_parts))
+    if len(decoded) != (row_bytes + 1) * height:
+        raise RuntimeError("Chrome PNG decoded to an unexpected scanline length")
+
+    rows: list[bytes] = []
+    previous = bytes(row_bytes)
+    stride = row_bytes + 1
+    for row_index in range(height):
+        start = row_index * stride
+        filter_type = decoded[start]
+        filtered = decoded[start + 1 : start + stride]
+        reconstructed = bytearray(row_bytes)
+        for index, value in enumerate(filtered):
+            left = reconstructed[index - bytes_per_pixel] if index >= bytes_per_pixel else 0
+            above = previous[index]
+            upper_left = previous[index - bytes_per_pixel] if index >= bytes_per_pixel else 0
+            if filter_type == 0:
+                predictor = 0
+            elif filter_type == 1:
+                predictor = left
+            elif filter_type == 2:
+                predictor = above
+            elif filter_type == 3:
+                predictor = (left + above) // 2
+            elif filter_type == 4:
+                predictor = _paeth_predictor(left, above, upper_left)
+            else:
+                raise RuntimeError(f"Chrome PNG used unsupported filter {filter_type}")
+            reconstructed[index] = (value + predictor) & 0xFF
+        row = bytes(reconstructed)
+        rows.append(row)
+        previous = row
+    return _ChromePngPixels(width, height, color_type, tuple(rows))
+
+
+def _normalized_rgba_row(row: bytes, color_type: int) -> bytes:
+    if color_type == 6:
+        return row
+    return b"".join(row[index : index + 3] + b"\xff" for index in range(0, len(row), 3))
+
+
+def _normalized_pixel_sha256(pixels: _ChromePngPixels) -> str:
+    digest = hashlib.sha256(pack(">II", pixels.width, pixels.height))
+    for row in pixels.rows:
+        digest.update(_normalized_rgba_row(row, pixels.color_type))
+    return digest.hexdigest()
+
+
+def _pixel_difference(
+    first: _ChromePngPixels,
+    second: _ChromePngPixels,
+) -> tuple[int, dict[str, int] | None]:
+    """Return changed RGBA pixels and their half-open physical-pixel bounds."""
+
+    if (first.width, first.height) != (second.width, second.height):
+        raise RuntimeError("cannot compare PNG pixels with different dimensions")
+    count = 0
+    left = first.width
+    top = first.height
+    right_exclusive = 0
+    bottom_exclusive = 0
+    for y, (first_raw, second_raw) in enumerate(zip(first.rows, second.rows, strict=True)):
+        first_row = _normalized_rgba_row(first_raw, first.color_type)
+        second_row = _normalized_rgba_row(second_raw, second.color_type)
+        for x in range(first.width):
+            start = x * 4
+            if first_row[start : start + 4] == second_row[start : start + 4]:
+                continue
+            count += 1
+            left = min(left, x)
+            top = min(top, y)
+            right_exclusive = max(right_exclusive, x + 1)
+            bottom_exclusive = max(bottom_exclusive, y + 1)
+    if count == 0:
+        return 0, None
+    return count, {
+        "left": left,
+        "top": top,
+        "right_exclusive": right_exclusive,
+        "bottom_exclusive": bottom_exclusive,
+        "width": right_exclusive - left,
+        "height": bottom_exclusive - top,
+    }
 
 
 def _valid_screenshot(path: Path, capture: Capture) -> bool:
@@ -1826,6 +1969,167 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _project_diagnostic_mapping(
+    value: object,
+    keys: Sequence[str],
+) -> dict[str, object] | None:
+    if not isinstance(value, Mapping):
+        return None
+    return {key: value[key] for key in keys if key in value}
+
+
+def _project_waterfall_canvas(value: object) -> dict[str, object] | None:
+    projected = _project_diagnostic_mapping(
+        value,
+        ("attempts", "sequence", "stable", "state"),
+    )
+    if projected is None or not isinstance(value, Mapping):
+        return None
+    canvases = value.get("canvases")
+    if isinstance(canvases, list):
+        projected["canvases"] = [
+            _project_diagnostic_mapping(canvas, ("id", "width", "height", "digest"))
+            for canvas in canvases
+        ]
+    return projected
+
+
+def _repeatability_capture_report(
+    *,
+    filename: str,
+    canonical_sha256: str,
+    content: bytes,
+    diagnostics: Mapping[str, object],
+) -> tuple[dict[str, object], _ChromePngPixels]:
+    pixels = _decode_chrome_png_pixels(content)
+    report: dict[str, object] = {
+        "file": filename,
+        "canonical_sha256": canonical_sha256,
+        "ihdr": {
+            "width": pixels.width,
+            "height": pixels.height,
+            "bit_depth": 8,
+            "color_type": pixels.color_type,
+            "color_type_name": {2: "rgb", 6: "rgba"}[pixels.color_type],
+        },
+        "normalized_rgba_sha256": _normalized_pixel_sha256(pixels),
+        "dom_sha256": diagnostics.get("dom_sha256"),
+        "computed_font_sha256": diagnostics.get("computed_font_sha256"),
+        "screenshot_attempts": diagnostics.get("screenshot_attempts"),
+        "viewport": _project_diagnostic_mapping(
+            diagnostics.get("viewport"),
+            (
+                "width",
+                "height",
+                "dpr",
+                "visualWidth",
+                "visualHeight",
+                "visualScale",
+                "colorScheme",
+                "forcedColors",
+                "contrast",
+                "reducedMotion",
+            ),
+        ),
+        "waterfall_canvas": _project_waterfall_canvas(
+            diagnostics.get("waterfall_canvas")
+        ),
+    }
+    return report, pixels
+
+
+def _repeatability_mismatch_report(
+    *,
+    capture: Capture,
+    destinations: Sequence[Path],
+    digests: Sequence[str],
+    diagnostics: Sequence[Mapping[str, object]],
+) -> tuple[dict[str, object], tuple[bytes, bytes]]:
+    contents: list[bytes] = []
+    for destination in destinations:
+        content = _read_regular_file(destination, _MAX_PNG_FILE_BYTES)
+        if content is None:
+            raise RuntimeError(f"cannot read canonical mismatch PNG: {destination}")
+        contents.append(content)
+    first, first_pixels = _repeatability_capture_report(
+        filename="first-canonical.png",
+        canonical_sha256=digests[0],
+        content=contents[0],
+        diagnostics=diagnostics[0],
+    )
+    second, second_pixels = _repeatability_capture_report(
+        filename="second-canonical.png",
+        canonical_sha256=digests[1],
+        content=contents[1],
+        diagnostics=diagnostics[1],
+    )
+    differing_pixels, differing_pixel_bounds = _pixel_difference(
+        first_pixels,
+        second_pixels,
+    )
+    report: dict[str, object] = {
+        "schema_version": 1,
+        "capture": {
+            "filename": capture.filename,
+            "theme": capture.theme,
+            "pane": capture.pane,
+            "css_width": capture.width,
+            "css_height": capture.height,
+            "device_scale_factor": capture.device_scale_factor,
+        },
+        "first": first,
+        "second": second,
+        "comparison": {
+            "canonical_bytes_equal": False,
+            "normalized_pixels_equal": (
+                first["normalized_rgba_sha256"] == second["normalized_rgba_sha256"]
+            ),
+            "differing_pixel_count": differing_pixels,
+            "differing_pixel_bounds": differing_pixel_bounds,
+        },
+    }
+    return report, (contents[0], contents[1])
+
+
+def _atomic_write(path: Path, content: bytes) -> None:
+    staging: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            prefix=f".{path.name}-",
+            dir=path.parent,
+            delete=False,
+        ) as stream:
+            staging = Path(stream.name)
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(staging, path)
+        staging = None
+    finally:
+        if staging is not None:
+            staging.unlink(missing_ok=True)
+
+
+def _preserve_repeatability_evidence(
+    evidence_dir: Path,
+    report: Mapping[str, object],
+    contents: tuple[bytes, bytes],
+) -> None:
+    try:
+        evidence_dir.mkdir(parents=True, exist_ok=False)
+    except FileExistsError as error:
+        raise RuntimeError(
+            f"repeatability evidence directory already exists: {evidence_dir}"
+        ) from error
+    _atomic_write(evidence_dir / "first-canonical.png", contents[0])
+    _atomic_write(evidence_dir / "second-canonical.png", contents[1])
+    serialized = (
+        json.dumps(report, sort_keys=True, indent=2, ensure_ascii=False, allow_nan=False) + "\n"
+    ).encode("utf-8")
+    _atomic_write(evidence_dir / "report.json", serialized)
+
+
 def _verify_capture_repeatability(
     *,
     chrome: str,
@@ -1837,6 +2141,7 @@ def _verify_capture_repeatability(
     capture_index: int,
     virtual_time_ms: int,
     capture_timeout_seconds: float,
+    evidence_dir: Path | None = None,
 ) -> str:
     """Capture twice in one environment without touching the checked-in gallery."""
 
@@ -1865,10 +2170,52 @@ def _verify_capture_repeatability(
 
     first_digest, second_digest = (_sha256(destination) for destination in destinations)
     if first_digest != second_digest:
+        report, contents = _repeatability_mismatch_report(
+            capture=capture,
+            destinations=destinations,
+            digests=(first_digest, second_digest),
+            diagnostics=diagnostics,
+        )
+        evidence_status = "disabled"
+        if evidence_dir is not None:
+            try:
+                _preserve_repeatability_evidence(evidence_dir, report, contents)
+            except (OSError, RuntimeError, ValueError) as error:
+                evidence_status = f"preservation failed: {error}"
+            else:
+                evidence_status = str(evidence_dir)
+        first_report = report["first"]
+        second_report = report["second"]
+        if not isinstance(first_report, Mapping) or not isinstance(second_report, Mapping):
+            raise RuntimeError("repeatability report contains invalid capture entries")
+        summary = {
+            "comparison": report["comparison"],
+            "first": {
+                key: first_report[key]
+                for key in (
+                    "canonical_sha256",
+                    "ihdr",
+                    "normalized_rgba_sha256",
+                    "dom_sha256",
+                    "computed_font_sha256",
+                )
+            },
+            "second": {
+                key: second_report[key]
+                for key in (
+                    "canonical_sha256",
+                    "ihdr",
+                    "normalized_rgba_sha256",
+                    "dom_sha256",
+                    "computed_font_sha256",
+                )
+            },
+        }
         raise RuntimeError(
             "same-Chrome repeatability check produced different PNG bytes for "
             f"{capture.filename}: {first_digest} != {second_digest}; "
-            f"first diagnostics={diagnostics[0]!r}; second diagnostics={diagnostics[1]!r}"
+            f"diagnostics={json.dumps(summary, sort_keys=True, separators=(',', ':'))}; "
+            f"evidence={evidence_status}"
         )
     return first_digest
 
@@ -1878,6 +2225,11 @@ def _generate(args: argparse.Namespace) -> None:
     node = _find_node(args.node)
     captures = _selected_captures(args.only)
     output_dir = args.output_dir.resolve()
+    evidence_dir = (
+        args.repeatability_evidence_dir.resolve()
+        if args.repeatability_evidence_dir is not None
+        else None
+    )
     if not args.verify_repeatability:
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1923,6 +2275,7 @@ def _generate(args: argparse.Namespace) -> None:
                             capture_index=index,
                             virtual_time_ms=args.virtual_time_ms,
                             capture_timeout_seconds=args.capture_timeout_seconds,
+                            evidence_dir=evidence_dir,
                         )
                         print(
                             f"Repeatable {capture.theme:16} "
@@ -2027,6 +2380,15 @@ def _parser() -> argparse.ArgumentParser:
         help="screenshot output directory",
     )
     parser.add_argument(
+        "--repeatability-evidence-dir",
+        type=Path,
+        metavar="PATH",
+        help=(
+            "on a repeatability mismatch, retain both canonical PNGs and a "
+            "sanitized diagnostic report in a newly created directory"
+        ),
+    )
+    parser.add_argument(
         "--virtual-time-ms",
         type=int,
         default=2500,
@@ -2050,6 +2412,9 @@ def _parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = _parser().parse_args()
+
+    if args.repeatability_evidence_dir is not None and not args.verify_repeatability:
+        raise SystemExit("--repeatability-evidence-dir requires --verify-repeatability")
 
     if args.list:
         for capture in CAPTURES:
