@@ -268,6 +268,65 @@ def test_internal_capture_bridge_documents_and_enforces_exact_cdp_viewports() ->
     ) < audit_source.index("await navigate(cdp, captureUrl")
 
 
+def test_internal_capture_bridge_hashes_post_capture_computed_font_state() -> None:
+    audit_source = _SCRIPT.read_text(encoding="utf-8")
+    for contract in (
+        "fingerprintComputedFonts",
+        'document.querySelectorAll("*")',
+        "element.getClientRects().length === 0",
+        "getComputedStyle(element)",
+        "computedProperties.map((property) => style[property])",
+        "[...document.fonts]",
+        "fontSetStatus: document.fonts.status",
+        "faces.sort((left, right) => {",
+        'createHash("sha256")',
+        'digest("hex")',
+        "computedFontSha256",
+    ):
+        assert contract in audit_source
+
+    fingerprint_start = audit_source.index("async function fingerprintComputedFonts(cdp)")
+    fingerprint_end = audit_source.index("async function waitForDashboard", fingerprint_start)
+    fingerprint_source = audit_source[fingerprint_start:fingerprint_end]
+    assert fingerprint_source.index('document.querySelectorAll("*")') < fingerprint_source.index(
+        "rendered.push("
+    )
+    assert "rendered.sort" not in fingerprint_source
+    assert fingerprint_source.index("const faces = [...document.fonts]") < fingerprint_source.index(
+        "faces.sort("
+    )
+    assert fingerprint_source.index("faces.sort(") < fingerprint_source.index(
+        "fontSetStatus: document.fonts.status"
+    )
+
+    capture_start = audit_source.index("export async function captureDashboardScreenshot")
+    capture_end = audit_source.index("\nasync function run(", capture_start)
+    capture_source = audit_source[capture_start:capture_end]
+    screenshot_index = capture_source.index(
+        "const screenshot = await captureStableScreenshot(cdp);"
+    )
+    final_dom_index = capture_source.index(
+        'const finalOuterHTML = await evaluate(cdp, "document.documentElement.outerHTML");'
+    )
+    font_fingerprint_index = capture_source.index(
+        "const computedFontSha256 = await fingerprintComputedFonts(cdp);"
+    )
+    png_conversion_index = capture_source.index(
+        'const png = Buffer.from(screenshot.data, "base64");'
+    )
+    assert screenshot_index < final_dom_index
+    dom_stability_index = capture_source.index("outerHTML !== finalOuterHTML")
+    assert final_dom_index < dom_stability_index
+    assert dom_stability_index < font_fingerprint_index
+    assert font_fingerprint_index < png_conversion_index
+
+    capture_result_start = capture_source.index("return {", font_fingerprint_index)
+    capture_result_end = capture_source.index("};", capture_result_start)
+    capture_result = capture_source[capture_result_start:capture_result_end]
+    assert "computedFontSha256" in capture_result
+    assert "inventory" not in capture_result
+
+
 def test_internal_capture_bridge_rejects_bad_arguments_without_opening_chrome() -> None:
     completed = _run_capture_node("--not-an-option")
 

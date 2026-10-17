@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
 import shutil
 import subprocess
+import sys
 import tarfile
 import zlib
 from collections import Counter
@@ -54,15 +56,26 @@ def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
     return pack(">I", len(data)) + chunk_type + data + pack(">I", checksum)
 
 
-def _png(width: int, height: int, *, pixel: bytes = b"\x00\x00\x00") -> bytes:
-    header = pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
-    rows = b"".join(b"\x00" + pixel * width for _row in range(height))
+def _png_pixels(width: int, height: int, pixels: tuple[bytes, ...]) -> bytes:
+    assert len(pixels) == width * height
+    channels = len(pixels[0])
+    assert channels in {3, 4}
+    assert all(len(pixel) == channels for pixel in pixels)
+    color_type = 2 if channels == 3 else 6
+    header = pack(">IIBBBBB", width, height, 8, color_type, 0, 0, 0)
+    rows = b"".join(
+        b"\x00" + b"".join(pixels[row * width : (row + 1) * width]) for row in range(height)
+    )
     return (
         b"\x89PNG\r\n\x1a\n"
         + _png_chunk(b"IHDR", header)
         + _png_chunk(b"IDAT", zlib.compress(rows))
         + _png_chunk(b"IEND", b"")
     )
+
+
+def _png(width: int, height: int, *, pixel: bytes = b"\x00\x00\x00") -> bytes:
+    return _png_pixels(width, height, (pixel,) * (width * height))
 
 
 def test_chrome_png_canonicalization_converges_distinct_compression_streams() -> None:
@@ -112,6 +125,7 @@ def _capture_result(
     *,
     outer_html: str | None = None,
     screenshot_attempts: object = 2,
+    computed_font_sha256: object = "0" * 64,
     viewport: dict[str, object] | None = None,
     waterfall_canvas: object | None = None,
 ) -> str:
@@ -159,6 +173,7 @@ def _capture_result(
             ),
             "pngBytes": png_bytes,
             "screenshotAttempts": screenshot_attempts,
+            "computedFontSha256": computed_font_sha256,
             "viewport": exact_viewport,
             "waterfallCanvas": waterfall_canvas,
         }
@@ -796,6 +811,95 @@ def test_capture_rejects_unproven_compositor_stability(
     assert tuple(output.iterdir()) == ()
 
 
+def test_capture_records_dom_and_computed_font_hashes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    capture = screenshots.Capture("capture.png", "system", 6, 4)
+    profile = tmp_path / "profile"
+    output = tmp_path / "output"
+    profile.mkdir()
+    output.mkdir()
+    outer_html = _ready_dom()
+    font_hash = "a" * 64
+
+    def run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        staged = Path(_command_value(command, "--output"))
+        content = _png(6, 4)
+        staged.write_bytes(content)
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=_capture_result(
+                capture,
+                len(content),
+                outer_html=outer_html,
+                computed_font_sha256=font_hash,
+            ),
+        )
+
+    monkeypatch.setattr(screenshots.subprocess, "run", run)
+    diagnostics: dict[str, object] = {}
+
+    screenshots._capture(
+        chrome="chrome",
+        node="node",
+        profile_dir=profile,
+        base_url="http://127.0.0.1:8000",
+        capture=capture,
+        output_dir=output,
+        virtual_time_ms=2500,
+        capture_timeout_seconds=20.0,
+        diagnostics=diagnostics,
+    )
+
+    assert diagnostics["dom_sha256"] == hashlib.sha256(outer_html.encode("utf-8")).hexdigest()
+    assert diagnostics["computed_font_sha256"] == font_hash
+
+
+@pytest.mark.parametrize("font_hash", (None, 7, "", "g" * 64, "a" * 63))
+def test_capture_rejects_invalid_computed_font_hash(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    font_hash: object,
+) -> None:
+    capture = screenshots.Capture("capture.png", "system", 6, 4)
+    profile = tmp_path / "profile"
+    output = tmp_path / "output"
+    profile.mkdir()
+    output.mkdir()
+
+    def run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        staged = Path(_command_value(command, "--output"))
+        content = _png(6, 4)
+        staged.write_bytes(content)
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=_capture_result(
+                capture,
+                len(content),
+                computed_font_sha256=font_hash,
+            ),
+        )
+
+    monkeypatch.setattr(screenshots.subprocess, "run", run)
+
+    with pytest.raises(RuntimeError, match="valid computed-font fingerprint"):
+        screenshots._capture(
+            chrome="chrome",
+            node="node",
+            profile_dir=profile,
+            base_url="http://127.0.0.1:8000",
+            capture=capture,
+            output_dir=output,
+            virtual_time_ms=2500,
+            capture_timeout_seconds=20.0,
+        )
+
+    assert tuple(output.iterdir()) == ()
+
+
 def test_capture_selection_preserves_inventory_order_and_rejects_unknown() -> None:
     requested = (
         "theme-pip-boy-inspired-800x480.png",
@@ -821,6 +925,7 @@ def test_repeatability_helper_uses_isolated_temporary_outputs(
     scratch = tmp_path / "scratch"
     profiles.mkdir()
     scratch.mkdir()
+    evidence = tmp_path / "evidence"
 
     def capture_once(**arguments: object) -> Path:
         output_dir = arguments["output_dir"]
@@ -841,10 +946,12 @@ def test_repeatability_helper_uses_isolated_temporary_outputs(
         capture_index=1,
         virtual_time_ms=2500,
         capture_timeout_seconds=20.0,
+        evidence_dir=evidence,
     )
 
     assert digest == screenshots._sha256(scratch / "capture-01-first" / capture.filename)
     assert (scratch / "capture-01-second" / capture.filename).is_file()
+    assert not evidence.exists()
 
 
 def test_repeatability_helper_rejects_different_same_chrome_bytes(
@@ -882,6 +989,204 @@ def test_repeatability_helper_rejects_different_same_chrome_bytes(
             virtual_time_ms=2500,
             capture_timeout_seconds=20.0,
         )
+
+
+def test_repeatability_mismatch_retains_exact_pixel_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    capture = screenshots.Capture("capture.png", "system", 3, 2)
+    profiles = tmp_path / "profiles"
+    scratch = tmp_path / "scratch"
+    evidence = tmp_path / "evidence"
+    profiles.mkdir()
+    scratch.mkdir()
+    first_pixels = (b"\x00\x00\x00",) * 6
+    second_pixels = list(first_pixels)
+    second_pixels[0] = b"\x01\x02\x03"
+    second_pixels[5] = b"\x04\x05\x06"
+    contents = (
+        screenshots._canonicalize_chrome_png(_png_pixels(3, 2, first_pixels)),
+        screenshots._canonicalize_chrome_png(_png_pixels(3, 2, tuple(second_pixels))),
+    )
+    private_sentinel = "DO_NOT_PERSIST_RAW_DOM_OR_EXTRA_DIAGNOSTICS"
+    run = 0
+
+    def capture_once(**arguments: object) -> Path:
+        nonlocal run
+        output_dir = arguments["output_dir"]
+        diagnostics = arguments["diagnostics"]
+        assert isinstance(output_dir, Path)
+        assert isinstance(diagnostics, dict)
+        destination = output_dir / capture.filename
+        destination.write_bytes(contents[run])
+        diagnostics.update(
+            {
+                "dom_sha256": ("a", "b")[run] * 64,
+                "computed_font_sha256": ("c", "d")[run] * 64,
+                "raw_outer_html": f"<html>{private_sentinel}</html>",
+                "screenshot_attempts": 2,
+                "viewport": {
+                    "width": 3,
+                    "height": 2,
+                    "private": private_sentinel,
+                },
+                "waterfall_canvas": {
+                    "attempts": 2,
+                    "canvases": [
+                        {
+                            "digest": "e" * 64,
+                            "height": 2,
+                            "id": "waterfall-spectrum",
+                            "private": private_sentinel,
+                            "width": 3,
+                        },
+                    ],
+                    "private": private_sentinel,
+                    "sequence": "33",
+                    "stable": True,
+                    "state": "live",
+                },
+            }
+        )
+        run += 1
+        return destination
+
+    monkeypatch.setattr(screenshots, "_capture", capture_once)
+
+    with pytest.raises(RuntimeError, match="produced different PNG bytes") as error:
+        screenshots._verify_capture_repeatability(
+            chrome="chrome",
+            node="node",
+            profile_root=profiles,
+            scratch_root=scratch,
+            base_url="http://127.0.0.1:8000",
+            capture=capture,
+            capture_index=1,
+            virtual_time_ms=2500,
+            capture_timeout_seconds=20.0,
+            evidence_dir=evidence,
+        )
+
+    assert str(evidence) in str(error.value)
+    assert {path.name for path in evidence.iterdir()} == {
+        "first-canonical.png",
+        "second-canonical.png",
+        "report.json",
+    }
+    assert (evidence / "first-canonical.png").read_bytes() == contents[0]
+    assert (evidence / "second-canonical.png").read_bytes() == contents[1]
+    report = json.loads((evidence / "report.json").read_text(encoding="utf-8"))
+    assert report["schema_version"] == 1
+    assert report["capture"] == {
+        "filename": capture.filename,
+        "theme": capture.theme,
+        "pane": capture.pane,
+        "css_width": capture.width,
+        "css_height": capture.height,
+        "device_scale_factor": capture.device_scale_factor,
+    }
+    assert report["first"]["canonical_sha256"] == hashlib.sha256(contents[0]).hexdigest()
+    assert report["second"]["canonical_sha256"] == hashlib.sha256(contents[1]).hexdigest()
+    assert report["first"]["ihdr"]["color_type"] == 2
+    assert report["second"]["ihdr"]["color_type"] == 2
+    assert report["first"]["dom_sha256"] == "a" * 64
+    assert report["second"]["computed_font_sha256"] == "d" * 64
+    assert report["first"]["waterfall_canvas"] == {
+        "attempts": 2,
+        "canvases": [
+            {
+                "digest": "e" * 64,
+                "height": 2,
+                "id": "waterfall-spectrum",
+                "width": 3,
+            }
+        ],
+        "sequence": "33",
+        "stable": True,
+        "state": "live",
+    }
+    assert report["comparison"] == {
+        "canonical_bytes_equal": False,
+        "normalized_pixels_equal": False,
+        "differing_pixel_count": 2,
+        "differing_pixel_bounds": {
+            "left": 0,
+            "top": 0,
+            "right_exclusive": 3,
+            "bottom_exclusive": 2,
+            "width": 3,
+            "height": 2,
+        },
+    }
+    assert private_sentinel not in (evidence / "report.json").read_text(encoding="utf-8")
+
+
+def test_repeatability_keeps_rgb_rgba_mismatch_as_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    capture = screenshots.Capture("capture.png", "system", 2, 2)
+    profiles = tmp_path / "profiles"
+    scratch = tmp_path / "scratch"
+    evidence = tmp_path / "evidence"
+    profiles.mkdir()
+    scratch.mkdir()
+    contents = (
+        screenshots._canonicalize_chrome_png(_png(2, 2, pixel=b"\x12\x34\x56")),
+        screenshots._canonicalize_chrome_png(_png(2, 2, pixel=b"\x12\x34\x56\xff")),
+    )
+    run = 0
+
+    def capture_once(**arguments: object) -> Path:
+        nonlocal run
+        output_dir = arguments["output_dir"]
+        assert isinstance(output_dir, Path)
+        destination = output_dir / capture.filename
+        destination.write_bytes(contents[run])
+        run += 1
+        return destination
+
+    monkeypatch.setattr(screenshots, "_capture", capture_once)
+
+    with pytest.raises(RuntimeError, match="produced different PNG bytes"):
+        screenshots._verify_capture_repeatability(
+            chrome="chrome",
+            node="node",
+            profile_root=profiles,
+            scratch_root=scratch,
+            base_url="http://127.0.0.1:8000",
+            capture=capture,
+            capture_index=1,
+            virtual_time_ms=2500,
+            capture_timeout_seconds=20.0,
+            evidence_dir=evidence,
+        )
+
+    report = json.loads((evidence / "report.json").read_text(encoding="utf-8"))
+    assert report["first"]["ihdr"]["color_type"] == 2
+    assert report["second"]["ihdr"]["color_type"] == 6
+    assert report["first"]["normalized_rgba_sha256"] == report["second"]["normalized_rgba_sha256"]
+    assert report["comparison"] == {
+        "canonical_bytes_equal": False,
+        "normalized_pixels_equal": True,
+        "differing_pixel_count": 0,
+        "differing_pixel_bounds": None,
+    }
+
+
+def test_repeatability_evidence_option_requires_repeatability_mode(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["generate_web_dashboard_screenshots.py", "--repeatability-evidence-dir", str(tmp_path)],
+    )
+
+    with pytest.raises(SystemExit, match="requires --verify-repeatability"):
+        screenshots.main()
 
 
 def test_dpr_capture_validation_uses_physical_png_dimensions(

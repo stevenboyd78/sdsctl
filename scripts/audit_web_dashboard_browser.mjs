@@ -9,6 +9,7 @@
  */
 
 import {spawn} from "node:child_process";
+import {createHash} from "node:crypto";
 import {constants as fsConstants} from "node:fs";
 import {access, mkdir, mkdtemp, rm, writeFile} from "node:fs/promises";
 import net from "node:net";
@@ -697,6 +698,69 @@ async function captureStableScreenshot(cdp) {
     previous = screenshot.data;
   }
   throw new Error("dashboard compositor did not produce two identical consecutive PNGs");
+}
+
+async function fingerprintComputedFonts(cdp) {
+  const inventory = await evaluate(
+    cdp,
+    `(() => {
+      const computedProperties = [
+        "fontFamily",
+        "fontFeatureSettings",
+        "fontKerning",
+        "fontOpticalSizing",
+        "fontSize",
+        "fontStretch",
+        "fontStyle",
+        "fontVariant",
+        "fontVariantNumeric",
+        "fontVariationSettings",
+        "fontWeight",
+        "letterSpacing",
+        "lineHeight",
+        "textRendering",
+        "wordSpacing",
+      ];
+      const rendered = [];
+      for (const element of document.querySelectorAll("*")) {
+        if (element.getClientRects().length === 0) continue;
+        const style = getComputedStyle(element);
+        if (style.visibility !== "visible") continue;
+        rendered.push(computedProperties.map((property) => style[property]));
+      }
+
+      const descriptorProperties = [
+        "display",
+        "family",
+        "featureSettings",
+        "status",
+        "stretch",
+        "style",
+        "unicodeRange",
+        "variant",
+        "variationSettings",
+        "weight",
+      ];
+      const faces = [...document.fonts].map((face) =>
+        descriptorProperties.map((property) => face[property]),
+      );
+      faces.sort((left, right) => {
+        const leftKey = JSON.stringify(left);
+        const rightKey = JSON.stringify(right);
+        if (leftKey < rightKey) return -1;
+        if (leftKey > rightKey) return 1;
+        return 0;
+      });
+      return {
+        computedProperties,
+        descriptorProperties,
+        faces,
+        fontSetStatus: document.fonts.status,
+        rendered,
+      };
+    })()`,
+  );
+  return createHash("sha256").update(JSON.stringify(inventory), "utf8").digest("hex");
 }
 
 async function waitForDashboard(cdp, timeoutMs) {
@@ -3936,9 +4000,11 @@ export async function captureDashboardScreenshot({
     if (pageFailures.length > 0) {
       throw new Error(`dashboard raised browser exceptions: ${pageFailures.join(" | ")}`);
     }
+    const computedFontSha256 = await fingerprintComputedFonts(cdp);
     const png = Buffer.from(screenshot.data, "base64");
     await writeFile(outputPath, png);
     return {
+      computedFontSha256,
       outerHTML: finalOuterHTML,
       pngBytes: png.length,
       screenshotAttempts: screenshot.attempts,
