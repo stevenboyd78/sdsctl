@@ -835,16 +835,42 @@ class LifecycleTestSink:
 
 class FakeMonotonicClock:
     def __init__(self) -> None:
-        self._lock = threading.Lock()
+        self._condition = threading.Condition()
         self._value = 0.0
+        self._observation_sequence = 0
+        self._last_observed_value: float | None = None
 
     def __call__(self) -> float:
-        with self._lock:
-            return self._value
+        with self._condition:
+            value = self._value
+            self._observation_sequence += 1
+            self._last_observed_value = value
+            self._condition.notify_all()
+            return value
 
     def advance(self, seconds: float) -> None:
-        with self._lock:
+        with self._condition:
             self._value += seconds
+
+    def observation_checkpoint(self) -> int:
+        with self._condition:
+            return self._observation_sequence
+
+    def wait_for_observation(
+        self,
+        value: float,
+        *,
+        after: int,
+        timeout: float = 1.0,
+    ) -> bool:
+        with self._condition:
+            return self._condition.wait_for(
+                lambda: (
+                    self._observation_sequence > after
+                    and self._last_observed_value == value
+                ),
+                timeout=timeout,
+            )
 
 
 def _wait_until(
@@ -1221,7 +1247,8 @@ def test_pcm_router_quarantine_uses_bounded_backoff_and_redacted_transitions() -
         router.submit_pcm(bytes((sample, 0)))
     clock.advance(0.99)
     router.submit_pcm(b"\x08\x00")
-    time.sleep(0.02)
+    checkpoint = clock.observation_checkpoint()
+    assert clock.wait_for_observation(0.99, after=checkpoint)
     assert failing.submit_calls == 1
 
     clock.advance(0.01)
@@ -1235,7 +1262,8 @@ def test_pcm_router_quarantine_uses_bounded_backoff_and_redacted_transitions() -
     )
     clock.advance(1.99)
     router.submit_pcm(b"\x0a\x00")
-    time.sleep(0.02)
+    checkpoint = clock.observation_checkpoint()
+    assert clock.wait_for_observation(2.99, after=checkpoint)
     assert failing.submit_calls == 2
 
     clock.advance(0.01)
