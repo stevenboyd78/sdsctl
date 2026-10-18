@@ -323,6 +323,63 @@ def test_runtime_psi_timeout_remains_strict_by_default() -> None:
     runtime.stop()
 
 
+def test_runtime_strict_start_recovers_post_start_inactive_psi_with_cooldown() -> None:
+    now = [100.0]
+    order: list[str] = []
+    scanner = FakeScanner(order)
+    transport = TrackingAudioTransport(order)
+    router = TrackingRouter(order)
+    audio = AudioFanoutSession(AudioStream(transport), (router,))
+    runtime = DaemonRuntime(
+        scanner,
+        audio,
+        router,
+        psi_recover_after=5.0,
+        psi_recovery_cooldown=60.0,
+        clock=lambda: now[0],
+    )
+
+    runtime.start()
+    assert not runtime.allow_degraded_psi_startup
+    assert order.count("psi.start") == 1
+
+    scanner._psi_active = False
+    scanner.psi_start_failures = 1
+
+    now[0] = 104.9
+    runtime.poll()
+    assert order.count("psi.start") == 1
+
+    now[0] = 105.1
+    runtime.poll()
+    assert order.count("psi.start") == 2
+
+    failed = runtime.snapshot()
+    assert failed.state is DaemonRuntimeState.RUNNING
+    assert failed.scanner_connected
+    assert not failed.psi_active
+    assert failed.audio.running
+    assert failed.router.running
+
+    now[0] = 164.9
+    runtime.poll()
+    assert order.count("psi.start") == 2
+
+    now[0] = 165.2
+    runtime.poll()
+    assert order.count("psi.start") == 3
+
+    recovered = runtime.snapshot()
+    assert recovered.state is DaemonRuntimeState.RUNNING
+    assert recovered.scanner_connected
+    assert recovered.psi_active
+    assert recovered.audio.running
+    assert recovered.router.running
+    assert "scanner.reconnect" not in order
+
+    runtime.stop()
+
+
 @pytest.mark.parametrize("failure", ["timeout", "rejected"])
 def test_runtime_allows_degraded_psi_startup_and_recovers(
     failure: Literal["timeout", "rejected"],

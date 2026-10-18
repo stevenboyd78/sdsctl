@@ -528,7 +528,13 @@ class DaemonRuntime:
             last_recovery_at = self._last_psi_recovery_at
 
         if not psi_active:
-            if not self.allow_degraded_psi_startup:
+            if last_psi_at is None:
+                if not self.allow_degraded_psi_startup:
+                    return
+            elif (
+                max(0.0, observed_at - last_psi_at)
+                < self.psi_recover_after
+            ):
                 return
             retry_delay = (
                 self.psi_recover_after
