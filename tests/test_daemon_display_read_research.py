@@ -449,12 +449,28 @@ def test_uncertain_read_stops_without_retry_or_follow_on_get(
         pass
 
 
-def test_unexpected_sqk_reply_shape_is_evidence_not_a_guessed_layout(scanner):
+def test_unexpected_sqk_reply_shape_is_evidence_not_a_guessed_layout(scanner, monkeypatch):
+    # This checks malformed selected-read handling, not PSI producer
+    # scheduling or elapsed I/O. Reach the parser deterministically without
+    # spending its 0.1s test budget on starting an unrelated background thread.
+    ticks = count(10.0, 0.001)
+    monkeypatch.setattr("sds200.daemon_display_read_research.monotonic", lambda: next(ticks))
+
+    def model(*, timeout):
+        scanner._stage("MDL", timeout)
+        scanner.bus.emit("psi", scanner.frame)
+        return scanner.model
+
+    monkeypatch.setattr(scanner, "get_model", model)
+
     scanner.fields_override = ("1", *STATES)
     result = attempt(DisplayReadKind.SYSTEM).run(scanner, operator_ready=True, timeout=0.1)
-    assert result.failure == "invalid_response" and result.sample is None
+    assert result.status == "read_unconfirmed" and result.failure == "invalid_response"
+    assert result.read_reserved and result.sample is None
     assert result.response_shape == {"field_count": 101, "state_token_count": 101}
     assert scanner.commands == ["SQK,1"]
+    assert scanner.stages == ["scope", "MDL", "VER", "SQK"]
+    assert scanner.scope_depth == scanner.hooks == 0 and scanner.producer is None
 
 
 def test_invalid_rtc_is_reported_as_invalid_without_an_invented_clock(scanner):

@@ -169,7 +169,7 @@ def test_private_listener_joins_real_retained_connection_without_consuming_messa
     owner.close()
     owner.close()
     assert connections.fds() == before and not private.witness.exited()
-    assert path.stat() == pin  # No unlink/rebind/metadata repair on retirement.
+    assert m.files.identity(path.stat()) == m.files.identity(pin)  # Ignore volatile atime only.
     refused(owner.recheck)
     refused(private.listen)  # A fresh object cannot adopt an earlier case socket.
 
