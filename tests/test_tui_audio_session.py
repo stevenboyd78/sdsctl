@@ -149,7 +149,17 @@ def test_pcm_router_waits_for_in_flight_submission_before_stopping_sink() -> Non
 
     detach_thread = threading.Thread(target=router.detach, args=(sink,))
     detach_thread.start()
-    time.sleep(0.02)
+    deadline = time.monotonic() + 1.0
+    while True:
+        subscriber = router.lifecycle_snapshot().subscribers[0]
+        if subscriber.state == "stopping":
+            break
+        if time.monotonic() >= deadline:
+            raise AssertionError("PCM router did not begin detaching the blocked sink")
+        time.sleep(0.001)
+
+    assert not subscriber.attached
+    assert subscriber.running
     assert detach_thread.is_alive()
     assert sink.running
 
