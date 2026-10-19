@@ -19,7 +19,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SLUG = "sds200_mimic_acceptance"
+NAME = "sds200 Mimic-SDS acceptance"
+NAMESPACE = "sdsctl-mimic-acceptance"
 APP = "home-assistant/sds200/"
+CUSTOM_STAGER_PATHS = frozenset(
+    {
+        "docs/mimic-sds-candidate-app.md",
+        "scripts/stage_mimic_app.py",
+        "tests/test_stage_mimic_app.py",
+    }
+)
 PUBLIC_OPTIONS = {
     "scanner_host",
     "mqtt_topic_prefix",
@@ -80,10 +89,98 @@ def replace_once(text: str, old: str, new: str) -> str:
     return text.replace(old, new, 1)
 
 
+class CandidateIdentity:
+    __slots__ = ("slug", "name", "namespace", "kind")
+
+    def __init__(self, slug: str, name: str, namespace: str, kind: str) -> None:
+        self.slug = slug
+        self.name = name
+        self.namespace = namespace
+        self.kind = kind
+
+
+def research_selected(
+    research_firmware: str | None,
+    display_read_firmware: str | None,
+    front_panel_firmware: str | None,
+    supplemental_firmware: str | None,
+    supplemental_continuity: bool,
+    supplemental_timing: bool,
+    supplemental_transition_wait: bool,
+    supplemental_bounded_writes: bool,
+) -> bool:
+    return any(
+        value is not None
+        for value in (
+            research_firmware,
+            display_read_firmware,
+            front_panel_firmware,
+            supplemental_firmware,
+        )
+    ) or any(
+        (
+            supplemental_continuity,
+            supplemental_timing,
+            supplemental_transition_wait,
+            supplemental_bounded_writes,
+        )
+    )
+
+
+def validate_candidate_slug(
+    revision: str,
+    candidate_slug: str | None,
+    *,
+    has_research: bool,
+) -> None:
+    if candidate_slug is None:
+        return
+    if (
+        not isinstance(candidate_slug, str)
+        or re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,127}", candidate_slug) is None
+    ):
+        raise ValueError("Review the exact custom candidate slug.")
+    if candidate_slug != f"sds200_main_{revision[:12]}":
+        raise ValueError("Custom candidate slug must be bound to the exact source revision.")
+    if has_research:
+        raise ValueError("Custom candidate identity cannot be combined with a research mode.")
+
+
+def resolve_candidate_identity(
+    revision: str,
+    candidate_slug: str | None,
+    stager_revision: str | None,
+    *,
+    has_research: bool,
+) -> CandidateIdentity:
+    if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
+        raise ValueError("An exact source revision is required.")
+    if candidate_slug is None:
+        if stager_revision is not None:
+            raise ValueError("A stager revision is only valid for a custom candidate identity.")
+        return CandidateIdentity(SLUG, NAME, NAMESPACE, "mimic-acceptance")
+    validate_candidate_slug(revision, candidate_slug, has_research=has_research)
+    if (
+        not isinstance(stager_revision, str)
+        or re.fullmatch(r"[0-9a-f]{40}", stager_revision) is None
+    ):
+        raise ValueError("Custom candidate identity requires an exact stager revision.")
+    if stager_revision == revision:
+        raise ValueError("Custom candidate identity requires a distinct stager revision.")
+    return CandidateIdentity(
+        candidate_slug,
+        f"sds200 accepted-main smoke {revision[:8]}",
+        f"sdsctl-main-{revision[:12]}",
+        "accepted-main-smoke",
+    )
+
+
 def render(
     snapshot: dict[str, bytes],
     revision: str,
     *,
+    candidate_slug: str | None = None,
+    stager_revision: str | None = None,
     research_firmware: str | None = None,
     display_read_firmware: str | None = None,
     display_read_kind: str | None = None,
@@ -111,8 +208,21 @@ def render(
         supplemental_transition_wait,
         supplemental_bounded_writes,
     )
-    if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
-        raise ValueError("An exact source revision is required.")
+    identity = resolve_candidate_identity(
+        revision,
+        candidate_slug,
+        stager_revision,
+        has_research=research_selected(
+            research_firmware,
+            display_read_firmware,
+            front_panel_firmware,
+            supplemental_firmware,
+            supplemental_continuity,
+            supplemental_timing,
+            supplemental_transition_wait,
+            supplemental_bounded_writes,
+        ),
+    )
     version = tomllib.loads(snapshot["pyproject.toml"].decode())["project"]["version"]
     if not isinstance(version, str) or re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) is None:
         raise ValueError("Review candidate version for this source baseline.")
@@ -137,17 +247,17 @@ def render(
     ):
         raise ValueError("Published option contract changed; explicit review required.")
     for old, new in (
-        ('name: "sds200"\n', 'name: "sds200 Mimic-SDS acceptance"\n'),
+        ('name: "sds200"\n', f'name: "{identity.name}"\n'),
         (f'version: "{version}"\n', f'version: "{version}-mimic-{revision[:12]}"\n'),
-        ('slug: "sds200"\n', f'slug: "{SLUG}"\n'),
+        ('slug: "sds200"\n', f'slug: "{identity.slug}"\n'),
         ('image: "ghcr.io/stevenboyd78/sds200-home-assistant"\n', ""),
         ("boot: auto\n", "boot: manual\n"),
         ("  50000/udp: 50000\n", "  50000/udp: null\n"),
-        ('panel_title: "sds200"\n', 'panel_title: "sds200 Mimic-SDS acceptance"\n'),
-        ('  mqtt_topic_prefix: "sdsctl"\n', '  mqtt_topic_prefix: "sdsctl-mimic-acceptance"\n'),
+        ('panel_title: "sds200"\n', f'panel_title: "{identity.name}"\n'),
+        ('  mqtt_topic_prefix: "sdsctl"\n', f'  mqtt_topic_prefix: "{identity.namespace}"\n'),
         (
             '  recording_directory: "sdsctl/recordings"\n',
-            '  recording_directory: "sdsctl-mimic-acceptance/recordings"\n',
+            f'  recording_directory: "{identity.namespace}/recordings"\n',
         ),
     ):
         manifest = replace_once(manifest, old, new)
@@ -162,7 +272,7 @@ def render(
     result["config.yaml"] = manifest.encode()
     result["translations/en.yaml"] = translations.encode()
     result[".dockerignore"] = b".git\n__pycache__\n*.pyc\n"
-    result["DOCS.md"] = (
+    docs = (
         "# Local Mimic-SDS acceptance only\n\n"
         f"Source: `{revision}`. Package metadata: `{version}` (NOT a published upgrade).\n\n"
         "Manual start only. Before starting, stop the installed scanner-owning App. "
@@ -182,17 +292,41 @@ def render(
         "Rollback: stop this candidate, restore any explicitly changed card resources, "
         "then start the unchanged installed App. Preserve candidate profile/recordings "
         "for review. No automatic deletion or migration is performed.\n"
-    ).encode()
+    )
+    if candidate_slug is not None:
+        docs = replace_once(
+            docs,
+            "# Local Mimic-SDS acceptance only\n\n",
+            "# Local accepted-main smoke only\n\n",
+        )
+        docs = replace_once(
+            docs,
+            f"Source: `{revision}`. Package metadata: `{version}` (NOT a published upgrade).\n\n",
+            f"Source: `{revision}`. Package metadata: `{version}` (NOT a published upgrade).\n\n"
+            f"Candidate App: `{identity.name}` (`{identity.slug}`); state namespace: "
+            f"`{identity.namespace}`. Stager revision: `{stager_revision}`.\n\n",
+        )
+    result["DOCS.md"] = docs.encode()
     report = {
         "schema_version": 1,
         "purpose": "local-mimic-acceptance-only",
         "source_revision": revision,
         "package_version": version,
-        "app_slug": SLUG,
+        "app_slug": identity.slug,
         "automatic_start": False,
         "profile_enabled_by_default": False,
         "files": {name: hashlib.sha256(data).hexdigest() for name, data in sorted(result.items())},
     }
+    if candidate_slug is not None:
+        report.update(
+            {
+                "purpose": "local-accepted-main-smoke-only",
+                "candidate_identity": identity.kind,
+                "app_name": identity.name,
+                "state_namespace": identity.namespace,
+                "stager_revision": stager_revision,
+            }
+        )
     if research_firmware is not None:
         if (
             re.fullmatch(r"[A-Za-z0-9._ -]{1,64}", research_firmware) is None
@@ -511,6 +645,76 @@ def render(
     return result
 
 
+def validated_custom_stager_revision(source_revision: str) -> str:
+    if re.fullmatch(r"[0-9a-f]{40}", source_revision) is None:
+        raise ValueError("Use a full 40-character commit ID, not a branch or tag.")
+    try:
+        stager_revision = git("rev-parse", "--verify", "HEAD^{commit}").decode("ascii").strip()
+    except (subprocess.CalledProcessError, UnicodeDecodeError) as error:
+        raise ValueError(
+            "Custom candidate staging requires an exact committed checkout."
+        ) from error
+    if re.fullmatch(r"[0-9a-f]{40}", stager_revision) is None:
+        raise ValueError("Custom candidate staging requires an exact committed checkout.")
+    if stager_revision == source_revision:
+        raise ValueError("Custom candidate staging requires a distinct reviewed stager commit.")
+    try:
+        parent_output = git("rev-list", "--parents", "-n", "1", stager_revision).decode("ascii")
+    except (subprocess.CalledProcessError, UnicodeDecodeError) as error:
+        raise ValueError("Review the custom candidate stager commit topology.") from error
+    parents = parent_output.strip().split()
+    if (
+        len(parents) != 3
+        or parents[0] != stager_revision
+        or parents[1] != source_revision
+        or re.fullmatch(r"[0-9a-f]{40}", parents[2]) is None
+    ):
+        raise ValueError(
+            "Custom candidate stager must be the reviewed normal merge on the source revision."
+        )
+    try:
+        if git("status", "--porcelain=v1", "-z", "--untracked-files=all"):
+            raise ValueError("Custom candidate staging requires a clean committed checkout.")
+        git("merge-base", "--is-ancestor", source_revision, stager_revision)
+        changed_output = git("diff", "--name-only", "-z", source_revision, stager_revision, "--")
+        status_output = git(
+            "diff",
+            "--name-status",
+            "-z",
+            "--no-renames",
+            source_revision,
+            stager_revision,
+            "--",
+        )
+    except subprocess.CalledProcessError as error:
+        raise ValueError(
+            "Custom candidate stager must descend from the exact source revision."
+        ) from error
+    if changed_output and not changed_output.endswith(b"\0"):
+        raise ValueError("Review the custom candidate stager diff.")
+    try:
+        changed_paths = {
+            path.decode("utf-8") for path in changed_output.removesuffix(b"\0").split(b"\0") if path
+        }
+    except UnicodeDecodeError as error:
+        raise ValueError("Review the custom candidate stager diff.") from error
+    if changed_paths != CUSTOM_STAGER_PATHS:
+        raise ValueError("Custom candidate stager must change only the reviewed adapter files.")
+    if status_output and not status_output.endswith(b"\0"):
+        raise ValueError("Review the custom candidate stager diff.")
+    status_parts = status_output.removesuffix(b"\0").split(b"\0")
+    try:
+        statuses = {
+            status_parts[index + 1].decode("utf-8"): status_parts[index].decode("ascii")
+            for index in range(0, len(status_parts), 2)
+        }
+    except (IndexError, UnicodeDecodeError) as error:
+        raise ValueError("Review the custom candidate stager diff.") from error
+    if statuses != {path: "M" for path in CUSTOM_STAGER_PATHS}:
+        raise ValueError("Custom candidate stager must modify each reviewed adapter file in place.")
+    return stager_revision
+
+
 def validate_research_choice(
     ast_firmware: str | None,
     read_firmware: str | None,
@@ -590,6 +794,7 @@ def validate_research_choice(
 def from_revision(
     revision: str,
     *,
+    candidate_slug: str | None = None,
     research_firmware: str | None = None,
     display_read_firmware: str | None = None,
     display_read_kind: str | None = None,
@@ -619,6 +824,20 @@ def from_revision(
     )
     if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
         raise ValueError("Use a full 40-character commit ID, not a branch or tag.")
+    has_research = research_selected(
+        research_firmware,
+        display_read_firmware,
+        front_panel_firmware,
+        supplemental_firmware,
+        supplemental_continuity,
+        supplemental_timing,
+        supplemental_transition_wait,
+        supplemental_bounded_writes,
+    )
+    validate_candidate_slug(revision, candidate_slug, has_research=has_research)
+    stager_revision = (
+        validated_custom_stager_revision(revision) if candidate_slug is not None else None
+    )
     archive = git(
         "archive",
         "--format=tar",
@@ -660,9 +879,11 @@ def from_revision(
             stream = source.extractfile(member)
             assert stream is not None
             snapshot[member.name] = stream.read()
-    return render(
+    result = render(
         snapshot,
         revision,
+        candidate_slug=candidate_slug,
+        stager_revision=stager_revision,
         research_firmware=research_firmware,
         display_read_firmware=display_read_firmware,
         display_read_kind=display_read_kind,
@@ -676,6 +897,11 @@ def from_revision(
         supplemental_transition_wait=supplemental_transition_wait,
         supplemental_bounded_writes=supplemental_bounded_writes,
     )
+    if candidate_slug is not None:
+        assert stager_revision is not None
+        if validated_custom_stager_revision(revision) != stager_revision:
+            raise ValueError("Custom candidate stager checkout changed during source capture.")
+    return result
 
 
 def stage(destination: Path, files: dict[str, bytes]) -> None:
@@ -724,6 +950,10 @@ def verify(destination: Path, files: dict[str, bytes]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-revision", required=True)
+    parser.add_argument(
+        "--candidate-slug",
+        help="Exact accepted-main candidate slug bound to the source revision.",
+    )
     parser.add_argument("--destination", type=Path, required=True)
     parser.add_argument("--verify", action="store_true")
     parser.add_argument(
@@ -746,6 +976,7 @@ def main() -> None:
     args = parser.parse_args()
     files = from_revision(
         args.source_revision,
+        candidate_slug=args.candidate_slug,
         research_firmware=args.system_status_research_firmware,
         display_read_firmware=args.display_read_research_firmware,
         display_read_kind=args.display_read_kind,
@@ -759,11 +990,16 @@ def main() -> None:
         supplemental_transition_wait=args.supplemental_transition_wait,
         supplemental_bounded_writes=args.supplemental_bounded_writes,
     )
-    if not args.verify:
+    if args.candidate_slug is not None:
+        report = json.loads(files["candidate-source.json"])
+        if validated_custom_stager_revision(args.source_revision) != report["stager_revision"]:
+            raise ValueError("Custom candidate stager checkout changed before verification.")
+    elif not args.verify:
         if git("rev-parse", "HEAD").decode().strip() != args.source_revision or git(
             "status", "--porcelain"
         ):
             raise ValueError("Stage only the clean current committed checkout.")
+    if not args.verify:
         stage(args.destination, files)
     verify(args.destination, files)
     print(

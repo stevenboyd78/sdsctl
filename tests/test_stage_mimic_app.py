@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import re
+import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -20,6 +23,8 @@ assert SPEC is not None and SPEC.loader is not None
 stager = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(stager)
 REVISION = "a" * 40
+STAGER_REVISION = "b" * 40
+CUSTOM_SLUG = f"sds200_main_{REVISION[:12]}"
 
 
 @pytest.fixture
@@ -44,6 +49,16 @@ def snapshot():
 
 def keys(text):
     return set(re.findall(r"^  ([a-z][a-z0-9_]*):", text, re.MULTILINE))
+
+
+def source_archive(snapshot):
+    stream = io.BytesIO()
+    with tarfile.open(fileobj=stream, mode="w") as archive:
+        for name, data in snapshot.items():
+            member = tarfile.TarInfo(name)
+            member.size = len(data)
+            archive.addfile(member, io.BytesIO(data))
+    return stream.getvalue()
 
 
 @pytest.mark.parametrize(
@@ -397,6 +412,153 @@ def test_candidate_inventory_is_deterministic_and_excludes_unrelated_files(snaps
     assert not any(name.startswith("home-assistant/") for name in output)
 
 
+def test_default_candidate_render_is_unchanged_when_identity_is_omitted(snapshot):
+    output = stager.render(snapshot, REVISION)
+    assert output == stager.render(
+        snapshot,
+        REVISION,
+        candidate_slug=None,
+        stager_revision=None,
+    )
+    report = json.loads(output["candidate-source.json"])
+    assert (
+        not {
+            "candidate_identity",
+            "app_name",
+            "state_namespace",
+            "stager_revision",
+        }
+        & report.keys()
+    )
+
+
+def test_custom_candidate_identity_is_source_bound_separate_and_attested(snapshot):
+    before = dict(snapshot)
+    legacy = stager.render(snapshot, REVISION)
+    custom = stager.render(
+        snapshot,
+        REVISION,
+        candidate_slug=CUSTOM_SLUG,
+        stager_revision=STAGER_REVISION,
+    )
+    assert snapshot == before
+    assert set(custom) == set(legacy)
+    changed = {name for name in custom if custom[name] != legacy[name]}
+    assert changed == {"config.yaml", "DOCS.md", "candidate-source.json"}
+    manifest = custom["config.yaml"].decode()
+    assert f'slug: "{CUSTOM_SLUG}"' in manifest
+    assert 'name: "sds200 accepted-main smoke aaaaaaaa"' in manifest
+    assert 'panel_title: "sds200 accepted-main smoke aaaaaaaa"' in manifest
+    assert 'mqtt_topic_prefix: "sdsctl-main-aaaaaaaaaaaa"' in manifest
+    assert 'recording_directory: "sdsctl-main-aaaaaaaaaaaa/recordings"' in manifest
+    assert 'version: "0.31.0-mimic-aaaaaaaaaaaa"' in manifest
+    assert "image:" not in manifest
+    assert "boot: manual\n" in manifest and "boot: auto\n" not in manifest
+    for port in ("50000/udp", "50443/tcp", "8443/tcp"):
+        assert f"  {port}: null\n" in manifest
+    assert "remote_daemon_enabled: false" in manifest
+    assert "native_dashboard_enabled: false" in manifest
+    assert "qualified_sds200_menu_control_enabled: false" in manifest
+    assert 'scanner_display_config: ""' in manifest
+    assert "sds200_mimic_acceptance" not in manifest
+    assert "sdsctl-mimic-acceptance" not in manifest
+    docs = custom["DOCS.md"].decode()
+    assert f"Candidate App: `sds200 accepted-main smoke aaaaaaaa` (`{CUSTOM_SLUG}`)" in docs
+    assert f"Stager revision: `{STAGER_REVISION}`" in docs
+    report = json.loads(custom["candidate-source.json"])
+    assert report["source_revision"] == REVISION
+    assert report["stager_revision"] == STAGER_REVISION
+    assert report["purpose"] == "local-accepted-main-smoke-only"
+    assert report["candidate_identity"] == "accepted-main-smoke"
+    assert report["app_slug"] == CUSTOM_SLUG
+    assert report["app_name"] == "sds200 accepted-main smoke aaaaaaaa"
+    assert report["state_namespace"] == "sdsctl-main-aaaaaaaaaaaa"
+    assert report["automatic_start"] is False
+    assert report["profile_enabled_by_default"] is False
+    assert report["files"] == {
+        name: hashlib.sha256(data).hexdigest()
+        for name, data in custom.items()
+        if name != "candidate-source.json"
+    }
+
+
+@pytest.mark.parametrize(
+    "candidate_slug",
+    [
+        True,
+        1,
+        "",
+        "SDS200_MAIN_AAAAAAAAAAAA",
+        "sds200_main_aaaaaaaaaaa",
+        "sds200_main_aaaaaaaaaaaa\n",
+        "sds200/main/aaaaaaaaaaaa",
+        "local_sds200_main_aaaaaaaaaaaa",
+        "sds200_main_bbbbbbbbbbbb",
+        "x" * 129,
+    ],
+)
+def test_custom_candidate_slug_is_exactly_source_bound_before_git(monkeypatch, candidate_slug):
+    monkeypatch.setattr(stager, "git", lambda *args: pytest.fail("Unexpected git read"))
+    with pytest.raises(ValueError, match="candidate slug|candidate identity"):
+        stager.from_revision(REVISION, candidate_slug=candidate_slug)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"research_firmware": "Version 1.26.01"},
+        {"display_read_firmware": "Version 1.26.01", "display_read_kind": "clock"},
+        {
+            "front_panel_firmware": "Version 1.26.01",
+            "front_panel_key": "M",
+            "front_panel_mode": "Trunk Scan",
+            "front_panel_screen": "trunk_scan",
+        },
+        {"supplemental_firmware": "Version 1.26.01"},
+        {
+            "supplemental_firmware": "Version 1.26.01",
+            "supplemental_continuity": True,
+        },
+        {
+            "supplemental_firmware": "Version 1.26.01",
+            "supplemental_continuity": True,
+            "supplemental_timing": True,
+        },
+        {
+            "supplemental_firmware": "Version 1.26.01",
+            "supplemental_continuity": True,
+            "supplemental_timing": True,
+            "supplemental_transition_wait": True,
+        },
+        {
+            "supplemental_firmware": "Version 1.26.01",
+            "supplemental_continuity": True,
+            "supplemental_timing": True,
+            "supplemental_transition_wait": True,
+            "supplemental_bounded_writes": True,
+        },
+    ],
+)
+def test_custom_candidate_cannot_combine_with_research_before_git(monkeypatch, kwargs):
+    monkeypatch.setattr(stager, "git", lambda *args: pytest.fail("Unexpected git read"))
+    with pytest.raises(ValueError, match="cannot be combined"):
+        stager.from_revision(REVISION, candidate_slug=CUSTOM_SLUG, **kwargs)
+
+
+def test_direct_render_requires_paired_candidate_and_stager_identity(snapshot):
+    with pytest.raises(ValueError, match="requires an exact stager revision"):
+        stager.render(snapshot, REVISION, candidate_slug=CUSTOM_SLUG)
+    with pytest.raises(ValueError, match="only valid for a custom candidate"):
+        stager.render(snapshot, REVISION, stager_revision=STAGER_REVISION)
+    with pytest.raises(ValueError, match="distinct stager revision"):
+        stager.render(
+            snapshot,
+            REVISION,
+            candidate_slug=CUSTOM_SLUG,
+            stager_revision=REVISION,
+        )
+
+
 @pytest.mark.parametrize("change", ["schema", "image", "version", "boot", "missing-runtime"])
 def test_changed_source_contract_requires_review(snapshot, change):
     if change == "missing-runtime":
@@ -482,6 +644,135 @@ def test_symlink_parent_cannot_stage_or_verify(tmp_path):
         stager.verify(alias / "candidate", {"one": b"x"})
 
 
+def test_custom_stager_revision_requires_clean_exact_three_file_diff(monkeypatch):
+    calls = []
+    paths = sorted(stager.CUSTOM_STAGER_PATHS)
+
+    def fake_git(*args):
+        calls.append(args)
+        if args[0] == "rev-parse":
+            return (STAGER_REVISION + "\n").encode()
+        if args[0] == "rev-list":
+            return f"{STAGER_REVISION} {REVISION} {'c' * 40}\n".encode()
+        if args[0] in {"status", "merge-base"}:
+            return b""
+        if args[1] == "--name-only":
+            return b"".join(path.encode() + b"\0" for path in paths)
+        return b"".join(b"M\0" + path.encode() + b"\0" for path in paths)
+
+    monkeypatch.setattr(stager, "git", fake_git)
+    assert stager.validated_custom_stager_revision(REVISION) == STAGER_REVISION
+    assert ("rev-list", "--parents", "-n", "1", STAGER_REVISION) in calls
+    assert ("status", "--porcelain=v1", "-z", "--untracked-files=all") in calls
+    assert (
+        "diff",
+        "--name-only",
+        "-z",
+        REVISION,
+        STAGER_REVISION,
+        "--",
+    ) in calls
+    assert (
+        "diff",
+        "--name-status",
+        "-z",
+        "--no-renames",
+        REVISION,
+        STAGER_REVISION,
+        "--",
+    ) in calls
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        "bad-head",
+        "same-head",
+        "dirty",
+        "not-descendant",
+        "one-parent",
+        "wrong-first-parent",
+        "missing-path",
+        "extra-path",
+        "deleted-path",
+        "malformed-paths",
+    ],
+)
+def test_custom_stager_revision_rejects_unreviewed_checkout(monkeypatch, failure):
+    paths = sorted(stager.CUSTOM_STAGER_PATHS)
+
+    def fake_git(*args):
+        if args[0] == "rev-parse":
+            if failure == "bad-head":
+                return b"HEAD\n"
+            return ((REVISION if failure == "same-head" else STAGER_REVISION) + "\n").encode()
+        if args[0] == "rev-list":
+            if failure == "one-parent":
+                return f"{STAGER_REVISION} {REVISION}\n".encode()
+            first_parent = "d" * 40 if failure == "wrong-first-parent" else REVISION
+            return f"{STAGER_REVISION} {first_parent} {'c' * 40}\n".encode()
+        if args[0] == "status":
+            return b"?? untracked\0" if failure == "dirty" else b""
+        if args[0] == "merge-base":
+            if failure == "not-descendant":
+                raise subprocess.CalledProcessError(1, ["git", *args])
+            return b""
+        if args[1] == "--name-only":
+            selected = paths[:-1] if failure == "missing-path" else paths
+            suffix = [] if failure != "extra-path" else ["unexpected"]
+            output = b"".join(path.encode() + b"\0" for path in [*selected, *suffix])
+            return output.removesuffix(b"\0") if failure == "malformed-paths" else output
+        status = b"".join(b"M\0" + path.encode() + b"\0" for path in paths)
+        if failure == "deleted-path":
+            status = status.replace(b"M\0" + paths[0].encode(), b"D\0" + paths[0].encode())
+        return status
+
+    monkeypatch.setattr(stager, "git", fake_git)
+    with pytest.raises(ValueError):
+        stager.validated_custom_stager_revision(REVISION)
+
+
+def test_custom_from_revision_attests_same_stager_before_and_after_archive(monkeypatch, snapshot):
+    revisions = iter((STAGER_REVISION, STAGER_REVISION))
+    monkeypatch.setattr(
+        stager, "validated_custom_stager_revision", lambda revision: next(revisions)
+    )
+    archive = source_archive(snapshot)
+    monkeypatch.setattr(
+        stager,
+        "git",
+        lambda *args: (
+            archive if args[0] == "archive" else pytest.fail("Unexpected direct Git read")
+        ),
+    )
+    files = stager.from_revision(REVISION, candidate_slug=CUSTOM_SLUG)
+    assert json.loads(files["candidate-source.json"])["stager_revision"] == STAGER_REVISION
+    with pytest.raises(StopIteration):
+        next(revisions)
+
+
+def test_custom_from_revision_rejects_checkout_movement(monkeypatch, snapshot):
+    revisions = iter((STAGER_REVISION, "c" * 40))
+    monkeypatch.setattr(
+        stager, "validated_custom_stager_revision", lambda revision: next(revisions)
+    )
+    archive = source_archive(snapshot)
+    monkeypatch.setattr(stager, "git", lambda *args: archive)
+    with pytest.raises(ValueError, match="changed during source capture"):
+        stager.from_revision(REVISION, candidate_slug=CUSTOM_SLUG)
+
+
+def test_default_from_revision_does_not_use_custom_stager_checks(monkeypatch, snapshot):
+    monkeypatch.setattr(
+        stager,
+        "validated_custom_stager_revision",
+        lambda revision: pytest.fail("Legacy staging does not inspect custom stager state"),
+    )
+    archive = source_archive(snapshot)
+    monkeypatch.setattr(stager, "git", lambda *args: archive)
+    assert stager.from_revision(REVISION) == stager.render(snapshot, REVISION)
+
+
 @pytest.mark.parametrize("dirty,head", [(True, REVISION), (False, "b" * 40)])
 def test_cli_refuses_dirty_or_other_checkout(monkeypatch, tmp_path, dirty, head):
     destination = tmp_path / "candidate"
@@ -517,3 +808,145 @@ def test_cli_verify_uses_committed_snapshot_not_self_attested_hashes(monkeypatch
     )
     with pytest.raises(ValueError):
         stager.main()
+
+
+@pytest.mark.parametrize("verify_only", [False, True])
+def test_cli_custom_candidate_revalidates_recorded_stager(monkeypatch, tmp_path, verify_only):
+    destination = tmp_path / "candidate"
+    files = {
+        "one": b"committed",
+        "candidate-source.json": json.dumps(
+            {"source_revision": REVISION, "stager_revision": STAGER_REVISION}
+        ).encode(),
+    }
+    if verify_only:
+        stager.stage(destination, files)
+    argv = [
+        "stage",
+        "--source-revision",
+        REVISION,
+        "--candidate-slug",
+        CUSTOM_SLUG,
+        "--destination",
+        str(destination),
+    ]
+    if verify_only:
+        argv.append("--verify")
+    monkeypatch.setattr(sys, "argv", argv)
+    received = []
+    validated = []
+
+    def fake_from_revision(revision, **kwargs):
+        received.append((revision, kwargs))
+        return files
+
+    def fake_validated_custom_stager_revision(revision):
+        validated.append(revision)
+        return STAGER_REVISION
+
+    monkeypatch.setattr(stager, "from_revision", fake_from_revision)
+    monkeypatch.setattr(
+        stager,
+        "validated_custom_stager_revision",
+        fake_validated_custom_stager_revision,
+    )
+    monkeypatch.setattr(stager, "git", lambda *args: pytest.fail("Legacy Git check ran"))
+    stager.main()
+    assert received == [
+        (
+            REVISION,
+            {
+                "candidate_slug": CUSTOM_SLUG,
+                "research_firmware": None,
+                "display_read_firmware": None,
+                "display_read_kind": None,
+                "front_panel_firmware": None,
+                "front_panel_key": None,
+                "front_panel_mode": None,
+                "front_panel_screen": None,
+                "supplemental_firmware": None,
+                "supplemental_continuity": False,
+                "supplemental_timing": False,
+                "supplemental_transition_wait": False,
+                "supplemental_bounded_writes": False,
+            },
+        )
+    ]
+    assert validated == [REVISION]
+    stager.verify(destination, files)
+
+
+def test_cli_custom_candidate_rejects_other_stager_before_creation(monkeypatch, tmp_path):
+    destination = tmp_path / "candidate"
+    files = {"candidate-source.json": json.dumps({"stager_revision": STAGER_REVISION}).encode()}
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stage",
+            "--source-revision",
+            REVISION,
+            "--candidate-slug",
+            CUSTOM_SLUG,
+            "--destination",
+            str(destination),
+        ],
+    )
+    monkeypatch.setattr(stager, "from_revision", lambda revision, **kwargs: files)
+    monkeypatch.setattr(stager, "validated_custom_stager_revision", lambda revision: "c" * 40)
+    with pytest.raises(ValueError, match="changed before verification"):
+        stager.main()
+    assert not destination.exists()
+
+
+def test_cli_default_identity_cannot_verify_custom_context(monkeypatch, snapshot, tmp_path):
+    destination = tmp_path / "candidate"
+    custom = stager.render(
+        snapshot,
+        REVISION,
+        candidate_slug=CUSTOM_SLUG,
+        stager_revision=STAGER_REVISION,
+    )
+    legacy = stager.render(snapshot, REVISION)
+    stager.stage(destination, custom)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stage",
+            "--source-revision",
+            REVISION,
+            "--destination",
+            str(destination),
+            "--verify",
+        ],
+    )
+    monkeypatch.setattr(stager, "from_revision", lambda revision, **kwargs: legacy)
+    monkeypatch.setattr(
+        stager, "git", lambda *args: pytest.fail("Legacy verification must not inspect Git")
+    )
+    with pytest.raises(ValueError, match="differs from the exact committed source"):
+        stager.main()
+
+
+def test_custom_verification_binds_full_revision_when_prefix_matches(snapshot, tmp_path):
+    destination = tmp_path / "candidate"
+    custom = stager.render(
+        snapshot,
+        REVISION,
+        candidate_slug=CUSTOM_SLUG,
+        stager_revision=STAGER_REVISION,
+    )
+    same_prefix_revision = REVISION[:12] + "c" * 28
+    other = stager.render(
+        snapshot,
+        same_prefix_revision,
+        candidate_slug=CUSTOM_SLUG,
+        stager_revision=STAGER_REVISION,
+    )
+    assert json.loads(custom["candidate-source.json"])["app_slug"] == CUSTOM_SLUG
+    assert json.loads(other["candidate-source.json"])["app_slug"] == CUSTOM_SLUG
+    stager.stage(destination, custom)
+    stager.verify(destination, custom)
+    with pytest.raises(ValueError, match="differs from the exact committed source"):
+        stager.verify(destination, other)

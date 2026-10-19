@@ -50,6 +50,58 @@ build evidence. Unexpected files, edits, missing files and filesystem links
 fail verification. Failed staging is preserved for inspection, not deleted or
 silently overwritten.
 
+### Accepted-main smoke identity
+
+A separately approved accepted-main smoke can use a source-bound identity when
+the default acceptance slug would collide with a preserved Local App. Derive
+the slug from the first 12 characters of the exact payload source revision and
+pass the same slug when creating and verifying the context:
+
+```bash
+source_revision=<full-40-character-accepted-source-commit>
+candidate_slug="sds200_main_${source_revision:0:12}"
+
+python scripts/stage_mimic_app.py \
+  --source-revision "$source_revision" \
+  --candidate-slug "$candidate_slug" \
+  --destination /absolute/private/path/new-accepted-main-candidate
+
+python scripts/stage_mimic_app.py \
+  --source-revision "$source_revision" \
+  --candidate-slug "$candidate_slug" \
+  --destination /absolute/private/path/new-accepted-main-candidate --verify
+```
+
+For source `4e9202ba3df5ac5c478e71426bbb3cfe14574901`, this produces
+slug `sds200_main_4e9202ba3df5`, name and panel title
+`sds200 accepted-main smoke 4e9202ba`, MQTT prefix
+`sdsctl-main-4e9202ba3df5`, and recording directory
+`sdsctl-main-4e9202ba3df5/recordings`. Home Assistant adds its normal `local_`
+prefix to the installed identity, yielding
+`local_sds200_main_4e9202ba3df5`. These values do not change the payload
+version suffix or any public runtime behavior.
+
+This path records two exact revisions in `candidate-source.json`:
+
+- `source_revision` identifies every archived payload byte.
+- `stager_revision` identifies the accepted commit containing the staging
+  adapter.
+
+The stager revision is inferred from the checkout, never supplied by the
+operator. It must be a clean descendant of the payload source, distinct from
+that source, and its complete source-to-stager diff must modify in place only
+`scripts/stage_mimic_app.py`, `tests/test_stage_mimic_app.py`, and this guide.
+Create and verify both re-attest the same checkout. Stage only after the adapter
+PR has been normally merged and all exact-main gates pass, using the accepted
+merge commit as the stager revision; do not stage from the PR head. The normal
+fixed-slug path remains unchanged and still requires clean `HEAD` to equal the
+payload source for creation.
+
+This identity support only prepares and verifies an offline build context. It
+does not authorize copying into `/addons`, refreshing or installing a Local
+App, changing options or ports, starting or stopping an App, accessing a
+scanner or Pi, or any other live-state mutation.
+
 Build the context locally before transferring it to the Local Apps directory.
 Record the source revision, platform, build arguments and resulting image ID.
 Run isolated startup/import tests without networking or real user mounts. This
@@ -67,8 +119,11 @@ Before switching the scanner owner:
 3. Prepare the [private display manifests and accepted-state directory](scanner-display-profile-import.md).
    Bind the exact scanner target and fresh opaque endpoint/source IDs. Use a
    separate candidate profile directory outside the recording inventory, for
-   example `/media/sdsctl-mimic-acceptance/profiles/profile.cfg`. The original
-   scanner profile remains read-only; any managed copy is explicit.
+   example `/media/sdsctl-mimic-acceptance/profiles/profile.cfg` for the legacy
+   fixed-slug candidate or `/media/sdsctl-main-<source12>/profiles/profile.cfg`
+   for an accepted-main candidate. Derive the latter from its exact manifest
+   state namespace. The original scanner profile remains read-only; any managed
+   copy is explicit.
 4. For browser Upload/Refresh, specify the exact trusted HTTPS Home Assistant
    origin and authorized HA user IDs in the deployment TOML. DNS or a literal
    IP can be used with valid HTTPS. Do not weaken origin/user checks to fit a
