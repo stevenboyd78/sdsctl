@@ -6,6 +6,7 @@ import signal
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -98,8 +99,20 @@ def test_expired_service_returns_503_without_reading_body(tree):
     asyncio.run(run())
 
 
-def test_native_slow_demand_body_is_cancelled_on_original_expiry(tree):
-    app, owner = service(tree, deadline=time.monotonic() + 0.3)
+def test_native_slow_demand_body_is_cancelled_on_original_expiry(tree, monkeypatch):
+    # Keep asyncio and the test's bounded waits on real monotonic time. Only
+    # the synthetic peer/probe composition receives a stable original clock
+    # until request-body admission is observably ready.
+    fixture_clock = [time.monotonic()]
+    original_deadline = fixture_clock[0] + 0.3
+    clock = SimpleNamespace(monotonic=lambda: fixture_clock[0])
+    monkeypatch.setattr(peer, "time", clock)
+    monkeypatch.setattr(
+        sys.modules["supplemental_recording_probe"],
+        "time",
+        clock,
+    )
+    app, owner = service(tree, deadline=original_deadline)
 
     async def run():
         output = []
@@ -117,6 +130,9 @@ def test_native_slow_demand_body_is_cancelled_on_original_expiry(tree):
 
         task = asyncio.create_task(app(http(DEMAND_PATH, "POST"), receive, send))
         await asyncio.wait_for(entered.wait(), 1)
+        assert not task.done()
+        assert owner._deadline == original_deadline
+        fixture_clock[0] = original_deadline
         await asyncio.wait_for(task, 2)
         assert cancelled.is_set() and not app._active
         assert output[0]["status"] == 503
