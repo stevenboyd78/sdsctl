@@ -1658,6 +1658,36 @@ export function browserAuditLibrary() {
     return failures;
   }
 
+  function lcarsHorizontalNavigationFailures() {
+    const failures = [];
+    const tabs = document.querySelector(".workspace-tabs");
+    const visibleTabs = Array.from(
+      tabs?.querySelectorAll('[role="tab"]') ?? [],
+    ).filter(rendered);
+    if (!rendered(tabs) || getComputedStyle(tabs).display !== "grid" || visibleTabs.length === 0) {
+      return failures;
+    }
+    const tabsRect = tabs.getBoundingClientRect();
+    const tabsStyle = getComputedStyle(tabs);
+    const firstRect = visibleTabs[0].getBoundingClientRect();
+    const lastRect = visibleTabs.at(-1).getBoundingClientRect();
+    const startInset = Number.parseFloat(tabsStyle.paddingLeft);
+    const endInset = Number.parseFloat(tabsStyle.paddingRight);
+    if (
+      !Number.isFinite(startInset) || startInset < 8 ||
+      firstRect.left < tabsRect.left + startInset - tolerance
+    ) {
+      failures.push("LCARS horizontal Scanner tab does not clear the fluid elbow");
+    }
+    if (
+      !Number.isFinite(endInset) || endInset < 8 ||
+      lastRect.right > tabsRect.right - endInset + tolerance
+    ) {
+      failures.push("LCARS horizontal tabs do not preserve the matching end inset");
+    }
+    return failures;
+  }
+
   function decorativeClearanceFailures(theme) {
     const failures = [];
     const header = document.querySelector(".site-header");
@@ -1667,6 +1697,7 @@ export function browserAuditLibrary() {
       if (brand.getBoundingClientRect().left < header.getBoundingClientRect().left + railWidth + 4) {
         failures.push("LCARS brand intrudes into the decorative left rail");
       }
+      failures.push(...lcarsHorizontalNavigationFailures());
       for (const panelHeader of document.querySelectorAll(".panel-header")) {
         if (!rendered(panelHeader)) continue;
         const rect = panelHeader.getBoundingClientRect();
@@ -1846,6 +1877,9 @@ export function browserAuditLibrary() {
   function ingressHomeAssistantLayout() {
     const failures = paneState("home-assistant");
     failures.push(...subpanelButtonGeometry("home-assistant"));
+    if (document.documentElement.dataset.theme === "lcars") {
+      failures.push(...lcarsHorizontalNavigationFailures());
+    }
     const pane = document.querySelector("#pane-home-assistant");
     const workspace = pane?.querySelector(":scope > .home-assistant-workspace");
     const panels = Array.from(

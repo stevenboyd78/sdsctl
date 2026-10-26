@@ -179,6 +179,23 @@ def test_lcars_header_content_reserves_space_for_decorative_edges() -> None:
     assert "flex: 0 0 var(--lcars-v2-nav-cap) !important;" in layout
 
 
+def test_lcars_horizontal_navigation_clears_the_fluid_elbow() -> None:
+    layout = files("sds200.web_assets").joinpath("lcars-v2.css").read_text()
+
+    assert "--lcars-v2-horizontal-nav-inset: 0.8rem;" in layout
+    assert (
+        "padding-inline: var(--lcars-v2-horizontal-nav-inset) !important;"
+        in layout
+    )
+    # The wide vertical rail has its own independent decorative cap and must
+    # retain the existing edge-to-edge navigation geometry.
+    desktop = layout.split(
+        "@media (min-width: 64rem) and (min-height: 38rem)", 2
+    )[2]
+    tabs = desktop.split(".workspace-tabs {", 1)[1].split("}", 1)[0]
+    assert "padding: 0 !important;" in tabs
+
+
 @pytest.mark.parametrize("theme_id", ("first-responder", "amateur-radio"))
 def test_overview_label_clears_the_header_divider(theme_id: str) -> None:
     stylesheet = read_built_in_web_theme_stylesheet(

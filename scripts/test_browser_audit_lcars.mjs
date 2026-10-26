@@ -120,7 +120,10 @@ test('decorative clearance measures the actual responsive rail, still rejecting 
   header.querySelector = () => brand;
   let rail = 13;
   const audit = vm.runInNewContext(`(${browserAuditLibrary.toString()})()`, {
-    Element, document: {querySelector: () => header, querySelectorAll: () => []},
+    Element, document: {
+      querySelector: selector => selector === '.site-header' ? header : null,
+      querySelectorAll: () => [],
+    },
     getComputedStyle: () => ({borderLeftWidth: `${rail}px`, display: 'block', visibility: 'visible'}),
   });
   assert.equal(audit.decorativeClearanceFailures('lcars').length, 0);
@@ -131,6 +134,45 @@ test('decorative clearance measures the actual responsive rail, still rejecting 
   assert.equal(audit.decorativeClearanceFailures('lcars').length, 0);
   brand.left = 150;
   assert.match(audit.decorativeClearanceFailures('lcars')[0], /intrudes/);
+});
+
+test('horizontal LCARS tabs preserve stable start and end insets', () => {
+  class Element {
+    constructor({left, right, width = right - left, height = 60}, style = {}) {
+      Object.assign(this, {rect: {left, right, width, height}, style, id: '',
+        parentElement: null, hidden: false});
+    }
+    getBoundingClientRect() { return this.rect; }
+  }
+  const brand = new Element({left: 17, right: 117});
+  const header = new Element({left: 0, right: 800});
+  header.querySelector = () => brand;
+  const first = new Element({left: 25.8, right: 125.8});
+  const last = new Element({left: 687.2, right: 787.2});
+  const tabs = new Element(
+    {left: 13, right: 800, width: 787},
+    {display: 'grid', paddingLeft: '12.8px', paddingRight: '12.8px'},
+  );
+  tabs.querySelectorAll = () => [first, last];
+  const audit = vm.runInNewContext(`(${browserAuditLibrary.toString()})()`, {
+    Element,
+    document: {
+      querySelector: selector => selector === '.site-header' ? header :
+        selector === '.workspace-tabs' ? tabs : null,
+      querySelectorAll: () => [],
+    },
+    getComputedStyle: element => ({borderLeftWidth: '13px', display: 'block',
+      visibility: 'visible', ...element.style}),
+  });
+  assert.equal(audit.decorativeClearanceFailures('lcars').length, 0);
+  first.rect.left = 20;
+  assert.match(audit.decorativeClearanceFailures('lcars')[0], /Scanner tab/);
+  first.rect.left = 25.8;
+  last.rect.right = 795;
+  assert.match(audit.decorativeClearanceFailures('lcars')[0], /matching end inset/);
+  last.rect.right = 787.2;
+  tabs.style.paddingLeft = '4px';
+  assert.match(audit.decorativeClearanceFailures('lcars')[0], /Scanner tab/);
 });
 
 test('LCARS utility and Scanner-filter roles stay internally consistent', () => {

@@ -57,11 +57,19 @@
   :root[data-theme="lcars"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) {
     --lcars-v2-nav-width: clamp(10rem, 14vw, 13rem);
     --lcars-v2-layout-gap: clamp(0.7rem, 1.6vw, 1.35rem);
+    --lcars-v2-horizontal-nav-inset: 0.8rem;
   }
 
   :root[data-theme="lcars"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-shell {
     border-radius: 2.5rem 0 0 0;
     gap: 0.8rem !important;
+  }
+
+  /* The fluid left rail is narrower than the fixed shell radius at some
+   * horizontal widths. Keep its variable inner curve away from Scanner so
+   * the frame owns the elbow and every tab keeps its own stable shape. */
+  :root[data-theme="lcars"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-tabs {
+    padding-inline: var(--lcars-v2-horizontal-nav-inset) !important;
   }
 
   :root[data-theme="lcars"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-tabs [role="tab"] {
