@@ -58,6 +58,7 @@
     --lcars-v2-nav-width: clamp(10rem, 14vw, 13rem);
     --lcars-v2-layout-gap: clamp(0.7rem, 1.6vw, 1.35rem);
     --lcars-v2-horizontal-nav-inset: 0.8rem;
+    --lcars-v2-horizontal-elbow-radius: 1.25rem;
   }
 
   :root[data-theme="lcars"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-shell {
@@ -65,11 +66,16 @@
     gap: 0.8rem !important;
   }
 
-  /* The fluid left rail is narrower than the fixed shell radius at some
-   * horizontal widths. Keep its variable inner curve away from Scanner so
-   * the frame owns the elbow and every tab keeps its own stable shape. */
+  /* Keep horizontal navigation inside its own padded row. The surrounding
+   * frame owns every edge, so Scanner never doubles as part of the elbow. */
   :root[data-theme="lcars"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-tabs {
     padding-inline: var(--lcars-v2-horizontal-nav-inset) !important;
+  }
+
+  @media (min-width: 44rem) {
+    :root[data-theme="lcars"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-tabs {
+      padding-block-start: var(--lcars-v2-horizontal-nav-inset) !important;
+    }
   }
 
   :root[data-theme="lcars"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-tabs [role="tab"] {
@@ -533,6 +539,7 @@
     background: var(--lcars-v2-band-forward) right bottom / calc(100% + var(--lcars-v2-header-rail)) 100% no-repeat;
   }
   :root[data-theme="lcars"][data-lcars-v2-bands="segmented"][data-lcars-v2-layout="v2"] .workspace-shell {
+    position: relative;
     border-top: var(--lcars-v2-shell-stroke) solid transparent;
     border-bottom: var(--lcars-v2-shell-stroke) solid transparent;
     background:
@@ -543,6 +550,30 @@
         var(--lcars-v2-lilac) calc(57% + 5px) 83%, var(--background) 83% calc(83% + 5px),
         var(--lcars-v2-blue) calc(83% + 5px) 100%) left top / var(--lcars-v2-rail) 100% no-repeat border-box,
       var(--background);
+  }
+  /* The horizontal frame uses one dedicated elbow instead of intersecting
+   * top and left rectangles. Its outer radii include the unequal rail widths,
+   * leaving the same circular inner radius at every responsive rail size. */
+  @media (max-width: 63.99rem), (max-height: 37.99rem) {
+    :root[data-theme="lcars"][data-lcars-v2-bands="segmented"][data-lcars-v2-layout="v2"] .workspace-shell {
+      border-top-left-radius:
+        calc(var(--lcars-v2-rail) + var(--lcars-v2-horizontal-elbow-radius))
+        calc(var(--lcars-v2-shell-stroke) + var(--lcars-v2-horizontal-elbow-radius));
+    }
+    :root[data-theme="lcars"][data-lcars-v2-bands="segmented"][data-lcars-v2-layout="v2"] .workspace-shell::before {
+      content: "";
+      position: absolute;
+      z-index: 0;
+      top: calc(-1 * var(--lcars-v2-shell-stroke));
+      left: calc(-1 * var(--lcars-v2-rail));
+      width: calc(var(--lcars-v2-rail) + var(--lcars-v2-horizontal-elbow-radius));
+      height: calc(var(--lcars-v2-shell-stroke) + var(--lcars-v2-horizontal-elbow-radius));
+      border: 0;
+      background: radial-gradient(circle at 100% 100%,
+        var(--background) 0 var(--lcars-v2-horizontal-elbow-radius),
+        var(--lcars-v2-salmon) calc(var(--lcars-v2-horizontal-elbow-radius) + 1px));
+      pointer-events: none;
+    }
   }
   :root[data-theme="lcars"][data-lcars-v2-bands="segmented"][data-lcars-v2-layout="v2"] .panel-header {
     border-bottom-color: transparent;
