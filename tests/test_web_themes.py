@@ -183,9 +183,26 @@ def test_lcars_horizontal_navigation_clears_the_fluid_elbow() -> None:
     layout = files("sds200.web_assets").joinpath("lcars-v2.css").read_text()
 
     assert "--lcars-v2-horizontal-nav-inset: 0.8rem;" in layout
+    assert "--lcars-v2-horizontal-elbow-radius: 1.25rem;" in layout
     assert (
         "padding-inline: var(--lcars-v2-horizontal-nav-inset) !important;"
         in layout
+    )
+    assert "@media (min-width: 44rem)" in layout
+    assert (
+        "padding-block-start: var(--lcars-v2-horizontal-nav-inset) !important;"
+        in layout
+    )
+    horizontal = layout.split(
+        "@media (max-width: 63.99rem), (max-height: 37.99rem)", 1
+    )[1].split("@media", 1)[0]
+    assert ".workspace-shell::before" in horizontal
+    assert "radial-gradient(circle at 100% 100%" in horizontal
+    assert "calc(var(--lcars-v2-rail) + var(--lcars-v2-horizontal-elbow-radius))" in horizontal
+    assert (
+        "calc(var(--lcars-v2-shell-stroke) + "
+        "var(--lcars-v2-horizontal-elbow-radius))"
+        in horizontal
     )
     # The wide vertical rail has its own independent decorative cap and must
     # retain the existing edge-to-edge navigation geometry.

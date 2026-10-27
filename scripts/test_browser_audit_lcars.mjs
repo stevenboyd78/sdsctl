@@ -136,10 +136,14 @@ test('decorative clearance measures the actual responsive rail, still rejecting 
   assert.match(audit.decorativeClearanceFailures('lcars')[0], /intrudes/);
 });
 
-test('horizontal LCARS tabs preserve stable start and end insets', () => {
+test('horizontal LCARS tabs remain independent inside one rounded frame elbow', () => {
   class Element {
-    constructor({left, right, width = right - left, height = 60}, style = {}) {
-      Object.assign(this, {rect: {left, right, width, height}, style, id: '',
+    constructor(box, style = {}) {
+      const {left, right, top = 0} = box;
+      const width = box.width ?? right - left;
+      const bottom = box.bottom ?? top + (box.height ?? 60);
+      const height = box.height ?? bottom - top;
+      Object.assign(this, {rect: {left, right, top, bottom, width, height}, style, id: '',
         parentElement: null, hidden: false});
     }
     getBoundingClientRect() { return this.rect; }
@@ -147,22 +151,31 @@ test('horizontal LCARS tabs preserve stable start and end insets', () => {
   const brand = new Element({left: 17, right: 117});
   const header = new Element({left: 0, right: 800});
   header.querySelector = () => brand;
-  const first = new Element({left: 25.8, right: 125.8});
-  const last = new Element({left: 687.2, right: 787.2});
+  const first = new Element({left: 25.8, right: 125.8, top: 12.8, bottom: 47.2},
+    {borderTopLeftRadius: '3px', borderTopRightRadius: '3px',
+      borderBottomRightRadius: '20px', borderBottomLeftRadius: '20px'});
+  const last = new Element({left: 687.2, right: 787.2, top: 12.8, bottom: 47.2},
+    {borderTopLeftRadius: '3px', borderTopRightRadius: '3px',
+      borderBottomRightRadius: '20px', borderBottomLeftRadius: '20px'});
   const tabs = new Element(
-    {left: 13, right: 800, width: 787},
-    {display: 'grid', paddingLeft: '12.8px', paddingRight: '12.8px'},
+    {left: 13, right: 800, top: 0, bottom: 60, width: 787, height: 60},
+    {display: 'grid', paddingLeft: '12.8px', paddingRight: '12.8px',
+      paddingTop: '12.8px', paddingBottom: '0px'},
   );
   tabs.querySelectorAll = () => [first, last];
+  const shell = new Element({left: 0, right: 800, top: 0, bottom: 300});
+  shell.style.before = {content: '\"\"', backgroundImage: 'radial-gradient(circle, black, red)',
+    width: '32px', height: '30px'};
   const audit = vm.runInNewContext(`(${browserAuditLibrary.toString()})()`, {
     Element,
     document: {
+      documentElement: {dataset: {lcarsV2Bands: 'segmented'}},
       querySelector: selector => selector === '.site-header' ? header :
-        selector === '.workspace-tabs' ? tabs : null,
+        selector === '.workspace-tabs' ? tabs : selector === '.workspace-shell' ? shell : null,
       querySelectorAll: () => [],
     },
-    getComputedStyle: element => ({borderLeftWidth: '13px', display: 'block',
-      visibility: 'visible', ...element.style}),
+    getComputedStyle: (element, pseudo) => ({borderLeftWidth: '13px', display: 'block',
+      visibility: 'visible', ...(pseudo === '::before' ? element.style.before : element.style)}),
   });
   assert.equal(audit.decorativeClearanceFailures('lcars').length, 0);
   first.rect.left = 20;
@@ -173,6 +186,52 @@ test('horizontal LCARS tabs preserve stable start and end insets', () => {
   last.rect.right = 787.2;
   tabs.style.paddingLeft = '4px';
   assert.match(audit.decorativeClearanceFailures('lcars')[0], /Scanner tab/);
+  tabs.style.paddingLeft = '12.8px';
+  tabs.style.paddingTop = '4px';
+  assert.ok(audit.decorativeClearanceFailures('lcars').some(failure => /upper frame/.test(failure)));
+  tabs.style.paddingTop = '12.8px';
+  first.style.borderTopLeftRadius = '20px';
+  assert.ok(audit.decorativeClearanceFailures('lcars').some(failure => /shape differs/.test(failure)));
+  first.style.borderTopLeftRadius = '3px';
+  shell.style.before.backgroundImage = 'none';
+  assert.ok(audit.decorativeClearanceFailures('lcars').some(failure => /continuous rounded elbow/.test(failure)));
+});
+
+test('phone LCARS tabs preserve their established block geometry', () => {
+  class Element {
+    constructor(rect, style = {}) {
+      Object.assign(this, {rect, style, id: '', parentElement: null, hidden: false});
+    }
+    getBoundingClientRect() { return this.rect; }
+  }
+  const brand = new Element({left: 17, right: 117, width: 100, height: 60});
+  const header = new Element({left: 0, right: 390, width: 390, height: 60});
+  header.querySelector = () => brand;
+  const first = new Element({left: 25.8, right: 125, top: 0, bottom: 44, width: 99.2, height: 44},
+    {borderTopLeftRadius: '3px', borderTopRightRadius: '3px',
+      borderBottomRightRadius: '20px', borderBottomLeftRadius: '20px'});
+  const second = new Element({left: 130, right: 230, top: 0, bottom: 44, width: 100, height: 44},
+    {...first.style});
+  const tabs = new Element({left: 13, right: 390, top: 0, bottom: 100, width: 377, height: 100},
+    {display: 'grid', paddingLeft: '12.8px', paddingRight: '12.8px',
+      paddingTop: '0px', paddingBottom: '0px'});
+  tabs.querySelectorAll = () => [first, second];
+  const shell = new Element({left: 0, right: 390, top: 0, bottom: 500, width: 390, height: 500});
+  shell.style.before = {content: '\"\"', backgroundImage: 'radial-gradient(circle, black, red)',
+    width: '32px', height: '30px'};
+  const audit = vm.runInNewContext(`(${browserAuditLibrary.toString()})()`, {
+    Element,
+    document: {
+      documentElement: {dataset: {lcarsV2Bands: 'segmented'}},
+      querySelector: selector => selector === '.site-header' ? header :
+        selector === '.workspace-tabs' ? tabs : selector === '.workspace-shell' ? shell : null,
+      querySelectorAll: () => [],
+    },
+    matchMedia: query => ({matches: query === '(forced-colors: none)'}),
+    getComputedStyle: (element, pseudo) => ({borderLeftWidth: '13px', display: 'block',
+      visibility: 'visible', ...(pseudo === '::before' ? element.style.before : element.style)}),
+  });
+  assert.equal(audit.decorativeClearanceFailures('lcars').length, 0);
 });
 
 test('LCARS utility and Scanner-filter roles stay internally consistent', () => {

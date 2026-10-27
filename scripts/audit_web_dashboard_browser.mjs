@@ -1660,6 +1660,7 @@ export function browserAuditLibrary() {
 
   function lcarsHorizontalNavigationFailures() {
     const failures = [];
+    const shell = document.querySelector(".workspace-shell");
     const tabs = document.querySelector(".workspace-tabs");
     const visibleTabs = Array.from(
       tabs?.querySelectorAll('[role="tab"]') ?? [],
@@ -1673,6 +1674,9 @@ export function browserAuditLibrary() {
     const lastRect = visibleTabs.at(-1).getBoundingClientRect();
     const startInset = Number.parseFloat(tabsStyle.paddingLeft);
     const endInset = Number.parseFloat(tabsStyle.paddingRight);
+    const topInset = Number.parseFloat(tabsStyle.paddingTop);
+    const requiresTopInset =
+      typeof matchMedia !== "function" || matchMedia("(min-width: 44rem)").matches;
     if (
       !Number.isFinite(startInset) || startInset < 8 ||
       firstRect.left < tabsRect.left + startInset - tolerance
@@ -1684,6 +1688,44 @@ export function browserAuditLibrary() {
       lastRect.right > tabsRect.right - endInset + tolerance
     ) {
       failures.push("LCARS horizontal tabs do not preserve the matching end inset");
+    }
+    if (requiresTopInset && (
+      !Number.isFinite(topInset) || topInset < 8 ||
+      firstRect.top < tabsRect.top + topInset - tolerance
+    )) {
+      failures.push("LCARS horizontal tabs do not clear the upper frame");
+    }
+    if (visibleTabs.length > 1) {
+      const scannerStyle = getComputedStyle(visibleTabs[0]);
+      const referenceStyle = getComputedStyle(visibleTabs[1]);
+      for (const property of [
+        "borderTopLeftRadius", "borderTopRightRadius",
+        "borderBottomRightRadius", "borderBottomLeftRadius",
+      ]) {
+        if (scannerStyle[property] !== referenceStyle[property]) {
+          failures.push("LCARS horizontal Scanner tab shape differs from its peers");
+          break;
+        }
+      }
+    }
+    const decorativeElbowEnabled =
+      typeof matchMedia !== "function" || matchMedia("(forced-colors: none)").matches;
+    if (
+      decorativeElbowEnabled &&
+      document.documentElement?.dataset?.lcarsV2Bands === "segmented" &&
+      rendered(shell)
+    ) {
+      const elbowStyle = getComputedStyle(shell, "::before");
+      const elbowWidth = Number.parseFloat(elbowStyle.width);
+      const elbowHeight = Number.parseFloat(elbowStyle.height);
+      if (
+        elbowStyle.content === "none" ||
+        !elbowStyle.backgroundImage?.includes("radial-gradient") ||
+        !Number.isFinite(elbowWidth) || elbowWidth < 24 ||
+        !Number.isFinite(elbowHeight) || elbowHeight < 24
+      ) {
+        failures.push("LCARS horizontal frame does not provide one continuous rounded elbow");
+      }
     }
     return failures;
   }
