@@ -24,8 +24,13 @@ class ReplySocket(FakeDatagramSocket):
         self.no_reply = timeout
         self.initial_psi = initial_psi
         self.clock_fields = ("0", "2026", "09", "17", "09", "45", "02", "1")
+        self.receive_started = threading.Event()
         self.quit = threading.Event()
         self.producer = None
+
+    def recv(self, size: int) -> bytes:
+        self.receive_started.set()
+        return super().recv(size)
 
     def feed_psi(self):
         self.feed(
@@ -90,6 +95,7 @@ def test_one_selected_get_uses_only_existing_udp_socket_and_never_retries(kind, 
     factory = FakeDatagramSocketFactory(socket)
     radio = SDS200.network("192.0.2.10", reconnect=False, socket_factory=factory)
     with radio:
+        assert socket.receive_started.wait(timeout=1)
         probe = DisplayReadResearchAttempt(DisplayReadResearchPolicy(FIRMWARE, kind))
         result = probe.run(radio, operator_ready=True, timeout=0.15)
         assert result.status == ("read_unconfirmed" if timeout else "reply_and_psi_observed")
@@ -108,6 +114,7 @@ def test_pre_read_expiry_and_selected_timeout_without_periodic_psi_are_distinct(
     socket = ReplySocket(timeout=True, initial_psi=initial_psi)
     factory = FakeDatagramSocketFactory(socket)
     with SDS200.network("192.0.2.10", reconnect=False, socket_factory=factory) as radio:
+        assert socket.receive_started.wait(timeout=1)
         probe = DisplayReadResearchAttempt(
             DisplayReadResearchPolicy(FIRMWARE, DisplayReadKind.FAVORITES)
         )
@@ -142,6 +149,7 @@ def test_captured_clock_reply_replays_through_real_decoder_on_one_fake_socket():
     socket.clock_fields = CAPTURED_FIELDS
     factory = FakeDatagramSocketFactory(socket)
     with SDS200.network("192.0.2.10", reconnect=False, socket_factory=factory) as radio:
+        assert socket.receive_started.wait(timeout=1)
         probe = DisplayReadResearchAttempt(
             DisplayReadResearchPolicy(FIRMWARE, DisplayReadKind.CLOCK)
         )
