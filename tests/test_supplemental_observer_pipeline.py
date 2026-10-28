@@ -94,7 +94,11 @@ def original_pipeline_fixture(temporary, *, binary=None):
         raise AssertionError("Original fixture retirement did not complete")
 
 
-@pytest.mark.parametrize("joined", [SELECTION], indirect=True)
+@pytest.mark.parametrize(
+    "joined",
+    [SELECTION | dict(compress_handoff_scheduler_time=True)],
+    indirect=True,
+)
 def test_original_observer_needs_no_plan_handoff_or_completion_stdin(
     binary, direct_launcher, reviewed_binary, joined, monkeypatch
 ):
