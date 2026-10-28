@@ -82,11 +82,40 @@ def original_link(prepared, monkeypatch, *, short=False):
 @pytest.fixture
 def case(prepared, monkeypatch):
     with original_link(prepared, monkeypatch) as link:
+        # These cases exercise retained kernel handles, not scheduler latency.
+        # Keep the real BOOTTIME source and timerfd operations, but give each
+        # target module its own fixed logical operation clock so shared-runner
+        # descheduling cannot spend an unrelated one-second safety budget.
+        # The explicit budget regression below advances only this local clock.
+        source_time = m.time
+        now = source_time.monotonic()
+
+        def fixture_time():
+            return SimpleNamespace(
+                CLOCK_BOOTTIME=source_time.CLOCK_BOOTTIME,
+                clock_gettime_ns=source_time.clock_gettime_ns,
+                monotonic=lambda: now,
+            )
+
+        monkeypatch.setattr(m, "time", fixture_time())
+        monkeypatch.setattr(m.links, "time", fixture_time())
         watch = m.DeadlineWatch(link)
         try:
             yield prepared, link, watch
         finally:
             watch.close()
+
+
+def test_fixture_clock_is_module_local_and_keeps_real_boottime(case):
+    _, _, watch = case
+    import time
+
+    assert m.time is not time and m.links.time is not time and m.time is not m.links.time
+    assert m.time.monotonic() == m.links.time.monotonic()
+    assert m.time.CLOCK_BOOTTIME == m.links.time.CLOCK_BOOTTIME == time.CLOCK_BOOTTIME
+    assert m.time.clock_gettime_ns is time.clock_gettime_ns
+    assert m.links.time.clock_gettime_ns is time.clock_gettime_ns
+    assert time.clock_gettime_ns(time.CLOCK_BOOTTIME) < watch.deadline_ns
 
 
 def test_capture_retains_original_bound_handles_and_never_closes_borrowed_owners(case):
