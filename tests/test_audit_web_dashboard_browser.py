@@ -91,6 +91,7 @@ def test_browser_audit_help_documents_scope_and_dependencies() -> None:
         "trusted Tab/Shift+Tab",
         "WCAG AA",
         "adaptive-presentation",
+        "LCARS navigation breakpoint",
         "alternative system-font metrics",
         "DPR-transition",
         "prefixed-URL",
@@ -107,6 +108,10 @@ def test_browser_audit_help_documents_scope_and_dependencies() -> None:
         "No third-party Node package",
     ):
         assert contract in completed.stdout
+
+    source = _SCRIPT.read_text(encoding="utf-8")
+    assert "Object.freeze([703, 704, 705])" in source
+    assert "navigation-transition/scanner" in source
 
 
 def test_browser_audit_list_is_the_complete_cartesian_matrix() -> None:

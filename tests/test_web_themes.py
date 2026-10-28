@@ -188,11 +188,12 @@ def test_lcars_horizontal_navigation_clears_the_fluid_elbow() -> None:
         "padding-inline: var(--lcars-v2-horizontal-nav-inset) !important;"
         in layout
     )
-    assert "@media (min-width: 44rem)" in layout
     assert (
         "padding-block-start: var(--lcars-v2-horizontal-nav-inset) !important;"
         in layout
     )
+    assert "@media (min-width: 44rem), (orientation: landscape)" in layout
+    assert "position: relative;\n    z-index: 1;" in layout
     horizontal = layout.split(
         "@media (max-width: 63.99rem), (max-height: 37.99rem)", 1
     )[1].split("@media", 1)[0]

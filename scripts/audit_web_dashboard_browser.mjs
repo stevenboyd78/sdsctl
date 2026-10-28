@@ -43,6 +43,8 @@ export const PANES = Object.freeze([
   "diagnostics",
 ]);
 
+const LCARS_NAVIGATION_TRANSITION_WIDTHS = Object.freeze([703, 704, 705]);
+
 const RADIO_FIELD_IDS = Object.freeze([
   "radio-mode",
   "radio-screen-raw",
@@ -92,6 +94,7 @@ theme × reference CSS viewport × workspace pane cases, all 189 explicit System
 palette responsive cases, plus media-preference, enlarged-text,
 pagination-focus, trusted Tab/Shift+Tab traversal, WCAG AA contrast, complete
 adaptive-presentation, DPR-transition, and prefixed-URL probes. It also covers
+the LCARS navigation breakpoint immediately below, at, and above 44rem,
 phone recording controls with alternative system-font metrics, and
 the Home Assistant Ingress Diagnostics layout across all themes at desktop and
 phone widths, plus the authenticated waterfall card at desktop, 800x480, and
@@ -1676,7 +1679,8 @@ export function browserAuditLibrary() {
     const endInset = Number.parseFloat(tabsStyle.paddingRight);
     const topInset = Number.parseFloat(tabsStyle.paddingTop);
     const requiresTopInset =
-      typeof matchMedia !== "function" || matchMedia("(min-width: 44rem)").matches;
+      typeof matchMedia !== "function" ||
+      matchMedia("(min-width: 44rem), (orientation: landscape)").matches;
     if (
       !Number.isFinite(startInset) || startInset < 8 ||
       firstRect.left < tabsRect.left + startInset - tolerance
@@ -1725,6 +1729,16 @@ export function browserAuditLibrary() {
         !Number.isFinite(elbowHeight) || elbowHeight < 24
       ) {
         failures.push("LCARS horizontal frame does not provide one continuous rounded elbow");
+      }
+      const firstStyle = getComputedStyle(visibleTabs[0]);
+      const elbowZIndex = Number.parseFloat(elbowStyle.zIndex);
+      const firstZIndex = Number.parseFloat(firstStyle.zIndex);
+      if (
+        firstStyle.position === "static" ||
+        !Number.isFinite(elbowZIndex) || !Number.isFinite(firstZIndex) ||
+        firstZIndex <= elbowZIndex
+      ) {
+        failures.push("LCARS horizontal Scanner tab does not paint above the frame elbow");
       }
     }
     return failures;
@@ -2728,6 +2742,7 @@ export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
   await navigate(cdp, `${baseUrl}/`, timeoutMs);
 
   let caseCount = 0;
+  let lcarsNavigationTransitionCases = 0;
   let systemPaletteCases = 0;
   const systemPalettes = await evaluate(
     cdp,
@@ -2825,6 +2840,25 @@ export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
       );
     }
 
+    if (theme === "lcars") {
+      for (const width of LCARS_NAVIGATION_TRANSITION_WIDTHS) {
+        const viewport = {width, height: 480, dpr: 1};
+        await setViewport(cdp, viewport);
+        await activatePane(cdp, "scanner");
+        lcarsNavigationTransitionCases += 1;
+        const context = `lcars/${width}x480@1/navigation-transition/scanner`;
+        collector.add(
+          context,
+          await evaluate(cdp, 'window.__sdsctlBrowserAudit.normal("scanner", "lcars")'),
+        );
+        await auditAccessibility(cdp, collector, context, "scanner");
+      }
+      console.log(
+        `Audited LCARS navigation transition widths: ` +
+          LCARS_NAVIGATION_TRANSITION_WIDTHS.join(", "),
+      );
+    }
+
     await auditPhoneRecordingFonts(cdp, collector, theme);
     await auditMediaPreferences(cdp, collector, theme);
     await auditEnlargedText(cdp, collector, theme);
@@ -2908,6 +2942,7 @@ export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
     failures: collector.failures,
     ingressDiagnosticsCases,
     ingressHomeAssistantCases,
+    lcarsNavigationTransitionCases,
     systemPaletteCases,
   };
 }
@@ -4201,6 +4236,12 @@ async function run(options) {
         `internal Ingress Home Assistant count mismatch: ${result.ingressHomeAssistantCases}`,
       );
     }
+    if (result.lcarsNavigationTransitionCases !== LCARS_NAVIGATION_TRANSITION_WIDTHS.length) {
+      throw new Error(
+        `internal LCARS navigation-transition count mismatch: ` +
+          `${result.lcarsNavigationTransitionCases}`,
+      );
+    }
     if (result.failures.length > 0) {
       console.error(`\nBrowser acceptance failed with ${result.failures.length} finding(s):`);
       const reported = result.failures.slice(0, 200);
@@ -4236,7 +4277,8 @@ async function run(options) {
         "fields, Simple/Detail and adaptive screens, trusted Tab/Shift+Tab and " +
         "pagination focus, WCAG AA normal/forced-color contrast, reduced motion, " +
         "enlarged-text scrolling escape, DPR changes, 12 phone recording font " +
-        "variants, prefixed URLs, all 18 " +
+        `variants, ${result.lcarsNavigationTransitionCases} LCARS navigation-breakpoint ` +
+        "cases, prefixed URLs, all 18 " +
         `Ingress-only Home Assistant workspaces, ${result.systemPaletteCases} ` +
         "responsive System-palette cases, all 18 read-only Ingress " +
         "Diagnostics layouts, browser Waterfall duration/pointer controls, and " +

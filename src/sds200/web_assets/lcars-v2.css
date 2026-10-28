@@ -66,19 +66,25 @@
     gap: 0.8rem !important;
   }
 
-  /* Keep horizontal navigation inside its own padded row. The surrounding
-   * frame owns every edge, so Scanner never doubles as part of the elbow. */
+  /* Keep horizontal navigation inside its own padded row at every width. The
+   * surrounding frame owns every edge, so Scanner never doubles as part of
+   * the elbow when the tabs wrap into the narrow multi-row layout. */
   :root[data-theme="lcars"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-tabs {
     padding-inline: var(--lcars-v2-horizontal-nav-inset) !important;
   }
 
-  @media (min-width: 44rem) {
+  /* Preserve the fixed-height tall-phone deck. Wide and landscape horizontal
+   * navigation retain an upper gutter; portrait phones keep the established
+   * block geometry that prevents Controls and Recordings clipping. */
+  @media (min-width: 44rem), (orientation: landscape) {
     :root[data-theme="lcars"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-tabs {
       padding-block-start: var(--lcars-v2-horizontal-nav-inset) !important;
     }
   }
 
   :root[data-theme="lcars"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-tabs [role="tab"] {
+    position: relative;
+    z-index: 1;
     min-height: 2.75rem !important;
     font-size: 0.78rem !important;
   }

@@ -153,7 +153,8 @@ test('horizontal LCARS tabs remain independent inside one rounded frame elbow', 
   header.querySelector = () => brand;
   const first = new Element({left: 25.8, right: 125.8, top: 12.8, bottom: 47.2},
     {borderTopLeftRadius: '3px', borderTopRightRadius: '3px',
-      borderBottomRightRadius: '20px', borderBottomLeftRadius: '20px'});
+      borderBottomRightRadius: '20px', borderBottomLeftRadius: '20px',
+      position: 'relative', zIndex: '1'});
   const last = new Element({left: 687.2, right: 787.2, top: 12.8, bottom: 47.2},
     {borderTopLeftRadius: '3px', borderTopRightRadius: '3px',
       borderBottomRightRadius: '20px', borderBottomLeftRadius: '20px'});
@@ -165,7 +166,7 @@ test('horizontal LCARS tabs remain independent inside one rounded frame elbow', 
   tabs.querySelectorAll = () => [first, last];
   const shell = new Element({left: 0, right: 800, top: 0, bottom: 300});
   shell.style.before = {content: '\"\"', backgroundImage: 'radial-gradient(circle, black, red)',
-    width: '32px', height: '30px'};
+    width: '32px', height: '30px', zIndex: '0'};
   const audit = vm.runInNewContext(`(${browserAuditLibrary.toString()})()`, {
     Element,
     document: {
@@ -195,9 +196,12 @@ test('horizontal LCARS tabs remain independent inside one rounded frame elbow', 
   first.style.borderTopLeftRadius = '3px';
   shell.style.before.backgroundImage = 'none';
   assert.ok(audit.decorativeClearanceFailures('lcars').some(failure => /continuous rounded elbow/.test(failure)));
+  shell.style.before.backgroundImage = 'radial-gradient(circle, black, red)';
+  first.style.zIndex = '0';
+  assert.ok(audit.decorativeClearanceFailures('lcars').some(failure => /paint above/.test(failure)));
 });
 
-test('phone LCARS tabs preserve their established block geometry', () => {
+test('phone LCARS tabs preserve their block geometry and clear the upper frame', () => {
   class Element {
     constructor(rect, style = {}) {
       Object.assign(this, {rect, style, id: '', parentElement: null, hidden: false});
@@ -209,7 +213,8 @@ test('phone LCARS tabs preserve their established block geometry', () => {
   header.querySelector = () => brand;
   const first = new Element({left: 25.8, right: 125, top: 0, bottom: 44, width: 99.2, height: 44},
     {borderTopLeftRadius: '3px', borderTopRightRadius: '3px',
-      borderBottomRightRadius: '20px', borderBottomLeftRadius: '20px'});
+      borderBottomRightRadius: '20px', borderBottomLeftRadius: '20px',
+      position: 'relative', zIndex: '1'});
   const second = new Element({left: 130, right: 230, top: 0, bottom: 44, width: 100, height: 44},
     {...first.style});
   const tabs = new Element({left: 13, right: 390, top: 0, bottom: 100, width: 377, height: 100},
@@ -218,7 +223,7 @@ test('phone LCARS tabs preserve their established block geometry', () => {
   tabs.querySelectorAll = () => [first, second];
   const shell = new Element({left: 0, right: 390, top: 0, bottom: 500, width: 390, height: 500});
   shell.style.before = {content: '\"\"', backgroundImage: 'radial-gradient(circle, black, red)',
-    width: '32px', height: '30px'};
+    width: '32px', height: '30px', zIndex: '0'};
   const audit = vm.runInNewContext(`(${browserAuditLibrary.toString()})()`, {
     Element,
     document: {
