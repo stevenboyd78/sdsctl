@@ -293,7 +293,13 @@ def test_partial_write_preserves_failed_claim(prepared, monkeypatch):
 
 def test_early_fstat_failure_closes_new_descriptor(prepared, monkeypatch):
     before = set(os.listdir("/proc/self/fd"))
-    monkeypatch.setattr(m.os, "fstat", lambda fd: (_ for _ in ()).throw(OSError("PRIVATE")))
+    process_fstat = os.fstat
+
+    def fail(_fd):
+        raise OSError("PRIVATE")
+
+    monkeypatch.setattr(m, "os", SimpleNamespace(**(vars(os) | {"fstat": fail})))
+    assert os.fstat is process_fstat
     with pytest.raises(OSError):
         m.run(["--case", CASE])
     assert set(os.listdir("/proc/self/fd")) == before
