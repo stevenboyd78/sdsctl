@@ -85,7 +85,11 @@ def test_late_accept_refuses_before_next_phase_without_renewing_original_cutoff(
     }
 
 
-@pytest.mark.parametrize("joined", [pipeline.SELECTION], indirect=True)
+@pytest.mark.parametrize(
+    "joined",
+    [pipeline.SELECTION | dict(compress_handoff_scheduler_time=True)],
+    indirect=True,
+)
 def test_plan_exchange_rechecks_original_bytes_without_redecoding_the_relation(
     binary, direct_launcher, reviewed_binary, joined, monkeypatch
 ):
