@@ -579,11 +579,16 @@ def test_mutation_during_bounded_payload_read_fails(case, monkeypatch, fault):
 @pytest.mark.parametrize("target", ["inventory", "read_bytes", "fstat"])
 def test_private_failures_are_sanitized_and_all_descriptors_closed(case, monkeypatch, target):
     before = len(list(Path("/proc/self/fd").iterdir()))
+    process_fstat = os.fstat
 
     def fail(*_args, **_kwargs):
         raise OSError("PRIVATE_EXCEPTION_TEXT")
 
-    monkeypatch.setattr(os if target == "fstat" else r, target, fail)
+    if target == "fstat":
+        monkeypatch.setattr(r, "os", SimpleNamespace(**(vars(os) | {"fstat": fail})))
+        assert os.fstat is process_fstat
+    else:
+        monkeypatch.setattr(r, target, fail)
     refuse(case)
     assert len(list(Path("/proc/self/fd").iterdir())) == before
 

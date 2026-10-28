@@ -6,6 +6,7 @@ import os
 import sys
 from dataclasses import asdict
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -290,11 +291,13 @@ def test_timeout_while_reading(tree, monkeypatch):
 
 def test_ancestor_stat_failure_closes_new_descriptor(tree, monkeypatch):
     before = len(list(Path("/proc/self/fd").iterdir()))
+    process_fstat = os.fstat
 
     def failure(*args):
         raise OSError("private ancestor")
 
-    monkeypatch.setattr(f.os, "fstat", failure)
+    monkeypatch.setattr(f, "os", SimpleNamespace(**(vars(os) | {"fstat": failure})))
+    assert os.fstat is process_fstat
     with pytest.raises(f.UnconfirmedFiles):
         f.inventory(tree)
     assert len(list(Path("/proc/self/fd").iterdir())) == before
