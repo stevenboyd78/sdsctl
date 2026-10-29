@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from threading import Event
+from threading import Event, current_thread
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -403,6 +403,42 @@ def test_pre_controller_worker_refusal_retains_bounded_location(rig, monkeypatch
 @pytest.mark.parametrize("fault", ("cancel", "signal", "connection", "old_file", "metadata"))
 def test_failures_preserve_evidence_without_success(rig, monkeypatch, fault):
     trial = rig.build()
+
+    class BoundedWorkerStateLock:
+        """Exclude host scheduling from this later-fault composition only."""
+
+        def __init__(self, lock):
+            self._lock = lock
+
+        def acquire(self, blocking=True, timeout=-1):
+            if blocking is False and current_thread().name == "finite-native-recording":
+                # Keep one production arm call and one qualification read. The
+                # test-side lock adapter only waits for the runtime's brief
+                # state update to finish before that original read proceeds.
+                return self._lock.acquire(timeout=1)
+            if timeout == -1:
+                return self._lock.acquire(blocking)
+            return self._lock.acquire(blocking, timeout)
+
+        def release(self):
+            self._lock.release()
+
+        def locked(self):
+            return self._lock.locked()
+
+        def __enter__(self):
+            self.acquire()
+            return self
+
+        def __exit__(self, *_args):
+            self.release()
+
+    monkeypatch.setattr(
+        rig.runtime,
+        "_state_lock",
+        BoundedWorkerStateLock(rig.runtime._state_lock),
+    )
+
     if fault == "metadata":
         from sds200 import daemon_recording
 

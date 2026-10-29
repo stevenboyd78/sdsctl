@@ -366,7 +366,20 @@ def test_deadline_before_disconnect_injection_is_not_a_connection_change(scanner
         probe.run(scanner, operator_ready=True, timeout=0.1)
 
 
-def test_no_post_reply_psi_is_not_a_continuity_pass(scanner):
+def test_no_post_reply_psi_is_not_a_continuity_pass(scanner, monkeypatch):
+    # This checks the post-response continuity boundary, not background-thread
+    # startup or elapsed I/O. Establish the initial PSI precondition directly
+    # and advance only the attempt's own ordered clock reads.
+    ticks = count(10.0, 0.001)
+    monkeypatch.setattr("sds200.daemon_display_read_research.monotonic", lambda: next(ticks))
+
+    def model(*, timeout):
+        scanner._stage("MDL", timeout)
+        scanner.bus.emit("psi", scanner.frame)
+        return scanner.model
+
+    monkeypatch.setattr(scanner, "get_model", model)
+
     def pause():
         scanner.frame = None
         # A valid pre-response event must not count as post-response progress.
@@ -376,6 +389,8 @@ def test_no_post_reply_psi_is_not_a_continuity_pass(scanner):
     result = attempt().run(scanner, operator_ready=True, timeout=0.025)
     assert result.status == "reply_only" and result.response_validated
     assert result.normal_psi_after_response == 0 and result.sample is None
+    assert scanner.stages == ["scope", "MDL", "VER", "DTM"]
+    assert scanner.scope_depth == scanner.hooks == 0 and scanner.producer is None
 
 
 @pytest.mark.parametrize(
