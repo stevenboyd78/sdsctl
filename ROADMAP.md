@@ -91,18 +91,20 @@ rollback/re-upgrade exercise after public v0.31.0 was reverified.
 
 ### Post-release display preference follow-up
 
-Add one bounded application-configuration setting that keeps the TUI dashboard
-as the default but lets a display-capable daemon client request Mimic-SDS as its
-initial screen. The managed Pi must use its existing service-account
-`config.toml`; do not change the packaged unit or place presentation state in
-the authenticated remote-client manifest. A temporary CLI override retains
-higher precedence. Reject explicit Mimic-SDS startup before normal display when
-capability negotiation does not supply a display source, and open the screen
-through Textual lifecycle callbacks rather than injected input. Preserve return
-to dashboard, shutdown and managed-display failure semantics. Record the wider
-safe non-secret runtime configuration gaps for later slices without making
-credentials, one-shot actions, destructive requests, enrollment/bootstrap or
-authority opt-ins persistable.
+**Merged after v0.31.0 in
+[PR #270](https://github.com/stevenboyd78/sdsctl/pull/270); not yet released.**
+The bounded application-configuration setting keeps the TUI dashboard as the
+default but lets a display-capable daemon client request Mimic-SDS as its
+initial screen. The managed Pi uses its existing service-account
+`config.toml`; the packaged unit is unchanged and presentation state does not
+enter the authenticated remote-client manifest. A temporary CLI override
+retains higher precedence. Explicit Mimic-SDS startup is rejected before the
+normal dashboard starts when capability negotiation does not supply a display
+source, and the screen opens through Textual lifecycle callbacks rather than
+injected input. Return to dashboard, shutdown and managed-display failure
+semantics remain covered. The wider safe non-secret runtime configuration gaps
+are recorded for later slices without making credentials, one-shot actions,
+destructive requests, enrollment/bootstrap or authority opt-ins persistable.
 
 ### v0.30.0 release closure
 
@@ -116,12 +118,14 @@ release, not the remaining managed-browser milestone or its unattended-use gates
 
 ### Immediate maintenance follow-up: Home Assistant Waterfall sizing
 
-Correct the independently reported Waterfall-card height growth with an external
-theme and `grid_options.rows: auto`. Preserve the valid duration/history YAML,
-explicit grid sizing, existing themes and bounded canvas rendering. Add browser
-regressions for stable height over repeated redraws, density and theme changes,
-and automatic versus fixed grid rows. Keep this isolated from new renderer or
-control features; v0.30.0 acceptance remains complete.
+**Released in [v0.31.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.31.0)
+through [PR #257](https://github.com/stevenboyd78/sdsctl/pull/257).**
+The isolated repair corrects the independently reported Waterfall-card height
+growth with an external theme and `grid_options.rows: auto`. It preserves the
+valid duration/history YAML, explicit grid sizing, existing themes and bounded
+canvas rendering. Browser regressions cover stable height over repeated
+redraws, density and theme changes, and automatic versus fixed grid rows. No
+new renderer or control feature entered this maintenance correction.
 
 ### Requested feature: Mimic-SDS screens and bounded front-panel work
 
