@@ -479,7 +479,7 @@ def test_trusted_ingress_only(rig, service, api, tmp_path):
         with TestClient(app, client=(WEB_DASHBOARD_HOME_ASSISTANT_INGRESS_CLIENT, 1234)) as client:
             reply = client.post(DEMAND_PATH, headers=renewal_headers(service.context()["context"]))
             assert reply.status_code == 200
-        wait_for(lambda: rig.peer.reads == ["FQK"])
+        wait_for_loopback_read(rig.peer, ["FQK"])
 
 
 @pytest.mark.parametrize("consumer", [False, True])
