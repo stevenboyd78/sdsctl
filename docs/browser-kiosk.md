@@ -187,14 +187,26 @@ restarting it. After the exact host is qualified, use its user manager to
 start/stop the installed unit and inspect its journal. Do not enable boot
 startup merely because a unit passed syntax validation.
 
+The kiosk template is an unprivileged graphical-session user service: it does
+not create, stop, unmask or reconfigure a Getty, and it does not select a
+virtual terminal. Before unattended kiosk startup, independently verify that
+the host provides an ordinary authenticated recovery login on tty2. From the
+graphical kiosk, press `Ctrl+Alt+F2`, confirm the account-and-password prompt is
+usable, then log out and return with the shortcut for the graphical virtual
+terminal assigned by that host. Record that return shortcut before testing; it
+is not necessarily tty1 on every desktop. If `getty@tty2.service` is masked or
+inactive, resolve that host policy separately instead of adding privilege or
+Getty control to the kiosk service.
+
 ## Acceptance, upgrade and removal
 
 Record each actual result: readable geometry; menu and Details operation;
 touch/keyboard navigation; theme switching; live status;
 visible/hidden Waterfall; denied controls and downloads; two concurrent clients;
 temporary network outage; expiry; sign-out; web/App restart; certificate failure;
-intentional close; and, separately, a physical cold start. Old data must be
-labeled stale. Neither console TUI may be disrupted by the new display.
+intentional close; authenticated tty2 recovery with `Ctrl+Alt+F2`; and,
+separately, a physical cold start. Old data must be labeled stale. Neither
+console TUI may be disrupted by the new display.
 
 For upgrades, stop only this kiosk's service, preserve its private profile and
 public trust material, update the isolated package, rerun preflight and the

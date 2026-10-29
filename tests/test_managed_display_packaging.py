@@ -40,6 +40,17 @@ def test_source_and_packaged_managed_display_services_are_identical() -> None:
     assert SERVICE.read_text(encoding="utf-8") == managed_display_service_template()
 
 
+def test_managed_display_requests_an_authenticated_secondary_console() -> None:
+    unit = SERVICE.read_text(encoding="utf-8")
+
+    assert "Wants=network-online.target getty@tty2.service" in unit
+    assert "Requires=getty@tty2.service" not in unit
+    assert "Conflicts=getty@tty2.service" not in unit
+    assert "TTYPath=/dev/tty2" not in unit
+    assert "DeviceAllow=/dev/tty2" not in unit
+    assert "autologin" not in unit.lower()
+
+
 def test_cli_prints_exact_packaged_managed_display_service(
     capsys,
 ) -> None:

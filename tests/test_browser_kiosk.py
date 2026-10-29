@@ -240,4 +240,7 @@ def test_kiosk_cli_and_service_do_not_enable_or_publish_anything(
     assert "StartLimitBurst=3" in output
     assert "graphical-session.target" in output
     assert "tty1" not in output
+    assert "tty2" not in output
+    assert "getty@" not in output
+    assert "TTYPath=" not in output
     assert "--no-sandbox" not in output
