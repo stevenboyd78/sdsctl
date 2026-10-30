@@ -1244,18 +1244,22 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
         )
         channel = stack.enter_context(closing(permission_server.accept()[0]))
         channel.setblocking(False)
-        q = m.PeerWriterPreflightQualification(
-            inputs,
-            h.observer_identity,
-            timer,
-            domain,
-            h.witness,
-            h.docker,
-            baseline_sha256=h.baseline,
-            generation=h.args["generation"],
-            command=h.args["command"],
-            passive_retirement=fixed_release,
-        )
+        # Direct preflight suites retain the exact production timeout. This
+        # broad composition instead isolates its initial read-only qualification
+        # from unrelated shared-runner scheduling before later expiry tests.
+        with compressed_scheduler_time(monkeypatch):
+            q = m.PeerWriterPreflightQualification(
+                inputs,
+                h.observer_identity,
+                timer,
+                domain,
+                h.witness,
+                h.docker,
+                baseline_sha256=h.baseline,
+                generation=h.args["generation"],
+                command=h.args["command"],
+                passive_retirement=fixed_release,
+            )
         sender = stack.enter_context(
             closing(
                 grants.Sender(
