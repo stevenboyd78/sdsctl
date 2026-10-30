@@ -2,7 +2,7 @@
 Description=sdsctl observe-only remote TUI display (%i)
 Documentation=https://github.com/stevenboyd78/sdsctl/blob/main/docs/managed-pi-display.md
 DefaultDependencies=no
-Wants=network-online.target
+Wants=network-online.target getty@tty2.service
 After=basic.target network-online.target systemd-user-sessions.service plymouth-quit-wait.service cloud-init.target
 Conflicts=getty@tty1.service shutdown.target
 Before=shutdown.target

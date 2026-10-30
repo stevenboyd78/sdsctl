@@ -25,7 +25,11 @@ The managed display:
   authentication, authorization, and unexpected local failures stop the unit.
 
 The supplied unit owns `/dev/tty1`. Starting it conflicts with the login prompt
-on that console. Other consoles and SSH remain separate recovery paths.
+on that console, while making a soft request for the operating system's ordinary
+authenticated `getty@tty2.service` as a secondary recovery console. It does not
+configure auto-login or unmask a Getty that an administrator deliberately
+masked. Verify tty2 on the actual host before enabling unattended startup; SSH
+remains a separate recovery path.
 
 ## 1. Prepare Raspberry Pi OS
 
@@ -207,6 +211,24 @@ Start the instance once without enabling boot startup:
 sudo systemctl start sdsctl-display@CLIENT_ID.service
 sudo systemctl status sdsctl-display@CLIENT_ID.service
 ```
+
+Before considering the host recoverable without SSH, verify that the ordinary
+authenticated secondary console is active:
+
+```bash
+systemctl is-active getty@tty2.service
+systemctl status getty@tty2.service
+sudo systemctl show -p Wants sdsctl-display@CLIENT_ID.service
+```
+
+From the text TUI on tty1, press `Alt+F2` to switch to tty2 and confirm that a
+normal account-and-password login prompt is usable. On keyboards that assign
+media controls to the function row, the physical shortcut may also require the
+`Fn` key. Log out when finished and use `Alt+F1` to return to the TUI. Do not
+replace this check with auto-login. If tty2 was deliberately masked or the
+Getty does not become active, the display can still start because the dependency
+is intentionally a soft `Wants=` request; resolve the host's recovery policy
+before enabling unattended startup rather than having this unit unmask it.
 
 Confirm the physical display, then press `Q`. An intentional quit leaves the
 disabled service inactive. If playback was installed, press `A` only after the
@@ -461,6 +483,8 @@ The unit deliberately:
 - binds standard input, output, and error to the physical console because
   Textual renders terminal frames through standard error;
 - claims `/dev/tty1` and stops the competing `getty@tty1` login prompt;
+- softly requests the ordinary authenticated `getty@tty2` login prompt without
+  claiming tty2, adding auto-login, or overriding an administrator mask;
 - uses the exact `/opt/sdsctl-display` virtual environment;
 - cannot open an SDS USB serial device;
 - permits only the console and optional sound character devices;
@@ -591,6 +615,8 @@ Those paths are deliberately exact. Do not recursively remove a parent such as
 ## Acceptance checklist
 
 - Reboot the Pi and confirm the TUI appears without a typed command.
+- From the tty1 TUI, press `Alt+F2`, confirm an ordinary authenticated login on
+  tty2, log out, and return with `Alt+F1`.
 - Confirm the expected terminal geometry and responsive layout.
 - Confirm the footer remains visible and the normal dashboard does not scroll.
 - On the compact 100-by-30 display, press `G` and confirm the full-width
