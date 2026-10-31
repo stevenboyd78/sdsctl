@@ -1048,8 +1048,12 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
     mode = options["mode"]
     automatic = options.get("automatic_observer", False)
     compressed_handoff_time = options.get("compress_handoff_scheduler_time", False)
+    compressed_final_acceptance_time = options.get(
+        "compress_final_acceptance_scheduler_time", False
+    )
     assert not automatic or (mode == "release-command-pair" and options.get("observer_join", False))
     assert not compressed_handoff_time or automatic
+    assert not compressed_final_acceptance_time or not automatic
     retained_scope = mode == "retained-scope-pair"
     fixed_release = mode == "release-command-pair"
     authenticated_release = mode in ("released-pair", "release-command-pair")
@@ -1369,6 +1373,7 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
             authenticated_release=authenticated_release,
             fixed_release=fixed_release,
             automatic_observer=automatic,
+            compressed_final_acceptance_time=compressed_final_acceptance_time,
             pipeline_end=pipeline_end,
             staged_plan=staged_plan,
             staged_handoff=staged_handoff,
@@ -1425,17 +1430,28 @@ def finish(s, monkeypatch, after_qualification=None):
     s.inputs.template.check_plan(plan, plan.original_clock)
     assert plan.original_clock.before_ns > s.timer.original.after_ns
     assert plan.raw != s.q.plan.raw  # Never pass outer preview as continuing writer plan.
-    if s.comparison is not None:
-        # In the automatic pipeline, actual Custody capture owns the first full
-        # paired collection. Do not add an unused standalone fixture snapshot
-        # immediately before that same required collection. No production guard
-        # is bypassed or cached: capture, arm and both delivery brackets still
-        # perform their own complete fresh comparisons before publication/release.
-        if s.automatic_observer:
-            assert after_qualification is not None
-        qualify_final(s, plan, collect=not s.automatic_observer)
-    if after_qualification is not None:
-        after_qualification()
+
+    def qualify_and_arm():
+        if s.comparison is not None:
+            # In the automatic pipeline, actual Custody capture owns the first full
+            # paired collection. Do not add an unused standalone fixture snapshot
+            # immediately before that same required collection. No production guard
+            # is bypassed or cached: capture, arm and both delivery brackets still
+            # perform their own complete fresh comparisons before publication/release.
+            if s.automatic_observer:
+                assert after_qualification is not None
+            qualify_final(s, plan, collect=not s.automatic_observer)
+        if after_qualification is not None:
+            after_qualification()
+
+    if s.compressed_final_acceptance_time:
+        # These broad synthetic compositions verify later handoff/refusal
+        # behavior, not the production two-second qualification and watch-arm
+        # cutoffs. Direct deadline suites retain the exact production clock.
+        with compressed_scheduler_time(monkeypatch):
+            qualify_and_arm()
+    else:
+        qualify_and_arm()
     if s.automatic_observer:
         assert type(s.custody) is termination_tests.m.Custody
         assert s.custody.pair is s.pair and s.custody.armed_watch is s.watch
@@ -2058,7 +2074,19 @@ def arm_original_watch(s, native_watch=None):
 )
 @pytest.mark.parametrize(
     "joined",
-    ["pair", "plan-pair", "retained-scope-pair", "released-pair", "release-command-pair"],
+    [
+        pytest.param(
+            dict(mode=mode, compress_final_acceptance_scheduler_time=True),
+            id=mode,
+        )
+        for mode in (
+            "pair",
+            "plan-pair",
+            "retained-scope-pair",
+            "released-pair",
+            "release-command-pair",
+        )
+    ],
     indirect=True,
 )
 def test_original_outer_watch_spans_final_acceptance_dispatcher_and_passive_retirement(
@@ -2204,6 +2232,7 @@ def test_original_received_observer_joins_fixed_writer_and_retires_before_origin
                 observer_join=True,
                 automatic_observer=True,
                 observer_join_fault=fault,
+                compress_handoff_scheduler_time=True,
             ),
             id=fault,
         )
@@ -2261,7 +2290,12 @@ def test_replaced_observer_receive_owners_refuse_original_watched_handoff(
     "joined",
     [
         pytest.param(
-            dict(mode="release-command-pair", observer_join=True, observer_join_fault=fault),
+            dict(
+                mode="release-command-pair",
+                observer_join=True,
+                observer_join_fault=fault,
+                compress_final_acceptance_scheduler_time=True,
+            ),
             id=fault,
         )
         for fault in ("context-drift", "input-drift", "expiry", "cleanup", "interrupt")

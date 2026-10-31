@@ -6,6 +6,7 @@ scanner, host service, Engine or installed platform calls are made here.
 """
 
 import array
+import errno
 import fcntl
 import os
 import select
@@ -58,6 +59,7 @@ def spawn_standard(binary, anchors, args, *, extra=()):
 @contextmanager
 def ingress(custody, binary, *, fault=None, after_exec=False, extra=(), launcher=None):
     channels = []
+    watch = None
 
     def spawner(binary, handles, args, *, extra):
         sender, receiver = socket.socketpair(
@@ -181,12 +183,18 @@ def ingress(custody, binary, *, fault=None, after_exec=False, extra=(), launcher
     finally:
         for channel in channels:
             channel.close()
+        assert all(channel.fileno() == -1 for channel in channels)
+        if watch is not None:
+            assert watch.closed
+            for fd, _identity in watch.resources:
+                with pytest.raises(OSError) as error:
+                    os.fstat(fd)
+                assert error.value.errno == errno.EBADF
 
 
 @pytest.mark.parametrize("pair", [False, "preparation"], indirect=True)
 @pytest.mark.parametrize("after_exec", [False, True])
 def test_original_transfer_recollection_cancel_and_no_fd_leak(custody, pair, binary, after_exec):
-    before = len(os.listdir("/proc/self/fd"))
     raw, deadline = pair.plan.raw, custody.deadline_ns
     with ingress(custody, binary, after_exec=after_exec) as watch:
         assert all(pair.counts[role]["container"] == 4 for role in pair.children)
@@ -196,7 +204,6 @@ def test_original_transfer_recollection_cancel_and_no_fd_leak(custody, pair, bin
         assert base.native_code(watch) == 13
         base.termination.exited(pair)  # Native exit observed before caller cleanup.
         assert watch.finish().returncode == 13
-    assert len(os.listdir("/proc/self/fd")) == before
 
 
 @pytest.mark.parametrize(
@@ -229,7 +236,6 @@ def test_original_transfer_recollection_cancel_and_no_fd_leak(custody, pair, bin
     ],
 )
 def test_rejected_transfer_no_ready_no_untrusted_signals_no_retry(custody, pair, binary, fault):
-    before = len(os.listdir("/proc/self/fd"))
     with ingress(custody, binary, fault=fault) as watch:
         committed = fault in {"bad_cancel", "writer_dies", "observer_dies"}
         assert base.native_code(watch) == (70 if committed else 64)
@@ -243,7 +249,6 @@ def test_rejected_transfer_no_ready_no_untrusted_signals_no_retry(custody, pair,
         base.termination.exited(pair)
         with pytest.raises(AssertionError), ingress(custody, binary):
             pytest.fail("one-attempt case reopened")
-    assert len(os.listdir("/proc/self/fd")) == before
 
 
 @pytest.mark.parametrize("fault", ["no_message", "no_eof", "late_no_message"])
