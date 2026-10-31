@@ -200,13 +200,20 @@ def observing(joined, monkeypatch):
     "healthy,recording", [(True, True), (False, True), (True, False), (False, False)]
 )
 def test_complete_app_observation_joins_fresh_status_not_inferred_from_files(
-    observing, healthy, recording
+    observing, healthy, recording, monkeypatch
 ):
     s = observing
     s.native = begin.plans.ordinary.NativeState(s.idle.generation, healthy, recording)
     sample = s.sampler()
     original = s.plan.raw, s.plan.lease, s.ledger.state, tuple(s.journal.entries)
-    result = sample.read()
+    # This test joins synthetic status rather than measuring scheduler time.
+    # Exclude an unrelated shared-runner pause from its asynchronous read.
+    with compressed_scheduler_time(
+        monkeypatch,
+        clock_module=begin.plans.clock,
+        witness=s.startup.clock,
+    ):
+        result = sample.read()
     assert result.observation.files == s.files.files
     assert result.observation.candidate.healthy is healthy
     assert result.observation.candidate.recording is recording
@@ -303,12 +310,21 @@ def test_sample_cannot_adopt_changed_original_owners(observing, field):
     assert s.host.failed and s.run.client.closed and not s.probes
 
 
-def test_direct_admissions_still_reject_app_observation_types(observing):
+def test_direct_admissions_still_reject_app_observation_types(observing, monkeypatch):
     s = observing
     denied(lambda: begin.RetainedHost(s.start, s.continued))
     denied(lambda: begin.ActiveSample(s.host, s.qualify))
     assert not s.start.failed and not s.host.failed and not s.run.failed
-    assert s.sampler().read().observation.files.stage == "active"
+    # This test verifies that rejected direct constructors do not poison the
+    # App-only controllers.  Its final synthetic success sample is not a clock
+    # oracle, so exclude an unrelated shared-runner pause from that read.
+    with compressed_scheduler_time(
+        monkeypatch,
+        clock_module=begin.plans.clock,
+        witness=s.startup.clock,
+    ):
+        result = s.sampler().read()
+    assert result.observation.files.stage == "active"
 
 
 def test_no_unreviewed_observation_subclass(observing):
