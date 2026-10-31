@@ -120,16 +120,19 @@ def test_passive_launch_borrows_original_bindings_and_keeps_explicit_cancel(laun
 
 @pytest.mark.parametrize("observe_first", [False, True])
 def test_preparation_and_read_only_observation_do_not_infer_native_permission(
-    launch_fixture, observation, observe_first
+    launch_fixture, observation, monkeypatch, observe_first
 ):
     s = launch_fixture
 
+    def observe():
+        return observation_tests.fixture_observe_candidate(s.service.observe_candidate, monkeypatch)
+
     def action():
         if observe_first:
-            s.service.observe_candidate()
+            observe()
         run = prepare(s)
         if not observe_first:
-            s.service.observe_candidate()
+            observe()
         assert not run.used and s.service.observation_attempted
         assert s.journal.machine.state.phase == "candidate_idle"
         services.publish(s, "cancel_idle")
