@@ -279,6 +279,10 @@ Creating or rotating either password requires saving its one-time value and
 restarting the App if native access is enabled. Rotation is not live until that
 restart, which invalidates existing browser sessions. Neither action enables a
 listener or Network mapping. Fully unattended re-login is not implemented.
+The kiosk launcher defaults to display login. An explicitly selected operator
+kiosk uses `/auth/login`, a separate private profile and the existing operator
+password; it is a privileged console capable of audio and scanner controls,
+not a display-only screen.
 
 ## Rotate, revoke, restore, or disable
 

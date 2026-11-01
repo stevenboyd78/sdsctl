@@ -22,6 +22,23 @@ from urllib.request import HTTPRedirectHandler, HTTPSHandler, ProxyHandler, Requ
 from .exceptions import ConfigurationError
 
 DISPLAY_LOGIN_PATH = "/auth/display/login"
+OPERATOR_LOGIN_PATH = "/auth/login"
+KIOSK_ROLES = frozenset({"display", "operator"})
+PROFILE_ROLE_FILE = ".sdsctl-kiosk-role"
+
+
+def kiosk_role(value: str) -> str:
+    """Require one explicit server-enforced dashboard role."""
+
+    if value not in KIOSK_ROLES:
+        raise ConfigurationError("Kiosk role must be 'display' or 'operator'.")
+    return value
+
+
+def kiosk_login_path(role: str) -> str:
+    """Return the login path for a validated role."""
+
+    return DISPLAY_LOGIN_PATH if kiosk_role(role) == "display" else OPERATOR_LOGIN_PATH
 
 
 def kiosk_origin(value: str) -> str:
@@ -56,29 +73,45 @@ class _NoRedirect(HTTPRedirectHandler):
         return None
 
 
-def kiosk_preflight(origin: str, ca_file: Path | None = None) -> str:
-    """Check issuer/name trust and the configured display login without authenticating."""
+def kiosk_preflight(
+    origin: str,
+    ca_file: Path | None = None,
+    role: str = "display",
+) -> str:
+    """Check issuer/name trust and the selected login without authenticating."""
 
     normalized = kiosk_origin(origin)
+    selected_role = kiosk_role(role)
+    login_path = kiosk_login_path(selected_role)
     if ca_file is not None and (not ca_file.is_absolute() or not ca_file.is_file()):
         raise ConfigurationError("Kiosk CA file must be an absolute readable certificate file.")
     try:
         context = ssl.create_default_context(cafile=ca_file)
         opener = build_opener(ProxyHandler({}), HTTPSHandler(context=context), _NoRedirect())
-        request = Request(normalized + DISPLAY_LOGIN_PATH, headers={"Accept": "text/html"})
+        request = Request(normalized + login_path, headers={"Accept": "text/html"})
         with opener.open(request, timeout=5) as response:
-            if (
-                response.status != 200
-                or response.headers.get("X-SDSCTL-Display-Login") != "1"
-                or response.headers.get_content_type() != "text/html"
-                or len(response.read(65537)) > 65536
+            body = response.read(65537)
+            common_valid = (
+                response.status == 200
+                and response.headers.get_content_type() == "text/html"
+                and len(body) <= 65536
+            )
+            display_valid = response.headers.get("X-SDSCTL-Display-Login") == "1"
+            operator_valid = (
+                b'<form method="post" action="/auth/login"' in body
+                and b"Operator sign in" in body
+            )
+            if not common_valid or not (
+                display_valid if selected_role == "display" else operator_valid
             ):
-                raise ConfigurationError("Server did not provide the expected display login.")
+                raise ConfigurationError(
+                    f"Server did not provide the expected {selected_role} login."
+                )
     except HTTPError as error:
         if error.code in {408, 429, 500, 502, 503, 504}:
             raise ConnectionError("Kiosk server is temporarily unavailable.") from error
         raise ConfigurationError(
-            "Display login unavailable or redirected; review server setup."
+            f"{selected_role.capitalize()} login unavailable or redirected; review server setup."
         ) from error
     except ssl.SSLError as error:
         raise ConfigurationError(
@@ -93,7 +126,12 @@ def kiosk_preflight(origin: str, ca_file: Path | None = None) -> str:
     return normalized
 
 
-def kiosk_command(origin: str, browser: Path, profile: Path) -> tuple[str, ...]:
+def kiosk_command(
+    origin: str,
+    browser: Path,
+    profile: Path,
+    role: str = "display",
+) -> tuple[str, ...]:
     """Build fixed Chromium arguments without TLS/sandbox bypass or credentials."""
 
     normalized = kiosk_origin(origin)
@@ -106,12 +144,12 @@ def kiosk_command(origin: str, browser: Path, profile: Path) -> tuple[str, ...]:
         "--no-default-browser-check",
         "--disable-background-networking",
         f"--user-data-dir={profile}",
-        normalized + DISPLAY_LOGIN_PATH,
+        normalized + kiosk_login_path(role),
     )
 
 
 @contextmanager
-def _profile_lock(profile: Path) -> Iterator[None]:
+def _profile_lock(profile: Path, role: str = "display") -> Iterator[None]:
     import fcntl
 
     if not profile.is_absolute() or profile.is_symlink() or profile.resolve() != profile:
@@ -125,10 +163,13 @@ def _profile_lock(profile: Path) -> Iterator[None]:
         or stat.S_IMODE(observed.st_mode) != 0o700
     ):
         raise ConfigurationError("Kiosk profile must be owned by this user and mode 0700.")
-    if not (profile / ".sdsctl-kiosk.lock").exists() and any(profile.iterdir()):
+    selected_role = kiosk_role(role)
+    lock_path = profile / ".sdsctl-kiosk.lock"
+    role_path = profile / PROFILE_ROLE_FILE
+    if not lock_path.exists() and any(profile.iterdir()):
         raise ConfigurationError("Refusing to reuse a non-kiosk browser profile.")
     flags = os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC
-    descriptor = os.open(profile / ".sdsctl-kiosk.lock", flags, 0o600)
+    descriptor = os.open(lock_path, flags, 0o600)
     try:
         opened = os.fstat(descriptor)
         if (
@@ -141,12 +182,52 @@ def _profile_lock(profile: Path) -> Iterator[None]:
             fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as error:
             raise ConfigurationError("A kiosk already owns this profile.") from error
+        if role_path.is_symlink():
+            raise ConfigurationError("Kiosk profile role marker must not be a symlink.")
+        if role_path.exists():
+            role_stat = role_path.stat(follow_symlinks=False)
+            try:
+                recorded_role = role_path.read_text(encoding="ascii")
+            except (OSError, UnicodeError) as error:
+                raise ConfigurationError("Kiosk profile role marker is unreadable.") from error
+            if (
+                not stat.S_ISREG(role_stat.st_mode)
+                or role_stat.st_uid != os.getuid()
+                or stat.S_IMODE(role_stat.st_mode) != 0o600
+                or recorded_role != selected_role + "\n"
+            ):
+                raise ConfigurationError(
+                    "Kiosk profile role does not match the selected role or is not private."
+                )
+        else:
+            legacy_entries = tuple(
+                entry for entry in profile.iterdir() if entry.name != lock_path.name
+            )
+            if legacy_entries:
+                if selected_role != "display":
+                    raise ConfigurationError(
+                        "Operator kiosk requires a new role-specific browser profile."
+                    )
+            else:
+                role_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
+                role_descriptor = os.open(role_path, role_flags, 0o600)
+                try:
+                    os.write(role_descriptor, (selected_role + "\n").encode("ascii"))
+                    os.fsync(role_descriptor)
+                finally:
+                    os.close(role_descriptor)
         yield
     finally:
         os.close(descriptor)
 
 
-def run_browser_kiosk(origin: str, browser: Path, profile: Path, ca_file: Path | None) -> int:
+def run_browser_kiosk(
+    origin: str,
+    browser: Path,
+    profile: Path,
+    ca_file: Path | None,
+    role: str = "display",
+) -> int:
     """Run in an existing Linux desktop; clean close succeeds, crash returns 75."""
 
     if sys.platform != "linux" or os.getuid() == 0:
@@ -155,10 +236,13 @@ def run_browser_kiosk(origin: str, browser: Path, profile: Path, ca_file: Path |
         raise ConfigurationError("Start the kiosk inside its graphical desktop session, not SSH.")
     if not browser.is_absolute() or not browser.is_file() or not os.access(browser, os.X_OK):
         raise ConfigurationError("Select the absolute installed Chromium executable path.")
-    command = kiosk_command(kiosk_preflight(origin, ca_file), browser, profile)
+    selected_role = kiosk_role(role)
+    command = kiosk_command(
+        kiosk_preflight(origin, ca_file, selected_role), browser, profile, selected_role
+    )
     # Do not relay browser diagnostics, which can contain URLs or profile data.
     with (
-        _profile_lock(profile),
+        _profile_lock(profile, selected_role),
         subprocess.Popen(
             command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         ) as child,

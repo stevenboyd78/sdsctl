@@ -1,6 +1,6 @@
-# Display-only browser kiosk — manual-login setup and testing
+# Browser kiosk — manual display or operator login
 
-**Manual-login functionality is included in v0.29.3 and later.** The v0.29.3
+**Manual display-login functionality is included in v0.29.3 and later.** The v0.29.3
 publication was partial (container images published, Python publication failed);
 use a fully published recovery version for a new installation. These commands
 are not in v0.29.2. Interactive testing passed on two Pi displays;
@@ -10,7 +10,13 @@ below. This does not provide unattended authentication recovery. See the
 This guide does not replace the
 [production TUI guide](managed-pi-display.md).
 
-## What this screen can do
+Display remains the default role. Select operator only for a physically
+controlled station that deliberately needs privileged dashboard capabilities.
+The two roles use different login routes, passwords and private browser
+profiles. The launcher refuses to reuse a role-bound profile for the other
+role, and a legacy display profile cannot be adopted by operator mode.
+
+## What each role can do
 
 The browser shows the scanner, Waterfall and read-only diagnostics from one
 existing daemon. It cannot hold or navigate the scanner, reconnect it, play
@@ -20,19 +26,27 @@ Theme selection and Waterfall pause/history/pointer controls affect only the
 local display. Visible Waterfall still acquires shared scanner demand through
 the daemon; it is not a separate scanner owner.
 
-This first version uses **manual sign-in**. A session lasts at most eight hours;
+Operator mode opens the ordinary privileged dashboard instead. It can stream
+scanner audio and exposes the same scanner controls, recording access and
+management actions as any other native operator session. Anyone with physical
+access to an unlocked operator kiosk can invoke those controls. Do not describe
+or deploy that role as observe-only. Audio remains user-initiated through the
+dashboard; the launcher does not disable Chromium's autoplay policy.
+
+Both roles use **manual sign-in**. A session lasts at most eight hours;
 inactive sessions can expire after thirty minutes. Restarting the web service
 also requires a fresh login. The screen marks old data stale and stops its
 consumers when authentication ends. Relaunching a browser is not automatic
 login. Each server has one shared display password, separate from its operator
-password; independently revocable browser devices are deferred.
+password. Operator mode uses the existing operator password; independently
+revocable browser devices are deferred.
 
 After display sign-in, the address ends in `/?kiosk=display`. Keep that address
 when bookmarking the dashboard: after expiry or an App restart, reloading it
 returns to **Display-only sign in**, not the operator login. This is only a
 navigation hint, not a credential or automatic login. Opening the plain server
 address still uses the operator sign-in page; the kiosk launcher opens the
-display sign-in page explicitly.
+selected role's sign-in page explicitly.
 
 ## 1. Choose a test machine
 
@@ -61,6 +75,11 @@ or rotate display password**, review the confirmation, and save its one-time
 value privately. It clears from that page after sixty seconds. Do not use or
 rotate the operator password for the display. Restart the App to load the new
 display password. The old password remains active until that restart.
+
+Operator mode uses the separately created native operator password from the
+same Advanced access panel. Never enter that password into a display profile.
+Creating or rotating it still requires an App restart before the new value is
+active. Keep the operator and display passwords distinct.
 
 Use the existing [native HTTPS setup](home-assistant-advanced-access.md), not the
 remote-daemon port or an exposed Ingress listener. Native access is off by
@@ -96,12 +115,23 @@ The public certificate file contains no server private key.
 /opt/sdsctl-kiosk/bin/sdsctl browser-kiosk \
   --origin https://scanner.example:8443 \
   --ca-file /home/display/server.crt \
+  --role display \
   --preflight-only
 ```
 
 This checks issuer/name trust and the enabled display-login endpoint without
 submitting a password. It rejects redirects and uses a five-second network
 timeout without inheriting an environment proxy.
+
+For an operator station, preflight the ordinary operator login explicitly:
+
+```bash
+/opt/sdsctl-kiosk/bin/sdsctl browser-kiosk \
+  --origin https://scanner.example:8443 \
+  --ca-file /home/display/server.crt \
+  --role operator \
+  --preflight-only
+```
 
 Run the next command **from the dedicated account's graphical terminal**:
 
@@ -110,7 +140,19 @@ Run the next command **from the dedicated account's graphical terminal**:
   --origin https://scanner.example:8443 \
   --ca-file /home/display/server.crt \
   --browser /usr/bin/chromium \
+  --role display \
   --profile-directory /home/display/.sdsctl-kiosk
+```
+
+For operator access, use a new private profile rather than the display profile:
+
+```bash
+/opt/sdsctl-kiosk/bin/sdsctl browser-kiosk \
+  --origin https://scanner.example:8443 \
+  --ca-file /home/display/server.crt \
+  --browser /usr/bin/chromium \
+  --role operator \
+  --profile-directory /home/display/.sdsctl-operator-kiosk
 ```
 
 Confirm the actual browser executable first. The launcher refuses root and
@@ -119,8 +161,9 @@ directory, requires private ownership/mode `0700`, locks it against a second
 launcher, and refuses an existing non-kiosk profile. Parents must already exist.
 The browser remains sandboxed. No password, cookie or TLS exception is supplied
 in its command line. A dedicated [Chromium data directory](https://www.chromium.org/developers/creating-and-using-profiles/)
-isolates it from ordinary browsing, but it may still contain sensitive cookies
-and saved browser data. It is not guaranteed to be memory-only storage.
+isolates it from ordinary browsing, but it may still contain sensitive cookies,
+saved passwords and browser data. It is not guaranteed to be memory-only
+storage. Treat an operator profile as a privileged credential store.
 
 At **Display-only sign in**, enter the display password manually. Never enter
 the operator password into this profile. Passwords start hidden; use **Show
@@ -132,6 +175,11 @@ foreground launcher from its launching terminal stops the kiosk. Do not use
 the browser's text-copy shortcut as a stop command. Successful
 close returns `0`, a browser crash or transient connectivity failure returns
 `75`, and configuration/preflight contract errors return `78`.
+
+At **Operator sign in**, enter only the operator password and confirm the
+header identifies an operator session before using audio or controls. A login
+page, session cookie or saved-password prompt does not reduce the requirement
+to protect the dedicated account and physical display.
 
 ### Using a small display
 
@@ -170,7 +218,15 @@ It is a **user service**, not the TUI's system console service. It reads
 SDSCTL_KIOSK_ORIGIN=https://scanner.example:8443
 SDSCTL_KIOSK_BROWSER=/usr/bin/chromium
 SDSCTL_KIOSK_CA_FILE=/home/display/server.crt
+SDSCTL_KIOSK_ROLE=display
+SDSCTL_KIOSK_PROFILE_DIRECTORY=/home/display/.sdsctl-kiosk
 ```
+
+The packaged defaults are `display` and `%h/.sdsctl-kiosk`. To select operator
+mode, set `SDSCTL_KIOSK_ROLE=operator` and an absolute, distinct
+`SDSCTL_KIOSK_PROFILE_DIRECTORY`, such as
+`/home/display/.sdsctl-operator-kiosk`. Passwords remain absent from the
+environment file.
 
 Keep passwords out of this file. Review the template's executable path and
 profile directory, then install it under the dedicated account's user-service
