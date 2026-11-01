@@ -78,6 +78,49 @@ def test_preflight_real_tls_trust_and_hostname_validation(tmp_path: Path) -> Non
             thread.join(timeout=5)
 
 
+@pytest.mark.skipif(shutil.which("openssl") is None, reason="OpenSSL TLS fixture")
+def test_operator_preflight_real_tls_contract(tmp_path: Path) -> None:
+    certificate = tmp_path / "server.crt"
+    key = tmp_path / "server.key"
+    subprocess.run(
+        [
+            "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+            "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost",
+            "-addext", "basicConstraints=critical,CA:TRUE", "-keyout", str(key),
+            "-out", str(certificate),
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            assert self.path == "/auth/login"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(
+                b'<html>Operator sign in<form method="post" action="/auth/login"></form></html>'
+            )
+
+        def log_message(self, format: str, *args: object) -> None:
+            pass
+
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    context.load_cert_chain(certificate, key)
+    with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
+        server.socket = context.wrap_socket(server.socket, server_side=True)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        origin = f"https://localhost:{server.server_port}"
+        try:
+            assert kiosk.kiosk_preflight(origin, certificate, "operator") == origin
+        finally:
+            server.shutdown()
+            thread.join(timeout=5)
+
+
 @pytest.mark.parametrize("ending", ["close", "crash", "interrupt"])
 def test_launcher_clean_close_crash_and_interrupt(
     monkeypatch: pytest.MonkeyPatch,
@@ -88,7 +131,7 @@ def test_launcher_clean_close_crash_and_interrupt(
     browser.write_text("fictional executable")
     browser.chmod(0o700)
     monkeypatch.setenv("DISPLAY", ":99")
-    monkeypatch.setattr(kiosk, "kiosk_preflight", lambda origin, ca: origin)
+    monkeypatch.setattr(kiosk, "kiosk_preflight", lambda origin, ca, role: origin)
 
     class Process:
         def __init__(self, command: tuple[str, ...], **kwargs: object) -> None:
@@ -148,6 +191,20 @@ def test_kiosk_command_contains_no_credential_or_verification_bypass() -> None:
     )
     with pytest.raises(ConfigurationError):
         kiosk.kiosk_command("https://display.example", Path("chromium"), Path("relative"))
+    operator = kiosk.kiosk_command(
+        "https://display.example",
+        Path("/usr/bin/chromium"),
+        Path("/home/display/private-operator-profile"),
+        "operator",
+    )
+    assert operator[-1] == "https://display.example/auth/login"
+    with pytest.raises(ConfigurationError, match="role"):
+        kiosk.kiosk_command(
+            "https://display.example",
+            Path("/usr/bin/chromium"),
+            Path("/home/display/private-profile"),
+            "administrator",
+        )
 
 
 @pytest.mark.parametrize(
@@ -199,11 +256,53 @@ def test_preflight_verifies_tls_and_display_contract(
             kiosk.kiosk_preflight("https://display.example")
 
 
+@pytest.mark.parametrize("failure", [None, "redirect", "offline", "unavailable", "wrong-service"])
+def test_preflight_verifies_operator_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str | None,
+) -> None:
+    class Response:
+        status = 200
+        headers = Message()
+        headers["Content-Type"] = "text/html"
+
+        def read(self, limit: int) -> bytes:
+            assert limit == 65537
+            if failure == "wrong-service":
+                return b"<html>fictional unrelated login</html>"
+            return b'<html>Operator sign in<form method="post" action="/auth/login"></form></html>'
+
+    class Opener:
+        @contextmanager
+        def open(self, request: object, timeout: float):  # type: ignore[no-untyped-def]
+            assert timeout == 5
+            assert request.full_url == "https://display.example/auth/login"  # type: ignore[attr-defined]
+            if failure == "redirect":
+                raise HTTPError("https://display.example", 302, "redirect", Message(), None)
+            if failure == "offline":
+                raise URLError("offline")
+            if failure == "unavailable":
+                raise HTTPError("https://display.example", 503, "unavailable", Message(), None)
+            yield Response()
+
+    monkeypatch.setattr(kiosk, "build_opener", lambda *handlers: Opener())
+    if failure is None:
+        assert kiosk.kiosk_preflight(
+            "https://display.example", role="operator"
+        ) == "https://display.example"
+    else:
+        with pytest.raises(
+            ConnectionError if failure in {"offline", "unavailable"} else ConfigurationError
+        ):
+            kiosk.kiosk_preflight("https://display.example", role="operator")
+
+
 @pytest.mark.skipif(os.name != "posix", reason="Linux private browser profile")
 def test_profile_is_private_exclusive_and_does_not_adopt_personal_data(tmp_path: Path) -> None:
     profile = tmp_path / "kiosk"
     with kiosk._profile_lock(profile):
         assert profile.stat().st_mode & 0o777 == 0o700
+        assert (profile / kiosk.PROFILE_ROLE_FILE).read_text() == "display\n"
         with pytest.raises(ConfigurationError, match="already owns"), kiosk._profile_lock(profile):
             pytest.fail("duplicate acquired")
     with kiosk._profile_lock(profile):
@@ -223,22 +322,75 @@ def test_profile_is_private_exclusive_and_does_not_adopt_personal_data(tmp_path:
         pytest.fail("followed symlink")
 
 
+@pytest.mark.skipif(os.name != "posix", reason="Linux role-bound browser profile")
+def test_profile_role_binding_refuses_cross_role_and_legacy_operator_reuse(
+    tmp_path: Path,
+) -> None:
+    operator = tmp_path / "operator"
+    with kiosk._profile_lock(operator, "operator"):
+        role_file = operator / kiosk.PROFILE_ROLE_FILE
+        assert role_file.read_text() == "operator\n"
+        assert role_file.stat().st_mode & 0o777 == 0o600
+    with pytest.raises(ConfigurationError, match="role"), kiosk._profile_lock(
+        operator, "display"
+    ):
+        pytest.fail("operator profile reused for display")
+
+    legacy = tmp_path / "legacy-display"
+    legacy.mkdir(mode=0o700)
+    (legacy / ".sdsctl-kiosk.lock").write_text("")
+    (legacy / ".sdsctl-kiosk.lock").chmod(0o600)
+    (legacy / "Cookies").write_text("fictional display data")
+    with kiosk._profile_lock(legacy, "display"):
+        pass
+    with pytest.raises(ConfigurationError, match="new role-specific"), kiosk._profile_lock(
+        legacy, "operator"
+    ):
+        pytest.fail("legacy display profile reused for operator")
+
+    symlink_profile = tmp_path / "symlink-profile"
+    symlink_profile.mkdir(mode=0o700)
+    (symlink_profile / ".sdsctl-kiosk.lock").write_text("")
+    (symlink_profile / ".sdsctl-kiosk.lock").chmod(0o600)
+    (symlink_profile / kiosk.PROFILE_ROLE_FILE).symlink_to("missing-role")
+    with pytest.raises(ConfigurationError, match="symlink"), kiosk._profile_lock(
+        symlink_profile, "operator"
+    ):
+        pytest.fail("symlink role marker accepted")
+
+
 def test_kiosk_cli_and_service_do_not_enable_or_publish_anything(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    calls: list[str] = []
-    monkeypatch.setattr(kiosk, "kiosk_preflight", lambda origin, ca: calls.append(origin))
+    calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        kiosk,
+        "kiosk_preflight",
+        lambda origin, ca, role: calls.append((origin, role)),
+    )
     assert (
         cli.main(["browser-kiosk", "--origin", "https://display.example", "--preflight-only"]) == 0
     )
-    assert calls == ["https://display.example"]
+    assert calls == [("https://display.example", "display")]
+    assert cli.main([
+        "browser-kiosk",
+        "--origin",
+        "https://display.example",
+        "--role",
+        "operator",
+        "--preflight-only",
+    ]) == 0
+    assert calls[-1] == ("https://display.example", "operator")
     assert cli.main(["browser-kiosk", "--origin", "https://display.example"]) == 78
     assert cli.main(["browser-kiosk-service"]) == 0
     output = capsys.readouterr().out
     assert "RestartPreventExitStatus=78" in output
     assert "StartLimitBurst=3" in output
     assert "graphical-session.target" in output
+    assert "SDSCTL_KIOSK_ROLE=display" in output
+    assert "SDSCTL_KIOSK_PROFILE_DIRECTORY=%h/.sdsctl-kiosk" in output
+    assert "--role ${SDSCTL_KIOSK_ROLE}" in output
     assert "tty1" not in output
     assert "tty2" not in output
     assert "getty@" not in output

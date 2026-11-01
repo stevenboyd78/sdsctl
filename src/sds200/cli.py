@@ -1297,7 +1297,7 @@ def build_parser(
     )
 
     kiosk = subparsers.add_parser(
-        "browser-kiosk", help="Preflight or launch a manual-login display-only Chromium kiosk",
+        "browser-kiosk", help="Preflight or launch a role-selected manual-login Chromium kiosk",
     )
     subparsers.add_parser(
         "browser-kiosk-service", help="Print the opt-in graphical-session user-service template",
@@ -1306,6 +1306,12 @@ def build_parser(
     kiosk.add_argument("--ca-file", type=Path, help="Absolute public CA file for preflight")
     kiosk.add_argument("--browser", type=Path, help="Absolute installed Chromium executable")
     kiosk.add_argument("--profile-directory", type=Path, help="Dedicated mode-0700 browser profile")
+    kiosk.add_argument(
+        "--role",
+        choices=("display", "operator"),
+        default="display",
+        help="Dashboard role; operator is privileged and requires its own profile",
+    )
     kiosk.add_argument(
         "--preflight-only", action="store_true", help="Check HTTPS without launching",
     )
@@ -6918,13 +6924,16 @@ def main(
 
             try:
                 if args.preflight_only:
-                    kiosk_preflight(args.origin, args.ca_file)
-                    print("Display login/TLS preflight passed; verify browser trust separately.")
+                    kiosk_preflight(args.origin, args.ca_file, args.role)
+                    print(
+                        f"{args.role.capitalize()} login/TLS preflight passed; "
+                        "verify browser trust separately."
+                    )
                     return 0
                 if args.browser is None or args.profile_directory is None:
                     raise ValueError("Kiosk launch requires --browser and --profile-directory.")
                 return run_browser_kiosk(
-                    args.origin, args.browser, args.profile_directory, args.ca_file,
+                    args.origin, args.browser, args.profile_directory, args.ca_file, args.role,
                 )
             except (ConfigurationError, ValueError):
                 print("Kiosk setup requires attention; check HTTPS trust, paths and desktop.",

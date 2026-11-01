@@ -55,7 +55,7 @@ dashboard login nor the TUI's client secret is a new browser-display identity.
 
 ## Decision 1: display-only or operator access
 
-Selected starting point: a **display-only screen with server-side permissions**.
+The default remains a **display-only screen with server-side permissions**.
 The candidate uses a separate manually entered display password. It permits
 status, events, themes and Waterfall; audio, recording inventory/downloads and
 all scanner or management mutations are denied. The password is shared by the
@@ -74,8 +74,11 @@ well as the rendered interface. Unknown or newly added operations must fail
 closed. Classify operations by effect, not only HTTP method: the existing
 Waterfall read stream legitimately acquires and releases shared scanner demand.
 
-An operator dashboard is a different, deliberately privileged option. If chosen,
-document the controls exposed to anyone with access to the unlocked browser.
+An operator dashboard is a different, deliberately privileged option. The
+manual launcher may select it explicitly for stations that need capabilities
+such as scanner audio, but it must use the ordinary operator login and a
+separate role-bound browser profile. Document the controls exposed to anyone
+with access to the unlocked browser.
 Do not label that installation observe-only or silently enable it as the
 display-only fallback. Preserve ordinary operator and Ingress behavior while
 adding any new permission model.

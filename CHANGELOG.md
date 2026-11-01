@@ -8,6 +8,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add an explicit privileged `operator` role to the manual Chromium kiosk for
+  stations that require capabilities such as scanner audio. Display remains the
+  backward-compatible default. Operator mode preflights the ordinary native
+  login, requires a separate role-bound private browser profile, keeps the
+  password out of services and command lines, and does not add autoplay, TLS or
+  browser-sandbox bypasses.
+
 - Add a headless, additive-only Favorites FTP write executor with a separately
   referenced writable credential, exact stable-target and case-insensitive
   collision checks, owner-only verified host backup, bounded staged readback,
