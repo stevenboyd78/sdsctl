@@ -75,6 +75,52 @@ def emit(value):
     print(json.dumps(value), flush=True)
 
 
+def fixture_raw_clock_samples(action, monkeypatch):
+    """Retry only strict raw clock samples interrupted by host scheduling."""
+    clock = p.domains.clock
+    read = clock.read
+
+    def sampled():
+        error = None
+        for _ in range(10):
+            try:
+                return read()
+            except clock.UnconfirmedClock as observed:
+                error = observed
+        assert error is not None
+        raise error
+
+    with monkeypatch.context() as patch:
+        patch.setattr(clock, "read", sampled)
+        return action()
+
+
+def test_input_fixture_retries_only_one_interrupted_raw_clock_sample(monkeypatch):
+    clock = p.domains.clock
+    read = clock.read
+    samples = []
+    actions = []
+    expected = object()
+
+    def descheduled():
+        samples.append(None)
+        if len(samples) == 1:
+            raise clock.UnconfirmedClock(clock.MESSAGE)
+        return expected
+
+    def action():
+        actions.append(None)
+        return clock.read()
+
+    with monkeypatch.context() as patch:
+        patch.setattr(clock, "read", descheduled)
+        assert fixture_raw_clock_samples(action, patch) is expected
+        assert clock.read is descheduled
+
+    assert actions == [None] and samples == [None, None]
+    assert clock.read is read
+
+
 def receive():
     raw = sys.stdin.buffer.readline()
     if not raw:
@@ -1236,15 +1282,18 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
             listener.bind_peer(h.witness)
             assert listener.listener is original_listener and listener.deadline == original_cutoff
         listener.accept()
-        assert p.send_inputs(
-            inputs,
-            listener,
-            timer,
-            h.observer_identity,
-            role="writer",
-            baseline_sha256=h.baseline,
-            counterpart=counterpart,
-            preparation=True,
+        assert fixture_raw_clock_samples(
+            lambda: p.send_inputs(
+                inputs,
+                listener,
+                timer,
+                h.observer_identity,
+                role="writer",
+                baseline_sha256=h.baseline,
+                counterpart=counterpart,
+                preparation=True,
+            ),
+            monkeypatch,
         )
         channel = stack.enter_context(closing(permission_server.accept()[0]))
         channel.setblocking(False)
