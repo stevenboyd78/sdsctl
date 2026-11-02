@@ -156,8 +156,9 @@ def test_catalog_retains_reviewed_release_option_contract() -> None:
     Match the strict loader in v0.29.4 and its v0.29.5 maintenance backport,
     not just the newer source-tree loader. The v0.30.0 release scope deliberately
     retained those seven public options. v0.31.0 atomically pairs the matching
-    runtime with two new disabled-by-default options. Keep each advertised image
-    on its explicitly reviewed contract.
+    runtime with two new disabled-by-default options. v0.32.0 retains that exact
+    nine-field contract. Keep each advertised image on its explicitly reviewed
+    contract.
     """
     manifest = _APP_MANIFEST.read_text(encoding="utf-8")
     version = _quoted_scalar(manifest, "version")
@@ -166,7 +167,7 @@ def test_catalog_retains_reviewed_release_option_contract() -> None:
         "remote_daemon_enabled", "native_dashboard_enabled",
         "advanced_access_server_name", "advanced_access_host_address",
     }
-    if version == "0.31.0":
+    if version in {"0.31.0", "0.32.0"}:
         released |= {
             "qualified_sds200_menu_control_enabled",
             "scanner_display_config",

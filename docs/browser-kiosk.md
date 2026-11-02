@@ -1,12 +1,14 @@
 # Browser kiosk — manual display or operator login
 
-**Manual display-login functionality is included in v0.29.3 and later.** The v0.29.3
-publication was partial (container images published, Python publication failed);
-use a fully published recovery version for a new installation. These commands
-are not in v0.29.2. Interactive testing passed on two Pi displays;
-manual-login boot startup also passed on one specific HDMI Pi setup described
-below. This does not provide unattended authentication recovery. See the
-[acceptance record](#milestone-341-candidate-acceptance) for the exact limits.
+**Manual display-login functionality is included in v0.29.3 and later.** The
+privileged manual operator role is included in v0.32.0. The v0.29.3 publication
+was partial (container images published, Python publication failed); use a fully
+published recovery version for a new installation. These commands are not in
+v0.29.2, and the operator role is not in v0.31.0. Interactive testing passed on
+two Pi displays; manual-login boot startup also passed on one specific HDMI Pi
+setup described below. This does not provide unattended authentication
+recovery. See the [acceptance record](#milestone-341-candidate-acceptance) for
+the exact limits.
 This guide does not replace the
 [production TUI guide](managed-pi-display.md).
 

@@ -21,9 +21,9 @@ fixes do not require a new milestone number. See the
 [milestone-to-release index](docs/release-tracking.md) for published history,
 partial publications and merged-but-unreleased work, and the
 [release policy](docs/releasing.md#0-choose-release-scope-and-version) for version
-selection. The [v0.31.0 release plan](docs/release-0.31.0.md) records the
+selection. The [v0.32.0 release plan](docs/release-0.32.0.md) records the
 reviewed next-release boundary and remaining publication/installed-upgrade
-gates. The [v0.30.0 release record](docs/release-0.30.0.md) remains the latest
+gates. The [v0.31.0 release record](docs/release-0.31.0.md) remains the latest
 completed public release and retains its explicit support limits.
 
 Keep `Released in vX.Y.Z` links on the applicable completed items. A closed
@@ -67,6 +67,25 @@ same-process automatic live recovery, and production restoration on both
 in the versioned release notes; these TUI checks do not qualify browser enrollment.
 
 ## Current release
+
+### v0.32.0 release preparation
+
+**Targeted for v0.32.0; not yet released.** The reviewed [release
+plan](docs/release-0.32.0.md) includes three bounded feature slices: the
+explicit privileged manual operator role for an existing graphical browser
+kiosk, configurable read-only Mimic-SDS TUI startup, and the verified
+additive-only Favorites FTP write executor. It also versions the accepted
+Mimic/LCARS presentation and audio/Waterfall/PSI/managed-display reliability
+corrections listed in the changelog.
+
+Display remains the default kiosk role. Operator mode requires the ordinary
+manual native login and a separate role-bound private profile; it adds no
+automatic authentication, browser-security bypass, listener or graphical
+session. The Favorites executor remains a library-only explicit operation and
+publication does not authorize a physical write, replacement or deletion. The
+Home Assistant App retains the exact v0.31.0 nine-field option contract. Public
+artifacts, repository App upgrade, clean public-package verification and
+target-specific operator activation remain separate gates.
 
 ### v0.31.0 release closure
 

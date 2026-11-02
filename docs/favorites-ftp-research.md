@@ -6,6 +6,11 @@ Constructing a write plan or configuration does not authorize scanner-side
 mutation; execution remains one explicit call with a private host artifact
 destination.
 
+The additive-only executor is included in v0.32.0 as a library boundary. The
+release adds no public write action and does not authorize a physical scanner
+write. Every physical execution still requires the independently reviewed,
+bounded authority described below.
+
 ## Scope
 
 The first FTP slice adds a renderer-neutral read-only Favorites storage source

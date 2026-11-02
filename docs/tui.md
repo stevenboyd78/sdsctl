@@ -240,12 +240,13 @@ relative-intensity treatment remains an unreleased follow-up until a concise
 physical visual check confirms the improvement. No release claim follows from
 the offline render alone.
 
-## Unreleased Mimic-SDS candidate
+## Mimic-SDS and v0.32.0 startup selection
 
-Mimic-SDS is a separate, read-only screen in the local development candidate.
-The ordinary dashboard remains the default startup view. When a configured
-daemon advertises the shared display-frame service, press **M** or choose
-**Mimic-SDS** in the command palette to open it. A durable non-secret
+Mimic-SDS is a separate, read-only screen published in v0.31.0. Version v0.32.0
+adds explicit startup-view selection while preserving the ordinary dashboard
+as the default. When a configured daemon advertises the shared display-frame
+service, press **M** or choose **Mimic-SDS** in the command palette to open it.
+A durable non-secret
 `tui_startup_view = "mimic"` setting in the versioned application
 `config.toml`, or a temporary `tui --startup-view mimic` override, opens the
 same screen after the root Textual app mounts; no key event is injected. The
@@ -301,8 +302,7 @@ A pending finite read may finish in the background, but its result is discarded
 and its dedicated API connection is closed by the worker. Resuming requires a
 new read. Stale, disconnected, malformed or failed responses never leave old
 values looking current. See the [frame API guide](scanner-display-frame-api.md#candidate-tui-presentation)
-for timeout, freshness and compatibility details. This remains development
-candidate support, not a published release.
+for timeout, freshness and compatibility details.
 
 On September 28, 2026, the installed development wheel at `824c417` passed
 user-observed Mimic-SDS visual and keyboard checks on both bench Pis: 100×30
