@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.32.0
+
+- Package the corrected Mimic-SDS alert rails, inactive treatment and
+  signal-qualified Modulation presentation in the matching App/card bundle.
+- Include the bounded audio, Waterfall and PSI lifecycle reliability fixes while
+  retaining one daemon-owned scanner, recording and RTP service set.
+- Preserve the v0.31.0 nine-field option/schema contract exactly. Operator kiosk
+  selection is a separate native-dashboard client role; it is not an App option,
+  does not enable automatic sign-in and does not expose a new listener.
+- Preserve the App slug/image identity, MQTT identities, credentials, ports,
+  recordings, ordinary Ingress, disabled advanced services and independently
+  versioned Core integration artifacts.
+
 ## 0.31.0
 
 - Add the optional Mimic-SDS display-profile deployment and authenticated

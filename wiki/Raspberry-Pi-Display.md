@@ -183,12 +183,16 @@ memory-only browser storage. Treat its profile as sensitive and never copy its
 cookies to another device. The console service described here must not store
 those values.
 
-A display-only browser kiosk is an unreleased candidate. Follow its
-[candidate setup and test guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/browser-kiosk.md)
-only with the reviewed candidate build, not v0.29.2. It uses a separate display
-password and server-enforced restrictions. It still needs manual login after
-session expiry or web-service restart. Do not replace a working TUI service or
-enable browser boot startup before that host's graphical workflow is tested.
-Interactive candidate testing passed on 1080p HDMI and 800×480 Pi displays,
-including manual re-login after an App restart. This does not qualify automatic
-kiosk cold boot or replace the production TUI installation described above.
+A display-only browser kiosk is fully published in v0.29.4 and later. Version
+v0.32.0 adds an explicit privileged operator role. Follow the
+[browser-kiosk setup and test guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/browser-kiosk.md)
+with a matching reviewed release. Display uses a separate display password and
+server-enforced restrictions. Operator uses the ordinary operator login and a
+different private role-bound browser profile; it is never observe-only. Both
+roles still need manual login after session expiry or web-service restart. Do
+not replace a working TUI service, enable browser boot startup, copy profiles,
+or auto-activate operator mode before that host's graphical workflow is tested.
+The packaged launcher does not create a graphical session or configure
+auto-login. Interactive testing passed on 1080p HDMI and 800×480 Pi displays,
+including manual re-login after an App restart; that does not authorize a
+target deployment or replace the production TUI installation described above.

@@ -6,6 +6,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-11-02
+
+Privileged manual operator kiosk, configurable Mimic-SDS TUI startup, and
+verified additive Favorites FTP writes. See the [release scope and acceptance
+record](docs/release-0.32.0.md). Publication and installed-release acceptance
+remain pending until the immutable tag, public artifacts and required upgrade
+checks are independently verified.
+
 ### Added
 
 - Add an explicit privileged `operator` role to the manual Chromium kiosk for
@@ -43,6 +51,16 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   bottom-row Modulation label now follows the reported signal level: profile
   color while receiving, inactive gray at level zero and an explicit unknown
   state when reception cannot be qualified.
+- Close bounded lifecycle gaps across supplemental acquisition, network-audio
+  worker state, remote PCM finalization, PCMU idle disconnects, live-audio
+  accept shutdown, shared Waterfall timeout budgets and post-start PSI recovery.
+  These corrections preserve the existing ownership, authorization and retry
+  boundaries while making teardown and capacity release deterministic.
+- Keep the authenticated tty2 recovery console available when the managed TUI
+  display owns tty1. The packaged kiosk user service still creates no graphical
+  session, changes no Getty and selects no virtual terminal.
+- Keep LCARS segmented rails connected through responsive navigation
+  transitions without covering dashboard content or changing saved theme IDs.
 
 ## [0.31.0] - 2026-10-05
 
@@ -2314,7 +2332,8 @@ First planned GitHub prerelease.
 - Added serial discovery, transport, packet framing, core responses, CLI tools,
   examples, tests, and CI.
 
-[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.31.0...HEAD
+[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.32.0...HEAD
+[0.32.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.5...v0.30.0
 [0.29.5]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.4...v0.29.5

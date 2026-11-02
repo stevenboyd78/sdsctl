@@ -175,6 +175,68 @@ Home Assistant OS users should follow [Home Assistant](Home-Assistant). The
 published App does not require `pip`, a source checkout, or a Local App under
 `/addons`.
 
+## Upgrade to v0.32.0
+
+Version 0.32.0 publishes configurable Mimic-SDS TUI startup, the explicit
+privileged manual browser-kiosk operator role, the verified additive-only
+Favorites FTP write executor, and the accepted presentation and runtime
+reliability corrections. Display remains the default browser-kiosk role.
+Operator uses the ordinary native operator login and a separate private,
+role-bound browser profile; it does not add auto-login, relax Chromium security,
+create a graphical session, or authorize activation on a target station.
+
+The Favorites executor is a library-only explicit operation. This release adds
+no public write command or Home Assistant action, and publication does not
+authorize a physical scanner write. Existing Favorites cannot be replaced or
+deleted through that additive boundary. Any physical execution still needs a
+fresh reviewed snapshot, collision check, private evidence destination, exact
+write plan, and separately bounded operator authority.
+
+Activate the existing Python virtual environment and install the exact release
+only after PyPI shows the reviewed wheel and source distribution:
+
+```bash
+python -m pip install --upgrade "sds200==0.32.0"
+python -m pip check
+sdsctl --version
+```
+
+For every optional runtime interface:
+
+```bash
+python -m pip install --upgrade "sds200[all]==0.32.0"
+python -m pip check
+sdsctl --version
+```
+
+Use the exact published container image for controlled container upgrades:
+
+```bash
+docker pull theboyd78/sdsctl:0.32.0
+```
+
+Verify the reviewed manifest digest before using a registry tag as an immutable
+deployment input. Preserve the exact previous package, image digest, profiles,
+configuration, credentials, recordings and service definitions for rollback.
+
+The Home Assistant App also tracks 0.32.0, but its strict configuration contract
+remains the exact nine fields published in v0.31.0. Save a private copy of the
+options, Network mappings, current image identity and digest-qualified dashboard
+resource URL. After Home Assistant offers the matching v0.32.0 update, use the
+normal repository-managed workflow and confirm those nine values are preserved,
+the App starts, Ingress reports the expected scanner, existing MQTT entities and
+recordings remain present, and the installed aggregate resource matches the
+release. Do not add an operator-role option or a Favorites-write option: neither
+exists in the App schema.
+
+For rollback, restore the exact prior reviewed Python package or container image
+through its normal package/registry workflow. For the App, use the normal
+Supervisor repository or backup mechanism and restore that release's matching
+catalog, image and resource URL. Preserve profiles, configuration, credentials,
+recordings and App data. Do not uninstall integrations, delete state, alter
+scanner storage, restart Home Assistant Core, or activate an operator kiosk
+merely to complete the software rollback.
+
 ## Upgrade to v0.31.0
 
 Version 0.31.0 publishes the Mimic-SDS presentation and installed display-profile

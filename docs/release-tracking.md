@@ -21,6 +21,22 @@ Treat implementation, physical acceptance and publication as separate facts.
 When only a slice ships, name that slice instead of marking the parent milestone
 complete. Existing historical milestone IDs remain unchanged.
 
+## Targeted next release — v0.32.0
+
+**Targeted for v0.32.0; not yet released.** The reviewed [release scope and
+acceptance plan](release-0.32.0.md) includes the explicit privileged manual
+operator browser-kiosk role, configurable read-only Mimic-SDS TUI startup, the
+verified additive-only Favorites FTP write executor, and the listed
+presentation/reliability corrections.
+
+The Home Assistant App advances in lockstep with the package while retaining
+the exact v0.31.0 nine-field options/schema contract. Display remains the
+default kiosk role. Operator mode requires manual native login and a separate
+private role-bound browser profile. Shipping the Favorites executor does not
+authorize a physical scanner write or add a public write action. Keep v0.31.0
+as Latest until every tagged artifact and required installed-release gate is
+verified and the normal GitHub Release is created.
+
 ## Latest release — v0.31.0
 
 **Released in [v0.31.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.31.0)**
@@ -85,6 +101,7 @@ milestone number.
 | [Managed-TUI outage waiting screen](../ROADMAP.md#v0295-maintenance-release) | [v0.29.5](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.29.5) | Released from the maintenance line; newer browser enrollment on main is excluded |
 | [Display improvements, recording continuity and experimental browser foundations](release-0.30.0.md) | [v0.30.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.30.0) | Released; published Pi/App upgrades and audio/recording acceptance passed; unattended browser qualification remains separate |
 | [Mimic-SDS displays and installed profiles](release-0.31.0.md) | [v0.31.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.31.0) | Released; public artifacts, repository App, managed Pi displays and approved system installations accepted; unattended browser enrollment remains excluded |
+| [Operator kiosk and controlled Favorites writes](release-0.32.0.md) | Targeted for v0.32.0 | Preparation authorized; public artifacts, installed upgrade and target activation remain pending; Favorites physical writes are not authorized by publication |
 
 ## Keeping the mapping current
 

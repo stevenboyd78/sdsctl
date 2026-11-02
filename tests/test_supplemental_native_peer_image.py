@@ -33,6 +33,18 @@ SEALS = 0x0001 | 0x0002 | 0x0004 | 0x0008 | F_SEAL_EXEC  # SEAL, SHRINK, GROW, W
 MAX_IMAGE = 8 * 1024 * 1024
 
 
+def open_descriptors():
+    descriptors = {}
+    for name in os.listdir("/proc/self/fd"):
+        fd = int(name)
+        try:
+            identity = os.fstat(fd)
+        except OSError:
+            continue  # The directory descriptor used by listdir has already closed.
+        descriptors[fd] = (identity.st_dev, identity.st_ino, identity.st_mode)
+    return descriptors
+
+
 def timely(cutoff):
     assert type(cutoff) is int and time.clock_gettime_ns(time.CLOCK_BOOTTIME) < cutoff
 
@@ -178,7 +190,7 @@ def test_unconfirmed_image_never_clones_or_renews_original_custody(
     custody, pair, reviewed_binary, direct_launcher, fault, monkeypatch
 ):
     candidate, expected = reviewed_binary
-    before = len(os.listdir("/proc/self/fd"))
+    before = open_descriptors()
     raw, cutoff, spawned = custody.plan.raw, custody.deadline_ns, []
     if fault == "digest":
         expected = "0" * 64
@@ -230,7 +242,7 @@ def test_unconfirmed_image_never_clones_or_renews_original_custody(
         direct.ingress_tests.ingress(custody, candidate, after_exec=True, launcher=launch),
     ):
         pytest.fail("Consumed custody retried image launch")
-    assert not spawned and len(os.listdir("/proc/self/fd")) == before
+    assert not spawned and open_descriptors().items() <= before.items()
 
 
 @pytest.mark.parametrize("pair", ["preparation"], indirect=True)

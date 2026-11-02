@@ -37,6 +37,12 @@ path defaults empty. Ordinary upgrades preserve current behavior; neither option
 creates automatic profile import, Favorites List synchronization or a broader
 front-panel control surface.
 
+v0.32.0 retains that exact nine-field catalog/runtime option contract. It adds
+no App switch for the privileged browser-kiosk operator role: operator access is
+a separate native-dashboard client role with manual login and its own private,
+role-bound browser profile. The release also does not expose the additive
+Favorites write executor as an App action or authorize a physical scanner write.
+
 The App requires a LAN-connected SDS200 and publishes UDP port `50000` for the
 scanner's inbound RTP audio. It does not enable host networking or expose the
 daemon's private Unix-domain client sockets.

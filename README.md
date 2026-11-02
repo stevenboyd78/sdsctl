@@ -67,7 +67,7 @@ For a container installation, select a published version rather than a source
 checkout. The version-specific image for this release is:
 
 ```bash
-docker pull theboyd78/sdsctl:0.31.0
+docker pull theboyd78/sdsctl:0.32.0
 ```
 
 `theboyd78/sdsctl:latest` follows the newest successfully published release.
@@ -205,21 +205,24 @@ workflow. Hardware-independent tests must not require a physical scanner.
 
 ## Project status
 
-Version `0.31.0` includes Mimic-SDS Web, TUI and Home Assistant presentations,
-installed display-profile administration, Waterfall/TUI refinements and the
-physically qualified SDS200 Version 1.26.01 one-press Menu boundary. The App's
-new profile path remains empty and the Menu switch remains false by default.
-See the [release scope](docs/release-0.31.0.md) for included changes,
-pre-publication evidence, upgrade requirements and deferred work.
+Version `0.32.0` adds an explicit privileged operator role to the manual
+Chromium kiosk, configurable read-only Mimic-SDS TUI startup and a verified
+additive-only Favorites FTP write executor. It also carries presentation,
+audio-lifecycle, Waterfall, PSI-recovery and managed-display reliability
+corrections. See the [release scope](docs/release-0.32.0.md) for included
+changes, pre-publication evidence, upgrade requirements and deferred work.
 
 The transport-aware Raspberry Pi TUI retains observe-only preflight and managed
-outage waiting/recovery. Scanner model/firmware presentation, ordinary
-Ingress and manual dashboard login remain separate from experimental browser
-enrollment. An upgrade does not enable automatic sign-in, a display profile or
-Menu control in existing installations. Secure unattended keyring, abrupt
-power-loss, cross-build and alternative-engine acceptance are not claimed.
-The other 26 front-panel keys, other firmware/context combinations, held
-gestures, sequences and retries remain unavailable.
+outage waiting/recovery.
+
+Display kiosk mode remains the backward-compatible default and observe-only;
+operator mode is a manually authenticated privileged station with a separate
+role-bound private profile. The launcher does not store a password, bypass
+Chromium security or create a graphical session. Favorites writes remain an
+explicit library boundary: publication does not authorize a scanner write, and
+existing HPDs cannot be replaced or deleted. An upgrade enables no automatic
+sign-in, profile import, Favorites mutation, listener, Menu control or broader
+front-panel command surface.
 See the
 [latest GitHub Release](https://github.com/stevenboyd78/sdsctl/releases/latest),
 [CHANGELOG.md](CHANGELOG.md), [ROADMAP.md](ROADMAP.md), and

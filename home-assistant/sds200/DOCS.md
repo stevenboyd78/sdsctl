@@ -224,6 +224,34 @@ topics are scanner-control inputs even though the generic daemon MQTT command
 topic remains disabled, so broker publish permissions for the dedicated control
 namespace should be limited to trusted Home Assistant publishers.
 
+## v0.32.0 upgrade and rollback
+
+The v0.32.0 catalog and image retain the exact nine configuration fields shown
+above. Save a private copy of the existing options, Network mappings, installed
+image identity and current digest-qualified dashboard resource URL. Use the
+normal repository-managed update only after Home Assistant offers v0.32.0, then
+confirm the installed version/image and all nine values before starting the App.
+
+The privileged manual browser-kiosk operator role is not an App option. It uses
+the existing native dashboard's operator login from a separate private,
+role-bound client profile and does not enable native access, create a graphical
+session or provide automatic login. The additive Favorites write executor is
+also not exposed as an App action, and publication does not authorize a physical
+scanner write.
+
+An ordinary update preserves the scanner host, MQTT namespace, recording
+directory, advanced-access settings, qualified Menu default, display-profile
+path, credentials and recordings. After updating, confirm that Ingress reports
+the expected scanner, existing MQTT entities and recordings remain present, and
+the installed aggregate dashboard resource matches this release.
+
+To roll back, preserve all nine option values, Network mappings, credentials,
+recordings, profiles and accepted state. Restore the prior reviewed App version
+through the normal Supervisor repository or backup mechanism and restore only
+that release's matching aggregate resource URL. Do not delete App data, alter
+scanner storage, remove Home Assistant Core integration files or activate a
+client role merely to make rollback succeed.
+
 ## v0.31.0 upgrade and rollback
 
 The v0.31.0 catalog and image add the two default-off/empty options above as one
