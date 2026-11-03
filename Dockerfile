@@ -1,6 +1,6 @@
 # Build this generic image from the repository root:
 # docker build -t sds200-daemon .
-FROM python:3.14-slim@sha256:656d12e70054d5fda18a045e2494c96701e9792dd1445f95b3d038df954f57e9 AS build
+FROM python:3.15-slim@sha256:94d3426f1def7db4a106a232ac121bfd975393e5dfd40a619b955fae45fe7913 AS build
 
 WORKDIR /build
 
@@ -12,7 +12,7 @@ RUN python -m pip wheel \
     --wheel-dir /wheels \
     ".[mqtt,web]"
 
-FROM python:3.14-slim@sha256:656d12e70054d5fda18a045e2494c96701e9792dd1445f95b3d038df954f57e9
+FROM python:3.15-slim@sha256:94d3426f1def7db4a106a232ac121bfd975393e5dfd40a619b955fae45fe7913
 
 LABEL \
     org.opencontainers.image.title="sdsctl" \
