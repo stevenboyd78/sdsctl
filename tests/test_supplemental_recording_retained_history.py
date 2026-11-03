@@ -9,6 +9,7 @@ import pytest
 
 from . import test_supplemental_recording_host_begin as begins
 from . import test_supplemental_recording_idle_continuity as continuity
+from ._supplemental_fixture_clock import compressed_scheduler_time
 
 m = begins.m
 layout, tree, routing, projection, binding, directory, prepared, setup, joined = (
@@ -27,7 +28,12 @@ layout, tree, routing, projection, binding, directory, prepared, setup, joined =
 @pytest.fixture
 def begun(joined, monkeypatch):
     s = joined
-    relay = s.start.start_once()
+    stable = m.plans.clock.read()
+    s.plan.check_clock(stable)
+    with monkeypatch.context() as patch:
+        patch.setattr(m.plans.clock, "read", lambda: stable)
+        with compressed_scheduler_time(patch):
+            relay = s.start.start_once()
     relay.ready, relay.ledger = s.run.ready, s.ledger
     relay.phase, relay.expected = "started", None
     relay.intent_sha256 = s.start.intent.sha256

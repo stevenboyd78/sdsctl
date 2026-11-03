@@ -57,8 +57,20 @@ def denied(callback):
 
 @pytest.fixture
 def setup(prepared, tmp_path, monkeypatch):
+    def clock_read():
+        """Retry only a raw sample rejected after hosted-runner descheduling."""
+
+        error = None
+        for _ in range(10):
+            try:
+                return m.plans.clock.read()
+            except m.plans.clock.UnconfirmedClock as observed:
+                error = observed
+        assert error is not None
+        raise error
+
     _, values = plans.projected_plan(prepared.pins.host.projection)
-    original = m.plans.clock.read()
+    original = clock_read()
     issued = original.boottime_ns / m.plans.clock.NS
     values.update(
         boot=original.boot,
@@ -77,7 +89,7 @@ def setup(prepared, tmp_path, monkeypatch):
     state = SimpleNamespace(trace=[], qualifies=0, reads=0, fault=None, launches=[])
 
     def now():
-        return m.plans.clock.read().boottime_ns / m.plans.clock.NS
+        return clock_read().boottime_ns / m.plans.clock.NS
 
     normal = b.App(plan.normal.pin, "running", plan.normal_generation, True, False)
     stopped_normal = b.App(plan.normal.pin, "stopped")
