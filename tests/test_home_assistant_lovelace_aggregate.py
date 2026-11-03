@@ -45,6 +45,21 @@ def test_aggregate_resource_url_uses_exact_module_digest() -> None:
     ) == HOME_ASSISTANT_LOVELACE_AGGREGATE_RESOURCE_URL
 
 
+@pytest.mark.parametrize(
+    "document",
+    ("docs/home-assistant-app.md", "home-assistant/sds200/DOCS.md"),
+)
+def test_documented_resource_urls_match_packaged_card_assets(document: str) -> None:
+    text = (Path(__file__).parents[1] / document).read_text(encoding="utf-8")
+    urls = [
+        *(theme.resource_url for theme in built_in_home_assistant_theme_registry().themes),
+        HOME_ASSISTANT_LOVELACE_AGGREGATE_RESOURCE_URL,
+    ]
+
+    for url in urls:
+        assert url in text
+
+
 def test_aggregate_imports_every_registry_module_in_order() -> None:
     registry = built_in_home_assistant_theme_registry()
 
