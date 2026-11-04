@@ -421,7 +421,10 @@ document and active pane fit without horizontal or vertical scrolling at the
 1920x1080 full-HD reference viewports. Information that cannot fit concurrently
 uses the named panes, scanner inspection controls, or recording page controls
 instead of an unannounced scrolling region. Large displays scale the workspace
-cleanly. When user text enlargement or browser zoom crosses the compact
+cleanly. Through the full-HD reference width, the shared shell consumes the
+available viewport with only its responsive edge gutter; above that width, a
+120rem cap preserves readable geometry on ultrawide desktop displays. When user
+text enlargement or browser zoom crosses the compact
 composition's safe boundary, accessibility and content reachability take
 priority and conventional scrolling is deliberately restored.
 
