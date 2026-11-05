@@ -592,6 +592,10 @@ complete and more height stays available to the working pane.
 
 The captures use each theme's [default typography](theme-typography.md),
 including the locally bundled theme fonts.
+The fictional scanner fixture holds `Dispatch 1 (Demo)`, so every Scanner-pane
+capture also demonstrates that theme's held-field treatment. A held System,
+Department, Site, or Channel changes the background and gains an inset boundary;
+released and unavailable fields keep their normal presentation.
 Appearance controls are centered above the workspace, wrapping onto a centered
 row when needed. LCARS shows the replacement v2 design with its Classic palette,
 Antonio font, segmented frame, and Site field beneath System. At compact

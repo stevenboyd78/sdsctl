@@ -2336,6 +2336,14 @@ function setScannerCurrentSelection(scope, value) {
   output.title = text === "Unavailable" ? "" : text;
 }
 
+function setScannerFieldHoldState(scope, known, held) {
+  const field = element(`radio-${scope}`).parentElement;
+  if (field === null || field.dataset.holdScope !== scope) {
+    throw new Error(`Missing scanner hold field for ${scope}`);
+  }
+  field.dataset.holdState = !known ? "unknown" : held ? "held" : "released";
+}
+
 function setScannerHoldControl(id, scope, available, known, held) {
   const button = element(id);
   const indicator = element(`${id}-state`);
@@ -2385,6 +2393,11 @@ function setScannerControls() {
     departmentHeld || radio.department_hold === "Off";
   const siteHoldKnown = siteHeld || radio.site_hold === "Off";
   const channelHoldKnown = channelHeld || radio.channel_hold === "Off";
+
+  setScannerFieldHoldState("system", systemHoldKnown, systemHeld);
+  setScannerFieldHoldState("department", departmentHoldKnown, departmentHeld);
+  setScannerFieldHoldState("site", siteHoldKnown, siteHeld);
+  setScannerFieldHoldState("channel", channelHoldKnown, channelHeld);
 
   setScannerCurrentSelection("system", radio.system);
   setScannerCurrentSelection("department", radio.department);

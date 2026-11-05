@@ -645,6 +645,11 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
     assert 'id="waterfall-fullscreen"' in response.text
     assert "Relative, uncalibrated scanner values" in response.text
     assert 'class="scanner-display-hierarchy"' in response.text
+    for scope in ("system", "department", "site", "channel"):
+        assert (
+            f'data-hold-scope="{scope}" data-hold-state="unknown"'
+            in response.text
+        )
     assert 'id="radio-view-auto"' in response.text
     assert 'id="radio-scan-fallback-select"' in response.text
     assert "media-src 'self'" in response.headers["content-security-policy"]
@@ -979,6 +984,9 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert 'performScannerControl("reconnect", "Reconnect scanner")' in script.text
     assert 'daemonControlSupported("scanner.hold_state")' in script.text
     assert "setScannerHoldControl" in script.text
+    assert "setScannerFieldHoldState" in script.text
+    for scope in ("system", "department", "site", "channel"):
+        assert f'setScannerFieldHoldState("{scope}",' in script.text
     assert 'radio.channel_hold === "On"' in script.text
     assert "button.disabled = !available" in script.text
     assert 'button.setAttribute("aria-pressed"' in script.text

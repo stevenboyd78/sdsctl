@@ -31,6 +31,14 @@
   --terminal-amber: #e4ad50;
   --terminal-frame: #293429;
   --terminal-frame-light: #53614d;
+  --hold-field-background: color-mix(
+    in srgb,
+    var(--terminal-amber) 18%,
+    var(--terminal-glass)
+  );
+  --hold-field-border: var(--terminal-amber);
+  --hold-field-label: var(--terminal-amber);
+  --hold-field-value: var(--terminal-green);
   font-family:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", monospace;

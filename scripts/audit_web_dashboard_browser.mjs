@@ -2137,6 +2137,7 @@ export function browserAuditLibrary() {
     failures.push(...semanticClipping());
     failures.push(...interactiveReadabilityFailures());
     failures.push(...hierarchyFieldAlignmentFailures());
+    failures.push(...holdFieldStateFailures());
     const visibleFields = fieldIds
       .map((id) => document.getElementById(id))
       .filter((field) => field instanceof HTMLElement && rendered(field));
@@ -2160,6 +2161,49 @@ export function browserAuditLibrary() {
           `${label(field)} retains ${getComputedStyle(field).minHeight} of ` +
             "minimum height and cannot center with the System field",
         );
+      }
+    }
+    return failures;
+  }
+
+  function holdFieldStateFailures() {
+    const failures = [];
+    const expected = {
+      system: "released",
+      department: "released",
+      site: "released",
+      channel: "held",
+    };
+    const fields = Array.from(
+      document.querySelectorAll("#radio-activity-panel [data-hold-scope]"),
+    );
+    if (fields.length !== Object.keys(expected).length) {
+      failures.push(
+        `scanner hierarchy exposes ${fields.length} hold-aware fields, expected 4`,
+      );
+    }
+    for (const [scope, state] of Object.entries(expected)) {
+      const field = document.querySelector(
+        `#radio-activity-panel [data-hold-scope="${scope}"]`,
+      );
+      if (!(field instanceof HTMLElement)) {
+        failures.push(`scanner hierarchy is missing the ${scope} hold-aware field`);
+        continue;
+      }
+      if (field.dataset.holdState !== state) {
+        failures.push(
+          `${scope} field hold state is ${JSON.stringify(field.dataset.holdState)}, ` +
+            `expected ${JSON.stringify(state)}`,
+        );
+      }
+      if (state === "held") {
+        const style = getComputedStyle(field);
+        if (style.backgroundColor === "rgba(0, 0, 0, 0)") {
+          failures.push(`${scope} held field has no theme background`);
+        }
+        if (style.boxShadow === "none") {
+          failures.push(`${scope} held field has no inset boundary treatment`);
+        }
       }
     }
     return failures;
