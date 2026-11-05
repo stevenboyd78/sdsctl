@@ -1,9 +1,44 @@
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import test from 'node:test';
-import {captureChildOutput, waitForHttp} from './audit_web_dashboard_browser.mjs';
+import {
+  captureChildOutput,
+  parseArguments,
+  waitForHttp,
+} from './audit_web_dashboard_browser.mjs';
 
 const url = 'http://127.0.0.1:12345/json/version';
+
+test('Chrome startup and later browser operations have independent deadlines', () => {
+  const defaults = parseArguments(['--timeout-ms', '30000']);
+  assert.equal(defaults.timeoutMs, 30000);
+  assert.equal(defaults.startupTimeoutMs, 90000);
+
+  const explicit = parseArguments([
+    '--startup-timeout-ms', '75000',
+    '--timeout-ms', '25000',
+  ]);
+  assert.equal(explicit.startupTimeoutMs, 75000);
+  assert.equal(explicit.timeoutMs, 25000);
+});
+
+test('cold Chrome readiness may pass after the operation deadline without weakening it', async () => {
+  let now = 0;
+  const response = {ok: true};
+  const actual = await waitForHttp(url, 90000, {exitCode: null, signalCode: null}, {
+    now: () => now,
+    fetcher: async () => {
+      if (now <= 30000) {
+        throw Object.assign(new Error('fixture cold start'), {code: 'ECONNREFUSED'});
+      }
+      return response;
+    },
+    sleep: async ms => { now += ms; },
+  });
+  assert.equal(actual, response);
+  assert.equal(now, 30100);
+  assert.equal(parseArguments(['--timeout-ms', '30000']).timeoutMs, 30000);
+});
 
 test('readiness returns the exact successful response and keeps the request abort signal', async () => {
   const response = {ok: true};
