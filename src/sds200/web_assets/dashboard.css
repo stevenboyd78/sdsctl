@@ -885,7 +885,7 @@ select:focus-visible,
 :root {
   --workspace-gap: clamp(0.35rem, 1.2vmin, 0.9rem);
   --pane-padding: clamp(0.55rem, 1.35vmin, 1.15rem);
-  --content-width: 96rem;
+  --content-width: 120rem;
   --waterfall-background: #07111c;
   --waterfall-grid: #31516a;
   --waterfall-spectrum: #42d7ff;

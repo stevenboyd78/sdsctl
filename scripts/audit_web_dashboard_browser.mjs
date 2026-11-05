@@ -1779,9 +1779,47 @@ export function browserAuditLibrary() {
     return failures;
   }
 
+  function shellGeometryFailures() {
+    const failures = [];
+    const rootFontSize = Number.parseFloat(
+      getComputedStyle(document.documentElement).fontSize,
+    );
+    if (!Number.isFinite(rootFontSize) || rootFontSize <= 0) {
+      return ["dashboard shell has an invalid root font size"];
+    }
+    const responsiveGutter = Math.min(
+      Math.max(0.75 * rootFontSize, innerWidth * 0.024),
+      2 * rootFontSize,
+    );
+    const expectedWidth = Math.min(
+      innerWidth - responsiveGutter,
+      120 * rootFontSize,
+    );
+    const regions = [".site-header", ".dashboard", ".site-footer"];
+    for (const selector of regions) {
+      const region = document.querySelector(selector);
+      if (!(region instanceof HTMLElement) || !rendered(region)) {
+        failures.push(`${selector} is unavailable for shell geometry`);
+        continue;
+      }
+      const rect = region.getBoundingClientRect();
+      if (Math.abs(rect.width - expectedWidth) > tolerance) {
+        failures.push(
+          `${selector} width ${rect.width.toFixed(1)} does not fill the ` +
+            `responsive shell target ${expectedWidth.toFixed(1)}`,
+        );
+      }
+      if (Math.abs(rect.left - (innerWidth - rect.width) / 2) > tolerance) {
+        failures.push(`${selector} is not centered in the CSS viewport`);
+      }
+    }
+    return failures;
+  }
+
   function normal(expectedPane, expectedTheme) {
     const failures = paneState(expectedPane);
     failures.push(...decorativeClearanceFailures(expectedTheme));
+    failures.push(...shellGeometryFailures());
     failures.push(...subpanelButtonGeometry(expectedPane));
     failures.push(...overviewStatusLayout(expectedTheme));
     const html = document.documentElement;
