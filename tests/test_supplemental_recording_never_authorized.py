@@ -14,6 +14,7 @@ from types import SimpleNamespace
 import pytest
 
 from . import test_supplemental_recording_reconcile as exits
+from ._supplemental_fixture_clock import compressed_scheduler_time
 
 m, b = exits.m, exits.m.dispatch.binding
 p = b.protected
@@ -115,9 +116,18 @@ def unstarted(prepared, actors, calibration, plan, journal, family, tree, monkey
         case.ready.close()
         if mode != "workers_live":
             exits.finish(family)
-            operator.poll()
-            if mode != "exit_unpublished":
-                operator.publish(journal)
+            stable = m.plans.clock.read()
+            plan.check_clock(stable)
+            # Direct reconciliation tests retain the real two-second oracle.
+            # This fixture only composes the valid pre-fault baseline, so a
+            # shared-runner pause must not consume it between fresh checks.
+            # A refused/consumed publication is still never retried.
+            with monkeypatch.context() as patch:
+                patch.setattr(m.plans.clock, "read", lambda: stable)
+                with compressed_scheduler_time(patch):
+                    operator.poll()
+                    if mode != "exit_unpublished":
+                        operator.publish(journal)
         if mode != "init_live":
             prepared.process.stdin.close()
             prepared.process.wait(timeout=3)
