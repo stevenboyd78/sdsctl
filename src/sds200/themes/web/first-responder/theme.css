@@ -21,6 +21,14 @@
   --dispatch-soft: rgb(78 161 255 / 0.08);
   --dispatch-red: #d94f4f;
   --dispatch-navy: #071525;
+  --hold-field-background: color-mix(
+    in srgb,
+    var(--warning) 18%,
+    var(--dispatch-navy)
+  );
+  --hold-field-border: var(--warning);
+  --hold-field-label: var(--warning);
+  --hold-field-value: #ffffff;
 }
 
 :root[data-theme="first-responder"] body {

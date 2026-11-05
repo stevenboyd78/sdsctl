@@ -111,6 +111,27 @@ def test_built_in_stylesheets_are_isolated_package_resources() -> None:
                 assert f'data-theme="{other}"' not in stylesheet
 
 
+def test_built_in_themes_style_held_scanner_fields() -> None:
+    registry = built_in_web_theme_registry()
+    base = files("sds200.web_assets").joinpath("dashboard.css").read_text(
+        encoding="utf-8"
+    )
+
+    assert '[data-hold-scope][data-hold-state="held"]' in base
+    assert "--hold-field-background" in base
+    assert "--hold-field-border" in base
+    assert "@media (forced-colors: active)" in base
+    for theme in registry.themes:
+        stylesheet = read_built_in_web_theme_stylesheet(theme).decode("utf-8")
+        for custom_property in (
+            "--hold-field-background:",
+            "--hold-field-border:",
+            "--hold-field-label:",
+            "--hold-field-value:",
+        ):
+            assert custom_property in stylesheet
+
+
 def test_pip_boy_inspired_theme_uses_stable_declarative_hooks() -> None:
     registry = built_in_web_theme_registry()
     theme = registry.require("pip-boy-inspired")

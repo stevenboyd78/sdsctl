@@ -31,6 +31,14 @@
   --scanner-display-muted: #526a88;
   --scanner-display-rule: #9fb2c9;
   --scanner-key: #e3e9f0;
+  --hold-field-background: color-mix(
+    in srgb,
+    var(--warning) 18%,
+    var(--scanner-display)
+  );
+  --hold-field-border: var(--warning);
+  --hold-field-label: var(--warning);
+  --hold-field-value: var(--scanner-display-ink);
 }
 
 :root[data-theme="system"] body {
@@ -187,6 +195,20 @@
 :root[data-theme="system"] #radio-activity-panel .primary-value {
   letter-spacing: 0.025em;
   text-shadow: 0 1px rgb(255 255 255 / 0.42);
+}
+
+:root[data-theme="system"]
+  #radio-activity-panel
+  [data-hold-scope][data-hold-state="held"]
+  dt {
+  color: var(--hold-field-label);
+}
+
+:root[data-theme="system"]
+  #radio-activity-panel
+  [data-hold-scope][data-hold-state="held"]
+  dd {
+  color: var(--hold-field-value);
 }
 
 :root[data-theme="system"] #radio-activity-panel .status-list > div,

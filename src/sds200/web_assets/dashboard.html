@@ -331,15 +331,15 @@
         </div>
 
         <dl class="scanner-display-hierarchy">
-          <div>
+          <div data-hold-scope="system" data-hold-state="unknown">
             <dt>System</dt>
             <dd id="radio-system" class="primary-value">No active system</dd>
           </div>
-          <div>
+          <div data-hold-scope="department" data-hold-state="unknown">
             <dt>Department</dt>
             <dd id="radio-department" class="secondary-value">Unavailable</dd>
           </div>
-          <div>
+          <div data-hold-scope="channel" data-hold-state="unknown">
             <dt>Channel</dt>
             <dd id="radio-channel" class="secondary-value">No active channel</dd>
           </div>
@@ -372,7 +372,7 @@
           <section id="radio-group-hierarchy" class="radio-field-group" aria-labelledby="radio-hierarchy-title" data-radio-group="hierarchy">
             <h3 id="radio-hierarchy-title">Hierarchy</h3>
             <dl class="radio-field-list">
-              <div><dt>Site</dt><dd id="radio-site">Unavailable</dd></div>
+              <div data-hold-scope="site" data-hold-state="unknown"><dt>Site</dt><dd id="radio-site">Unavailable</dd></div>
               <div><dt>System index</dt><dd id="radio-system-index">Unavailable</dd></div>
               <div><dt>System hold</dt><dd id="radio-system-hold">Unavailable</dd></div>
               <div><dt>Department index</dt><dd id="radio-department-index">Unavailable</dd></div>

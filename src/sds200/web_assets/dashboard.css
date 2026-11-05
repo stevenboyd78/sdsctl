@@ -1485,6 +1485,23 @@ body {
   min-height: 0;
 }
 
+#radio-activity-panel [data-hold-scope][data-hold-state="held"] {
+  background: var(
+    --hold-field-background,
+    color-mix(in srgb, var(--warning) 18%, var(--surface-emphasis))
+  );
+  box-shadow: inset 0 0 0 0.16rem
+    var(--hold-field-border, var(--warning));
+}
+
+#radio-activity-panel [data-hold-scope][data-hold-state="held"] dt {
+  color: var(--hold-field-label, var(--warning));
+}
+
+#radio-activity-panel [data-hold-scope][data-hold-state="held"] dd {
+  color: var(--hold-field-value, var(--text));
+}
+
 .radio-summary {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -2676,6 +2693,17 @@ body {
   .radio-view-controls button[aria-pressed="true"] {
     color: HighlightText;
     background: Highlight;
+  }
+
+  #radio-activity-panel [data-hold-scope][data-hold-state="held"] {
+    forced-color-adjust: none;
+    color: CanvasText !important;
+    background: Canvas !important;
+    box-shadow: inset 0 0 0 0.16rem Highlight;
+  }
+
+  #radio-activity-panel [data-hold-scope][data-hold-state="held"] :is(dt, dd) {
+    color: CanvasText !important;
   }
 
   .status-badge {
