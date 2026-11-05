@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "interface": "web",
+  "id": "cinematic-tactical-field",
+  "label": "Tactical Field",
+  "order": 1210,
+  "stylesheet": "theme.css",
+  "color_scheme": "dark",
+  "theme_colors": {"light": "#10140d", "dark": "#10140d"}
+}

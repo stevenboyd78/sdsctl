@@ -1,0 +1,29 @@
+/* Original geometric broadcast-lounge presentation. */
+:root[data-theme="cinematic-art-deco-radio"] {
+  color-scheme: dark;
+  --background: #0d1514; --surface: #13211f; --surface-emphasis: #1e302d;
+  --text: #f5efd9; --muted: #bbb59f; --border: #7d6b43;
+  --accent: #d7ba6d; --accent-strong: #f0d994; --success: #74bd91;
+  --warning: #e5bf5a; --danger: #d86b63; --focus: #fff0b8;
+  --shadow: 0 0.9rem 2.2rem rgb(0 0 0 / 0.6); --radius-small: 0; --radius-large: 0;
+  --hold-field-background: #403318; --hold-field-border: #e5bf5a; --hold-field-label: #f3d479; --hold-field-value: #ffffff;
+}
+:root[data-theme="cinematic-art-deco-radio"] body { background: linear-gradient(60deg, transparent 46%, rgb(215 186 109 / 0.05) 47% 53%, transparent 54%), linear-gradient(-60deg, transparent 46%, rgb(215 186 109 / 0.035) 47% 53%, transparent 54%), radial-gradient(circle at 50% -5%, rgb(28 105 91 / 0.2), transparent 35%), #0d1514; background-size: 5rem 8rem, 5rem 8rem, auto, auto; }
+:root[data-theme="cinematic-art-deco-radio"] .site-header { position: relative; border: 1px solid #9b8351; border-top: 0.25rem double var(--accent); border-radius: 0; background: linear-gradient(110deg, #1f3732, #0f1a18 72%); box-shadow: 0 0 0 2px rgb(215 186 109 / 0.05) inset, var(--shadow); }
+:root[data-theme="cinematic-art-deco-radio"] .site-header::after { position: absolute; right: 1rem; bottom: 0.45rem; width: min(27rem, 35vw); height: 0.2rem; background: linear-gradient(90deg, transparent, #d7ba6d 15% 42%, transparent 42% 58%, #d7ba6d 58% 85%, transparent); content: ""; }
+:root[data-theme="cinematic-art-deco-radio"] :is(.brand h1, .panel h2, .panel h3, .workspace-tabs [role="tab"]) { font-family: "Barlow Condensed", sans-serif; letter-spacing: 0.13em; text-transform: uppercase; }
+:root[data-theme="cinematic-art-deco-radio"] .workspace-shell { border: 1px solid #9b8351; border-radius: 0; background: #101b19; box-shadow: 0 0 0 2px rgb(215 186 109 / 0.05) inset, var(--shadow); }
+:root[data-theme="cinematic-art-deco-radio"] .workspace-tabs { border-bottom: 1px solid #9b8351; background: #1a2b28; }
+:root[data-theme="cinematic-art-deco-radio"] .workspace-tabs [role="tab"] { border-color: #7d6b43; border-radius: 0; background: linear-gradient(#28403b, #152420); color: var(--muted); }
+:root[data-theme="cinematic-art-deco-radio"] .workspace-tabs [role="tab"][aria-selected="true"] { border-color: var(--accent-strong); background: linear-gradient(100deg, #d7ba6d 0 0.24rem, #26594f 0.24rem); color: #fff; }
+:root[data-theme="cinematic-art-deco-radio"] .workspace-deck { background: linear-gradient(#182724, #0a1211); }
+:root[data-theme="cinematic-art-deco-radio"] [data-workspace-pane] { border-color: #5e5338; background: rgb(13 21 20 / 0.84); }
+:root[data-theme="cinematic-art-deco-radio"] .panel { border: 1px solid #7d6b43; border-top: 0.22rem double var(--accent); border-radius: 0; background: linear-gradient(135deg, rgb(215 186 109 / 0.055), transparent 30%), #172623; box-shadow: 0 0.6rem 1.3rem rgb(0 0 0 / 0.48); }
+:root[data-theme="cinematic-art-deco-radio"] #radio-activity-panel { border-color: #a38b58; border-top-color: var(--warning); background: radial-gradient(ellipse at 15% 0%, rgb(215 186 109 / 0.11), transparent 30%), #0f1917; }
+:root[data-theme="cinematic-art-deco-radio"] .radio-view-controls { border: 1px solid #7d6b43; border-radius: 0; background: #1a2b28; }
+:root[data-theme="cinematic-art-deco-radio"] .radio-field-groups { border-color: #5e5338; background: rgb(215 186 109 / 0.035); }
+:root[data-theme="cinematic-art-deco-radio"] :is(button, .recording-action, select, input, textarea) { border-color: #9b8351; border-radius: 0; background: linear-gradient(#304a44, #172622); color: var(--text); }
+:root[data-theme="cinematic-art-deco-radio"] :is(button, .recording-action):hover:not(:disabled) { border-color: var(--accent-strong); background: #356258; }
+:root[data-theme="cinematic-art-deco-radio"] .status-badge { border-radius: 0; letter-spacing: 0.12em; text-transform: uppercase; }
+@media (prefers-reduced-motion: reduce) { :root[data-theme="cinematic-art-deco-radio"] *, :root[data-theme="cinematic-art-deco-radio"] *::before, :root[data-theme="cinematic-art-deco-radio"] *::after { animation: none !important; transition: none !important; } }
+@media (forced-colors: active) { :root[data-theme="cinematic-art-deco-radio"] { --background: Canvas; --surface: Canvas; --surface-emphasis: Canvas; --text: CanvasText; --muted: CanvasText; --border: CanvasText; --accent: Highlight; --accent-strong: Highlight; --focus: Highlight; } :root[data-theme="cinematic-art-deco-radio"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups) { background: Canvas; box-shadow: none; } :root[data-theme="cinematic-art-deco-radio"] .site-header::after { display: none; } }

@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "interface": "web",
+  "id": "cinematic-retro-arcade",
+  "label": "Retro Arcade",
+  "order": 1060,
+  "stylesheet": "theme.css",
+  "color_scheme": "dark",
+  "theme_colors": {"light": "#080811", "dark": "#080811"}
+}

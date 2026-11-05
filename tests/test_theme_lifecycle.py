@@ -28,6 +28,7 @@ from sds200.theme_lifecycle import (
     remove_theme_package,
     validate_theme_package,
 )
+from sds200.web_themes import BUILT_IN_WEB_THEME_IDS
 
 SOURCE_THEME_ROOT = Path(__file__).parents[1] / "src" / "sds200" / "themes"
 
@@ -1502,12 +1503,7 @@ def test_absent_inventory_is_read_only_and_always_lists_built_ins(
     assert not root.exists()
     assert inventory.issues == ()
     assert tuple(package.identity for package in inventory.packages) == (
-        "web/system",
-        "web/lcars",
-        "web/matrix",
-        "web/first-responder",
-        "web/amateur-radio",
-        "web/pip-boy-inspired",
+        *(f"web/{identifier}" for identifier in BUILT_IN_WEB_THEME_IDS),
         "home-assistant/compact",
         "home-assistant/sds200-display",
         "home-assistant/waterfall",

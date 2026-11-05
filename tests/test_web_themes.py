@@ -10,6 +10,7 @@ import pytest
 
 from sds200.web_themes import (
     BUILT_IN_WEB_THEME_IDS,
+    CINEMATIC_WEB_THEME_IDS,
     WebThemeError,
     WebThemeRegistry,
     built_in_web_theme_registry,
@@ -54,7 +55,15 @@ def test_built_in_web_theme_registry_is_ordered_and_immutable() -> None:
     registry = built_in_web_theme_registry()
 
     assert registry.identifiers == BUILT_IN_WEB_THEME_IDS
-    assert tuple(theme.order for theme in registry.themes) == (0, 10, 20, 30, 40, 50)
+    assert tuple(theme.order for theme in registry.themes) == (
+        0,
+        10,
+        20,
+        30,
+        40,
+        50,
+        *range(1000, 1220, 10),
+    )
     assert tuple(theme.label for theme in registry.themes) == (
         "System",
         "LCARS",
@@ -62,6 +71,28 @@ def test_built_in_web_theme_registry_is_ordered_and_immutable() -> None:
         "First Responder",
         "Amateur Radio",
         "Pip-Boy-inspired",
+        "Mission Control",
+        "Cyberpunk Night",
+        "Synthwave Outrun",
+        "Cold War Radar",
+        "Dieselpunk Command",
+        "Steampunk Telegraph",
+        "Retro Arcade",
+        "Y2K Media Center",
+        "Mecha Operations",
+        "Comic Book",
+        "Wizarding Archive",
+        "Gothic Cathedral",
+        "Fantasy Cartographer",
+        "Desert Empire",
+        "Carrier Air Wing",
+        "Motorsport Pit Wall",
+        "Noir Detective",
+        "Art Deco Radio",
+        "Solarpunk Communications",
+        "National Parks Ranger",
+        "Galactic Operations",
+        "Tactical Field",
     )
     assert registry.require("matrix").stylesheet_url == (
         "assets/themes/matrix/theme.css"
@@ -82,9 +113,10 @@ def test_built_in_web_theme_browser_document_is_deterministic() -> None:
         "colorScheme": "light dark",
         "themeColors": {"light": "#eef2f7", "dark": "#0d1420"},
     }
+    assert payload[-1]["id"] == CINEMATIC_WEB_THEME_IDS[-1]
     assert payload[-1]["themeColors"] == {
-        "light": "#071008",
-        "dark": "#071008",
+        "light": "#10140d",
+        "dark": "#10140d",
     }
     assert registry.browser_json() == registry.browser_json()
 
@@ -130,6 +162,43 @@ def test_built_in_themes_style_held_scanner_fields() -> None:
             "--hold-field-value:",
         ):
             assert custom_property in stylesheet
+
+
+@pytest.mark.parametrize(
+    "identifier",
+    (
+        "cinematic-y2k-media",
+        "cinematic-mecha-operations",
+        "cinematic-comic-book",
+        "cinematic-fantasy-cartographer",
+        "cinematic-national-parks",
+        "cinematic-solarpunk",
+    ),
+)
+def test_light_cinematic_theme_hover_preserves_selected_tab(identifier: str) -> None:
+    theme = built_in_web_theme_registry().require(identifier)
+    stylesheet = read_built_in_web_theme_stylesheet(theme).decode("utf-8")
+
+    assert (
+        ':hover:not(:disabled):not([aria-selected="true"])' in stylesheet
+    )
+
+
+@pytest.mark.parametrize(
+    ("identifier", "fallback"),
+    (
+        ("cinematic-y2k-media", "background-color: #176fa8"),
+        ("cinematic-mecha-operations", "background-color: #0c6f9b"),
+    ),
+)
+def test_light_gradient_tabs_have_solid_contrast_fallback(
+    identifier: str,
+    fallback: str,
+) -> None:
+    theme = built_in_web_theme_registry().require(identifier)
+    stylesheet = read_built_in_web_theme_stylesheet(theme).decode("utf-8")
+
+    assert fallback in stylesheet
 
 
 def test_pip_boy_inspired_theme_uses_stable_declarative_hooks() -> None:

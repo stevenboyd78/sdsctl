@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "interface": "web",
+  "id": "cinematic-dieselpunk-command",
+  "label": "Dieselpunk Command",
+  "order": 1040,
+  "stylesheet": "theme.css",
+  "color_scheme": "dark",
+  "theme_colors": {"light": "#17130f", "dark": "#17130f"}
+}

@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "interface": "web",
+  "id": "cinematic-mecha-operations",
+  "label": "Mecha Operations",
+  "order": 1080,
+  "stylesheet": "theme.css",
+  "color_scheme": "light",
+  "theme_colors": {"light": "#e8ebea", "dark": "#e8ebea"}
+}

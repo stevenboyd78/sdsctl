@@ -1,0 +1,29 @@
+/* Original parchment cartography presentation. */
+:root[data-theme="cinematic-fantasy-cartographer"] {
+  color-scheme: light;
+  --background: #d8c99f; --surface: #eee1bb; --surface-emphasis: #ddca96;
+  --text: #2c2419; --muted: #645642; --border: #826b47;
+  --accent: #34644c; --accent-strong: #224b38; --success: #2f7147;
+  --warning: #86570c; --danger: #a33f36; --focus: #163c2a;
+  --shadow: 0 0.7rem 1.8rem rgb(65 46 25 / 0.28); --radius-small: 0.25rem; --radius-large: 0.4rem;
+  --hold-field-background: #f3d983; --hold-field-border: #86570c; --hold-field-label: #664005; --hold-field-value: #2c2419;
+}
+:root[data-theme="cinematic-fantasy-cartographer"] body { background: repeating-radial-gradient(ellipse at 20% 20%, rgb(70 91 62 / 0.08) 0 1px, transparent 1px 3.5rem), linear-gradient(110deg, rgb(255 255 255 / 0.24), transparent 34%), #d8c99f; }
+:root[data-theme="cinematic-fantasy-cartographer"] .site-header { position: relative; border: 2px solid #826b47; border-radius: 0.4rem; background: linear-gradient(120deg, #f3e6bf, #d5c08a); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.3) inset, var(--shadow); }
+:root[data-theme="cinematic-fantasy-cartographer"] .site-header::after { position: absolute; right: 1rem; bottom: 0.5rem; width: min(27rem, 35vw); height: 0.18rem; background: linear-gradient(90deg, transparent, #34644c 18% 82%, transparent); content: ""; }
+:root[data-theme="cinematic-fantasy-cartographer"] :is(.brand h1, .panel h2, .panel h3) { font-family: Georgia, "Times New Roman", serif; letter-spacing: 0.04em; }
+:root[data-theme="cinematic-fantasy-cartographer"] .workspace-shell { border: 2px solid #826b47; background: #e8d8ac; box-shadow: var(--shadow); }
+:root[data-theme="cinematic-fantasy-cartographer"] .workspace-tabs { border-bottom: 2px solid #826b47; background: #ddca96; }
+:root[data-theme="cinematic-fantasy-cartographer"] .workspace-tabs [role="tab"] { border-color: #826b47; background: #eee1bb; color: var(--muted); font-family: Georgia, "Times New Roman", serif; }
+:root[data-theme="cinematic-fantasy-cartographer"] .workspace-tabs [role="tab"][aria-selected="true"] { border-color: #224b38; background: #34644c; color: #fff; }
+:root[data-theme="cinematic-fantasy-cartographer"] .workspace-deck { background: rgb(238 225 187 / 0.75); }
+:root[data-theme="cinematic-fantasy-cartographer"] [data-workspace-pane] { border-color: #9a8157; background: rgb(238 225 187 / 0.78); }
+:root[data-theme="cinematic-fantasy-cartographer"] .panel { border: 2px solid #826b47; background: linear-gradient(145deg, rgb(52 100 76 / 0.06), transparent 30%), #eee1bb; box-shadow: 0 0.5rem 1.15rem rgb(65 46 25 / 0.22); }
+:root[data-theme="cinematic-fantasy-cartographer"] #radio-activity-panel { border-color: #6d5a3c; background: linear-gradient(90deg, rgb(52 100 76 / 0.09), transparent 50%), #f3e6bf; }
+:root[data-theme="cinematic-fantasy-cartographer"] .radio-view-controls { border: 2px solid #826b47; background: #ddca96; }
+:root[data-theme="cinematic-fantasy-cartographer"] .radio-field-groups { border-color: #9a8157; background: rgb(52 100 76 / 0.035); }
+:root[data-theme="cinematic-fantasy-cartographer"] :is(button, .recording-action, select, input, textarea) { border-color: #826b47; background: linear-gradient(#f6eac5, #d8c492); color: var(--text); }
+:root[data-theme="cinematic-fantasy-cartographer"] :is(button, .recording-action):hover:not(:disabled):not([aria-selected="true"]) { border-color: #224b38; background: #c8d5b6; }
+:root[data-theme="cinematic-fantasy-cartographer"] .status-badge { border-radius: 999px; font-family: Georgia, "Times New Roman", serif; }
+@media (prefers-reduced-motion: reduce) { :root[data-theme="cinematic-fantasy-cartographer"] *, :root[data-theme="cinematic-fantasy-cartographer"] *::before, :root[data-theme="cinematic-fantasy-cartographer"] *::after { animation: none !important; transition: none !important; } }
+@media (forced-colors: active) { :root[data-theme="cinematic-fantasy-cartographer"] { --background: Canvas; --surface: Canvas; --surface-emphasis: Canvas; --text: CanvasText; --muted: CanvasText; --border: CanvasText; --accent: Highlight; --accent-strong: Highlight; --focus: Highlight; } :root[data-theme="cinematic-fantasy-cartographer"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups) { background: Canvas; box-shadow: none; } :root[data-theme="cinematic-fantasy-cartographer"] .site-header::after { display: none; } }

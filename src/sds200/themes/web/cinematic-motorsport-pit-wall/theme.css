@@ -1,0 +1,29 @@
+/* Original motorsport telemetry and pit-wall presentation. */
+:root[data-theme="cinematic-motorsport-pit-wall"] {
+  color-scheme: dark;
+  --background: #0d0f11; --surface: #171a1d; --surface-emphasis: #22262a;
+  --text: #f2f4f5; --muted: #a9b0b5; --border: #545c62;
+  --accent: #e3433e; --accent-strong: #ff7771; --success: #5bd486;
+  --warning: #ffd34f; --danger: #ff5f59; --focus: #ffffff;
+  --shadow: 0 0.85rem 2rem rgb(0 0 0 / 0.62); --radius-small: 0.08rem; --radius-large: 0.12rem;
+  --hold-field-background: #403714; --hold-field-border: #ffd34f; --hold-field-label: #ffe489; --hold-field-value: #ffffff;
+}
+:root[data-theme="cinematic-motorsport-pit-wall"] body { background: linear-gradient(45deg, rgb(255 255 255 / 0.018) 25%, transparent 25% 75%, rgb(255 255 255 / 0.018) 75%), linear-gradient(45deg, rgb(255 255 255 / 0.018) 25%, transparent 25% 75%, rgb(255 255 255 / 0.018) 75%), radial-gradient(circle at 80% 0%, rgb(227 67 62 / 0.13), transparent 30%), #0d0f11; background-size: 1rem 1rem, 1rem 1rem, auto, auto; background-position: 0 0, 0.5rem 0.5rem, 0 0, 0 0; }
+:root[data-theme="cinematic-motorsport-pit-wall"] .site-header { position: relative; border: 1px solid #697178; border-left: 0.5rem solid var(--accent); border-radius: 0; background: linear-gradient(105deg, #282d31, #111416 72%); box-shadow: var(--shadow); }
+:root[data-theme="cinematic-motorsport-pit-wall"] .site-header::after { position: absolute; right: 1rem; bottom: 0.45rem; width: min(28rem, 36vw); height: 0.3rem; background: repeating-linear-gradient(90deg, #f3f4f4 0 0.65rem, #171a1d 0.65rem 1.3rem); content: ""; border-bottom: 0.12rem solid var(--accent); }
+:root[data-theme="cinematic-motorsport-pit-wall"] :is(.brand h1, .panel h2, .panel h3, .workspace-tabs [role="tab"]) { font-family: "Barlow Condensed", sans-serif; letter-spacing: 0.1em; text-transform: uppercase; }
+:root[data-theme="cinematic-motorsport-pit-wall"] .workspace-shell { border: 1px solid #697178; border-radius: 0; background: #111416; box-shadow: var(--shadow); }
+:root[data-theme="cinematic-motorsport-pit-wall"] .workspace-tabs { border-bottom: 2px solid #697178; background: #1d2124; }
+:root[data-theme="cinematic-motorsport-pit-wall"] .workspace-tabs [role="tab"] { border-color: #545c62; border-radius: 0; background: linear-gradient(#30363a, #181c1f); color: var(--muted); }
+:root[data-theme="cinematic-motorsport-pit-wall"] .workspace-tabs [role="tab"][aria-selected="true"] { border-color: var(--accent-strong); background: linear-gradient(100deg, #ffd34f 0 0.3rem, #a52d2a 0.3rem); color: #fff; }
+:root[data-theme="cinematic-motorsport-pit-wall"] .workspace-deck { background: linear-gradient(#1a1e21, #090b0c); }
+:root[data-theme="cinematic-motorsport-pit-wall"] [data-workspace-pane] { border-color: #41484d; background: rgb(13 15 17 / 0.84); }
+:root[data-theme="cinematic-motorsport-pit-wall"] .panel { border: 1px solid #545c62; border-top: 0.28rem solid var(--accent); border-radius: 0; background: linear-gradient(135deg, rgb(227 67 62 / 0.06), transparent 30%), #181c1f; box-shadow: 0 0.6rem 1.3rem rgb(0 0 0 / 0.5); }
+:root[data-theme="cinematic-motorsport-pit-wall"] #radio-activity-panel { border-color: #798289; border-top-color: var(--warning); background: linear-gradient(90deg, rgb(227 67 62 / 0.1), transparent 50%), #101214; }
+:root[data-theme="cinematic-motorsport-pit-wall"] .radio-view-controls { border: 1px solid #545c62; border-left: 0.35rem solid var(--warning); border-radius: 0; background: #1d2124; }
+:root[data-theme="cinematic-motorsport-pit-wall"] .radio-field-groups { border-color: #41484d; background: rgb(227 67 62 / 0.035); }
+:root[data-theme="cinematic-motorsport-pit-wall"] :is(button, .recording-action, select, input, textarea) { border-color: #697178; border-radius: 0; background: linear-gradient(#343a3e, #191c1f); color: var(--text); }
+:root[data-theme="cinematic-motorsport-pit-wall"] :is(button, .recording-action):hover:not(:disabled) { border-color: var(--accent-strong); background: #6c2928; }
+:root[data-theme="cinematic-motorsport-pit-wall"] .status-badge { border-radius: 0; letter-spacing: 0.1em; text-transform: uppercase; }
+@media (prefers-reduced-motion: reduce) { :root[data-theme="cinematic-motorsport-pit-wall"] *, :root[data-theme="cinematic-motorsport-pit-wall"] *::before, :root[data-theme="cinematic-motorsport-pit-wall"] *::after { animation: none !important; transition: none !important; } }
+@media (forced-colors: active) { :root[data-theme="cinematic-motorsport-pit-wall"] { --background: Canvas; --surface: Canvas; --surface-emphasis: Canvas; --text: CanvasText; --muted: CanvasText; --border: CanvasText; --accent: Highlight; --accent-strong: Highlight; --focus: Highlight; } :root[data-theme="cinematic-motorsport-pit-wall"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups) { background: Canvas; box-shadow: none; } :root[data-theme="cinematic-motorsport-pit-wall"] .site-header::after { display: none; } }

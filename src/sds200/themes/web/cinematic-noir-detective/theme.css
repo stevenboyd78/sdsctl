@@ -1,0 +1,29 @@
+/* Original monochrome case-file presentation. */
+:root[data-theme="cinematic-noir-detective"] {
+  color-scheme: dark;
+  --background: #11110f; --surface: #1c1c19; --surface-emphasis: #292824;
+  --text: #eee9dc; --muted: #b5afa1; --border: #68655d;
+  --accent: #d3b778; --accent-strong: #ead39e; --success: #8ab18d;
+  --warning: #d9bd66; --danger: #c8706d; --focus: #fff2c8;
+  --shadow: 0 1rem 2.4rem rgb(0 0 0 / 0.64); --radius-small: 0.06rem; --radius-large: 0.1rem;
+  --hold-field-background: #3c341b; --hold-field-border: #d9bd66; --hold-field-label: #ebd17f; --hold-field-value: #ffffff;
+}
+:root[data-theme="cinematic-noir-detective"] body { background: radial-gradient(ellipse at 20% 0%, rgb(211 183 120 / 0.12), transparent 26%), radial-gradient(ellipse at 50% 50%, transparent 35%, rgb(0 0 0 / 0.38) 100%), repeating-linear-gradient(0deg, rgb(255 255 255 / 0.018) 0 1px, transparent 1px 4px), #11110f; }
+:root[data-theme="cinematic-noir-detective"] .site-header { position: relative; border: 1px solid #77736a; border-radius: 0; background: linear-gradient(115deg, #35332e, #171714 72%); box-shadow: var(--shadow); }
+:root[data-theme="cinematic-noir-detective"] .site-header::after { position: absolute; right: 1rem; bottom: 0.5rem; width: min(26rem, 34vw); height: 1px; background: linear-gradient(90deg, transparent, #d3b778 20% 80%, transparent); content: ""; box-shadow: 0 0 0.5rem #d3b778; }
+:root[data-theme="cinematic-noir-detective"] :is(.brand h1, .panel h2, .panel h3) { font-family: Georgia, "Times New Roman", serif; letter-spacing: 0.055em; }
+:root[data-theme="cinematic-noir-detective"] .workspace-shell { border: 1px solid #77736a; border-radius: 0; background: #161613; box-shadow: var(--shadow); }
+:root[data-theme="cinematic-noir-detective"] .workspace-tabs { border-bottom: 1px solid #77736a; background: #24231f; }
+:root[data-theme="cinematic-noir-detective"] .workspace-tabs [role="tab"] { border-color: #68655d; border-radius: 0; background: linear-gradient(#34332e, #1c1c19); color: var(--muted); font-family: Georgia, "Times New Roman", serif; }
+:root[data-theme="cinematic-noir-detective"] .workspace-tabs [role="tab"][aria-selected="true"] { border-color: var(--accent-strong); background: linear-gradient(100deg, #d3b778 0 0.24rem, #514a3a 0.24rem); color: #fff; }
+:root[data-theme="cinematic-noir-detective"] .workspace-deck { background: linear-gradient(#20201c, #0d0d0b); }
+:root[data-theme="cinematic-noir-detective"] [data-workspace-pane] { border-color: #4e4c46; background: rgb(17 17 15 / 0.84); }
+:root[data-theme="cinematic-noir-detective"] .panel { border: 1px solid #68655d; border-left: 0.22rem solid var(--accent); border-radius: 0; background: linear-gradient(135deg, rgb(211 183 120 / 0.055), transparent 32%), #20201c; box-shadow: 0 0.65rem 1.4rem rgb(0 0 0 / 0.5); }
+:root[data-theme="cinematic-noir-detective"] #radio-activity-panel { border-color: #8c877c; border-left-color: var(--warning); background: radial-gradient(ellipse at 13% 0%, rgb(211 183 120 / 0.1), transparent 30%), #141411; }
+:root[data-theme="cinematic-noir-detective"] .radio-view-controls { border: 1px solid #68655d; border-radius: 0; background: #24231f; }
+:root[data-theme="cinematic-noir-detective"] .radio-field-groups { border-color: #4e4c46; background: rgb(211 183 120 / 0.035); }
+:root[data-theme="cinematic-noir-detective"] :is(button, .recording-action, select, input, textarea) { border-color: #77736a; border-radius: 0; background: linear-gradient(#393832, #1d1d19); color: var(--text); }
+:root[data-theme="cinematic-noir-detective"] :is(button, .recording-action):hover:not(:disabled) { border-color: var(--accent-strong); background: #514a3a; }
+:root[data-theme="cinematic-noir-detective"] .status-badge { border-radius: 0; font-family: Georgia, "Times New Roman", serif; }
+@media (prefers-reduced-motion: reduce) { :root[data-theme="cinematic-noir-detective"] *, :root[data-theme="cinematic-noir-detective"] *::before, :root[data-theme="cinematic-noir-detective"] *::after { animation: none !important; transition: none !important; } }
+@media (forced-colors: active) { :root[data-theme="cinematic-noir-detective"] { --background: Canvas; --surface: Canvas; --surface-emphasis: Canvas; --text: CanvasText; --muted: CanvasText; --border: CanvasText; --accent: Highlight; --accent-strong: Highlight; --focus: Highlight; } :root[data-theme="cinematic-noir-detective"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups) { background: Canvas; box-shadow: none; } :root[data-theme="cinematic-noir-detective"] .site-header::after { display: none; } }

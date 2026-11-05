@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "interface": "web",
+  "id": "cinematic-carrier-air-wing",
+  "label": "Carrier Air Wing",
+  "order": 1140,
+  "stylesheet": "theme.css",
+  "color_scheme": "dark",
+  "theme_colors": {"light": "#07131e", "dark": "#07131e"}
+}

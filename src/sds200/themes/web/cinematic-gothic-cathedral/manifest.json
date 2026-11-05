@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "interface": "web",
+  "id": "cinematic-gothic-cathedral",
+  "label": "Gothic Cathedral",
+  "order": 1110,
+  "stylesheet": "theme.css",
+  "color_scheme": "dark",
+  "theme_colors": {"light": "#0f0d15", "dark": "#0f0d15"}
+}

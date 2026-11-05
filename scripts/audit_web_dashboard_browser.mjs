@@ -4,7 +4,7 @@
  * Run the dashboard and Home Assistant waterfall-card acceptance in one Chrome.
  *
  * This intentionally uses only Node built-ins and Chrome DevTools Protocol.
- * It writes no screenshots; the 26-image documentation gallery remains the
+ * It writes no screenshots; the 48-image documentation gallery remains the
  * responsibility of generate_web_dashboard_screenshots.py.
  */
 
@@ -25,6 +25,28 @@ export const THEMES = Object.freeze([
   "first-responder",
   "amateur-radio",
   "pip-boy-inspired",
+  "cinematic-mission-control",
+  "cinematic-cyberpunk-night",
+  "cinematic-synthwave",
+  "cinematic-cold-war-radar",
+  "cinematic-dieselpunk-command",
+  "cinematic-steampunk-telegraph",
+  "cinematic-retro-arcade",
+  "cinematic-y2k-media",
+  "cinematic-mecha-operations",
+  "cinematic-comic-book",
+  "cinematic-wizarding-archive",
+  "cinematic-gothic-cathedral",
+  "cinematic-fantasy-cartographer",
+  "cinematic-desert-empire",
+  "cinematic-carrier-air-wing",
+  "cinematic-motorsport-pit-wall",
+  "cinematic-noir-detective",
+  "cinematic-art-deco-radio",
+  "cinematic-solarpunk",
+  "cinematic-national-parks",
+  "cinematic-galactic-operations",
+  "cinematic-tactical-field",
 ]);
 
 export const VIEWPORTS = Object.freeze([
@@ -89,7 +111,7 @@ const HELP = `\
 Usage: node scripts/audit_web_dashboard_browser.mjs [options]
 
 Run the deterministic dashboard and Home Assistant waterfall-card browser audit in one local
-Chrome/Chromium session. The audit writes no PNGs. It covers all 144 built-in
+Chrome/Chromium session. The audit writes no PNGs. It covers all 672 built-in
 theme × reference CSS viewport × workspace pane cases, all 189 explicit System
 palette responsive cases, plus media-preference, enlarged-text,
 pagination-focus, trusted Tab/Shift+Tab traversal, WCAG AA contrast, complete
@@ -110,7 +132,7 @@ Options:
   --waterfall-only    Run only the Home Assistant waterfall-card regression/lifecycle audit
   --waterfall-screenshot-dir PATH
                       Write three sanitized waterfall-card reference PNGs
-  --list              List the 144 matrix cases without opening Chrome
+  --list              List the 672 matrix cases without opening Chrome
   -h, --help          Show this help and exit
 
 The default command requires Node.js 24 or newer, starts the existing fictional-data server from
@@ -4289,7 +4311,7 @@ async function run(options) {
     console.log(`Chrome: ${chrome}`);
     console.log(`Demo server: ${baseUrl}`);
     if (options.waterfallScreenshotDirectory === null) {
-      console.log("Screenshots: disabled (the 26-image gallery is unchanged)");
+      console.log("Screenshots: disabled (the 48-image gallery is unchanged)");
     } else {
       await mkdir(options.waterfallScreenshotDirectory, {recursive: true});
       console.log(`Waterfall card screenshots: ${options.waterfallScreenshotDirectory}`);
@@ -4360,9 +4382,9 @@ async function run(options) {
         "pagination focus, WCAG AA normal/forced-color contrast, reduced motion, " +
         "enlarged-text scrolling escape, DPR changes, 12 phone recording font " +
         `variants, ${result.lcarsNavigationTransitionCases} LCARS navigation-breakpoint ` +
-        "cases, prefixed URLs, all 18 " +
+        `cases, prefixed URLs, all ${result.ingressHomeAssistantCases} ` +
         `Ingress-only Home Assistant workspaces, ${result.systemPaletteCases} ` +
-        "responsive System-palette cases, all 18 read-only Ingress " +
+        `responsive System-palette cases, all ${result.ingressDiagnosticsCases} read-only Ingress ` +
         "Diagnostics layouts, browser Waterfall duration/pointer controls, and " +
         `${waterfallCard.viewportCases} responsive Home Assistant waterfall-card ` +
         "viewports with elapsed history, display-only pointer input, shared " +

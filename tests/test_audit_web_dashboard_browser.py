@@ -84,7 +84,7 @@ def test_browser_audit_help_documents_scope_and_dependencies() -> None:
     assert completed.returncode == 0
     assert completed.stderr == ""
     for contract in (
-        "all 144 built-in",
+        "all 672 built-in",
         "writes no PNGs",
         "enlarged-text",
         "pagination-focus",
@@ -121,8 +121,8 @@ def test_browser_audit_list_is_the_complete_cartesian_matrix() -> None:
     assert completed.stderr == ""
     lines = completed.stdout.splitlines()
     cases = lines[:-1]
-    assert len(cases) == 144
-    assert lines[-1] == "Matrix cases: 144; screenshots written: 0"
+    assert len(cases) == 672
+    assert lines[-1] == "Matrix cases: 672; screenshots written: 0"
 
     themes = {
         "system",
@@ -131,6 +131,28 @@ def test_browser_audit_list_is_the_complete_cartesian_matrix() -> None:
         "first-responder",
         "amateur-radio",
         "pip-boy-inspired",
+        "cinematic-mission-control",
+        "cinematic-cyberpunk-night",
+        "cinematic-synthwave",
+        "cinematic-cold-war-radar",
+        "cinematic-dieselpunk-command",
+        "cinematic-steampunk-telegraph",
+        "cinematic-retro-arcade",
+        "cinematic-y2k-media",
+        "cinematic-mecha-operations",
+        "cinematic-comic-book",
+        "cinematic-wizarding-archive",
+        "cinematic-gothic-cathedral",
+        "cinematic-fantasy-cartographer",
+        "cinematic-desert-empire",
+        "cinematic-carrier-air-wing",
+        "cinematic-motorsport-pit-wall",
+        "cinematic-noir-detective",
+        "cinematic-art-deco-radio",
+        "cinematic-solarpunk",
+        "cinematic-national-parks",
+        "cinematic-galactic-operations",
+        "cinematic-tactical-field",
     }
     viewports = {
         "viewport=1920x1080@1",
@@ -156,7 +178,7 @@ def test_browser_audit_list_is_the_complete_cartesian_matrix() -> None:
         token for line in cases for token in line.split() if token.startswith("viewport=")
     } == viewports
     assert {token for line in cases for token in line.split() if token.startswith("pane=")} == panes
-    assert len(set(cases)) == 144
+    assert len(set(cases)) == 672
 
 
 def test_browser_audit_rejects_invalid_arguments_without_opening_chrome() -> None:

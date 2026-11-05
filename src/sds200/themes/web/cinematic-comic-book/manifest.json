@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "interface": "web",
+  "id": "cinematic-comic-book",
+  "label": "Comic Book",
+  "order": 1090,
+  "stylesheet": "theme.css",
+  "color_scheme": "light",
+  "theme_colors": {"light": "#f5e9c9", "dark": "#f5e9c9"}
+}

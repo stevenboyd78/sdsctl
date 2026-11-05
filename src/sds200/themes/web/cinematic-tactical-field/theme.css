@@ -1,0 +1,148 @@
+/* Original field-operations presentation with restrained topographic camouflage. */
+:root[data-theme="cinematic-tactical-field"] {
+  color-scheme: dark;
+  --background: #10140d;
+  --surface: #1c2417;
+  --surface-emphasis: #293321;
+  --text: #eef0dc;
+  --muted: #b7b99d;
+  --border: #62694c;
+  --accent: #b8c779;
+  --accent-strong: #dbe79f;
+  --success: #89cf80;
+  --warning: #e6c75a;
+  --danger: #e17a63;
+  --focus: #f4f7bd;
+  --shadow: 0 0.8rem 1.8rem rgb(0 0 0 / 0.48);
+  --radius-small: 0.1rem;
+  --radius-large: 0.15rem;
+  --hold-field-background: #3b3518;
+  --hold-field-border: #e6c75a;
+  --hold-field-label: #f2da82;
+  --hold-field-value: #ffffff;
+}
+
+:root[data-theme="cinematic-tactical-field"] body {
+  background:
+    radial-gradient(ellipse at 18% 22%, rgb(85 98 57 / 0.24) 0 9%, transparent 10%),
+    radial-gradient(ellipse at 82% 63%, rgb(94 83 50 / 0.2) 0 11%, transparent 12%),
+    repeating-linear-gradient(90deg, rgb(184 199 121 / 0.035) 0 1px, transparent 1px 3rem),
+    repeating-linear-gradient(0deg, rgb(184 199 121 / 0.03) 0 1px, transparent 1px 3rem),
+    #10140d;
+  background-size: 21rem 17rem, 24rem 19rem, auto, auto, auto;
+}
+
+:root[data-theme="cinematic-tactical-field"] .site-header {
+  border: 1px solid #73795a;
+  border-radius: 0;
+  background: linear-gradient(110deg, #303b26, #151b12 72%);
+  box-shadow: var(--shadow);
+}
+
+:root[data-theme="cinematic-tactical-field"] .site-header::after {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.45rem;
+  width: min(26rem, 34vw);
+  height: 0.2rem;
+  background: repeating-linear-gradient(90deg, #b8c779 0 1.7rem, transparent 1.7rem 2rem);
+  content: "";
+}
+
+:root[data-theme="cinematic-tactical-field"] :is(.brand h1, .panel h2, .panel h3, .workspace-tabs [role="tab"]) {
+  font-family: "Barlow Condensed", sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+:root[data-theme="cinematic-tactical-field"] .workspace-shell {
+  border: 1px solid #73795a;
+  border-radius: 0;
+  background: #151b12;
+  box-shadow: 0 0 0 1px rgb(184 199 121 / 0.07) inset, var(--shadow);
+}
+
+:root[data-theme="cinematic-tactical-field"] .workspace-tabs {
+  border-bottom: 2px solid #62694c;
+  background: #1a2216;
+}
+
+:root[data-theme="cinematic-tactical-field"] .workspace-tabs [role="tab"] {
+  border-color: #62694c;
+  border-radius: 0;
+  background: #273120;
+  color: var(--muted);
+}
+
+:root[data-theme="cinematic-tactical-field"] .workspace-tabs [role="tab"][aria-selected="true"] {
+  border-color: var(--accent-strong);
+  background: linear-gradient(100deg, #89964e 0 0.3rem, #3b482b 0.3rem 100%);
+  color: #ffffff;
+}
+
+:root[data-theme="cinematic-tactical-field"] .workspace-deck {
+  background: linear-gradient(145deg, rgb(48 59 38 / 0.54), rgb(12 16 10 / 0.75));
+}
+
+:root[data-theme="cinematic-tactical-field"] [data-workspace-pane] {
+  border-color: #4b533c;
+  background: rgb(16 20 13 / 0.78);
+}
+
+:root[data-theme="cinematic-tactical-field"] .panel {
+  position: relative;
+  border: 1px solid #62694c;
+  border-left: 0.28rem solid var(--accent);
+  border-radius: 0;
+  background:
+    linear-gradient(135deg, rgb(184 199 121 / 0.06), transparent 30%),
+    #20281a;
+  box-shadow: 0 0.55rem 1.25rem rgb(0 0 0 / 0.36);
+}
+
+:root[data-theme="cinematic-tactical-field"] #radio-activity-panel {
+  border-color: #90996b;
+  border-left-color: var(--warning);
+  background: linear-gradient(90deg, rgb(184 199 121 / 0.1), transparent 48%), #151c12;
+}
+
+:root[data-theme="cinematic-tactical-field"] .radio-view-controls {
+  border: 1px solid #62694c;
+  border-radius: 0;
+  background: #20281a;
+}
+
+:root[data-theme="cinematic-tactical-field"] .radio-field-groups {
+  border-color: #4b533c;
+  background: rgb(184 199 121 / 0.045);
+}
+
+:root[data-theme="cinematic-tactical-field"] :is(button, .recording-action, select, input, textarea) {
+  border-color: #73795a;
+  border-radius: 0;
+  background: linear-gradient(#37442a, #20281a);
+  color: var(--text);
+}
+
+:root[data-theme="cinematic-tactical-field"] :is(button, .recording-action):hover:not(:disabled) {
+  border-color: var(--accent-strong);
+  background: #455633;
+}
+
+:root[data-theme="cinematic-tactical-field"] .status-badge {
+  border-radius: 0;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="cinematic-tactical-field"] *,
+  :root[data-theme="cinematic-tactical-field"] *::before,
+  :root[data-theme="cinematic-tactical-field"] *::after { animation: none !important; transition: none !important; }
+}
+
+@media (forced-colors: active) {
+  :root[data-theme="cinematic-tactical-field"] { --background: Canvas; --surface: Canvas; --surface-emphasis: Canvas; --text: CanvasText; --muted: CanvasText; --border: CanvasText; --accent: Highlight; --accent-strong: Highlight; --focus: Highlight; }
+  :root[data-theme="cinematic-tactical-field"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups) { background: Canvas; box-shadow: none; }
+  :root[data-theme="cinematic-tactical-field"] .site-header::after { display: none; }
+}

@@ -37,6 +37,7 @@ from sds200.web_dashboard import (
     WEB_DASHBOARD_UNAVAILABLE_DETAIL,
     create_web_dashboard_app,
 )
+from sds200.web_themes import BUILT_IN_WEB_THEME_IDS, built_in_web_theme_registry
 
 
 class FakeDaemonApiClient:
@@ -676,17 +677,15 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
         '<option value="pip-boy-inspired">Pip-Boy-inspired</option>'
         in response.text
     )
+    for theme in built_in_web_theme_registry().themes:
+        assert (
+            f'<option value="{theme.identifier}">{theme.label}</option>'
+            in response.text
+        )
     assert 'src="assets/theme-bootstrap.js"' in response.text
     assert 'href="assets/dashboard.css"' in response.text
     assert 'href="assets/system-palettes.css"' in response.text
-    for theme in (
-        "system",
-        "lcars",
-        "matrix",
-        "first-responder",
-        "amateur-radio",
-        "pip-boy-inspired",
-    ):
+    for theme in BUILT_IN_WEB_THEME_IDS:
         assert f'href="assets/themes/{theme}/theme.css"' in response.text
     assert response.text.index('href="assets/dashboard.css"') < response.text.index(
         'href="assets/themes/system/theme.css"'
@@ -694,6 +693,9 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
     assert response.text.index('href="assets/themes/pip-boy-inspired/theme.css"') < (
         response.text.index('href="assets/system-palettes.css"')
     )
+    assert response.text.index(
+        'href="assets/themes/cinematic-tactical-field/theme.css"'
+    ) < response.text.index('href="assets/system-palettes.css"')
     assert response.text.index('href="assets/system-palettes.css"') < (
         response.text.index('href="assets/dashboard-viewport.css"')
     )
@@ -719,14 +721,7 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
         system_palette_stylesheet = client.get("/assets/system-palettes.css")
         theme_stylesheets = {
             theme: client.get(f"/assets/themes/{theme}/theme.css")
-            for theme in (
-                "system",
-                "lcars",
-                "matrix",
-                "first-responder",
-                "amateur-radio",
-                "pip-boy-inspired",
-            )
+            for theme in BUILT_IN_WEB_THEME_IDS
         }
         theme_bootstrap = client.get("/assets/theme-bootstrap.js")
         script = client.get("/assets/dashboard.js")
@@ -931,6 +926,8 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert '"matrix"' in theme_bootstrap.text
     assert '"first-responder"' in theme_bootstrap.text
     assert '"amateur-radio"' in theme_bootstrap.text
+    for theme in BUILT_IN_WEB_THEME_IDS:
+        assert json.dumps(theme) in theme_bootstrap.text
     assert "localStorage.getItem" in theme_bootstrap.text
     assert "localStorage.setItem" in theme_bootstrap.text
     assert "document.documentElement.dataset.theme" in theme_bootstrap.text

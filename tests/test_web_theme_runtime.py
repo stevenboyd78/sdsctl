@@ -17,7 +17,7 @@ from sds200.web_theme_runtime import (
     build_web_theme_runtime,
     read_web_theme_stylesheet,
 )
-from sds200.web_themes import WebThemeError
+from sds200.web_themes import BUILT_IN_WEB_THEME_IDS, WebThemeError
 
 
 class ForbiddenDaemonClient:
@@ -74,14 +74,7 @@ def _app(root: Path) -> FastAPI:
 def test_runtime_defaults_to_exact_built_in_registry() -> None:
     runtime = build_web_theme_runtime()
 
-    assert runtime.registry.identifiers == (
-        "system",
-        "lcars",
-        "matrix",
-        "first-responder",
-        "amateur-radio",
-        "pip-boy-inspired",
-    )
+    assert runtime.registry.identifiers == BUILT_IN_WEB_THEME_IDS
     assert runtime.managed_identifiers == ()
     assert runtime.ignored_managed_entries == 0
     assert all(asset.origin == "built-in" for asset in runtime.assets)
@@ -112,10 +105,7 @@ def test_runtime_merges_valid_web_theme_in_manifest_order(tmp_path: Path) -> Non
         "system",
         "lcars",
         "solarized",
-        "matrix",
-        "first-responder",
-        "amateur-radio",
-        "pip-boy-inspired",
+        *BUILT_IN_WEB_THEME_IDS[2:],
     )
     assert runtime.managed_identifiers == ("solarized",)
     asset = runtime.require_asset("solarized")

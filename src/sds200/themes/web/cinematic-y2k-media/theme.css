@@ -1,0 +1,29 @@
+/* Original translucent early-digital media-center presentation. */
+:root[data-theme="cinematic-y2k-media"] {
+  color-scheme: light;
+  --background: #dce9f2; --surface: #f4fbff; --surface-emphasis: #d0e7f4;
+  --text: #102a3d; --muted: #49677b; --border: #7da6bd;
+  --accent: #176fa8; --accent-strong: #0b5689; --success: #217a56;
+  --warning: #91620d; --danger: #b93646; --focus: #003f69;
+  --shadow: 0 0.8rem 2rem rgb(38 82 110 / 0.23); --radius-small: 0.75rem; --radius-large: 1rem;
+  --hold-field-background: #fff1b9; --hold-field-border: #91620d; --hold-field-label: #714b07; --hold-field-value: #102a3d;
+}
+:root[data-theme="cinematic-y2k-media"] body { background: radial-gradient(circle at 17% 8%, rgb(255 255 255 / 0.9), transparent 28%), linear-gradient(135deg, rgb(77 176 224 / 0.18), transparent 42%), repeating-linear-gradient(90deg, rgb(23 111 168 / 0.04) 0 1px, transparent 1px 4rem), #dce9f2; }
+:root[data-theme="cinematic-y2k-media"] .site-header { position: relative; border: 1px solid #8eb7cc; border-radius: 1rem; background: linear-gradient(145deg, rgb(255 255 255 / 0.92), rgb(181 219 239 / 0.82)); box-shadow: 0 1px 0 #fff inset, var(--shadow); }
+:root[data-theme="cinematic-y2k-media"] .site-header::after { position: absolute; right: 1.2rem; bottom: 0.55rem; width: min(25rem, 33vw); height: 0.35rem; border-radius: 999px; background: linear-gradient(90deg, #176fa8, #7cc9ed 55%, #d0f3ff); content: ""; box-shadow: 0 1px 0 #fff inset; }
+:root[data-theme="cinematic-y2k-media"] :is(.brand h1, .panel h2, .panel h3) { font-family: "Atkinson Hyperlegible Next", sans-serif; letter-spacing: 0.025em; }
+:root[data-theme="cinematic-y2k-media"] .workspace-shell { border: 1px solid #8eb7cc; border-radius: 1rem; background: rgb(244 251 255 / 0.82); box-shadow: 0 1px 0 #fff inset, var(--shadow); }
+:root[data-theme="cinematic-y2k-media"] .workspace-tabs { border-bottom: 1px solid #8eb7cc; background: rgb(210 232 244 / 0.85); }
+:root[data-theme="cinematic-y2k-media"] .workspace-tabs [role="tab"] { border-color: #8eb7cc; border-radius: 999px; background: linear-gradient(#ffffff, #c5e1ef); color: var(--muted); }
+:root[data-theme="cinematic-y2k-media"] .workspace-tabs [role="tab"][aria-selected="true"] { border-color: #0b5689; background-color: #176fa8; background-image: linear-gradient(#5cb4e0, #176fa8); color: #fff; box-shadow: 0 1px 0 rgb(255 255 255 / 0.65) inset; }
+:root[data-theme="cinematic-y2k-media"] .workspace-deck { background: linear-gradient(rgb(240 249 254 / 0.85), rgb(190 221 238 / 0.72)); }
+:root[data-theme="cinematic-y2k-media"] [data-workspace-pane] { border-color: #9bbdd0; background: rgb(244 251 255 / 0.76); }
+:root[data-theme="cinematic-y2k-media"] .panel { border: 1px solid #8eb7cc; border-radius: 0.85rem; background: linear-gradient(145deg, rgb(255 255 255 / 0.92), rgb(214 235 246 / 0.82)); box-shadow: 0 1px 0 #fff inset, 0 0.55rem 1.2rem rgb(38 82 110 / 0.18); }
+:root[data-theme="cinematic-y2k-media"] #radio-activity-panel { border-color: #5e94b1; background: linear-gradient(90deg, rgb(23 111 168 / 0.1), transparent 50%), #edf8fd; }
+:root[data-theme="cinematic-y2k-media"] .radio-view-controls { border: 1px solid #8eb7cc; border-radius: 0.8rem; background: rgb(222 239 248 / 0.9); }
+:root[data-theme="cinematic-y2k-media"] .radio-field-groups { border-color: #9bbdd0; background: rgb(23 111 168 / 0.04); }
+:root[data-theme="cinematic-y2k-media"] :is(button, .recording-action, select, input, textarea) { border-color: #7da6bd; border-radius: 999px; background: linear-gradient(#ffffff, #c7e1ef); color: var(--text); }
+:root[data-theme="cinematic-y2k-media"] :is(button, .recording-action):hover:not(:disabled):not([aria-selected="true"]) { border-color: #0b5689; background: #d9f3ff; }
+:root[data-theme="cinematic-y2k-media"] .status-badge { border-radius: 999px; }
+@media (prefers-reduced-motion: reduce) { :root[data-theme="cinematic-y2k-media"] *, :root[data-theme="cinematic-y2k-media"] *::before, :root[data-theme="cinematic-y2k-media"] *::after { animation: none !important; transition: none !important; } }
+@media (forced-colors: active) { :root[data-theme="cinematic-y2k-media"] { --background: Canvas; --surface: Canvas; --surface-emphasis: Canvas; --text: CanvasText; --muted: CanvasText; --border: CanvasText; --accent: Highlight; --accent-strong: Highlight; --focus: Highlight; } :root[data-theme="cinematic-y2k-media"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups) { background: Canvas; box-shadow: none; } :root[data-theme="cinematic-y2k-media"] .site-header::after { display: none; } }
