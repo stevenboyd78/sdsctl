@@ -48,6 +48,12 @@ def wait_for(predicate):
         time.sleep(0.01)
 
 
+def publish_release(directory, outcome):
+    pending = directory / "release.pending"
+    pending.write_text(outcome)
+    os.replace(pending, directory / "release")
+
+
 @pytest.fixture
 def trial(tmp_path):
     directory = tmp_path / "guard"
@@ -77,7 +83,7 @@ def trial(tmp_path):
         # Let the owned guardian clean up its child; never target a saved PID.
         if process.poll() is None:
             (directory / "publish-ready").touch()
-            (directory / "release").write_text("operator_wait_expired")
+            publish_release(directory, "operator_wait_expired")
             process.wait(timeout=6)
         process.stdout.close()
         process.stderr.close()
@@ -94,7 +100,7 @@ def bind(trial):
 
 def finish(trial, outcome="window_expired"):
     directory, process = trial
-    (directory / "release").write_text(outcome)
+    publish_release(directory, outcome)
     assert process.wait(timeout=6) == 0
 
 
@@ -229,7 +235,7 @@ def test_actual_staged_outer_supervisor_handles_only_verified_completion(
     children = iter((process, web))
     (directory / "publish-ready").touch()
     wait_for(lambda: (directory / "daemon-case/ready.json").exists())
-    timer = Timer(0.3, lambda: (directory / "release").write_text("window_expired"))
+    timer = Timer(0.3, lambda: publish_release(directory, "window_expired"))
     timer.start()
     if sibling_failed:
         web.returncode = 4

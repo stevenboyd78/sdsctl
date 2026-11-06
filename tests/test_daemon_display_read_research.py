@@ -488,7 +488,13 @@ def test_unexpected_sqk_reply_shape_is_evidence_not_a_guessed_layout(scanner, mo
     assert scanner.scope_depth == scanner.hooks == 0 and scanner.producer is None
 
 
-def test_invalid_rtc_is_reported_as_invalid_without_an_invented_clock(scanner):
+def test_invalid_rtc_is_reported_as_invalid_without_an_invented_clock(scanner, monkeypatch):
+    # This checks invalid RTC parsing, not background-thread startup latency.
+    # Keep the attempt clock deterministic while the real producer supplies
+    # the required post-response continuity frames.
+    ticks = count(10.0, 0.001)
+    monkeypatch.setattr("sds200.daemon_display_read_research.monotonic", lambda: next(ticks))
+
     scanner.fields_override = ("0", "0000", "00", "00", "00", "00", "00", "0")
     result = attempt().run(scanner, operator_ready=True, timeout=0.1)
     assert result.status == "reply_and_psi_observed"
