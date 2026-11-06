@@ -436,6 +436,8 @@ def test_constructed_native_run_records_real_loopback_rtp_and_obeys_explicit_gat
                         assert len(rtsp.started_ports) == 1 and not scanner.reads
                         assert not trial.manager.snapshot().active
                         with connect(spec.sockets / "api.sock") as peer:
+                            # Allow a loaded runner to schedule the synthetic API server.
+                            peer.settimeout(10.0)
                             assert (
                                 assembly.query(peer, Op.RECORDING_STATUS)["result"]["active"]
                                 is False
