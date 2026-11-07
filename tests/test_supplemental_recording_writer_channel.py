@@ -29,6 +29,8 @@ from . import test_supplemental_recording_peer_listener as preparation_listeners
 from . import test_supplemental_recording_permission_probe as preflight_probe
 from . import test_supplemental_recording_service_runtime_expectations as declared
 from . import test_supplemental_recording_startup_assembly as assembly
+from ._supplemental_failure_diagnostics import failure_locations
+from ._supplemental_fixture_clock import compressed_scheduler_time
 
 NAME = "supplemental_recording_writer_channel"
 SPEC = importlib.util.spec_from_file_location(
@@ -250,9 +252,81 @@ COMMAND_OUTER = (
 )
 
 
+def fixture_prepared_inputs(action, monkeypatch):
+    """Exclude runner scheduling from this broad synthetic input join."""
+
+    clock = prep.domains.clock
+    read = clock.read
+
+    def sampled():
+        error = None
+        for _ in range(10):
+            try:
+                return read()
+            except clock.UnconfirmedClock as observed:
+                error = observed
+        assert error is not None
+        raise error
+
+    with monkeypatch.context() as patch:
+        patch.setattr(clock, "read", sampled)
+        with compressed_scheduler_time(patch):
+            return action()
+
+
+def preparation_diagnostics(patches):
+    """Attach only the first bounded source location behind refusal sanitation."""
+
+    cleanup = prep._cleanup
+
+    def retire(callbacks, problem):
+        try:
+            return cleanup(callbacks, problem)
+        except Exception as error:
+            if problem is not None:
+                locations = failure_locations(problem)
+                if locations:
+                    error.add_note(locations)
+            raise
+
+    patches.setattr(prep, "_cleanup", retire)
+
+
+def test_prepared_input_fixture_compresses_only_receiver_scheduler_time(monkeypatch):
+    wall = [100.0]
+    clock = prep.domains.clock
+    samples = []
+    observed = []
+    expected = object()
+
+    monkeypatch.setattr(time, "monotonic", lambda: wall[0])
+
+    def descheduled():
+        samples.append(None)
+        if len(samples) == 1:
+            raise clock.UnconfirmedClock(clock.MESSAGE)
+        return expected
+
+    monkeypatch.setattr(clock, "read", descheduled)
+
+    def action():
+        began = time.monotonic()
+        wall[0] += 3.0  # Synthetic runner pause, not a production timeout change.
+        observed.append((began, time.monotonic()))
+        return clock.read()
+
+    assert fixture_prepared_inputs(action, monkeypatch) is expected
+    began, ended = observed[0]
+    assert began < ended < began + 0.001
+    assert samples == [None, None]
+    assert time.monotonic() == 103.0
+    assert clock.read is descheduled
+
+
 @pytest.fixture
 def connection(service_case, monkeypatch, request):
     s = service_case
+    preparation_diagnostics(monkeypatch)
     monkeypatch.setattr(m.bootstrap, "ROOT_UID", os.geteuid())
     monkeypatch.setattr(m.bootstrap.links, "ROOT_UID", os.geteuid())
     monkeypatch.setattr(connections.m, "ROOT_UID", os.geteuid())
@@ -457,15 +531,18 @@ def connection(service_case, monkeypatch, request):
                     prep_root, outer_witness, deadline=time.monotonic() + 2
                 )
                 prep_stack.callback(prep_connection.close)
-                input_owner, observer_witness = prep_stack.enter_context(
-                    prep.receive_inputs(
-                        s.declaration,
-                        prep_connection,
-                        prep_clock,
-                        identities[os.getpid()],
-                        role="writer",
-                        baseline_sha256=baseline_pin,
-                    )
+                input_owner, observer_witness = fixture_prepared_inputs(
+                    lambda: prep_stack.enter_context(
+                        prep.receive_inputs(
+                            s.declaration,
+                            prep_connection,
+                            prep_clock,
+                            identities[os.getpid()],
+                            role="writer",
+                            baseline_sha256=baseline_pin,
+                        )
+                    ),
+                    monkeypatch,
                 )
                 prepared_receipt = json.loads(transport.line(outer))
                 assert prepared_receipt["prepared"]
