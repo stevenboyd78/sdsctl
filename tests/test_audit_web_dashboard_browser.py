@@ -103,6 +103,7 @@ def test_browser_audit_help_documents_scope_and_dependencies() -> None:
         "final-stream cleanup",
         "--waterfall-only",
         "--waterfall-screenshot-dir",
+        "--startup-timeout-ms",
         "three sanitized waterfall-card reference PNGs",
         "Node.js 24 or newer",
         "No third-party Node package",
@@ -182,12 +183,13 @@ def test_browser_audit_list_is_the_complete_cartesian_matrix() -> None:
 
 
 def test_browser_audit_rejects_invalid_arguments_without_opening_chrome() -> None:
-    completed = _run_node("--timeout-ms", "0")
+    for argument in ("--timeout-ms", "--startup-timeout-ms"):
+        completed = _run_node(argument, "0")
 
-    assert completed.returncode == 2
-    assert completed.stdout == ""
-    assert "--timeout-ms must be a positive integer" in completed.stderr
-    assert "Use --help for usage." in completed.stderr
+        assert completed.returncode == 2
+        assert completed.stdout == ""
+        assert f"{argument} must be a positive integer" in completed.stderr
+        assert "Use --help for usage." in completed.stderr
 
 
 def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> None:
@@ -366,7 +368,10 @@ def test_internal_capture_bridge_rejects_bad_arguments_without_opening_chrome() 
 
 
 def test_browser_audit_is_a_ci_and_release_gate() -> None:
-    command = "node scripts/audit_web_dashboard_browser.mjs --timeout-ms 30000"
+    command = (
+        "node scripts/audit_web_dashboard_browser.mjs "
+        "--startup-timeout-ms 90000 --timeout-ms 30000"
+    )
     setup_node = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
 
     ci = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
@@ -378,3 +383,11 @@ def test_browser_audit_is_a_ci_and_release_gate() -> None:
     assert 'node-version: "24"' in ci
     assert 'node-version: "24"' in release
     assert command in Path("docs/releasing.md").read_text(encoding="utf-8")
+
+
+def test_browser_audit_keeps_chrome_startup_separate_from_operation_timeout() -> None:
+    source = _SCRIPT.read_text(encoding="utf-8")
+
+    assert "startupTimeoutMs: DEFAULT_STARTUP_TIMEOUT_MS" in source
+    assert "pageWebSocketUrl(\n        remotePort,\n        options.startupTimeoutMs," in source
+    assert "CdpClient.connect(websocketUrl, options.timeoutMs)" in source
