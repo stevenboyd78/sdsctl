@@ -84,6 +84,7 @@ const RADIO_FIELD_IDS = Object.freeze([
 ]);
 
 const DEFAULT_TIMEOUT_MS = 20_000;
+const DEFAULT_STARTUP_TIMEOUT_MS = 90_000;
 const SCREENSHOT_STATUS_MESSAGE = "Daemon and scanner status are available.";
 const HELP = `\
 Usage: node scripts/audit_web_dashboard_browser.mjs [options]
@@ -106,7 +107,9 @@ Options:
   --chrome PATH       Chrome/Chromium executable (auto-detected by default)
   --python PATH       Python used for the demo server (repo .venv by default)
   --base-url URL      Audit an already-running demo server instead of starting one
-  --timeout-ms N      Startup and CDP operation timeout (default: 20000)
+  --startup-timeout-ms N
+                      Chrome process readiness timeout (default: 90000)
+  --timeout-ms N      CDP and dashboard operation timeout (default: 20000)
   --waterfall-only    Run only the Home Assistant waterfall-card regression/lifecycle audit
   --waterfall-screenshot-dir PATH
                       Write three sanitized waterfall-card reference PNGs
@@ -120,13 +123,14 @@ then removes only its temporary browser profile. No third-party Node package or
 new Python runtime dependency is required.
 `;
 
-function parseArguments(argv) {
+export function parseArguments(argv) {
   const options = {
     baseUrl: null,
     chrome: null,
     help: false,
     list: false,
     python: null,
+    startupTimeoutMs: DEFAULT_STARTUP_TIMEOUT_MS,
     timeoutMs: DEFAULT_TIMEOUT_MS,
     waterfallScreenshotDirectory: null,
     waterfallOnly: false,
@@ -144,6 +148,7 @@ function parseArguments(argv) {
       "--base-url",
       "--chrome",
       "--python",
+      "--startup-timeout-ms",
       "--timeout-ms",
       "--waterfall-screenshot-dir",
     ].includes(argument)) {
@@ -160,8 +165,10 @@ function parseArguments(argv) {
         options.python = value;
       } else if (argument === "--waterfall-screenshot-dir") {
         options.waterfallScreenshotDirectory = path.resolve(value);
-      } else {
+      } else if (argument === "--timeout-ms") {
         options.timeoutMs = Number(value);
+      } else {
+        options.startupTimeoutMs = Number(value);
       }
     } else {
       throw new Error(`unknown argument: ${argument}`);
@@ -170,6 +177,9 @@ function parseArguments(argv) {
 
   if (!Number.isInteger(options.timeoutMs) || options.timeoutMs <= 0) {
     throw new Error("--timeout-ms must be a positive integer");
+  }
+  if (!Number.isInteger(options.startupTimeoutMs) || options.startupTimeoutMs <= 0) {
+    throw new Error("--startup-timeout-ms must be a positive integer");
   }
   if (options.baseUrl !== null) {
     const parsed = new URL(options.baseUrl);
@@ -4265,7 +4275,11 @@ async function run(options) {
     chromeOutput = opened.output;
     let websocketUrl;
     try {
-      websocketUrl = await pageWebSocketUrl(remotePort, options.timeoutMs, chromeProcess);
+      websocketUrl = await pageWebSocketUrl(
+        remotePort,
+        options.startupTimeoutMs,
+        chromeProcess,
+      );
     } catch (error) {
       throw new Error(`${error.message}\nChrome output:\n${chromeOutput()}`);
     }

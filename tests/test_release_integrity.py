@@ -196,7 +196,10 @@ def test_ci_and_release_workflows_share_the_measured_coverage_floor() -> None:
     project = tomllib.loads(_read("pyproject.toml"))
     coverage_command = "pytest --cov=sds200 --cov-report=term-missing"
     gallery_command = "python scripts/generate_web_dashboard_screenshots.py --verify-gallery"
-    audit_command = "node scripts/audit_web_dashboard_browser.mjs --timeout-ms 30000"
+    audit_command = (
+        "node scripts/audit_web_dashboard_browser.mjs "
+        "--startup-timeout-ms 90000 --timeout-ms 30000"
+    )
     repeatability_command = (
         "python scripts/generate_web_dashboard_screenshots.py --verify-repeatability "
         "--only theme-system-1920x1080.png "
