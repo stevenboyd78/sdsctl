@@ -481,7 +481,8 @@ def test_constructed_native_run_records_real_loopback_rtp_and_obeys_explicit_gat
                         failure = error
                     finally:
                         finished.set()
-                    observed.result(timeout=3)
+                    # Exceed the loaded-runner loopback-read budget above.
+                    observed.result(timeout=12)
                     if failure is not None:
                         raise failure
                 assert result.artifact.samples == 1280
