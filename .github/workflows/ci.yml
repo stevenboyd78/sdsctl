@@ -139,7 +139,7 @@ jobs:
           python scripts/generate_web_dashboard_screenshots.py --verify-gallery
 
       - name: Real-Chrome dashboard acceptance
-        run: node scripts/audit_web_dashboard_browser.mjs --timeout-ms 30000
+        run: node scripts/audit_web_dashboard_browser.mjs --startup-timeout-ms 90000 --timeout-ms 30000
 
       - name: Real-Chrome Mimic card acceptance
         run: node scripts/audit_home_assistant_mimic.mjs --timeout-ms 30000

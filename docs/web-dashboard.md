@@ -737,7 +737,7 @@ Run the screenshot-free real-Chrome acceptance matrix before closing responsive
 workspace or theme changes:
 
 ```bash
-node scripts/audit_web_dashboard_browser.mjs --timeout-ms 30000
+node scripts/audit_web_dashboard_browser.mjs --startup-timeout-ms 90000 --timeout-ms 30000
 ```
 
 For a focused Home Assistant Waterfall-card check, add `--waterfall-only`.
