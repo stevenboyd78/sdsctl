@@ -1,139 +1,676 @@
-/* Original carrier aviation presentation; no franchise marks or copied trade dress. */
+/*
+ * Original carrier flight-deck operations interface.
+ * Genre cues are expressed with abstract deck, HUD, and instrument geometry;
+ * no franchise marks, squadron insignia, or copied trade dress are used.
+ */
 :root[data-theme="cinematic-carrier-air-wing"] {
   color-scheme: dark;
-  --background: #07131e;
-  --surface: #0d2233;
-  --surface-emphasis: #16354b;
-  --text: #f1f7fb;
-  --muted: #9fb6c5;
-  --border: #476879;
-  --accent: #52b9e8;
-  --accent-strong: #91ddff;
-  --success: #62d59a;
-  --warning: #ffd24a;
-  --danger: #ff665e;
+  --background: #030b12;
+  --surface: #081925;
+  --surface-emphasis: #0d2a3a;
+  --text: #f4fbff;
+  --muted: #8fb2c4;
+  --border: #446d82;
+  --accent: #42c9ff;
+  --accent-strong: #9ae7ff;
+  --success: #55e0a0;
+  --warning: #ffd447;
+  --danger: #ff6259;
   --focus: #ffffff;
-  --shadow: 0 0.85rem 2rem rgb(0 0 0 / 0.44);
-  --radius-small: 0.12rem;
-  --radius-large: 0.2rem;
-  --hold-field-background: #403815;
-  --hold-field-border: #ffd24a;
-  --hold-field-label: #ffe688;
+  --shadow: 0 1rem 3rem rgb(0 0 0 / 0.62);
+  --radius-small: 0;
+  --radius-large: 0;
+  --hold-field-background: #453b11;
+  --hold-field-border: #ffd447;
+  --hold-field-label: #ffe98b;
   --hold-field-value: #ffffff;
+  font-family: "Barlow Condensed", "Liberation Sans Narrow", sans-serif;
 }
 
 :root[data-theme="cinematic-carrier-air-wing"] body {
   background:
-    linear-gradient(90deg, transparent 49.8%, rgb(255 210 74 / 0.06) 50%, transparent 50.2%),
-    repeating-linear-gradient(0deg, rgb(255 255 255 / 0.025) 0 1px, transparent 1px 3.4rem),
-    radial-gradient(circle at 78% 14%, rgb(82 185 232 / 0.13), transparent 28%),
-    #07131e;
+    linear-gradient(90deg, transparent 49.88%, rgb(255 212 71 / 0.16) 50%, transparent 50.12%),
+    repeating-linear-gradient(0deg, rgb(111 166 190 / 0.055) 0 1px, transparent 1px 4rem),
+    radial-gradient(ellipse at 50% 115%, #16435a 0, #07141e 42%, #030b12 74%);
+}
+
+:root[data-theme="cinematic-carrier-air-wing"] .theme-stage {
+  display: block;
+  perspective: 48rem;
+}
+
+:root[data-theme="cinematic-carrier-air-wing"] .theme-stage-a {
+  inset: 5% 14% -18%;
+  border: 1px solid rgb(66 201 255 / 0.28);
+  background:
+    linear-gradient(90deg, transparent 48.8%, rgb(255 212 71 / 0.58) 49% 49.35%, transparent 49.55% 50.45%, rgb(255 212 71 / 0.58) 50.65% 51%, transparent 51.2%),
+    repeating-linear-gradient(0deg, transparent 0 6.8rem, rgb(240 248 252 / 0.16) 6.8rem 7rem);
+  clip-path: polygon(38% 0, 62% 0, 100% 100%, 0 100%);
+  transform: rotateX(58deg);
+  transform-origin: 50% 100%;
+}
+
+:root[data-theme="cinematic-carrier-air-wing"] .theme-stage-b,
+:root[data-theme="cinematic-carrier-air-wing"] .theme-stage-c {
+  top: 22%;
+  width: 14rem;
+  height: 14rem;
+  border: 1px solid rgb(66 201 255 / 0.25);
+  border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, rgb(66 201 255 / 0.18) 0 1deg, transparent 1deg 30deg);
+}
+
+:root[data-theme="cinematic-carrier-air-wing"] .theme-stage-b { left: -7rem; }
+:root[data-theme="cinematic-carrier-air-wing"] .theme-stage-c { right: -7rem; }
+
+:root[data-theme="cinematic-carrier-air-wing"] .theme-stage-d {
+  top: 0;
+  right: 12%;
+  width: 26rem;
+  height: 0.22rem;
+  background: repeating-linear-gradient(90deg, var(--warning) 0 1.2rem, transparent 1.2rem 1.65rem);
+  box-shadow: 0 0 1rem rgb(255 212 71 / 0.4);
 }
 
 :root[data-theme="cinematic-carrier-air-wing"] .site-header {
-  border: 1px solid #688495;
-  border-left: 0.5rem solid var(--warning);
+  border: 1px solid #5f8799;
+  border-left: 0.65rem solid var(--warning);
   border-radius: 0;
-  background: linear-gradient(105deg, #142f43, #081823 68%);
-  box-shadow: var(--shadow);
+  background:
+    linear-gradient(118deg, rgb(66 201 255 / 0.15), transparent 38%),
+    linear-gradient(90deg, #102b3b, #06131d 68%);
+  box-shadow: inset 0 -1px rgb(154 231 255 / 0.2), var(--shadow);
+  clip-path: polygon(0 0, calc(100% - 2.4rem) 0, 100% 2.4rem, 100% 100%, 1.4rem 100%, 0 calc(100% - 1.4rem));
+}
+
+:root[data-theme="cinematic-carrier-air-wing"] .site-header::before {
+  position: absolute;
+  top: 0.38rem;
+  right: 3.3rem;
+  width: min(24rem, 31vw);
+  height: 0.35rem;
+  background: repeating-linear-gradient(135deg, var(--warning) 0 0.75rem, #121b21 0.75rem 1.5rem);
+  content: "";
 }
 
 :root[data-theme="cinematic-carrier-air-wing"] .site-header::after {
   position: absolute;
-  right: 1rem;
+  right: 1.2rem;
   bottom: 0.45rem;
-  width: min(28rem, 36vw);
-  height: 0.28rem;
-  background: repeating-linear-gradient(135deg, #ffd24a 0 0.8rem, #111820 0.8rem 1.6rem);
+  width: min(34rem, 42vw);
+  height: 0.2rem;
+  background: linear-gradient(90deg, transparent, var(--accent) 10% 62%, transparent 62% 67%, var(--warning) 67% 84%, transparent 84%);
   content: "";
+  box-shadow: 0 0 0.65rem rgb(66 201 255 / 0.5);
 }
 
 :root[data-theme="cinematic-carrier-air-wing"] :is(.brand h1, .panel h2, .panel h3, .workspace-tabs [role="tab"]) {
-  font-family: "Barlow Condensed", sans-serif;
-  letter-spacing: 0.09em;
+  font-family: "Barlow Condensed", "Liberation Sans Narrow", sans-serif;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+:root[data-theme="cinematic-carrier-air-wing"] .brand h1 {
+  color: #ffffff;
+  text-shadow: 0 0 1rem rgb(66 201 255 / 0.35);
+}
+
+:root[data-theme="cinematic-carrier-air-wing"] :is(.eyebrow, .panel-kicker, .theme-picker label) {
+  color: var(--warning);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+:root[data-theme="cinematic-carrier-air-wing"] .status-badge {
+  border: 1px solid var(--success);
+  border-radius: 0;
+  background: rgb(8 35 42 / 0.92);
+  clip-path: polygon(0.65rem 0, 100% 0, 100% calc(100% - 0.65rem), calc(100% - 0.65rem) 100%, 0 100%, 0 0.65rem);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 :root[data-theme="cinematic-carrier-air-wing"] .workspace-shell {
-  border: 1px solid #688495;
+  border: 1px solid #557d90;
+  border-top: 0.28rem solid var(--accent);
   border-radius: 0;
-  background: #081923;
-  box-shadow: 0 0 0 1px rgb(145 221 255 / 0.08) inset, var(--shadow);
+  background: linear-gradient(180deg, rgb(13 42 58 / 0.95), rgb(3 12 18 / 0.98));
+  box-shadow: inset 0 0 0 1px rgb(154 231 255 / 0.08), var(--shadow);
+  clip-path: polygon(1.8rem 0, calc(100% - 1.8rem) 0, 100% 1.8rem, 100% 100%, 0 100%, 0 1.8rem);
 }
 
 :root[data-theme="cinematic-carrier-air-wing"] .workspace-tabs {
-  border-bottom: 2px solid #577789;
-  background: #0e2738;
+  padding: 0.45rem 1rem 0;
+  border: 0;
+  background: linear-gradient(90deg, #0c2534, #071720);
 }
 
 :root[data-theme="cinematic-carrier-air-wing"] .workspace-tabs [role="tab"] {
-  border: 1px solid #476879;
+  border: 1px solid #4f7487;
   border-radius: 0;
-  background: linear-gradient(#1d3c50, #0b202f);
-  color: var(--muted);
+  background: linear-gradient(180deg, #173b4f, #091d29);
+  color: #a8c3cf;
+  clip-path: polygon(0 0, calc(100% - 0.8rem) 0, 100% 50%, calc(100% - 0.8rem) 100%, 0 100%, 0.55rem 50%);
 }
 
 :root[data-theme="cinematic-carrier-air-wing"] .workspace-tabs [role="tab"][aria-selected="true"] {
   border-color: var(--warning);
-  background: linear-gradient(110deg, #ffd24a 0 0.34rem, #205d7a 0.34rem 100%);
-  color: #ffffff;
+  color: #041019;
+  background-color: #f2c43c;
+  background-image: linear-gradient(90deg, #fff09a, var(--warning) 58%, #e9a91e);
+  box-shadow: 0 0 1rem rgb(255 212 71 / 0.35);
 }
 
 :root[data-theme="cinematic-carrier-air-wing"] .workspace-deck {
-  background: linear-gradient(180deg, rgb(20 47 67 / 0.42), rgb(5 15 23 / 0.72));
+  margin: 0 0.75rem 0.75rem;
+  border: 1px solid #315a70;
+  background:
+    linear-gradient(90deg, transparent 49.88%, rgb(255 212 71 / 0.14) 50%, transparent 50.12%),
+    repeating-linear-gradient(0deg, rgb(94 142 162 / 0.045) 0 1px, transparent 1px 3.1rem),
+    #030d15;
 }
 
 :root[data-theme="cinematic-carrier-air-wing"] [data-workspace-pane] {
-  border-color: #38586b;
-  background: rgb(7 19 30 / 0.74);
+  border: 0;
+  background: transparent;
 }
 
 :root[data-theme="cinematic-carrier-air-wing"] .panel {
   position: relative;
-  border: 1px solid #577789;
+  border: 1px solid #4c7488;
   border-top: 0.28rem solid var(--accent);
   border-radius: 0;
-  background: linear-gradient(145deg, #143145, #091b29 74%);
-  box-shadow: 0 0.55rem 1.2rem rgb(0 0 0 / 0.34);
+  background:
+    linear-gradient(135deg, rgb(66 201 255 / 0.1), transparent 27%),
+    linear-gradient(315deg, rgb(255 212 71 / 0.055), transparent 23%),
+    rgb(4 20 30 / 0.96);
+  box-shadow: inset 0 0 2.4rem rgb(66 201 255 / 0.04);
+  clip-path: polygon(0 0, calc(100% - 1.6rem) 0, 100% 1.6rem, 100% 100%, 1.6rem 100%, 0 calc(100% - 1.6rem));
 }
 
+:root[data-theme="cinematic-carrier-air-wing"] .panel::before,
+:root[data-theme="cinematic-carrier-air-wing"] .panel::after {
+  position: absolute;
+  z-index: -1;
+  width: 7rem;
+  height: 7rem;
+  border: solid var(--warning);
+  content: "";
+  opacity: 0.55;
+}
+
+:root[data-theme="cinematic-carrier-air-wing"] .panel::before {
+  top: 0.45rem;
+  left: 0.45rem;
+  border-width: 1px 0 0 1px;
+}
+
+:root[data-theme="cinematic-carrier-air-wing"] .panel::after {
+  right: 0.45rem;
+  bottom: 0.45rem;
+  border-width: 0 1px 1px 0;
+}
+
+:root[data-theme="cinematic-carrier-air-wing"] .panel-header { border-bottom: 1px solid #386278; }
+
 :root[data-theme="cinematic-carrier-air-wing"] #radio-activity-panel {
-  border-color: #8eacbc;
+  border-color: #7597a7;
   border-top-color: var(--warning);
   background:
-    linear-gradient(90deg, rgb(82 185 232 / 0.12), transparent 54%),
-    #071924;
+    linear-gradient(90deg, rgb(66 201 255 / 0.12), transparent 42%),
+    radial-gradient(circle at 92% 12%, rgb(66 201 255 / 0.12), transparent 18%),
+    rgb(3 15 24 / 0.97);
 }
 
 :root[data-theme="cinematic-carrier-air-wing"] .radio-view-controls {
-  border: 1px solid #577789;
-  border-left: 0.32rem solid var(--warning);
+  border: 1px solid #416b7e;
+  border-left: 0.4rem solid var(--warning);
   border-radius: 0;
-  background: #0b2130;
+  background: rgb(7 28 40 / 0.94);
 }
 
-:root[data-theme="cinematic-carrier-air-wing"] .radio-field-groups {
-  border-color: #38586b;
-  background: rgb(82 185 232 / 0.055);
+:root[data-theme="cinematic-carrier-air-wing"] .scanner-display-hierarchy {
+  gap: 0.35rem;
+  border: 0;
+  background: transparent;
 }
+
+:root[data-theme="cinematic-carrier-air-wing"] .scanner-display-hierarchy > div {
+  border: 1px solid #416b7e;
+  border-top: 0.2rem solid var(--accent);
+  background: linear-gradient(120deg, rgb(23 67 86 / 0.86), rgb(5 25 36 / 0.94));
+  clip-path: polygon(0 0, calc(100% - 0.9rem) 0, 100% 0.9rem, 100% 100%, 0 100%);
+}
+
+:root[data-theme="cinematic-carrier-air-wing"] .scanner-display-hierarchy > div:last-child {
+  border-right: 1px solid #416b7e;
+  border-top-color: var(--warning);
+}
+
+:root[data-theme="cinematic-carrier-air-wing"] :is(.radio-summary, .radio-field-groups) {
+  border-color: #31596c;
+  border-radius: 0;
+  background: rgb(9 31 43 / 0.72);
+}
+
+:root[data-theme="cinematic-carrier-air-wing"] .radio-field-list > div { border-bottom-color: #2f5364; }
 
 :root[data-theme="cinematic-carrier-air-wing"] :is(button, .recording-action, select, input, textarea) {
-  border-color: #688495;
+  border-color: #52798c;
   border-radius: 0;
-  background: linear-gradient(#1a3a50, #0a1d2b);
   color: var(--text);
-}
-
-:root[data-theme="cinematic-carrier-air-wing"] :is(button, .recording-action):hover:not(:disabled) {
-  border-color: var(--warning);
-  background: #205d7a;
-}
-
-:root[data-theme="cinematic-carrier-air-wing"] .status-badge {
-  border-radius: 0;
-  letter-spacing: 0.09em;
+  background: linear-gradient(180deg, #174056, #071d2a);
+  font-family: inherit;
+  letter-spacing: 0.045em;
   text-transform: uppercase;
 }
+
+:root[data-theme="cinematic-carrier-air-wing"] :is(button, .recording-action):hover:not(:disabled):not([aria-selected="true"]) {
+  border-color: var(--warning);
+  background: #1b5874;
+}
+
+:root[data-theme="cinematic-carrier-air-wing"] button[aria-pressed="true"] {
+  color: #071019;
+  border-color: var(--warning);
+  background: var(--warning);
+}
+
+/*
+ * Full-HD production environment: an original night carrier approach scene
+ * built from deterministic inline vectors.  This is intentionally not a
+ * reusable cinematic template; its composition, instrument layout, motion
+ * grammar, and material treatment belong only to Carrier Air Wing.
+ */
+@media (min-width: 1280px) and (min-height: 720px) and (min-aspect-ratio: 3/2) {
+  :root[data-theme="cinematic-carrier-air-wing"] body {
+    background: #01070c;
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"] .theme-stage > span {
+    display: none;
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"]
+    .cinematic-stage-art
+    [data-cinematic-scene="carrier-air-wing"] {
+    display: inline;
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"] .cinematic-stage-art {
+    opacity: 0.94;
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"] .site-header {
+    border-color: rgb(123 219 242 / 0.62);
+    background:
+      linear-gradient(90deg, rgb(4 22 33 / 0.94), rgb(2 12 19 / 0.78) 60%, rgb(4 26 38 / 0.91)),
+      linear-gradient(180deg, rgb(91 220 255 / 0.12), transparent 55%);
+    box-shadow:
+      inset 0 -1px rgb(154 231 255 / 0.42),
+      inset 0 0 3rem rgb(37 179 220 / 0.08),
+      0 1.2rem 4rem rgb(0 0 0 / 0.72);
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"] .overview {
+    text-shadow: 0 0 0.75rem rgb(59 213 255 / 0.42);
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"] .workspace-shell {
+    isolation: isolate;
+    border-color: rgb(111 211 237 / 0.6);
+    background:
+      linear-gradient(180deg, rgb(7 30 43 / 0.84), rgb(1 8 13 / 0.64)),
+      repeating-linear-gradient(90deg, transparent 0 7rem, rgb(83 213 245 / 0.025) 7rem 7.08rem);
+    box-shadow:
+      inset 0 0 0 1px rgb(188 242 255 / 0.08),
+      inset 0 0 5rem rgb(36 174 207 / 0.07),
+      0 1.4rem 4rem rgb(0 0 0 / 0.76);
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"] .workspace-tabs {
+    position: relative;
+    z-index: 4;
+    padding: 0.58rem 1rem 0.52rem;
+    border-bottom: 1px solid rgb(97 199 224 / 0.38);
+    background:
+      linear-gradient(180deg, rgb(16 54 72 / 0.92), rgb(2 17 26 / 0.88)),
+      repeating-linear-gradient(90deg, transparent 0 2.6rem, rgb(128 230 255 / 0.05) 2.6rem 2.7rem);
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"] .workspace-tabs::before,
+  :root[data-theme="cinematic-carrier-air-wing"] .workspace-tabs::after {
+    position: absolute;
+    top: 50%;
+    width: 0.48rem;
+    height: 0.48rem;
+    border: 1px solid rgb(216 248 255 / 0.7);
+    border-radius: 50%;
+    background: #04121a;
+    content: "";
+    box-shadow: inset 0 0 0 0.12rem #183848, 0 0 0.65rem rgb(75 214 249 / 0.32);
+    translate: 0 -50%;
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"] .workspace-tabs::before { left: 0.28rem; }
+  :root[data-theme="cinematic-carrier-air-wing"] .workspace-tabs::after { right: 0.28rem; }
+
+  :root[data-theme="cinematic-carrier-air-wing"] .workspace-tabs [role="tab"] {
+    position: relative;
+    min-height: 2.45rem;
+    border-color: rgb(102 188 211 / 0.66);
+    background:
+      linear-gradient(180deg, rgb(28 78 99 / 0.94), rgb(3 23 34 / 0.94)),
+      linear-gradient(90deg, rgb(82 218 255 / 0.12), transparent 34% 70%, rgb(82 218 255 / 0.07));
+    box-shadow:
+      inset 0 1px rgb(197 245 255 / 0.12),
+      inset 0 -0.3rem 0 rgb(0 7 11 / 0.4);
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"] .workspace-tabs [role="tab"]::before {
+    position: absolute;
+    top: 0.24rem;
+    left: 50%;
+    width: 32%;
+    height: 0.13rem;
+    background: rgb(90 225 255 / 0.36);
+    content: "";
+    translate: -50% 0;
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"]
+    .workspace-tabs
+    [role="tab"][aria-selected="true"]::before {
+    background: #fff6b7;
+    box-shadow: 0 0 0.7rem #ffd447;
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"] .workspace-deck {
+    position: relative;
+    z-index: 2;
+    border-color: rgb(93 195 221 / 0.46);
+    background:
+      linear-gradient(90deg, rgb(0 8 13 / 0.62), rgb(3 19 28 / 0.46) 22% 78%, rgb(0 8 13 / 0.62)),
+      linear-gradient(180deg, rgb(0 12 18 / 0.66), rgb(0 8 12 / 0.42));
+    box-shadow:
+      inset 0 0 4rem rgb(24 179 220 / 0.065),
+      inset 0 0 0 1px rgb(161 236 255 / 0.07);
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"] #radio-activity-panel {
+    border-color: rgb(115 214 239 / 0.68);
+    border-top-color: var(--warning);
+    background:
+      linear-gradient(90deg, rgb(0 13 20 / 0.76), rgb(2 22 31 / 0.44) 19% 81%, rgb(0 13 20 / 0.76)),
+      radial-gradient(circle at 50% 62%, rgb(45 198 233 / 0.08), transparent 35%);
+    box-shadow:
+      inset 0 0 5rem rgb(42 197 232 / 0.055),
+      inset 0 0 0 1px rgb(155 235 255 / 0.08);
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"] #radio-activity-panel::before,
+  :root[data-theme="cinematic-carrier-air-wing"] #radio-activity-panel::after {
+    z-index: 0;
+    border: 0;
+    pointer-events: none;
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"] #radio-activity-panel::before {
+    inset: 0.55rem;
+    width: auto;
+    height: auto;
+    background:
+      linear-gradient(var(--warning), var(--warning)) 0 0 / 4.5rem 1px no-repeat,
+      linear-gradient(var(--warning), var(--warning)) 0 0 / 1px 3.1rem no-repeat,
+      linear-gradient(var(--accent), var(--accent)) 100% 100% / 4.5rem 1px no-repeat,
+      linear-gradient(var(--accent), var(--accent)) 100% 100% / 1px 3.1rem no-repeat;
+    content: "";
+    opacity: 0.84;
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"] #radio-activity-panel::after {
+    top: 5.08rem;
+    right: 1rem;
+    width: 8.5rem;
+    height: 0.24rem;
+    background: repeating-linear-gradient(90deg, #ffd447 0 0.82rem, transparent 0.82rem 1.18rem);
+    content: "";
+    opacity: 0.62;
+    box-shadow: 0 0 0.7rem rgb(255 212 71 / 0.38);
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"]
+    #radio-activity-panel
+    > :not(.radio-field-groups) {
+    position: relative;
+    z-index: 3;
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"] .scanner-display-hierarchy > div {
+    border-color: rgb(100 204 230 / 0.58);
+    background:
+      linear-gradient(115deg, rgb(16 67 86 / 0.88), rgb(2 20 30 / 0.76)),
+      repeating-linear-gradient(90deg, transparent 0 3.8rem, rgb(94 222 255 / 0.04) 3.8rem 3.86rem);
+    box-shadow:
+      inset 0 1px rgb(171 239 255 / 0.08),
+      inset 0 -1.2rem 2.5rem rgb(0 7 11 / 0.26);
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"] .radio-summary {
+    border-color: rgb(95 198 224 / 0.5);
+    background: rgb(1 16 24 / 0.58);
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"] .radio-field-groups {
+    position: relative;
+    z-index: 2;
+    isolation: isolate;
+    border: 1px solid rgb(90 194 219 / 0.44);
+    background:
+      radial-gradient(circle at 50% 53%, transparent 0 18rem, rgb(0 12 18 / 0.16) 28rem, rgb(0 8 12 / 0.6) 72%),
+      linear-gradient(90deg, rgb(0 11 17 / 0.7), transparent 24% 76%, rgb(0 11 17 / 0.7));
+    box-shadow:
+      inset 0 0 0 1px rgb(174 238 255 / 0.055),
+      inset 0 0 5rem rgb(0 6 10 / 0.36);
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"] .radio-field-groups::before {
+    position: absolute;
+    z-index: 0;
+    top: 50%;
+    left: 50%;
+    width: min(34rem, 54vh);
+    aspect-ratio: 1;
+    border: 1px solid rgb(111 227 255 / 0.52);
+    border-radius: 50%;
+    background:
+      radial-gradient(circle, transparent 0 7%, rgb(92 224 255 / 0.22) 7.2% 7.7%, transparent 8% 34%, rgb(92 224 255 / 0.22) 34.2% 34.7%, transparent 35% 63%, rgb(92 224 255 / 0.18) 63.2% 63.7%, transparent 64%),
+      repeating-conic-gradient(from -2deg, rgb(88 223 255 / 0.4) 0 0.22deg, transparent 0.22deg 10deg),
+      conic-gradient(from 213deg, transparent 0 5%, rgb(70 214 250 / 0.12) 5% 15%, transparent 15% 100%);
+    content: "";
+    opacity: 0.9;
+    box-shadow:
+      0 0 2rem rgb(38 204 245 / 0.1),
+      inset 0 0 2rem rgb(38 204 245 / 0.09);
+    translate: -50% -48%;
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"] .radio-field-groups::after {
+    position: absolute;
+    z-index: 1;
+    top: 50%;
+    left: 50%;
+    width: min(21rem, 34vh);
+    aspect-ratio: 1.36;
+    border: solid #ffd447;
+    border-width: 0.14rem 0;
+    background:
+      linear-gradient(90deg, transparent 48.8%, rgb(255 212 71 / 0.85) 49% 51%, transparent 51.2%),
+      linear-gradient(150deg, transparent 45%, rgb(255 212 71 / 0.75) 45.4% 46.2%, transparent 46.6%),
+      linear-gradient(30deg, transparent 45%, rgb(255 212 71 / 0.75) 45.4% 46.2%, transparent 46.6%);
+    clip-path: polygon(0 0, 100% 0, 84% 100%, 16% 100%);
+    content: "";
+    opacity: 0.8;
+    filter: drop-shadow(0 0 0.55rem rgb(255 212 71 / 0.3));
+    translate: -50% -42%;
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"] .radio-field-group {
+    position: relative;
+    z-index: 2;
+    background: transparent;
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"] .radio-field-group h3 {
+    position: relative;
+    z-index: 4;
+    width: max-content;
+    padding: 0.16rem 0.7rem 0.18rem 0.38rem;
+    border-left: 0.22rem solid var(--warning);
+    color: #d7f7ff;
+    background: linear-gradient(90deg, rgb(6 34 47 / 0.94), transparent);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list {
+    position: relative;
+    z-index: 3;
+    display: grid !important;
+    height: calc(100% - 1.35rem);
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    grid-template-rows: auto minmax(0, 1fr) auto !important;
+    gap: 0.35rem 0.55rem !important;
+    margin-top: 0.28rem;
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > div {
+    position: relative;
+    z-index: 4;
+    align-self: start;
+    min-height: 3rem;
+    padding: 0.38rem 0.5rem 0.42rem;
+    border: 1px solid rgb(91 200 226 / 0.5);
+    background:
+      linear-gradient(115deg, rgb(10 49 64 / 0.94), rgb(1 18 27 / 0.88)),
+      linear-gradient(90deg, rgb(85 223 255 / 0.1), transparent 38%);
+    box-shadow:
+      inset 0 1px rgb(184 242 255 / 0.08),
+      inset 0 -0.28rem rgb(0 8 12 / 0.28),
+      0 0.35rem 0.9rem rgb(0 0 0 / 0.32);
+    clip-path: polygon(0 0, calc(100% - 0.55rem) 0, 100% 0.55rem, 100% 100%, 0 100%);
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > div:nth-child(-n + 5) {
+    grid-row: 1;
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > div:nth-child(n + 6) {
+    align-self: end;
+    grid-row: 3;
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > :is(:nth-child(1), :nth-child(6)) { grid-column: 1; }
+  :root[data-theme="cinematic-carrier-air-wing"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > :is(:nth-child(2), :nth-child(7)) { grid-column: 2; }
+  :root[data-theme="cinematic-carrier-air-wing"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > :is(:nth-child(3), :nth-child(8)) { grid-column: 3; }
+  :root[data-theme="cinematic-carrier-air-wing"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > :is(:nth-child(4), :nth-child(9)) { grid-column: 4; }
+  :root[data-theme="cinematic-carrier-air-wing"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > :is(:nth-child(5), :nth-child(10)) { grid-column: 5; }
+
+  :root[data-theme="cinematic-carrier-air-wing"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > div::before {
+    position: absolute;
+    top: 0.18rem;
+    right: 0.24rem;
+    width: 0.36rem;
+    height: 0.36rem;
+    border: 1px solid rgb(113 225 252 / 0.72);
+    border-radius: 50%;
+    background: rgb(46 180 211 / 0.25);
+    content: "";
+    box-shadow: 0 0 0.42rem rgb(74 218 251 / 0.22);
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > div:nth-child(10)::before {
+    border-color: var(--warning);
+    background: rgb(255 212 71 / 0.52);
+    box-shadow: 0 0 0.58rem rgb(255 212 71 / 0.44);
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"]
+    #radio-activity-panel
+    [data-hold-scope][data-hold-state="held"] {
+    border-color: var(--warning) !important;
+    background:
+      linear-gradient(115deg, rgb(82 68 12 / 0.96), rgb(29 25 4 / 0.9)) !important;
+    box-shadow:
+      inset 0 0 0 0.14rem var(--warning),
+      0 0 1.35rem rgb(255 212 71 / 0.28) !important;
+  }
+}
+
+@media (width < 1280px), (height < 720px), (aspect-ratio < 3/2) {
+  :root[data-theme="cinematic-carrier-air-wing"] .cinematic-stage-art { display: none; }
+  :root[data-theme="cinematic-carrier-air-wing"] .theme-stage { opacity: 0.28; }
+  :root[data-theme="cinematic-carrier-air-wing"] :is(.site-header, .workspace-shell, .panel) { clip-path: none; }
+  :root[data-theme="cinematic-carrier-air-wing"] .workspace-tabs { padding-inline: 0.35rem; }
+  :root[data-theme="cinematic-carrier-air-wing"] .panel::before,
+  :root[data-theme="cinematic-carrier-air-wing"] .panel::after { display: none; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cinematic-carrier-air-wing"] .theme-stage-b,
+  :root[data-theme="cinematic-carrier-air-wing"] .theme-stage-c { animation: carrier-instrument-sweep 18s linear infinite; }
+  :root[data-theme="cinematic-carrier-air-wing"] .carrier-clouds-far { animation: carrier-cloud-drift-far 110s linear infinite alternate; }
+  :root[data-theme="cinematic-carrier-air-wing"] .carrier-clouds-near { animation: carrier-cloud-drift-near 76s linear infinite alternate; }
+  :root[data-theme="cinematic-carrier-air-wing"] .carrier-deck-lights { animation: carrier-deck-light-chase 5.4s ease-in-out infinite; }
+  :root[data-theme="cinematic-carrier-air-wing"] .carrier-radar-sweep { animation: carrier-radar-turn 16s linear infinite; transform-origin: 210px 210px; }
+  :root[data-theme="cinematic-carrier-air-wing"] .carrier-hud-ring-outer { animation: carrier-hud-dash 28s linear infinite; }
+  :root[data-theme="cinematic-carrier-air-wing"] .carrier-hud-ring-inner { animation: carrier-hud-dash-reverse 36s linear infinite; }
+  :root[data-theme="cinematic-carrier-air-wing"] .carrier-attitude { animation: carrier-attitude-breathe 9s ease-in-out infinite; }
+  :root[data-theme="cinematic-carrier-air-wing"] .carrier-signal-trace { animation: carrier-signal-glow 4.8s ease-in-out infinite; }
+  :root[data-theme="cinematic-carrier-air-wing"] .radio-field-groups::before { animation: carrier-instrument-sweep 56s linear infinite; }
+}
+
+@keyframes carrier-instrument-sweep { to { rotate: 360deg; } }
+@keyframes carrier-cloud-drift-far { to { transform: translateX(7.5rem); } }
+@keyframes carrier-cloud-drift-near { to { transform: translateX(-10rem); } }
+@keyframes carrier-deck-light-chase { 0%, 100% { opacity: 0.36; } 42% { opacity: 1; } 58% { opacity: 0.62; } }
+@keyframes carrier-radar-turn { to { transform: rotate(360deg); } }
+@keyframes carrier-hud-dash { to { stroke-dashoffset: -228; } }
+@keyframes carrier-hud-dash-reverse { to { stroke-dashoffset: 244; } }
+@keyframes carrier-attitude-breathe { 0%, 100% { transform: translateY(-3px); opacity: 0.48; } 50% { transform: translateY(5px); opacity: 0.78; } }
+@keyframes carrier-signal-glow { 0%, 100% { opacity: 0.52; } 50% { opacity: 1; } }
 
 @media (prefers-reduced-motion: reduce) {
   :root[data-theme="cinematic-carrier-air-wing"] *,
@@ -142,11 +679,50 @@
 }
 
 @media (forced-colors: active) {
-  :root[data-theme="cinematic-carrier-air-wing"] {
-    --background: Canvas; --surface: Canvas; --surface-emphasis: Canvas;
-    --text: CanvasText; --muted: CanvasText; --border: CanvasText;
-    --accent: Highlight; --accent-strong: Highlight; --focus: Highlight;
-  }
-  :root[data-theme="cinematic-carrier-air-wing"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups) { background: Canvas; box-shadow: none; }
-  :root[data-theme="cinematic-carrier-air-wing"] .site-header::after { display: none; }
+  :root[data-theme="cinematic-carrier-air-wing"] { --background: Canvas; --surface: Canvas; --surface-emphasis: Canvas; --text: CanvasText; --muted: CanvasText; --border: CanvasText; --accent: Highlight; --accent-strong: Highlight; --focus: Highlight; }
+  :root[data-theme="cinematic-carrier-air-wing"] .theme-stage { display: none; }
+  :root[data-theme="cinematic-carrier-air-wing"] .cinematic-stage-art,
+  :root[data-theme="cinematic-carrier-air-wing"] .radio-field-groups::before,
+  :root[data-theme="cinematic-carrier-air-wing"] .radio-field-groups::after { display: none; }
+  :root[data-theme="cinematic-carrier-air-wing"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups, .scanner-display-hierarchy > div) { background: Canvas; box-shadow: none; clip-path: none; }
+  :root[data-theme="cinematic-carrier-air-wing"] :is(.site-header, .panel)::before,
+  :root[data-theme="cinematic-carrier-air-wing"] :is(.site-header, .panel)::after { display: none; }
 }
+
+/* A held scanner scope becomes an acquired landing/HUD target. */
+:root[data-theme="cinematic-carrier-air-wing"]:has(
+  #radio-activity-panel [data-hold-state="held"]
+) .carrier-hud-ring-outer {
+  stroke: #ffd447;
+  stroke-width: 6;
+  filter: drop-shadow(0 0 0.65rem rgb(255 212 71 / 0.82));
+}
+
+:root[data-theme="cinematic-carrier-air-wing"]:has(
+  #radio-activity-panel [data-hold-state="held"]
+) :is(.carrier-deck-lights, .carrier-bearing-tape) {
+  color: #ffd447;
+  fill: #ffd447;
+  opacity: 1;
+  filter: drop-shadow(0 0 0.6rem rgb(255 212 71 / 0.78));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cinematic-carrier-air-wing"]:has(
+    #radio-activity-panel [data-hold-state="held"]
+  ) .carrier-hud-ring-outer {
+    animation: carrier-lock-acquired 1.8s ease-in-out infinite;
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"]:has(
+    #radio-activity-panel [data-hold-state="held"]
+  ) .carrier-deck-lights {
+    animation: carrier-deck-lock 1.4s steps(2, end) infinite;
+  }
+}
+
+@keyframes carrier-lock-acquired {
+  0%, 100% { stroke-dashoffset: 0; opacity: 0.74; }
+  50% { stroke-dashoffset: -38; opacity: 1; }
+}
+@keyframes carrier-deck-lock { 0%, 100% { opacity: 0.42; } 50% { opacity: 1; } }

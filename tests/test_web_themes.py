@@ -94,9 +94,7 @@ def test_built_in_web_theme_registry_is_ordered_and_immutable() -> None:
         "Galactic Operations",
         "Tactical Field",
     )
-    assert registry.require("matrix").stylesheet_url == (
-        "assets/themes/matrix/theme.css"
-    )
+    assert registry.require("matrix").stylesheet_url == ("assets/themes/matrix/theme.css")
     with pytest.raises(FrozenInstanceError):
         registry.themes[0].label = "Changed"  # type: ignore[misc]
 
@@ -123,21 +121,22 @@ def test_built_in_web_theme_browser_document_is_deterministic() -> None:
 
 def test_built_in_stylesheets_are_isolated_package_resources() -> None:
     registry = built_in_web_theme_registry()
-    base = files("sds200.web_assets").joinpath("dashboard.css").read_text(
-        encoding="utf-8"
-    )
+    base = files("sds200.web_assets").joinpath("dashboard.css").read_text(encoding="utf-8")
 
-    assert ':root[data-theme=' not in base
+    assert ":root[data-theme=" not in base
     for theme in registry.themes:
         stylesheet = read_built_in_web_theme_stylesheet(theme).decode("utf-8")
         assert f':root[data-theme="{theme.identifier}"]' in stylesheet
         assert "javascript:" not in stylesheet.lower()
         assert "https://" not in stylesheet.lower()
         assert "http://" not in stylesheet.lower()
-        assert re.search(
-            r':root\[data-theme="[^"]+"\]\s+#[0-9a-fA-F]{3,8}\b',
-            stylesheet,
-        ) is None
+        assert (
+            re.search(
+                r':root\[data-theme="[^"]+"\]\s+#[0-9a-fA-F]{3,8}\b',
+                stylesheet,
+            )
+            is None
+        )
         for other in registry.identifiers:
             if other != theme.identifier:
                 assert f'data-theme="{other}"' not in stylesheet
@@ -145,9 +144,7 @@ def test_built_in_stylesheets_are_isolated_package_resources() -> None:
 
 def test_built_in_themes_style_held_scanner_fields() -> None:
     registry = built_in_web_theme_registry()
-    base = files("sds200.web_assets").joinpath("dashboard.css").read_text(
-        encoding="utf-8"
-    )
+    base = files("sds200.web_assets").joinpath("dashboard.css").read_text(encoding="utf-8")
 
     assert '[data-hold-scope][data-hold-state="held"]' in base
     assert "--hold-field-background" in base
@@ -162,6 +159,197 @@ def test_built_in_themes_style_held_scanner_fields() -> None:
             "--hold-field-value:",
         ):
             assert custom_property in stylesheet
+
+
+def test_native_select_popup_rows_have_theme_independent_contrast() -> None:
+    base = files("sds200.web_assets").joinpath("dashboard.css").read_text(
+        encoding="utf-8"
+    )
+
+    popup = re.search(r"select option,\s*select optgroup\s*\{([^}]+)\}", base)
+    assert popup is not None
+    assert "color-scheme: light;" in popup[1]
+    assert "color: #111827;" in popup[1]
+    assert "background: #fff;" in popup[1]
+    assert "-webkit-text-fill-color: #111827;" in popup[1]
+
+    forced_colors = base.split("@media (forced-colors: active)", 1)[1]
+    forced_popup = re.search(
+        r"select option,\s*select optgroup\s*\{([^}]+)\}", forced_colors
+    )
+    assert forced_popup is not None
+    assert "color: FieldText !important;" in forced_popup[1]
+    assert "background: Field !important;" in forced_popup[1]
+    assert "-webkit-text-fill-color: FieldText !important;" in forced_popup[1]
+
+
+HERO_CINEMATIC_THEMES = (
+    (
+        "cinematic-carrier-air-wing",
+        "carrier-air-wing",
+        "carrier-",
+        ("carrier-cloud-drift-far", "carrier-radar-turn", "carrier-hud-dash"),
+        "carrier-lock-acquired",
+    ),
+    (
+        "cinematic-tactical-field",
+        "tactical-field",
+        "tactical-",
+        ("tactical-scope-turn", "tactical-route-flow", "tactical-contact-pulse"),
+        "tactical-route-lock",
+    ),
+    (
+        "cinematic-wizarding-archive",
+        "wizarding-archive",
+        "archive-",
+        ("archive-ring-a", "archive-stars-breathe", "archive-candle-breathe"),
+        "archive-hold-ink",
+    ),
+    (
+        "cinematic-galactic-operations",
+        "galactic-operations",
+        "galactic-",
+        ("galactic-stars-far", "galactic-ring-a", "galactic-sweep-turn"),
+        "galactic-lock-arc",
+    ),
+    (
+        "cinematic-mission-control",
+        "mission-control",
+        "mission-",
+        ("mission-trace-run", "mission-needle-a", "mission-lamp-test"),
+        "mission-hold-lamp",
+    ),
+    (
+        "cinematic-cyberpunk-night",
+        "cyberpunk-night",
+        "cyber-",
+        ("cyber-rain-far", "cyber-train-pass", "cyber-holo-a"),
+        "cyber-hold-glitch",
+    ),
+)
+
+
+@pytest.mark.parametrize(
+    ("identifier", "scene", "prefix", "motion_markers", "hold_marker"),
+    HERO_CINEMATIC_THEMES,
+)
+def test_hero_cinematic_theme_reveals_only_its_matching_panorama(
+    identifier: str,
+    scene: str,
+    prefix: str,
+    motion_markers: tuple[str, ...],
+    hold_marker: str,
+) -> None:
+    del prefix, motion_markers, hold_marker
+    stylesheet = read_built_in_web_theme_stylesheet(
+        built_in_web_theme_registry().require(identifier)
+    ).decode("utf-8")
+    other_scenes = {item[1] for item in HERO_CINEMATIC_THEMES if item[1] != scene}
+
+    assert (
+        "@media (min-width: 1280px) and (min-height: 720px) and (min-aspect-ratio: 3/2)"
+    ) in stylesheet
+    assert (
+        "@media (width < 1280px), (height < 720px), (aspect-ratio < 3/2)"
+    ) in stylesheet
+    assert "(max-aspect-ratio: 3/2)" not in stylesheet
+    assert f'[data-cinematic-scene="{scene}"]' in stylesheet
+    assert stylesheet.count("data-cinematic-scene=") == 1
+    assert all(other not in stylesheet for other in other_scenes)
+    assert ".theme-stage > span" in stylesheet
+    assert "display: inline" in stylesheet
+
+
+def test_mission_control_full_hd_tabs_reserve_a_separate_lamp_lane() -> None:
+    stylesheet = read_built_in_web_theme_stylesheet(
+        built_in_web_theme_registry().require("cinematic-mission-control")
+    ).decode("utf-8")
+    full_hd = stylesheet.split(
+        "@media (min-width: 1280px) and (min-height: 720px) and (min-aspect-ratio: 3/2)",
+        1,
+    )[1]
+    tab = re.search(r'\.workspace-tabs \[role="tab"\]\s*\{([^}]+)\}', full_hd)
+    lamp = re.search(r'\.workspace-tabs \[role="tab"\]::before\s*\{([^}]+)\}', full_hd)
+    divider = re.search(r'\.workspace-tabs \[role="tab"\]::after\s*\{([^}]+)\}', full_hd)
+
+    assert tab is not None and lamp is not None and divider is not None
+    assert "display: grid !important;" in tab[1]
+    assert "grid-template-rows: 0.9rem minmax(1.1rem, auto);" in tab[1]
+    assert "row-gap: 0.4rem;" in tab[1]
+    assert "align-content: center;" in tab[1]
+    assert "align-items: center !important;" in tab[1]
+    assert "justify-items: center !important;" in tab[1]
+    assert "min-height: 4.4rem !important;" in tab[1]
+    assert "padding: 0.45rem 0.55rem !important;" in tab[1]
+    assert "position: static;" in lamp[1]
+    assert "grid-row: 1;" in lamp[1]
+    assert "align-self: center;" in lamp[1]
+    assert "justify-self: center;" in lamp[1]
+    assert "translate: none;" in lamp[1]
+    assert "height: 0.56rem;" in lamp[1]
+    assert "top: 1.72rem;" in divider[1]
+
+
+@pytest.mark.parametrize(
+    ("identifier", "scene", "prefix", "motion_markers", "hold_marker"),
+    HERO_CINEMATIC_THEMES,
+)
+def test_hero_cinematic_motion_and_hold_reactions_are_scene_native(
+    identifier: str,
+    scene: str,
+    prefix: str,
+    motion_markers: tuple[str, ...],
+    hold_marker: str,
+) -> None:
+    del scene
+    stylesheet = read_built_in_web_theme_stylesheet(
+        built_in_web_theme_registry().require(identifier)
+    ).decode("utf-8")
+
+    assert "@media (prefers-reduced-motion: no-preference)" in stylesheet
+    assert "@media (prefers-reduced-motion: reduce)" in stylesheet
+    assert "animation: none !important" in stylesheet
+    assert stylesheet.count(f"@keyframes {prefix}") >= 3
+    assert all(marker in stylesheet for marker in motion_markers)
+    assert ':has(\n  #radio-activity-panel [data-hold-state="held"]\n)' in stylesheet
+    assert hold_marker in stylesheet
+    assert f"@keyframes {hold_marker}" in stylesheet
+
+
+def test_orbital_keyframes_preserve_authored_svg_orientation_across_loops() -> None:
+    wizarding = read_built_in_web_theme_stylesheet(
+        built_in_web_theme_registry().require("cinematic-wizarding-archive")
+    ).decode("utf-8")
+    cyberpunk = read_built_in_web_theme_stylesheet(
+        built_in_web_theme_registry().require("cinematic-cyberpunk-night")
+    ).decode("utf-8")
+
+    for marker in (
+        "from { transform: rotate(60deg); }",
+        "to { transform: rotate(420deg); }",
+        "from { transform: rotate(-60deg); }",
+        "to { transform: rotate(-420deg); }",
+    ):
+        assert marker in wizarding
+    assert "from { transform: rotate(28deg); }" in cyberpunk
+    assert "to { transform: rotate(-332deg); }" in cyberpunk
+
+
+@pytest.mark.parametrize(
+    "identifier",
+    tuple(item[0] for item in HERO_CINEMATIC_THEMES),
+)
+def test_hero_cinematic_forced_colors_removes_decorative_stage(
+    identifier: str,
+) -> None:
+    stylesheet = read_built_in_web_theme_stylesheet(
+        built_in_web_theme_registry().require(identifier)
+    ).decode("utf-8")
+
+    assert "@media (forced-colors: active)" in stylesheet
+    forced_colors = stylesheet.split("@media (forced-colors: active)", 1)[1]
+    assert ".theme-stage" in forced_colors
+    assert "display: none" in forced_colors
 
 
 @pytest.mark.parametrize(
@@ -179,26 +367,31 @@ def test_light_cinematic_theme_hover_preserves_selected_tab(identifier: str) -> 
     theme = built_in_web_theme_registry().require(identifier)
     stylesheet = read_built_in_web_theme_stylesheet(theme).decode("utf-8")
 
-    assert (
-        ':hover:not(:disabled):not([aria-selected="true"])' in stylesheet
-    )
+    assert ':hover:not(:disabled):not([aria-selected="true"])' in stylesheet
 
 
 @pytest.mark.parametrize(
-    ("identifier", "fallback"),
+    ("identifier", "fallbacks"),
     (
-        ("cinematic-y2k-media", "background-color: #176fa8"),
-        ("cinematic-mecha-operations", "background-color: #0c6f9b"),
+        ("cinematic-y2k-media", ("background-color: #176fa8",)),
+        ("cinematic-mecha-operations", ("background-color: #0c6f9b",)),
+        ("cinematic-cyberpunk-night", ("background-color: #ff4bd8",)),
+        ("cinematic-galactic-operations", ("background-color: #7ac9ee",)),
+        ("cinematic-tactical-field", ("background-color: #172015",)),
+        (
+            "cinematic-wizarding-archive",
+            ("background-color: #c88b3f", "background-color: #c79f5e"),
+        ),
     ),
 )
-def test_light_gradient_tabs_have_solid_contrast_fallback(
+def test_gradient_surfaces_have_solid_contrast_fallbacks(
     identifier: str,
-    fallback: str,
+    fallbacks: tuple[str, ...],
 ) -> None:
     theme = built_in_web_theme_registry().require(identifier)
     stylesheet = read_built_in_web_theme_stylesheet(theme).decode("utf-8")
 
-    assert fallback in stylesheet
+    assert all(fallback in stylesheet for fallback in fallbacks)
 
 
 def test_pip_boy_inspired_theme_uses_stable_declarative_hooks() -> None:
@@ -236,8 +429,9 @@ def test_pip_boy_inspired_theme_uses_stable_declarative_hooks() -> None:
 def test_lcars_data_groups_keep_bounded_corners_without_removing_containment() -> None:
     theme = built_in_web_theme_registry().require("lcars")
     stylesheet = read_built_in_web_theme_stylesheet(theme).decode("utf-8")
-    match = re.search(r':root\[data-theme="lcars"\] :is\(\.radio-field-groups,[^{]+\{([^}]+)\}',
-                      stylesheet)
+    match = re.search(
+        r':root\[data-theme="lcars"\] :is\(\.radio-field-groups,[^{]+\{([^}]+)\}', stylesheet
+    )
     assert match is not None
     assert "border-radius: 0;" in match[1]
     assert "999px" not in match[1]
@@ -259,9 +453,9 @@ def test_lcars_header_content_reserves_space_for_decorative_edges() -> None:
     )
     assert header is not None
     assert "border-radius: 0;" in header[1]
-    viewport = files("sds200.web_assets").joinpath(
-        "dashboard-viewport.css"
-    ).read_text(encoding="utf-8")
+    viewport = (
+        files("sds200.web_assets").joinpath("dashboard-viewport.css").read_text(encoding="utf-8")
+    )
     assert ':root[data-theme="lcars"]' not in viewport
     layout = files("sds200.web_assets").joinpath("lcars-v2.css").read_text()
     assert "--lcars-v2-nav-cap: 3.2rem;" in layout
@@ -274,32 +468,22 @@ def test_lcars_horizontal_navigation_clears_the_fluid_elbow() -> None:
 
     assert "--lcars-v2-horizontal-nav-inset: 0.8rem;" in layout
     assert "--lcars-v2-horizontal-elbow-radius: 1.25rem;" in layout
-    assert (
-        "padding-inline: var(--lcars-v2-horizontal-nav-inset) !important;"
-        in layout
-    )
-    assert (
-        "padding-block-start: var(--lcars-v2-horizontal-nav-inset) !important;"
-        in layout
-    )
+    assert "padding-inline: var(--lcars-v2-horizontal-nav-inset) !important;" in layout
+    assert "padding-block-start: var(--lcars-v2-horizontal-nav-inset) !important;" in layout
     assert "@media (min-width: 44rem), (orientation: landscape)" in layout
     assert "position: relative;\n    z-index: 1;" in layout
-    horizontal = layout.split(
-        "@media (max-width: 63.99rem), (max-height: 37.99rem)", 1
-    )[1].split("@media", 1)[0]
+    horizontal = layout.split("@media (max-width: 63.99rem), (max-height: 37.99rem)", 1)[1].split(
+        "@media", 1
+    )[0]
     assert ".workspace-shell::before" in horizontal
     assert "radial-gradient(circle at 100% 100%" in horizontal
     assert "calc(var(--lcars-v2-rail) + var(--lcars-v2-horizontal-elbow-radius))" in horizontal
     assert (
-        "calc(var(--lcars-v2-shell-stroke) + "
-        "var(--lcars-v2-horizontal-elbow-radius))"
-        in horizontal
+        "calc(var(--lcars-v2-shell-stroke) + var(--lcars-v2-horizontal-elbow-radius))" in horizontal
     )
     # The wide vertical rail has its own independent decorative cap and must
     # retain the existing edge-to-edge navigation geometry.
-    desktop = layout.split(
-        "@media (min-width: 64rem) and (min-height: 38rem)", 2
-    )[2]
+    desktop = layout.split("@media (min-width: 64rem) and (min-height: 38rem)", 2)[2]
     tabs = desktop.split(".workspace-tabs {", 1)[1].split("}", 1)[0]
     assert "padding: 0 !important;" in tabs
 

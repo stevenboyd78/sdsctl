@@ -56,6 +56,23 @@ export const VIEWPORTS = Object.freeze([
   Object.freeze({name: "phone", width: 390, height: 844, dpr: 2}),
 ]);
 
+const HERO_PANORAMA_SCENES = Object.freeze([
+  Object.freeze({theme: "cinematic-carrier-air-wing", scene: "carrier-air-wing"}),
+  Object.freeze({theme: "cinematic-tactical-field", scene: "tactical-field"}),
+  Object.freeze({theme: "cinematic-wizarding-archive", scene: "wizarding-archive"}),
+  Object.freeze({theme: "cinematic-galactic-operations", scene: "galactic-operations"}),
+  Object.freeze({theme: "cinematic-mission-control", scene: "mission-control"}),
+  Object.freeze({theme: "cinematic-cyberpunk-night", scene: "cyberpunk-night"}),
+]);
+
+const HERO_PANORAMA_BOUNDARIES = Object.freeze([
+  Object.freeze({width: 1280, height: 720, panorama: true}),
+  Object.freeze({width: 1440, height: 960, panorama: true}),
+  Object.freeze({width: 1440, height: 961, panorama: false}),
+  Object.freeze({width: 1279, height: 720, panorama: false}),
+  Object.freeze({width: 1280, height: 719, panorama: false}),
+]);
+
 export const PANES = Object.freeze([
   "scanner",
   "controls",
@@ -113,7 +130,8 @@ Usage: node scripts/audit_web_dashboard_browser.mjs [options]
 
 Run the deterministic dashboard and Home Assistant waterfall-card browser audit in one local
 Chrome/Chromium session. The audit writes no PNGs. It covers all 672 built-in
-theme × reference CSS viewport × workspace pane cases, all 189 explicit System
+theme × reference CSS viewport × workspace pane cases, 30 exact panoramic-boundary
+cases for the six hero environments, all 189 explicit System
 palette responsive cases, plus media-preference, enlarged-text,
 pagination-focus, trusted Tab/Shift+Tab traversal, WCAG AA contrast, complete
 adaptive-presentation, DPR-transition, and prefixed-URL probes. It also covers
@@ -2195,6 +2213,26 @@ export function browserAuditLibrary() {
         );
       }
     }
+    const hierarchy = document.querySelector(".scanner-display-hierarchy");
+    const channel = document.querySelector(
+      '.scanner-display-hierarchy > [data-hold-scope="channel"]',
+    );
+    if (
+      hierarchy instanceof HTMLElement &&
+      channel instanceof HTMLElement &&
+      rendered(hierarchy) &&
+      getComputedStyle(hierarchy).gridTemplateColumns.split(" ").length === 1
+    ) {
+      const dividerWidth = Number.parseFloat(
+        getComputedStyle(channel).borderBottomWidth,
+      );
+      const rowGap = Number.parseFloat(getComputedStyle(hierarchy).rowGap);
+      const hasDivider = Number.isFinite(dividerWidth) && dividerWidth > 0;
+      const hasThemeSpacing = Number.isFinite(rowGap) && rowGap > 0;
+      if (!hasDivider && !hasThemeSpacing) {
+        failures.push("compact Channel field has no separation before Site");
+      }
+    }
     return failures;
   }
 
@@ -2787,8 +2825,12 @@ async function auditPagination(cdp, collector, context) {
 }
 
 async function auditMediaPreferences(cdp, collector, theme) {
-  const viewport = {width: 800, height: 480, dpr: 1};
-  await setViewport(cdp, viewport);
+  const hero = HERO_PANORAMA_SCENES.find((candidate) => candidate.theme === theme);
+  const compactViewport = {width: 800, height: 480, dpr: 1};
+  const reducedMotionViewport = hero
+    ? {width: 1920, height: 1080, dpr: 1}
+    : compactViewport;
+  await setViewport(cdp, reducedMotionViewport);
   await activatePane(cdp, "scanner");
 
   await cdp.send("Emulation.setEmulatedMedia", {
@@ -2796,11 +2838,35 @@ async function auditMediaPreferences(cdp, collector, theme) {
     media: "screen",
   });
   await frames(cdp);
+  if (hero) {
+    collector.add(
+      `${theme}/reduced-motion/panorama-scene`,
+      await evaluate(
+        cdp,
+        `(() => {
+          const failures = [];
+          const scene = document.querySelector(
+            ${JSON.stringify(`[data-cinematic-scene="${hero.scene}"]`)},
+          );
+          const rendered = scene instanceof Element &&
+            getComputedStyle(scene).display !== "none" &&
+            getComputedStyle(scene).visibility !== "hidden" &&
+            scene.getClientRects().length > 0;
+          if (!rendered) {
+            failures.push("headline panoramic scene is not rendered under reduced motion");
+          }
+          return {failures};
+        })()`,
+      ),
+    );
+  }
   collector.add(
     `${theme}/reduced-motion`,
     await evaluate(cdp, "window.__sdsctlBrowserAudit.reducedMotion()"),
   );
 
+  await setViewport(cdp, compactViewport);
+  await activatePane(cdp, "scanner");
   await cdp.send("Emulation.setEmulatedMedia", {
     features: [
       {name: "forced-colors", value: "active"},
@@ -2848,6 +2914,68 @@ async function auditEnlargedText(cdp, collector, theme) {
   }
   await evaluate(cdp, "scrollTo(0, 0); true");
   await frames(cdp);
+}
+
+async function auditHeroPanoramaBoundaries(cdp, collector) {
+  let caseCount = 0;
+  for (const {theme, scene} of HERO_PANORAMA_SCENES) {
+    collector.add(
+      `${theme}/panorama-boundary/theme-switch`,
+      await evaluate(
+        cdp,
+        `window.__sdsctlBrowserAudit.switchTheme(${JSON.stringify(theme)})`,
+      ),
+    );
+    for (const viewport of HERO_PANORAMA_BOUNDARIES) {
+      caseCount += 1;
+      await setViewport(cdp, {...viewport, dpr: 1});
+      await activatePane(cdp, "scanner");
+      await frames(cdp);
+      const context =
+        `${theme}/${viewport.width}x${viewport.height}@1/` +
+        `${viewport.panorama ? "panorama" : "compact"}-boundary/scanner`;
+      const sceneSelector = `[data-cinematic-scene="${scene}"]`;
+      collector.add(
+        context,
+        await evaluate(
+          cdp,
+          `(() => {
+            const failures = [];
+            const production = matchMedia(
+              "(min-width: 1280px) and (min-height: 720px) and (min-aspect-ratio: 3/2)",
+            ).matches;
+            const compact = matchMedia(
+              "(width < 1280px), (height < 720px), (aspect-ratio < 3/2)",
+            ).matches;
+            const expected = ${JSON.stringify(viewport.panorama)};
+            const scene = document.querySelector(
+              ${JSON.stringify(sceneSelector)},
+            );
+            const visible = scene !== null && getComputedStyle(scene).display !== "none";
+            if (production !== expected) {
+              failures.push("production query is " + production + " instead of " + expected);
+            }
+            if (compact === production) {
+              failures.push("production and compact queries overlap or leave a gap");
+            }
+            if (visible !== expected) {
+              failures.push("scene visibility is " + visible + " instead of " + expected);
+            }
+            return {failures};
+          })()`,
+        ),
+      );
+      collector.add(
+        context,
+        await evaluate(
+          cdp,
+          `window.__sdsctlBrowserAudit.normal("scanner", ${JSON.stringify(theme)})`,
+        ),
+      );
+      await auditAccessibility(cdp, collector, context, "scanner");
+    }
+  }
+  return caseCount;
 }
 
 export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
@@ -2978,6 +3106,9 @@ export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
     await auditEnlargedText(cdp, collector, theme);
   }
 
+  const panoramaBoundaryCases = await auditHeroPanoramaBoundaries(cdp, collector);
+  console.log(`Audited ${panoramaBoundaryCases} hero panoramic-boundary cases`);
+
   await cdp.send("Emulation.setEmulatedMedia", {features: [], media: "screen"});
   await setViewport(cdp, {width: 800, height: 480, dpr: 1});
   await navigate(cdp, `${baseUrl}/__demo/prefix/`, timeoutMs);
@@ -3057,6 +3188,7 @@ export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
     ingressDiagnosticsCases,
     ingressHomeAssistantCases,
     lcarsNavigationTransitionCases,
+    panoramaBoundaryCases,
     systemPaletteCases,
   };
 }
@@ -3851,9 +3983,11 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
         await refreshWhenIdle();
         const outageMarkedStale = document.querySelector('#dashboard-message').textContent.includes('stale');
         const outageVisible = document.querySelector('#dashboard-message').getBoundingClientRect().height > 0;
+        const outageState = document.querySelector('#dashboard-message').dataset.state;
         window.__kioskAudit.offline = false;
         await refreshWhenIdle();
         const recovered = !authenticationRequired && document.querySelector('#status-badge').dataset.state !== 'offline';
+        const recoveredState = document.querySelector('#dashboard-message').dataset.state;
         startEventStream();
         if (document.documentElement.dataset.kioskCompact === 'true') document.querySelector('#native-menu-toggle').click();
         window.__kioskAudit.expired = true;
@@ -3864,13 +3998,15 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
         await refreshRecordings();
         startEventStream();
         reconcileWaterfallDemand();
-        return {geometry, visibleTabs, rejectedPane, liveCanvas, outageMarkedStale, outageVisible, recovered,
+        return {geometry, visibleTabs, rejectedPane, liveCanvas, outageMarkedStale, outageVisible,
+          outageState, recovered, recoveredState,
           loginVisible: document.querySelector('#native-session-status').getBoundingClientRect().height > 0,
           menuClosed: !document.querySelector('#native-menu').open,
           boundedReads: window.__kioskAudit.boundedReads,
           message: document.querySelector('#native-session-status').textContent,
           login: document.querySelector('#native-session-status a')?.getAttribute('href'),
           expired: authenticationRequired, eventsClosed: eventSource === null,
+          loginState: document.querySelector('#dashboard-message').dataset.state,
           waterfallClosed: waterfallAbortController === null,
           requestsAtExpiry, requestsAfter: window.__kioskAudit.requests.length,
           paths: window.__kioskAudit.requests,
@@ -3883,9 +4019,10 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
             : g.overviewHeight > 120 || g.gap > 24 || g.bannerGap > 24 ||
               g.gap < -1 || g.bannerGap < -1 || g.workspaceHeight < 150)) ||
           state.rejectedPane !== 'scanner' || !state.liveCanvas || !state.expired ||
-          !state.outageMarkedStale || !state.outageVisible || !state.loginVisible || !state.menuClosed || !state.recovered || !state.boundedReads ||
+          !state.outageMarkedStale || !state.outageVisible || state.outageState !== 'offline' ||
+          !state.loginVisible || !state.menuClosed || !state.recovered || state.recoveredState !== 'online' || !state.boundedReads ||
           !state.eventsClosed || !state.waterfallClosed || state.requestsAtExpiry !== state.requestsAfter ||
-          !state.message.includes('stale') || !state.login?.endsWith('/auth/display/login') ||
+          !state.message.includes('stale') || state.loginState !== 'offline' || !state.login?.endsWith('/auth/display/login') ||
           state.paths.some(path => /\/(scanner\/|recording|audio)/.test(path)) || state.horizontalOverflow) {
         throw new Error(`display kiosk ${viewport.name} failed: ${JSON.stringify(state)}`);
       }
@@ -4179,6 +4316,7 @@ export async function captureDashboardScreenshot({
             current: document.querySelector("#dashboard-message")?.textContent?.trim() ?? null,
             initial: message.initialMessage,
             mutations: message.mutations,
+            state: document.querySelector("#dashboard-message")?.dataset?.state ?? null,
           },
         };
       })()`,
@@ -4198,6 +4336,7 @@ export async function captureDashboardScreenshot({
     if (
       captureState.message?.initial !== SCREENSHOT_STATUS_MESSAGE ||
       captureState.message?.current !== SCREENSHOT_STATUS_MESSAGE ||
+      captureState.message?.state !== "online" ||
       captureState.message?.mutations !== 0
     ) {
       throw new Error(
@@ -4360,6 +4499,14 @@ async function run(options) {
           `${result.lcarsNavigationTransitionCases}`,
       );
     }
+    if (
+      result.panoramaBoundaryCases !==
+      HERO_PANORAMA_SCENES.length * HERO_PANORAMA_BOUNDARIES.length
+    ) {
+      throw new Error(
+        `internal panoramic-boundary count mismatch: ${result.panoramaBoundaryCases}`,
+      );
+    }
     if (result.failures.length > 0) {
       console.error(`\nBrowser acceptance failed with ${result.failures.length} finding(s):`);
       const reported = result.failures.slice(0, 200);
@@ -4391,7 +4538,8 @@ async function run(options) {
       console.log(`Wrote ${screenshotPath}`);
     }
     console.log(
-      `PASS: ${result.caseCount} matrix cases plus theme switching, all 35 radio ` +
+      `PASS: ${result.caseCount} matrix cases plus ${result.panoramaBoundaryCases} ` +
+        `hero panoramic-boundary cases, theme switching, all 35 radio ` +
         "fields, Simple/Detail and adaptive screens, trusted Tab/Shift+Tab and " +
         "pagination focus, WCAG AA normal/forced-color contrast, reduced motion, " +
         "enlarged-text scrolling escape, DPR changes, 12 phone recording font " +

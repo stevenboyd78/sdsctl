@@ -405,6 +405,34 @@ proprietary typefaces, copied interface geometry, or remote resources. Every
 theme retains the same semantic status colors, visible held-field treatment,
 keyboard behavior, reduced-motion fallback, and forced-colors contract.
 
+Six headline panoramic environments deliberately recompose the wide-screen
+workspace instead of acting as palette swaps or instances of one re-themed
+template: Carrier Air Wing uses a flight-deck/HUD frame, Tactical Field a
+left-side map-console rail, Wizarding Archive an illuminated
+book-and-observatory frame, Galactic Operations a two-row bridge command bank,
+Mission Control a bottom-mounted annunciator switch bank, and Cyberpunk Night
+an asymmetric right-side neon rail. Each owns its scene silhouette, instrument
+layout, materials, motion grammar, and scanner-state reaction. The other 16
+Cinematic choices remain distinct themed colorway treatments for compact and
+general-purpose displays rather than claiming the same panoramic scene depth.
+
+A headline panorama activates only when all three conditions hold: the CSS
+viewport is at least 1280 pixels wide, at least 720 pixels high, and at least a
+3:2 aspect ratio. If any condition is false, that theme uses the common compact
+colorway and horizontal-navigation contract. This deliberately includes
+1366x768 as a panoramic desktop while keeping portrait, short, and narrow
+screens compact. Live panoramas use independent scene-native motion;
+`prefers-reduced-motion` retains the complete static composition and every
+state indication.
+
+Held fields also produce a theme-native supplemental response: Carrier locks
+its target/HUD and deck lights; Tactical locks its route and contacts;
+Wizarding responds through constellation ink, seal, and candlelight; Galactic
+energizes tactical rings and subsystem towers; Mission drives annunciators and
+meters; and Cyberpunk overloads its hologram and neon. The actual held field
+remains independently identified in semantic content, color, and static
+treatment, so the decorative response is never the sole indication.
+
 All 28 choices are built-in packages under the installed
 `sds200/themes/web/<theme-name>/` resource hierarchy. Each directory contains
 only a versioned `manifest.json` and its declared `theme.css`. The manifest
@@ -937,8 +965,10 @@ screens clears values that are no longer present rather than retaining stale
 mode-specific details. Raw `screen` and classified `screen_kind` remain separate
 so an unknown future screen is still visible without being misclassified.
 
-The Scanner pane keeps System, Department, and Channel in one prominent stable
-hierarchy. Its **Auto**, **Hierarchy**, **RF**, **Identity**, and **Special**
+The Scanner pane keeps System and Department on the first row, then Channel and
+Site on the second, in one prominent stable two-by-two hierarchy. The wider
+cells give long configured names room while using the pane's vertical space.
+Its **Auto**, **Hierarchy**, **RF**, **Identity**, and **Special**
 controls make every remaining field group explicitly reachable. Auto uses the
 normalized `screen_kind`: Search and Close Call select the RF group and search
 presentation, while Weather and Tone-Out select the Special group and their

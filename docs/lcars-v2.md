@@ -30,9 +30,9 @@ still the default and safe fallback. There is no duplicate LCARS v2 entry.
 - Black canvas, colored horizontal segments with black breaks, and rounded
   frame elbows. A decorative row above the wide-screen navigation buttons
   leaves room for the upper curve to finish without clipping labels.
-- Site sits beneath System, Department beside it, and Channel spans the next
-  row. The same live Site node is moved, not duplicated. Other themes restore
-  it to its original technical-details position.
+- The shared primary scanner hierarchy uses a stable two-by-two matrix: System
+  and Department on the first row, then Channel and Site on the second. LCARS
+  styles those same live nodes without duplicating or relocating them.
 - At smaller sizes the navigation returns to horizontal / wrapping tabs.
   Existing tab keyboard handling, status meanings, hidden controls, and
   display-only authorization remain in place.

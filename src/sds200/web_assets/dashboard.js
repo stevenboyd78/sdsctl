@@ -2563,6 +2563,12 @@ function psiLabel(snapshot) {
   return "Unavailable";
 }
 
+function setDashboardMessage(state, message) {
+  const node = element("dashboard-message");
+  node.dataset.state = state;
+  node.textContent = message;
+}
+
 function setOverallStatus(state, label, message) {
   if (authenticationRequired) {
     state = "offline";
@@ -2573,7 +2579,7 @@ function setOverallStatus(state, label, message) {
   document.documentElement.dataset.connectionState = state;
   badge.dataset.state = state;
   badge.textContent = label;
-  element("dashboard-message").textContent = message;
+  setDashboardMessage(state, message);
 }
 
 function renderSnapshot(snapshot, message = null) {
@@ -2893,8 +2899,10 @@ function startEventStream() {
     if (eventSource !== source) {
       return;
     }
-    element("dashboard-message").textContent =
-      "Live events are reconnecting; status polling remains active.";
+    setDashboardMessage(
+      "attention",
+      "Live events are reconnecting; status polling remains active.",
+    );
     scheduleEventStreamRestart(source);
     if (nativeAccessMode) void refreshStatus();
   };

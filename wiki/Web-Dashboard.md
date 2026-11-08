@@ -43,14 +43,16 @@ available for that same System, Department, Site, or Channel.
 ## Choose a theme
 
 Theme choice is browser-local presentation state. It does not change daemon or
-scanner state. The six built-in choices share the same panes, controls, fields,
+scanner state. All 28 built-in choices share the same panes, controls, fields,
 keyboard behavior, and security boundary.
 
-Every theme is captured in the same review order: 1920x1080 Full HD, 1366x768
-desktop, 800x480 compact landscape/Raspberry Pi display, and 390x844 portrait
-phone at DPR2. At normal zoom the workspace fits these reference sizes. Compact
-LCARS panes can scroll internally to keep fields and controls reachable without
-shrinking them. When text enlargement or browser zoom needs more room, content
+Every theme is audited at 1920x1080 Full HD, 1366x768 desktop, 800x480 compact
+landscape/Raspberry Pi display, and 390x844 portrait phone at DPR2. The visual
+gallery retains all four references for the established themes and one
+authoritative Full-HD Scanner reference for each Cinematic theme. At normal
+zoom the workspace fits every audited reference size. Compact LCARS panes can
+scroll internally to keep fields and controls reachable without shrinking
+them. When text enlargement or browser zoom needs more room, content
 reachability takes priority and conventional scrolling returns.
 
 The captures show theme-default typography, using locally bundled fonts where
@@ -139,7 +141,24 @@ proprietary fonts, copied hardware geometry, or remote resources.
 These 22 original project-owned themes evoke broad genres and operational
 settings without using franchise names, logos, characters, screenshots,
 proprietary typefaces, copied interface geometry, or remote resources. Each
-Full HD reference uses the same fictional held-channel scanner fixture.
+Full HD reference uses the same fictional held-channel scanner fixture. Six are
+independent panoramic environments; the other 16 are distinct colorway
+treatments intended for compact and general-purpose displays.
+
+Carrier Air Wing, Tactical Field, Wizarding Archive, Galactic Operations,
+Mission Control, and Cyberpunk Night are the headline panoramic environments,
+not re-themed instances of one template. They use distinct flight-deck,
+map-console, illuminated archive, bridge-command, annunciator-switchbank, and
+asymmetric neon architectures, with their own materials, instruments, motion,
+and held-state reactions. A panorama activates only at a CSS viewport of at
+least 1280x720 and an aspect ratio of at least 3:2. If any condition is false,
+the theme returns to its compact colorway and the shared horizontal navigation.
+Reduced-motion mode keeps the full static scene and all state indications.
+
+Across every theme, the Scanner hierarchy remains one stable two-by-two live
+matrix: System and Department on the first row, then Channel and Site on the
+second. Decorative panoramic reactions supplement those semantic fields; they
+never replace the visible held-field state.
 
 ### Mission Control
 

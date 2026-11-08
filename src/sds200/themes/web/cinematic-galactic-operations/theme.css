@@ -1,141 +1,286 @@
-/* Original cinematic spacecraft operations console; no franchise assets or marks. */
+/*
+ * Original deep-space bridge console: a star field, sensor rings, segmented
+ * command tiles, and chamfered hull geometry with no franchise iconography.
+ */
 :root[data-theme="cinematic-galactic-operations"] {
   color-scheme: dark;
-  --background: #05080d;
-  --surface: #0b1119;
-  --surface-emphasis: #121c28;
-  --text: #eaf4ff;
-  --muted: #90a2b4;
-  --border: #374554;
-  --accent: #75c9ff;
-  --accent-strong: #b7e4ff;
-  --success: #6ee7a2;
-  --warning: #ffc857;
-  --danger: #ff5f62;
-  --focus: #d9f1ff;
-  --shadow: 0 1rem 2.5rem rgb(0 0 0 / 0.6);
-  --radius-small: 0.18rem;
-  --radius-large: 0.25rem;
-  --hold-field-background: #322a14;
-  --hold-field-border: #ffc857;
-  --hold-field-label: #ffd982;
+  --background: #02050a;
+  --surface: #080e16;
+  --surface-emphasis: #0e1824;
+  --text: #edf8ff;
+  --muted: #8ca4b7;
+  --border: #324c60;
+  --accent: #6ed8ff;
+  --accent-strong: #c2efff;
+  --success: #65e9a5;
+  --warning: #ffca55;
+  --danger: #ff5f6d;
+  --focus: #ffffff;
+  --shadow: 0 1.2rem 3.4rem rgb(0 0 0 / 0.72);
+  --radius-small: 0;
+  --radius-large: 0;
+  --hold-field-background: #352b12;
+  --hold-field-border: #ffca55;
+  --hold-field-label: #ffdc83;
   --hold-field-value: #ffffff;
+  font-family: "Orbitron", "IBM Plex Sans", sans-serif;
 }
 
 :root[data-theme="cinematic-galactic-operations"] body {
   background:
-    radial-gradient(circle at 13% 18%, #b7e4ff 0 1px, transparent 1.4px),
-    radial-gradient(circle at 84% 23%, #ffffff 0 1px, transparent 1.5px),
-    radial-gradient(circle at 63% 77%, #75c9ff 0 1px, transparent 1.6px),
-    radial-gradient(ellipse at 50% -18%, rgb(45 100 148 / 0.2), transparent 44%),
-    #05080d;
-  background-size: 15rem 13rem, 19rem 17rem, 23rem 21rem, auto, auto;
+    radial-gradient(circle at 12% 17%, #d8f3ff 0 1px, transparent 1.5px),
+    radial-gradient(circle at 86% 22%, #ffffff 0 1px, transparent 1.4px),
+    radial-gradient(circle at 62% 81%, #6ed8ff 0 1px, transparent 1.6px),
+    radial-gradient(ellipse at 50% 110%, rgb(44 113 157 / 0.22), transparent 48%),
+    #02050a;
+  background-size: 13rem 11rem, 17rem 19rem, 23rem 21rem, auto, auto;
+}
+
+:root[data-theme="cinematic-galactic-operations"] .theme-stage { display: block; }
+
+:root[data-theme="cinematic-galactic-operations"] .theme-stage-a,
+:root[data-theme="cinematic-galactic-operations"] .theme-stage-b,
+:root[data-theme="cinematic-galactic-operations"] .theme-stage-c {
+  border: 1px solid rgb(110 216 255 / 0.2);
+  border-radius: 50%;
+}
+
+:root[data-theme="cinematic-galactic-operations"] .theme-stage-a {
+  top: -15rem;
+  left: calc(50% - 24rem);
+  width: 48rem;
+  height: 48rem;
+  background:
+    repeating-conic-gradient(from 0deg, transparent 0 14deg, rgb(110 216 255 / 0.12) 14deg 15deg, transparent 15deg 30deg),
+    radial-gradient(circle, transparent 0 29%, rgb(110 216 255 / 0.12) 29.3% 29.6%, transparent 30% 44%, rgb(110 216 255 / 0.09) 44.3% 44.6%, transparent 45%);
+}
+
+:root[data-theme="cinematic-galactic-operations"] .theme-stage-b {
+  right: -12rem;
+  bottom: -12rem;
+  width: 32rem;
+  height: 32rem;
+  box-shadow: 0 0 0 2rem rgb(255 95 109 / 0.025), 0 0 0 5rem rgb(110 216 255 / 0.02);
+}
+
+:root[data-theme="cinematic-galactic-operations"] .theme-stage-c {
+  bottom: -8rem;
+  left: -8rem;
+  width: 22rem;
+  height: 22rem;
+  background: repeating-conic-gradient(rgb(255 202 85 / 0.11) 0 1deg, transparent 1deg 22.5deg);
+}
+
+:root[data-theme="cinematic-galactic-operations"] .theme-stage-d {
+  top: 0;
+  left: 9%;
+  width: 18%;
+  height: 0.18rem;
+  background: var(--accent);
+  box-shadow: 0 0 1rem var(--accent);
 }
 
 :root[data-theme="cinematic-galactic-operations"] .site-header {
-  border: 1px solid #45586a;
-  border-radius: 0.18rem;
-  background: linear-gradient(100deg, #121e2b 0 62%, #1c1217 100%);
-  box-shadow: 0 0 2rem rgb(117 201 255 / 0.1), var(--shadow);
+  border: 1px solid #4b697e;
+  border-radius: 0;
+  background:
+    linear-gradient(120deg, rgb(110 216 255 / 0.13), transparent 32%),
+    linear-gradient(240deg, rgb(255 95 109 / 0.1), transparent 28%),
+    #08111b;
+  box-shadow: inset 0 0 2rem rgb(110 216 255 / 0.04), var(--shadow);
+  clip-path: polygon(2.2rem 0, calc(50% - 8rem) 0, calc(50% - 7rem) 0.65rem, calc(50% + 7rem) 0.65rem, calc(50% + 8rem) 0, calc(100% - 2.2rem) 0, 100% 50%, calc(100% - 2.2rem) 100%, 2.2rem 100%, 0 50%);
 }
 
+:root[data-theme="cinematic-galactic-operations"] .site-header::before,
 :root[data-theme="cinematic-galactic-operations"] .site-header::after {
   position: absolute;
-  right: 1rem;
+  top: 0.55rem;
   bottom: 0.55rem;
-  width: min(31rem, 38vw);
-  height: 0.22rem;
-  background: linear-gradient(90deg, var(--accent) 0 42%, transparent 42% 48%, var(--danger) 48% 66%, transparent 66% 72%, var(--warning) 72%);
+  width: 0.22rem;
+  background: linear-gradient(var(--accent), transparent 38% 62%, var(--danger));
   content: "";
-  box-shadow: 0 0 0.8rem currentColor;
+  box-shadow: 0 0 0.7rem rgb(110 216 255 / 0.5);
 }
 
+:root[data-theme="cinematic-galactic-operations"] .site-header::before { left: 2.2rem; }
+:root[data-theme="cinematic-galactic-operations"] .site-header::after { right: 2.2rem; }
+
 :root[data-theme="cinematic-galactic-operations"] :is(.brand h1, .panel h2, .panel h3, .workspace-tabs [role="tab"]) {
-  font-family: "Orbitron", sans-serif;
+  font-family: "Orbitron", "IBM Plex Sans", sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+:root[data-theme="cinematic-galactic-operations"] .brand h1 {
+  color: #ffffff;
+  text-shadow: 0 0 1rem rgb(110 216 255 / 0.36);
+}
+
+:root[data-theme="cinematic-galactic-operations"] :is(.eyebrow, .panel-kicker, .theme-picker label) {
+  color: var(--accent);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+:root[data-theme="cinematic-galactic-operations"] .status-badge {
+  border: 1px solid var(--success);
+  border-radius: 50%;
+  background: rgb(5 18 24 / 0.92);
+  box-shadow: inset 0 0 0 0.2rem #071019, 0 0 1rem rgb(101 233 165 / 0.23);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 :root[data-theme="cinematic-galactic-operations"] .workspace-shell {
-  border: 1px solid #45586a;
-  background: linear-gradient(180deg, #0b121b, #05090e);
-  box-shadow: 0 0 0 1px rgb(117 201 255 / 0.06) inset, var(--shadow);
+  gap: 0.5rem;
+  padding: 0.6rem;
+  border: 1px solid #426177;
+  border-radius: 0;
+  background: linear-gradient(180deg, rgb(13 27 40 / 0.96), rgb(2 7 12 / 0.98));
+  box-shadow: inset 0 0 0 1px rgb(110 216 255 / 0.07), var(--shadow);
+  clip-path: polygon(1.8rem 0, calc(100% - 1.8rem) 0, 100% 1.8rem, 100% calc(100% - 1.8rem), calc(100% - 1.8rem) 100%, 1.8rem 100%, 0 calc(100% - 1.8rem), 0 1.8rem);
 }
 
+/* A bridge command bank: three broad controls over three supporting controls. */
 :root[data-theme="cinematic-galactic-operations"] .workspace-tabs {
-  border-bottom: 1px solid #45586a;
-  background: #090f16;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem 0.7rem;
+  padding: 0.2rem 2rem;
+  background: transparent;
+}
+
+:root[data-theme="cinematic-galactic-operations"] .workspace-tabs-with-home-assistant {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
 }
 
 :root[data-theme="cinematic-galactic-operations"] .workspace-tabs [role="tab"] {
-  border-color: #3c4a58;
-  border-radius: 0.1rem 0.65rem 0.1rem 0.1rem;
-  background: #111a24;
-  color: var(--muted);
+  min-height: 1.8rem;
+  border: 1px solid #3d5d72;
+  border-radius: 0;
+  color: #95acbb;
+  background: linear-gradient(110deg, #122636, #07111a);
+  clip-path: polygon(0.85rem 0, calc(100% - 0.85rem) 0, 100% 50%, calc(100% - 0.85rem) 100%, 0.85rem 100%, 0 50%);
 }
 
+:root[data-theme="cinematic-galactic-operations"] .workspace-tabs [role="tab"]:nth-child(3n + 2) { border-color: #5d4255; }
+
 :root[data-theme="cinematic-galactic-operations"] .workspace-tabs [role="tab"][aria-selected="true"] {
-  border-color: var(--accent);
-  background: linear-gradient(100deg, #173e58, #102536 78%);
   color: #ffffff;
-  box-shadow: 0 0 1rem rgb(117 201 255 / 0.18) inset;
+  border-color: var(--accent);
+  background-color: #102b3c;
+  background-image: linear-gradient(90deg, #164862, #102b3c 50%, #3a1c2a);
+  box-shadow: inset 0 0 1rem rgb(110 216 255 / 0.2), 0 0 0.8rem rgb(110 216 255 / 0.18);
 }
 
 :root[data-theme="cinematic-galactic-operations"] .workspace-deck {
-  background: linear-gradient(145deg, rgb(24 42 59 / 0.55), rgb(3 6 10 / 0.75));
+  border: 1px solid #2e5066;
+  background:
+    radial-gradient(circle at 50% 0, rgb(110 216 255 / 0.12), transparent 35%),
+    linear-gradient(90deg, rgb(110 216 255 / 0.035) 1px, transparent 1px),
+    linear-gradient(rgb(110 216 255 / 0.035) 1px, transparent 1px),
+    #02080e;
+  background-size: auto, 4rem 4rem, 4rem 4rem, auto;
 }
 
-:root[data-theme="cinematic-galactic-operations"] [data-workspace-pane] {
-  border-color: #2a3947;
-  background: rgb(5 9 14 / 0.78);
-}
+:root[data-theme="cinematic-galactic-operations"] [data-workspace-pane] { border: 0; background: transparent; }
 
 :root[data-theme="cinematic-galactic-operations"] .panel {
   position: relative;
-  border: 1px solid #3c4a58;
-  border-left: 0.25rem solid var(--accent);
-  border-radius: 0.15rem 0.8rem 0.15rem 0.15rem;
-  background: linear-gradient(130deg, #111c27, #090f16 70%);
-  box-shadow: 0 0.75rem 1.5rem rgb(0 0 0 / 0.46);
+  border: 1px solid #3e6278;
+  border-radius: 0;
+  background:
+    linear-gradient(135deg, rgb(110 216 255 / 0.09), transparent 25%),
+    linear-gradient(315deg, rgb(255 95 109 / 0.06), transparent 22%),
+    rgb(5 14 22 / 0.96);
+  box-shadow: inset 0 0 2.8rem rgb(110 216 255 / 0.035);
+  clip-path: polygon(1.2rem 0, calc(100% - 2.2rem) 0, 100% 2.2rem, 100% calc(100% - 1.2rem), calc(100% - 1.2rem) 100%, 0 100%, 0 1.2rem);
 }
 
+:root[data-theme="cinematic-galactic-operations"] .panel::before {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.9rem;
+  width: 5rem;
+  height: 0.2rem;
+  background: linear-gradient(90deg, var(--danger) 0 25%, transparent 25% 32%, var(--warning) 32% 60%, transparent 60% 67%, var(--accent) 67%);
+  content: "";
+  box-shadow: 0 0 0.7rem rgb(110 216 255 / 0.35);
+}
+
+:root[data-theme="cinematic-galactic-operations"] .panel-header { border-bottom: 1px solid #31556b; }
+
 :root[data-theme="cinematic-galactic-operations"] #radio-activity-panel {
-  border-color: #65869d;
-  border-left-color: var(--warning);
-  background:
-    linear-gradient(110deg, rgb(117 201 255 / 0.12), transparent 44%),
-    linear-gradient(250deg, rgb(255 95 98 / 0.08), transparent 36%),
-    #070c12;
+  border-color: #62869b;
+  background: radial-gradient(circle at 86% 12%, rgb(110 216 255 / 0.14), transparent 18%), linear-gradient(110deg, rgb(110 216 255 / 0.1), transparent 44%), rgb(2 9 15 / 0.97);
 }
 
 :root[data-theme="cinematic-galactic-operations"] .radio-view-controls {
-  border: 1px solid #3c4a58;
-  border-radius: 0 0.8rem 0 0;
-  background: #0d151e;
+  border: 1px solid #385d72;
+  border-radius: 0;
+  background: rgb(7 20 30 / 0.9);
+  clip-path: polygon(0.8rem 0, 100% 0, 100% 100%, 0 100%, 0 0.8rem);
 }
 
-:root[data-theme="cinematic-galactic-operations"] .radio-field-groups {
-  border-color: #2b3c4a;
-  background: rgb(117 201 255 / 0.045);
+:root[data-theme="cinematic-galactic-operations"] .scanner-display-hierarchy {
+  gap: 0.5rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+:root[data-theme="cinematic-galactic-operations"] .scanner-display-hierarchy > div {
+  border: 1px solid #3c6076;
+  background: linear-gradient(120deg, #102b3b, #06131d 68%, #1c1018);
+  clip-path: polygon(0.7rem 0, 100% 0, 100% calc(100% - 0.7rem), calc(100% - 0.7rem) 100%, 0 100%, 0 0.7rem);
+}
+
+:root[data-theme="cinematic-galactic-operations"] .scanner-display-hierarchy > div:nth-child(2n) { border-right: 1px solid #3c6076; }
+:root[data-theme="cinematic-galactic-operations"] .scanner-display-hierarchy > div:nth-last-child(-n + 2) { border-bottom: 1px solid #3c6076; }
+
+:root[data-theme="cinematic-galactic-operations"] :is(.radio-summary, .radio-field-groups) {
+  border-color: #2f4e61;
+  border-radius: 0;
+  background: rgb(8 21 31 / 0.74);
 }
 
 :root[data-theme="cinematic-galactic-operations"] :is(button, .recording-action, select, input, textarea) {
-  border-color: #4a5d6d;
-  border-radius: 0.12rem 0.5rem 0.12rem 0.12rem;
-  background: linear-gradient(#182633, #0b1219);
+  border: 1px solid #41657a;
+  border-radius: 0;
   color: var(--text);
-}
-
-:root[data-theme="cinematic-galactic-operations"] :is(button, .recording-action):hover:not(:disabled) {
-  border-color: var(--accent);
-  background: #173e58;
-}
-
-:root[data-theme="cinematic-galactic-operations"] .status-badge {
-  border-radius: 0.1rem 0.65rem 0.1rem 0.1rem;
-  letter-spacing: 0.08em;
+  background: linear-gradient(#122d3d, #06131c);
+  font-family: inherit;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
+  clip-path: polygon(0.45rem 0, 100% 0, 100% calc(100% - 0.45rem), calc(100% - 0.45rem) 100%, 0 100%, 0 0.45rem);
 }
+
+:root[data-theme="cinematic-galactic-operations"] :is(button, .recording-action):hover:not(:disabled):not([aria-selected="true"]) {
+  border-color: var(--accent);
+  background: #164862;
+  box-shadow: 0 0 0.7rem rgb(110 216 255 / 0.2);
+}
+
+:root[data-theme="cinematic-galactic-operations"] button[aria-pressed="true"] {
+  color: #041017;
+  border-color: #fff0b3;
+  background: var(--warning);
+}
+
+@media (width < 1280px), (height < 720px), (aspect-ratio < 3/2) {
+  :root[data-theme="cinematic-galactic-operations"] :is(.site-header, .workspace-shell, .panel) { clip-path: none; }
+  :root[data-theme="cinematic-galactic-operations"] .workspace-tabs,
+  :root[data-theme="cinematic-galactic-operations"] .workspace-tabs-with-home-assistant { grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); padding-inline: 0.2rem; }
+  :root[data-theme="cinematic-galactic-operations"] .workspace-tabs-with-home-assistant { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  :root[data-theme="cinematic-galactic-operations"] .panel::before { display: none; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cinematic-galactic-operations"] .theme-stage-a { animation: galactic-sensor-turn 90s linear infinite; }
+}
+
+@keyframes galactic-sensor-turn { to { rotate: 360deg; } }
 
 @media (prefers-reduced-motion: reduce) {
   :root[data-theme="cinematic-galactic-operations"] *,
@@ -145,6 +290,278 @@
 
 @media (forced-colors: active) {
   :root[data-theme="cinematic-galactic-operations"] { --background: Canvas; --surface: Canvas; --surface-emphasis: Canvas; --text: CanvasText; --muted: CanvasText; --border: CanvasText; --accent: Highlight; --accent-strong: Highlight; --focus: Highlight; }
-  :root[data-theme="cinematic-galactic-operations"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups) { background: Canvas; box-shadow: none; }
-  :root[data-theme="cinematic-galactic-operations"] .site-header::after { display: none; }
+  :root[data-theme="cinematic-galactic-operations"] .theme-stage { display: none; }
+  :root[data-theme="cinematic-galactic-operations"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups, .scanner-display-hierarchy > div) { background: Canvas; box-shadow: none; clip-path: none; }
+  :root[data-theme="cinematic-galactic-operations"] :is(.site-header, .panel)::before,
+  :root[data-theme="cinematic-galactic-operations"] :is(.site-header, .panel)::after { display: none; }
 }
+
+/* Full-HD production environment: an original panoramic orbital bridge. */
+@media (min-width: 1280px) and (min-height: 720px) and (min-aspect-ratio: 3/2) {
+  :root[data-theme="cinematic-galactic-operations"] .theme-stage > span { display: none; }
+  :root[data-theme="cinematic-galactic-operations"]
+    .cinematic-stage-art
+    [data-cinematic-scene="galactic-operations"] { display: inline; }
+  :root[data-theme="cinematic-galactic-operations"] .cinematic-stage-art { opacity: 0.96; }
+  :root[data-theme="cinematic-galactic-operations"] body { background: #020309; }
+
+  :root[data-theme="cinematic-galactic-operations"] .site-header {
+    margin-inline: 5vw;
+    border: 1px solid rgb(116 225 255 / 0.58);
+    border-radius: 0 0 4.6rem 4.6rem / 0 0 1.5rem 1.5rem;
+    background:
+      linear-gradient(90deg, rgb(6 20 38 / 0.94), rgb(7 10 27 / 0.72) 54%, rgb(26 10 35 / 0.9)),
+      radial-gradient(ellipse at 50% -30%, rgb(91 225 255 / 0.2), transparent 52%);
+    box-shadow: inset 0 -1px rgb(155 239 255 / 0.3), 0 1.2rem 4rem rgb(0 0 0 / 0.66);
+  }
+
+  /* The bridge frame owns the outer corners; controls stay in its clear bay. */
+  :root[data-theme="cinematic-galactic-operations"] .site-header > .brand {
+    margin-inline-start: 2.7rem;
+  }
+
+  :root[data-theme="cinematic-galactic-operations"] .site-header > .header-actions {
+    margin-inline-end: 2.7rem;
+  }
+
+  :root[data-theme="cinematic-galactic-operations"] .workspace-shell {
+    border: 1px solid rgb(112 225 255 / 0.52);
+    background:
+      linear-gradient(90deg, rgb(4 13 26 / 0.72), rgb(5 10 23 / 0.32) 17% 83%, rgb(17 7 26 / 0.7)),
+      radial-gradient(ellipse at 50% 18%, rgb(75 213 255 / 0.08), transparent 44%);
+    box-shadow: inset 0 0 0 1px rgb(188 239 255 / 0.06), inset 0 0 5rem rgb(0 0 0 / 0.25), 0 1rem 3.5rem rgb(0 0 0 / 0.68);
+    clip-path: polygon(2.4rem 0, calc(100% - 2.4rem) 0, 100% 2.4rem, 100% 100%, 0 100%, 0 2.4rem);
+  }
+
+  :root[data-theme="cinematic-galactic-operations"] .workspace-tabs {
+    position: relative;
+    z-index: 4;
+    gap: 0.38rem;
+    padding: 0.55rem 13vw;
+    border-bottom: 1px solid rgb(92 211 245 / 0.33);
+    background: rgb(3 11 24 / 0.72);
+  }
+
+  :root[data-theme="cinematic-galactic-operations"] .workspace-tabs [role="tab"] {
+    position: relative;
+    min-height: 2.1rem;
+    border: 1px solid rgb(107 220 250 / 0.44);
+    background:
+      linear-gradient(135deg, rgb(23 69 98 / 0.88), rgb(6 20 36 / 0.92) 55%, rgb(33 13 47 / 0.86)),
+      radial-gradient(circle at 50% 0, rgb(127 232 255 / 0.16), transparent 48%);
+    box-shadow: inset 0 1px rgb(206 248 255 / 0.11), inset 0 -0.34rem rgb(0 3 11 / 0.38);
+  }
+
+  :root[data-theme="cinematic-galactic-operations"] .workspace-tabs [role="tab"]::after {
+    position: absolute;
+    right: 0.42rem;
+    bottom: 0.28rem;
+    left: 0.42rem;
+    height: 0.12rem;
+    background: linear-gradient(90deg, #62eaff 0 35%, transparent 35% 42%, #d296ff 42% 72%, transparent 72% 78%, #ffd46b 78%);
+    content: "";
+    opacity: 0.35;
+  }
+
+  :root[data-theme="cinematic-galactic-operations"]
+    .workspace-tabs
+    [role="tab"][aria-selected="true"] {
+    color: #06101b;
+    background: linear-gradient(90deg, #9eefff, #7ac9ee 48%, #d5b2ff);
+    background-color: #7ac9ee;
+    box-shadow: 0 0 1rem rgb(98 234 255 / 0.35), inset 0 0 0 1px #ebfdff;
+  }
+
+  :root[data-theme="cinematic-galactic-operations"]
+    .workspace-tabs
+    [role="tab"][aria-selected="true"]::after { opacity: 1; }
+
+  :root[data-theme="cinematic-galactic-operations"] .workspace-deck {
+    border: 0;
+    background:
+      linear-gradient(90deg, rgb(2 8 18 / 0.78), transparent 19% 81%, rgb(13 4 20 / 0.78)),
+      rgb(3 8 18 / 0.25);
+    box-shadow: inset 0 0 4rem rgb(0 0 0 / 0.34);
+  }
+
+  :root[data-theme="cinematic-galactic-operations"] #radio-activity-panel {
+    width: auto !important;
+    margin-inline: 9vw;
+    border: 1px solid rgb(112 228 255 / 0.6);
+    background:
+      radial-gradient(ellipse at 50% 58%, transparent 0 19rem, rgb(1 6 15 / 0.3) 30rem),
+      linear-gradient(90deg, rgb(2 10 22 / 0.8), rgb(7 18 36 / 0.26) 22% 78%, rgb(18 6 26 / 0.78));
+    box-shadow: inset 0 0 0 1px rgb(188 238 255 / 0.06), inset 0 0 4.5rem rgb(0 0 0 / 0.28);
+  }
+
+  :root[data-theme="cinematic-galactic-operations"] .radio-view-controls {
+    border: 1px solid rgb(98 218 250 / 0.5);
+    background: rgb(4 15 30 / 0.74);
+  }
+
+  :root[data-theme="cinematic-galactic-operations"] .scanner-display-hierarchy {
+    gap: 0.55rem;
+    padding-inline: 1.1rem;
+  }
+
+  :root[data-theme="cinematic-galactic-operations"] .scanner-display-hierarchy > div {
+    position: relative;
+    border: 1px solid rgb(108 224 255 / 0.56);
+    background:
+      radial-gradient(circle at 15% 50%, rgb(79 222 255 / 0.18), transparent 20%),
+      linear-gradient(120deg, rgb(9 42 64 / 0.88), rgb(4 17 32 / 0.78) 63%, rgb(34 10 42 / 0.74));
+    box-shadow: inset 0 0 1.3rem rgb(71 217 255 / 0.06), 0 0.35rem 0.85rem rgb(0 0 0 / 0.28);
+  }
+
+  :root[data-theme="cinematic-galactic-operations"] .scanner-display-hierarchy > div::before,
+  :root[data-theme="cinematic-galactic-operations"] .scanner-display-hierarchy > div::after {
+    position: absolute;
+    width: 0.8rem;
+    height: 0.8rem;
+    border-color: #8cefff;
+    border-style: solid;
+    content: "";
+    opacity: 0.62;
+  }
+
+  :root[data-theme="cinematic-galactic-operations"] .scanner-display-hierarchy > div::before {
+    top: 0.22rem;
+    left: 0.22rem;
+    border-width: 1px 0 0 1px;
+  }
+
+  :root[data-theme="cinematic-galactic-operations"] .scanner-display-hierarchy > div::after {
+    right: 0.22rem;
+    bottom: 0.22rem;
+    border-width: 0 1px 1px 0;
+  }
+
+  :root[data-theme="cinematic-galactic-operations"] .radio-summary {
+    border: 1px solid rgb(98 216 248 / 0.44);
+    background: rgb(3 14 29 / 0.62);
+  }
+
+  :root[data-theme="cinematic-galactic-operations"] .radio-field-groups {
+    position: relative;
+    isolation: isolate;
+    border: 1px solid rgb(104 225 255 / 0.42);
+    background:
+      radial-gradient(ellipse at 50% 38%, transparent 0 18rem, rgb(1 7 18 / 0.32) 30rem),
+      linear-gradient(90deg, rgb(2 8 19 / 0.7), transparent 22% 78%, rgb(18 4 24 / 0.7));
+    box-shadow: inset 0 0 4rem rgb(0 0 0 / 0.32);
+  }
+
+  :root[data-theme="cinematic-galactic-operations"] .radio-field-group {
+    position: relative;
+    z-index: 2;
+    background: transparent;
+  }
+
+  :root[data-theme="cinematic-galactic-operations"] .radio-field-group h3 {
+    position: relative;
+    z-index: 4;
+    width: max-content;
+    margin-inline: auto;
+    padding: 0.16rem 1.2rem;
+    border-inline: 1px solid #7aeaff;
+    color: #baf4ff;
+    background: linear-gradient(90deg, transparent, rgb(12 42 64 / 0.88) 18% 82%, transparent);
+    letter-spacing: 0.2em;
+  }
+
+  :root[data-theme="cinematic-galactic-operations"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list {
+    display: grid !important;
+    height: calc(100% - 1.4rem);
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    grid-template-rows: minmax(0, 1fr) auto auto !important;
+    gap: 0.3rem 0.5rem !important;
+    padding: 0.2rem 0.8rem 0.55rem;
+  }
+
+  :root[data-theme="cinematic-galactic-operations"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > div {
+    position: relative;
+    z-index: 3;
+    min-height: 2.9rem;
+    padding: 0.32rem 0.48rem;
+    border: 1px solid rgb(98 220 252 / 0.48);
+    background:
+      linear-gradient(135deg, rgb(15 54 77 / 0.94), rgb(3 17 31 / 0.9) 62%, rgb(37 12 47 / 0.86));
+    clip-path: polygon(0.6rem 0, 100% 0, 100% calc(100% - 0.6rem), calc(100% - 0.6rem) 100%, 0 100%, 0 0.6rem);
+    box-shadow: inset 0 1px rgb(190 241 255 / 0.09), 0 0.35rem 0.8rem rgb(0 0 0 / 0.28);
+  }
+
+  :root[data-theme="cinematic-galactic-operations"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > div:nth-child(-n + 5) { grid-row: 2; }
+  :root[data-theme="cinematic-galactic-operations"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > div:nth-child(n + 6) { grid-row: 3; }
+  :root[data-theme="cinematic-galactic-operations"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > :is(:nth-child(1), :nth-child(6)) { grid-column: 1; }
+  :root[data-theme="cinematic-galactic-operations"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > :is(:nth-child(2), :nth-child(7)) { grid-column: 2; }
+  :root[data-theme="cinematic-galactic-operations"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > :is(:nth-child(3), :nth-child(8)) { grid-column: 3; }
+  :root[data-theme="cinematic-galactic-operations"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > :is(:nth-child(4), :nth-child(9)) { grid-column: 4; }
+  :root[data-theme="cinematic-galactic-operations"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > :is(:nth-child(5), :nth-child(10)) { grid-column: 5; }
+
+  :root[data-theme="cinematic-galactic-operations"]
+    #radio-activity-panel
+    [data-hold-scope][data-hold-state="held"] {
+    border-color: #ffd46b !important;
+    background: linear-gradient(120deg, rgb(92 67 14 / 0.92), rgb(28 18 9 / 0.86), rgb(43 15 45 / 0.84)) !important;
+    box-shadow: inset 0 0 0 0.14rem #ffd46b, 0 0 1.25rem rgb(255 212 107 / 0.3) !important;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cinematic-galactic-operations"] .galactic-stars-far { animation: galactic-stars-far 180s linear infinite alternate; }
+  :root[data-theme="cinematic-galactic-operations"] .galactic-stars-near { animation: galactic-stars-near 96s linear infinite alternate; }
+  :root[data-theme="cinematic-galactic-operations"] .galactic-ring-a { animation: galactic-ring-a 54s linear infinite; transform-origin: 370px 300px; }
+  :root[data-theme="cinematic-galactic-operations"] .galactic-ring-b { animation: galactic-ring-b 88s linear infinite; transform-origin: 370px 300px; }
+  :root[data-theme="cinematic-galactic-operations"] .galactic-sweep { animation: galactic-sweep-turn 38s linear infinite; transform-origin: 370px 300px; }
+  :root[data-theme="cinematic-galactic-operations"] .galactic-planet { animation: galactic-planet-breathe 13s ease-in-out infinite alternate; }
+}
+
+@keyframes galactic-stars-far { to { transform: translate3d(2rem, -0.8rem, 0); } }
+@keyframes galactic-stars-near { to { transform: translate3d(-3.2rem, 1.4rem, 0); } }
+@keyframes galactic-ring-a { to { transform: rotate(360deg); } }
+@keyframes galactic-ring-b { to { transform: rotate(-360deg); } }
+@keyframes galactic-sweep-turn { to { transform: rotate(360deg); } }
+@keyframes galactic-planet-breathe { to { opacity: 0.78; } }
+
+/* A held scope propagates as a bridge-wide tactical lock. */
+:root[data-theme="cinematic-galactic-operations"]:has(
+  #radio-activity-panel [data-hold-state="held"]
+) :is(.galactic-ring-a, .galactic-ring-b) {
+  stroke: #ffd46b;
+  stroke-width: 6;
+  filter: drop-shadow(0 0 0.7rem rgb(255 212 107 / 0.72));
+}
+
+:root[data-theme="cinematic-galactic-operations"]:has(
+  #radio-activity-panel [data-hold-state="held"]
+) .galactic-subsystem-tower {
+  filter: drop-shadow(0 0 0.8rem rgb(255 212 107 / 0.48));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cinematic-galactic-operations"]:has(
+    #radio-activity-panel [data-hold-state="held"]
+  ) .galactic-ring-a {
+    animation: galactic-lock-arc 2.4s linear infinite;
+  }
+
+  :root[data-theme="cinematic-galactic-operations"]:has(
+    #radio-activity-panel [data-hold-state="held"]
+  ) .galactic-subsystem-tower {
+    animation: galactic-station-alert 1.8s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes galactic-lock-arc { to { transform: rotate(360deg); stroke-dashoffset: -84; } }
+@keyframes galactic-station-alert { to { opacity: 0.66; } }

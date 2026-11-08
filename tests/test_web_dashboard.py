@@ -703,8 +703,28 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
         response.text.index('src="assets/theme-bootstrap.js"')
     )
     assert 'src="assets/dashboard.js"' in response.text
+    assert 'src="dashboard-file-preview.js"' not in response.text
     assert "<style" not in response.text
     assert "<script>" not in response.text
+
+
+def test_raw_dashboard_source_has_truthful_static_file_preview() -> None:
+    repository_root = Path(__file__).resolve().parents[1]
+    asset_root = repository_root / "src" / "sds200" / "web_assets"
+    dashboard = (asset_root / "dashboard.html").read_text(encoding="utf-8")
+    preview = (asset_root / "dashboard-file-preview.js").read_text(
+        encoding="utf-8",
+    )
+
+    assert 'src="dashboard-file-preview.js"' in dashboard
+    assert 'data-state="loading"' in dashboard
+    assert 'aria-atomic="true"' in dashboard
+    assert 'globalThis.location?.protocol !== "file:"' in preview
+    assert 'dataset.previewMode = "static"' in preview
+    assert "sample data only; no daemon or scanner is connected" in preview
+    assert '"scanner-connected": "Static fixture"' in preview
+    assert '"scanner-endpoint": "No live endpoint"' in preview
+    assert "fetch(" not in preview
 
 
 def test_web_dashboard_serves_packaged_static_assets() -> None:

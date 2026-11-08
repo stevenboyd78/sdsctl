@@ -1,138 +1,285 @@
-/* Original field-operations presentation with restrained topographic camouflage. */
+/*
+ * Original field-command map table. Abstract contour lines, coordinate grids,
+ * and utilitarian equipment forms avoid real unit marks and camouflage art.
+ */
 :root[data-theme="cinematic-tactical-field"] {
   color-scheme: dark;
-  --background: #10140d;
-  --surface: #1c2417;
-  --surface-emphasis: #293321;
-  --text: #eef0dc;
-  --muted: #b7b99d;
-  --border: #62694c;
-  --accent: #b8c779;
-  --accent-strong: #dbe79f;
-  --success: #89cf80;
-  --warning: #e6c75a;
-  --danger: #e17a63;
-  --focus: #f4f7bd;
-  --shadow: 0 0.8rem 1.8rem rgb(0 0 0 / 0.48);
-  --radius-small: 0.1rem;
-  --radius-large: 0.15rem;
-  --hold-field-background: #3b3518;
-  --hold-field-border: #e6c75a;
-  --hold-field-label: #f2da82;
+  --background: #0a0e08;
+  --surface: #151c11;
+  --surface-emphasis: #202a19;
+  --text: #f1f2dd;
+  --muted: #aeb493;
+  --border: #626b4c;
+  --accent: #b7ca71;
+  --accent-strong: #e0efa0;
+  --success: #87d684;
+  --warning: #e8c857;
+  --danger: #e5765f;
+  --focus: #f6ffbd;
+  --shadow: 0 1rem 2.6rem rgb(0 0 0 / 0.6);
+  --radius-small: 0.08rem;
+  --radius-large: 0.12rem;
+  --hold-field-background: #3e3717;
+  --hold-field-border: #e8c857;
+  --hold-field-label: #ffe07a;
   --hold-field-value: #ffffff;
+  font-family: "IBM Plex Mono", "Liberation Mono", monospace;
 }
 
 :root[data-theme="cinematic-tactical-field"] body {
   background:
-    radial-gradient(ellipse at 18% 22%, rgb(85 98 57 / 0.24) 0 9%, transparent 10%),
-    radial-gradient(ellipse at 82% 63%, rgb(94 83 50 / 0.2) 0 11%, transparent 12%),
-    repeating-linear-gradient(90deg, rgb(184 199 121 / 0.035) 0 1px, transparent 1px 3rem),
-    repeating-linear-gradient(0deg, rgb(184 199 121 / 0.03) 0 1px, transparent 1px 3rem),
-    #10140d;
-  background-size: 21rem 17rem, 24rem 19rem, auto, auto, auto;
+    repeating-radial-gradient(ellipse at 12% 42%, transparent 0 2rem, rgb(183 202 113 / 0.05) 2.05rem 2.12rem, transparent 2.17rem 3.7rem),
+    repeating-linear-gradient(90deg, rgb(183 202 113 / 0.04) 0 1px, transparent 1px 4rem),
+    repeating-linear-gradient(0deg, rgb(183 202 113 / 0.035) 0 1px, transparent 1px 4rem),
+    #0a0e08;
+}
+
+:root[data-theme="cinematic-tactical-field"] .theme-stage { display: block; }
+
+:root[data-theme="cinematic-tactical-field"] .theme-stage-a,
+:root[data-theme="cinematic-tactical-field"] .theme-stage-b,
+:root[data-theme="cinematic-tactical-field"] .theme-stage-c {
+  width: 28rem;
+  height: 20rem;
+  border: 1px solid rgb(183 202 113 / 0.15);
+  border-radius: 44% 56% 38% 62%;
+  box-shadow:
+    0 0 0 1.7rem rgb(183 202 113 / 0.035),
+    0 0 0 3.4rem rgb(183 202 113 / 0.025),
+    0 0 0 5.1rem rgb(183 202 113 / 0.02);
+  transform: rotate(-14deg);
+}
+
+:root[data-theme="cinematic-tactical-field"] .theme-stage-a { top: 15%; left: -8rem; }
+:root[data-theme="cinematic-tactical-field"] .theme-stage-b { right: -9rem; bottom: 8%; transform: rotate(21deg); }
+:root[data-theme="cinematic-tactical-field"] .theme-stage-c { top: -11rem; left: 46%; transform: scale(0.65) rotate(8deg); }
+
+:root[data-theme="cinematic-tactical-field"] .theme-stage-d {
+  inset: 0;
+  background:
+    linear-gradient(90deg, transparent calc(50% - 1px), rgb(232 200 87 / 0.11) 50%, transparent calc(50% + 1px)),
+    linear-gradient(0deg, transparent calc(50% - 1px), rgb(232 200 87 / 0.09) 50%, transparent calc(50% + 1px));
 }
 
 :root[data-theme="cinematic-tactical-field"] .site-header {
-  border: 1px solid #73795a;
+  border: 1px solid #71795a;
   border-radius: 0;
-  background: linear-gradient(110deg, #303b26, #151b12 72%);
-  box-shadow: var(--shadow);
+  background:
+    repeating-linear-gradient(135deg, transparent 0 1rem, rgb(183 202 113 / 0.025) 1rem 2rem),
+    linear-gradient(105deg, #2a3421, #11170e 68%);
+  box-shadow: inset 0 0 0 3px #0d120b, inset 0 0 0 4px #414a34, var(--shadow);
 }
 
+:root[data-theme="cinematic-tactical-field"] .site-header::before,
 :root[data-theme="cinematic-tactical-field"] .site-header::after {
   position: absolute;
-  right: 0.75rem;
-  bottom: 0.45rem;
-  width: min(26rem, 34vw);
-  height: 0.2rem;
-  background: repeating-linear-gradient(90deg, #b8c779 0 1.7rem, transparent 1.7rem 2rem);
   content: "";
 }
 
+:root[data-theme="cinematic-tactical-field"] .site-header::before {
+  inset: 0.55rem auto 0.55rem 0.55rem;
+  width: 0.3rem;
+  background: repeating-linear-gradient(0deg, var(--warning) 0 0.7rem, transparent 0.7rem 1rem);
+}
+
+:root[data-theme="cinematic-tactical-field"] .site-header::after {
+  right: 1rem;
+  bottom: 0.6rem;
+  width: min(26rem, 34vw);
+  height: 0.18rem;
+  background: repeating-linear-gradient(90deg, var(--accent) 0 1.5rem, transparent 1.5rem 1.8rem);
+}
+
 :root[data-theme="cinematic-tactical-field"] :is(.brand h1, .panel h2, .panel h3, .workspace-tabs [role="tab"]) {
-  font-family: "Barlow Condensed", sans-serif;
-  letter-spacing: 0.1em;
+  font-family: "Barlow Condensed", "Liberation Sans Narrow", sans-serif;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
-:root[data-theme="cinematic-tactical-field"] .workspace-shell {
-  border: 1px solid #73795a;
-  border-radius: 0;
-  background: #151b12;
-  box-shadow: 0 0 0 1px rgb(184 199 121 / 0.07) inset, var(--shadow);
-}
-
-:root[data-theme="cinematic-tactical-field"] .workspace-tabs {
-  border-bottom: 2px solid #62694c;
-  background: #1a2216;
-}
-
-:root[data-theme="cinematic-tactical-field"] .workspace-tabs [role="tab"] {
-  border-color: #62694c;
-  border-radius: 0;
-  background: #273120;
-  color: var(--muted);
-}
-
-:root[data-theme="cinematic-tactical-field"] .workspace-tabs [role="tab"][aria-selected="true"] {
-  border-color: var(--accent-strong);
-  background: linear-gradient(100deg, #89964e 0 0.3rem, #3b482b 0.3rem 100%);
-  color: #ffffff;
-}
-
-:root[data-theme="cinematic-tactical-field"] .workspace-deck {
-  background: linear-gradient(145deg, rgb(48 59 38 / 0.54), rgb(12 16 10 / 0.75));
-}
-
-:root[data-theme="cinematic-tactical-field"] [data-workspace-pane] {
-  border-color: #4b533c;
-  background: rgb(16 20 13 / 0.78);
-}
-
-:root[data-theme="cinematic-tactical-field"] .panel {
-  position: relative;
-  border: 1px solid #62694c;
-  border-left: 0.28rem solid var(--accent);
-  border-radius: 0;
-  background:
-    linear-gradient(135deg, rgb(184 199 121 / 0.06), transparent 30%),
-    #20281a;
-  box-shadow: 0 0.55rem 1.25rem rgb(0 0 0 / 0.36);
-}
-
-:root[data-theme="cinematic-tactical-field"] #radio-activity-panel {
-  border-color: #90996b;
-  border-left-color: var(--warning);
-  background: linear-gradient(90deg, rgb(184 199 121 / 0.1), transparent 48%), #151c12;
-}
-
-:root[data-theme="cinematic-tactical-field"] .radio-view-controls {
-  border: 1px solid #62694c;
-  border-radius: 0;
-  background: #20281a;
-}
-
-:root[data-theme="cinematic-tactical-field"] .radio-field-groups {
-  border-color: #4b533c;
-  background: rgb(184 199 121 / 0.045);
-}
-
-:root[data-theme="cinematic-tactical-field"] :is(button, .recording-action, select, input, textarea) {
-  border-color: #73795a;
-  border-radius: 0;
-  background: linear-gradient(#37442a, #20281a);
-  color: var(--text);
-}
-
-:root[data-theme="cinematic-tactical-field"] :is(button, .recording-action):hover:not(:disabled) {
-  border-color: var(--accent-strong);
-  background: #455633;
+:root[data-theme="cinematic-tactical-field"] :is(.eyebrow, .panel-kicker, .theme-picker label) {
+  color: var(--accent-strong);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
 }
 
 :root[data-theme="cinematic-tactical-field"] .status-badge {
   border-radius: 0;
+  border-style: dashed;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+}
+
+/* Wide displays become a field console with a dedicated vertical mode rail. */
+:root[data-theme="cinematic-tactical-field"] .workspace-shell {
+  grid-template-columns: clamp(8.8rem, 11vw, 12rem) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+  border: 1px solid #747c5d;
+  border-radius: 0;
+  background: #10150d;
+  box-shadow: inset 0 0 0 3px #090c07, inset 0 0 0 4px #3f4933, var(--shadow);
+}
+
+:root[data-theme="cinematic-tactical-field"] .workspace-tabs {
+  grid-column: 1;
+  grid-row: 1;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: repeat(6, minmax(0, 1fr));
+  align-content: stretch;
+  gap: 0.35rem;
+  padding: 1rem 0.6rem;
+  border-right: 0.3rem solid #3e4932;
+  background: linear-gradient(90deg, rgb(183 202 113 / 0.08), transparent), #151c11;
+}
+
+:root[data-theme="cinematic-tactical-field"] .workspace-tabs-with-home-assistant {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: repeat(7, minmax(0, 1fr));
+}
+
+:root[data-theme="cinematic-tactical-field"] .workspace-tabs [role="tab"] {
+  position: relative;
+  min-height: 0;
+  border: 1px solid #596346;
+  border-radius: 0;
+  color: var(--muted);
+  background: linear-gradient(90deg, #25301e, #171e13);
+  text-align: left;
+}
+
+:root[data-theme="cinematic-tactical-field"] .workspace-tabs [role="tab"]::before {
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-right: 0.55rem;
+  border: 1px solid currentColor;
+  content: "";
+  transform: rotate(45deg);
+}
+
+:root[data-theme="cinematic-tactical-field"] .workspace-tabs [role="tab"][aria-selected="true"] {
+  border-color: var(--warning);
+  color: #101408;
+  background-color: #c3a437;
+  background-image: linear-gradient(90deg, var(--warning), #c3a437);
+  box-shadow: 0 0 1.1rem rgb(232 200 87 / 0.22);
+}
+
+:root[data-theme="cinematic-tactical-field"] .workspace-deck {
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0.7rem;
+  border: 1px solid #505b3f;
+  background:
+    repeating-radial-gradient(ellipse at 82% 22%, transparent 0 2.4rem, rgb(183 202 113 / 0.045) 2.45rem 2.52rem, transparent 2.57rem 4rem),
+    repeating-linear-gradient(90deg, rgb(183 202 113 / 0.03) 0 1px, transparent 1px 3rem),
+    repeating-linear-gradient(0deg, rgb(183 202 113 / 0.03) 0 1px, transparent 1px 3rem),
+    #0c110a;
+}
+
+:root[data-theme="cinematic-tactical-field"] [data-workspace-pane] { border: 0; background: transparent; }
+
+:root[data-theme="cinematic-tactical-field"] .panel {
+  position: relative;
+  border: 1px solid #606a4d;
+  border-left: 0.45rem solid var(--accent);
+  border-radius: 0;
+  background: linear-gradient(135deg, rgb(183 202 113 / 0.08), transparent 31%), rgb(18 25 14 / 0.95);
+  box-shadow: inset 0 0 0 2px rgb(6 9 5 / 0.8);
+}
+
+:root[data-theme="cinematic-tactical-field"] .panel::before {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-top: 2px solid var(--warning);
+  border-right: 2px solid var(--warning);
+  content: "";
+  opacity: 0.72;
+}
+
+:root[data-theme="cinematic-tactical-field"] .panel-header { border-bottom: 1px dashed #687253; }
+
+:root[data-theme="cinematic-tactical-field"] #radio-activity-panel {
+  border-color: #80896a;
+  border-left-color: var(--warning);
+  background: linear-gradient(90deg, rgb(183 202 113 / 0.1), transparent 42%), rgb(13 19 11 / 0.96);
+}
+
+:root[data-theme="cinematic-tactical-field"] .radio-view-controls {
+  border: 1px dashed #697454;
+  border-radius: 0;
+  background: rgb(27 36 21 / 0.88);
+}
+
+:root[data-theme="cinematic-tactical-field"] .scanner-display-hierarchy {
+  gap: 1px;
+  border: 0.25rem solid #27311f;
+  border-radius: 0;
+  background: #687253;
+}
+
+:root[data-theme="cinematic-tactical-field"] .scanner-display-hierarchy > div {
+  border: 0;
+  background-color: #172015;
+  background-image: linear-gradient(110deg, #2d3a24, #172015);
+}
+
+:root[data-theme="cinematic-tactical-field"] .scanner-display-hierarchy > div:last-child { border: 0; }
+
+:root[data-theme="cinematic-tactical-field"] :is(.radio-summary, .radio-field-groups) {
+  border-color: #4f5a3e;
+  border-radius: 0;
+  background: rgb(29 38 23 / 0.74);
+}
+
+:root[data-theme="cinematic-tactical-field"] .radio-field-list > div {
+  border-bottom-style: dashed;
+  border-bottom-color: #465139;
+}
+
+:root[data-theme="cinematic-tactical-field"] :is(button, .recording-action, select, input, textarea) {
+  border-color: #697454;
+  border-radius: 0;
+  color: var(--text);
+  background: linear-gradient(#303d27, #182015);
+  font-family: inherit;
+  text-transform: uppercase;
+}
+
+:root[data-theme="cinematic-tactical-field"] :is(button, .recording-action):hover:not(:disabled):not([aria-selected="true"]) {
+  border-color: var(--accent-strong);
+  background: #435433;
+}
+
+:root[data-theme="cinematic-tactical-field"] button[aria-pressed="true"] {
+  color: #0b0e08;
+  border-color: var(--warning);
+  background: var(--warning);
+}
+
+@media (width < 1280px), (height < 720px), (aspect-ratio < 3/2) {
+  :root[data-theme="cinematic-tactical-field"] .workspace-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  :root[data-theme="cinematic-tactical-field"] .workspace-tabs,
+  :root[data-theme="cinematic-tactical-field"] .workspace-tabs-with-home-assistant {
+    grid-column: 1;
+    grid-row: 1;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-rows: minmax(0, 1fr);
+    padding: 0.4rem;
+    border-right: 0;
+    border-bottom: 0.22rem solid #3e4932;
+  }
+  :root[data-theme="cinematic-tactical-field"] .workspace-tabs-with-home-assistant { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  :root[data-theme="cinematic-tactical-field"] .workspace-tabs [role="tab"] { text-align: center; }
+  :root[data-theme="cinematic-tactical-field"] .workspace-tabs [role="tab"]::before { display: none; }
+  :root[data-theme="cinematic-tactical-field"] .workspace-deck { grid-column: 1; grid-row: 2; margin: 0.35rem; }
+  :root[data-theme="cinematic-tactical-field"] .panel::before { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -143,6 +290,277 @@
 
 @media (forced-colors: active) {
   :root[data-theme="cinematic-tactical-field"] { --background: Canvas; --surface: Canvas; --surface-emphasis: Canvas; --text: CanvasText; --muted: CanvasText; --border: CanvasText; --accent: Highlight; --accent-strong: Highlight; --focus: Highlight; }
-  :root[data-theme="cinematic-tactical-field"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups) { background: Canvas; box-shadow: none; }
-  :root[data-theme="cinematic-tactical-field"] .site-header::after { display: none; }
+  :root[data-theme="cinematic-tactical-field"] .theme-stage { display: none; }
+  :root[data-theme="cinematic-tactical-field"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups, .scanner-display-hierarchy > div) { background: Canvas; box-shadow: none; }
+  :root[data-theme="cinematic-tactical-field"] :is(.site-header, .panel)::before,
+  :root[data-theme="cinematic-tactical-field"] :is(.site-header, .panel)::after { display: none; }
+}
+
+/* Full-HD production environment: a rugged illuminated geospatial table. */
+@media (min-width: 1280px) and (min-height: 720px) and (min-aspect-ratio: 3/2) {
+  :root[data-theme="cinematic-tactical-field"] .theme-stage > span { display: none; }
+  :root[data-theme="cinematic-tactical-field"]
+    .cinematic-stage-art
+    [data-cinematic-scene="tactical-field"] { display: inline; }
+  :root[data-theme="cinematic-tactical-field"] .cinematic-stage-art { opacity: 0.92; }
+
+  :root[data-theme="cinematic-tactical-field"] body { background: #070c07; }
+
+  :root[data-theme="cinematic-tactical-field"] .site-header {
+    border: 0.38rem solid #242d20;
+    border-left-width: 1.1rem;
+    background:
+      linear-gradient(90deg, rgb(36 48 29 / 0.96), rgb(11 17 10 / 0.82)),
+      repeating-linear-gradient(135deg, transparent 0 1rem, rgb(197 216 146 / 0.035) 1rem 1.08rem);
+    box-shadow:
+      inset 0 0 0 1px rgb(206 220 167 / 0.18),
+      inset 0 -0.55rem rgb(5 8 5 / 0.46),
+      0 1rem 3rem rgb(0 0 0 / 0.62);
+  }
+
+  /* Keep the operational copy clear of the painted edge/scale markings. */
+  :root[data-theme="cinematic-tactical-field"] .site-header > .brand {
+    margin-inline-start: 1rem;
+  }
+
+  :root[data-theme="cinematic-tactical-field"] .site-header > .header-actions {
+    margin-inline-end: 0.75rem;
+    padding-block-end: 0.55rem;
+  }
+
+  :root[data-theme="cinematic-tactical-field"] .workspace-shell {
+    border: 0.48rem solid #242d20;
+    background: rgb(7 13 7 / 0.54);
+    box-shadow:
+      inset 0 0 0 1px rgb(201 218 157 / 0.2),
+      inset 0 0 4rem rgb(13 19 10 / 0.34),
+      0 1.2rem 3rem rgb(0 0 0 / 0.66);
+  }
+
+  :root[data-theme="cinematic-tactical-field"] .workspace-tabs {
+    position: relative;
+    padding: 2.2rem 0.5rem 0.75rem;
+    border-right: 0.55rem solid #20291c;
+    background:
+      linear-gradient(90deg, rgb(44 57 35 / 0.96), rgb(17 24 14 / 0.94)),
+      repeating-linear-gradient(0deg, transparent 0 4.1rem, rgb(215 226 179 / 0.045) 4.1rem 4.2rem);
+    box-shadow: inset -1px 0 rgb(208 222 169 / 0.25), inset -0.6rem 0 rgb(5 8 5 / 0.28);
+  }
+
+  :root[data-theme="cinematic-tactical-field"] .workspace-tabs::before {
+    position: absolute;
+    top: 0.6rem;
+    left: 50%;
+    width: 2.6rem;
+    height: 0.8rem;
+    border: 0.22rem solid #11180e;
+    border-radius: 0.14rem;
+    background: #a2b36c;
+    content: "";
+    box-shadow: inset 0 0 0 1px #d7e6a3, 0 0 0.7rem rgb(181 204 118 / 0.24);
+    translate: -50% 0;
+  }
+
+  :root[data-theme="cinematic-tactical-field"] .workspace-tabs [role="tab"] {
+    position: relative;
+    border: 1px solid #59664a;
+    border-left: 0.34rem solid #737f5f;
+    background: linear-gradient(90deg, #303d29, #151d13);
+    box-shadow: inset 0 1px rgb(221 231 193 / 0.1), inset 0 -0.35rem #0b1009;
+  }
+
+  :root[data-theme="cinematic-tactical-field"] .workspace-tabs [role="tab"]::after {
+    position: absolute;
+    top: 50%;
+    right: 0.42rem;
+    width: 0.48rem;
+    height: 0.48rem;
+    border-radius: 50%;
+    background: #4a5540;
+    content: "";
+    box-shadow: inset 0 0 0 1px #9eaa82;
+    translate: 0 -50%;
+  }
+
+  :root[data-theme="cinematic-tactical-field"]
+    .workspace-tabs
+    [role="tab"][aria-selected="true"]::after {
+    background: #f1d864;
+    box-shadow: 0 0 0.8rem rgb(241 216 100 / 0.62);
+  }
+
+  :root[data-theme="cinematic-tactical-field"] .workspace-deck {
+    border: 1px solid rgb(198 215 151 / 0.36);
+    background:
+      linear-gradient(90deg, rgb(7 13 7 / 0.76), transparent 18% 82%, rgb(7 13 7 / 0.76)),
+      rgb(8 14 8 / 0.32);
+    box-shadow: inset 0 0 4.5rem rgb(1 4 1 / 0.36);
+  }
+
+  :root[data-theme="cinematic-tactical-field"] #radio-activity-panel {
+    border: 1px dashed rgb(214 226 173 / 0.56);
+    background: rgb(7 13 7 / 0.36);
+    box-shadow: inset 0 0 0 0.34rem rgb(31 42 25 / 0.66), inset 0 0 4rem rgb(0 0 0 / 0.32);
+  }
+
+  :root[data-theme="cinematic-tactical-field"] .scanner-display-hierarchy {
+    border: 0.42rem solid rgb(31 41 26 / 0.9);
+    background: #85916a;
+    box-shadow: 0 0.55rem 1.1rem rgb(0 0 0 / 0.34);
+  }
+
+  :root[data-theme="cinematic-tactical-field"] .scanner-display-hierarchy > div {
+    position: relative;
+    background:
+      linear-gradient(110deg, rgb(50 69 41 / 0.94), rgb(12 22 11 / 0.9)),
+      repeating-linear-gradient(0deg, transparent 0 0.9rem, rgb(197 219 143 / 0.045) 0.9rem 0.96rem);
+    background-color: #172015;
+  }
+
+  :root[data-theme="cinematic-tactical-field"] .scanner-display-hierarchy > div::after {
+    position: absolute;
+    right: 0.35rem;
+    bottom: 0.28rem;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-right: 1px solid #d3e4a1;
+    border-bottom: 1px solid #d3e4a1;
+    content: "";
+    opacity: 0.34;
+  }
+
+  :root[data-theme="cinematic-tactical-field"] .radio-summary {
+    border: 0.28rem solid #252e20;
+    background: rgb(22 32 18 / 0.74);
+    box-shadow: inset 0 0 0 1px rgb(201 220 155 / 0.16);
+  }
+
+  :root[data-theme="cinematic-tactical-field"] .radio-field-groups {
+    position: relative;
+    isolation: isolate;
+    border: 0.42rem solid rgb(31 42 25 / 0.88);
+    background:
+      radial-gradient(circle at 50% 52%, transparent 0 18rem, rgb(7 14 7 / 0.26) 30rem),
+      linear-gradient(90deg, rgb(7 14 7 / 0.82), transparent 21% 79%, rgb(7 14 7 / 0.82));
+    box-shadow: inset 0 0 0 1px rgb(213 226 175 / 0.17), inset 0 0 4rem rgb(0 0 0 / 0.34);
+  }
+
+  :root[data-theme="cinematic-tactical-field"] .radio-field-group {
+    position: relative;
+    z-index: 2;
+    background: transparent;
+  }
+
+  :root[data-theme="cinematic-tactical-field"] .radio-field-group h3 {
+    position: relative;
+    z-index: 4;
+    width: max-content;
+    padding: 0.16rem 1.1rem 0.18rem 0.42rem;
+    border-left: 0.36rem solid #f0d363;
+    background: linear-gradient(90deg, rgb(29 43 23 / 0.96), transparent);
+    letter-spacing: 0.16em;
+  }
+
+  :root[data-theme="cinematic-tactical-field"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list {
+    display: grid !important;
+    height: calc(100% - 1.4rem);
+    grid-template-columns: minmax(10rem, 15rem) minmax(17rem, 1fr) minmax(10rem, 15rem) !important;
+    grid-template-rows: repeat(5, minmax(0, 1fr)) !important;
+    gap: 0.3rem 0.6rem !important;
+  }
+
+  :root[data-theme="cinematic-tactical-field"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > div {
+    position: relative;
+    z-index: 3;
+    align-self: center;
+    padding: 0.32rem 0.48rem;
+    border: 1px solid rgb(189 210 139 / 0.48);
+    border-left: 0.32rem solid #8fa264;
+    background: linear-gradient(90deg, rgb(37 55 30 / 0.96), rgb(12 22 11 / 0.86));
+    box-shadow: 0 0.35rem 0.75rem rgb(0 0 0 / 0.28);
+  }
+
+  :root[data-theme="cinematic-tactical-field"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > div:nth-child(-n + 5) { grid-column: 1; }
+  :root[data-theme="cinematic-tactical-field"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > div:nth-child(n + 6) { grid-column: 3; }
+  :root[data-theme="cinematic-tactical-field"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > div:nth-child(1),
+  :root[data-theme="cinematic-tactical-field"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > div:nth-child(6) { grid-row: 1; }
+  :root[data-theme="cinematic-tactical-field"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > div:nth-child(2),
+  :root[data-theme="cinematic-tactical-field"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > div:nth-child(7) { grid-row: 2; }
+  :root[data-theme="cinematic-tactical-field"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > div:nth-child(3),
+  :root[data-theme="cinematic-tactical-field"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > div:nth-child(8) { grid-row: 3; }
+  :root[data-theme="cinematic-tactical-field"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > div:nth-child(4),
+  :root[data-theme="cinematic-tactical-field"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > div:nth-child(9) { grid-row: 4; }
+  :root[data-theme="cinematic-tactical-field"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > div:nth-child(5),
+  :root[data-theme="cinematic-tactical-field"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > div:nth-child(10) { grid-row: 5; }
+
+  :root[data-theme="cinematic-tactical-field"]
+    #radio-activity-panel
+    [data-hold-scope][data-hold-state="held"] {
+    border-color: #f0d363 !important;
+    border-left-width: 0.55rem !important;
+    background: linear-gradient(90deg, rgb(91 78 24 / 0.96), rgb(27 28 11 / 0.9)) !important;
+    box-shadow: 0 0 1.1rem rgb(240 211 99 / 0.26), inset 0 0 0 1px #f0d363 !important;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cinematic-tactical-field"] .tactical-sweep {
+    animation: tactical-scope-turn 22s linear infinite;
+    transform-origin: 300px 300px;
+  }
+  :root[data-theme="cinematic-tactical-field"] .tactical-route-line { animation: tactical-route-flow 9s linear infinite; }
+  :root[data-theme="cinematic-tactical-field"] .tactical-contact-a { animation: tactical-contact-pulse 4.6s ease-out infinite; transform-origin: center; }
+  :root[data-theme="cinematic-tactical-field"] .tactical-contact-b { animation: tactical-contact-pulse 4.6s 1.8s ease-out infinite; transform-origin: center; }
+}
+
+@keyframes tactical-scope-turn { to { transform: rotate(360deg); } }
+@keyframes tactical-route-flow { to { stroke-dashoffset: -136; } }
+@keyframes tactical-contact-pulse { 0%, 100% { opacity: 0.48; } 38% { opacity: 1; } }
+
+/* A held scope is plotted as a locked route/contact on the field map. */
+:root[data-theme="cinematic-tactical-field"]:has(
+  #radio-activity-panel [data-hold-state="held"]
+) .tactical-route-line {
+  stroke: #fff3a0;
+  stroke-width: 9;
+  filter: drop-shadow(0 0 0.7rem rgb(242 211 99 / 0.78));
+}
+
+:root[data-theme="cinematic-tactical-field"]:has(
+  #radio-activity-panel [data-hold-state="held"]
+) .tactical-contact {
+  stroke: #fff3a0;
+  stroke-width: 5;
+  filter: drop-shadow(0 0 0.55rem rgb(242 211 99 / 0.9));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cinematic-tactical-field"]:has(
+    #radio-activity-panel [data-hold-state="held"]
+  ) .tactical-route-line {
+    animation: tactical-route-lock 1.7s linear infinite;
+  }
+
+  :root[data-theme="cinematic-tactical-field"]:has(
+    #radio-activity-panel [data-hold-state="held"]
+  ) .tactical-contact {
+    animation: tactical-contact-lock 1.35s ease-out infinite;
+  }
+}
+
+@keyframes tactical-route-lock { to { stroke-dashoffset: -68; } }
+@keyframes tactical-contact-lock {
+  0%, 100% { opacity: 0.56; stroke-width: 3; }
+  58% { opacity: 1; stroke-width: 7; }
 }

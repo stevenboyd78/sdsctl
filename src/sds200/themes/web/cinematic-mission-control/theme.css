@@ -1,139 +1,287 @@
-/* Original mid-century spaceflight control-room presentation. */
+/*
+ * Original mid-century mission operations room: institutional enamel,
+ * annunciator lamps, instrument labels, and a bottom-mounted switch bank.
+ */
 :root[data-theme="cinematic-mission-control"] {
   color-scheme: dark;
-  --background: #111820;
-  --surface: #1c2730;
-  --surface-emphasis: #273640;
-  --text: #edf2e8;
-  --muted: #b4c0b4;
-  --border: #65766d;
-  --accent: #82c5b0;
-  --accent-strong: #b7e7d8;
-  --success: #79d89a;
-  --warning: #f0be57;
-  --danger: #ed735f;
-  --focus: #eaf8d6;
-  --shadow: 0 0.85rem 2rem rgb(0 0 0 / 0.5);
-  --radius-small: 0.16rem;
+  --background: #0d1418;
+  --surface: #1d292c;
+  --surface-emphasis: #29383a;
+  --text: #edf1df;
+  --muted: #b1bba8;
+  --border: #77877a;
+  --accent: #8bc8b2;
+  --accent-strong: #c5eddf;
+  --success: #78d596;
+  --warning: #efbd55;
+  --danger: #dc6755;
+  --focus: #f7ffda;
+  --shadow: 0 1rem 2.8rem rgb(0 0 0 / 0.62);
+  --radius-small: 0.12rem;
   --radius-large: 0.22rem;
-  --hold-field-background: #40351a;
-  --hold-field-border: #f0be57;
-  --hold-field-label: #ffda7d;
+  --hold-field-background: #443617;
+  --hold-field-border: #efbd55;
+  --hold-field-label: #ffda7a;
   --hold-field-value: #ffffff;
+  font-family: "IBM Plex Mono", "Liberation Mono", monospace;
 }
 
 :root[data-theme="cinematic-mission-control"] body {
   background:
-    repeating-linear-gradient(90deg, rgb(130 197 176 / 0.035) 0 1px, transparent 1px 4rem),
-    repeating-linear-gradient(0deg, rgb(130 197 176 / 0.028) 0 1px, transparent 1px 4rem),
-    radial-gradient(circle at 70% 5%, rgb(130 197 176 / 0.12), transparent 30%),
-    #111820;
+    linear-gradient(90deg, transparent 0 49.9%, rgb(139 200 178 / 0.06) 50%, transparent 50.1%),
+    repeating-linear-gradient(90deg, rgb(139 200 178 / 0.035) 0 1px, transparent 1px 4rem),
+    repeating-linear-gradient(0deg, rgb(139 200 178 / 0.03) 0 1px, transparent 1px 4rem),
+    radial-gradient(ellipse at 50% -10%, #2b4144, #0d1418 58%);
+}
+
+:root[data-theme="cinematic-mission-control"] .theme-stage { display: block; }
+
+:root[data-theme="cinematic-mission-control"] .theme-stage-a {
+  top: 10%;
+  left: 4%;
+  width: 9rem;
+  height: 17rem;
+  border: 1px solid rgb(139 200 178 / 0.18);
+  background:
+    radial-gradient(circle at 25% 12%, rgb(120 213 150 / 0.55) 0 0.26rem, transparent 0.32rem),
+    radial-gradient(circle at 50% 12%, rgb(239 189 85 / 0.55) 0 0.26rem, transparent 0.32rem),
+    radial-gradient(circle at 75% 12%, rgb(220 103 85 / 0.55) 0 0.26rem, transparent 0.32rem),
+    repeating-linear-gradient(0deg, transparent 0 2rem, rgb(139 200 178 / 0.08) 2rem 2.05rem);
+}
+
+:root[data-theme="cinematic-mission-control"] .theme-stage-b {
+  top: 10%;
+  right: 4%;
+  width: 9rem;
+  height: 17rem;
+  border: 1px solid rgb(139 200 178 / 0.18);
+  background: repeating-linear-gradient(90deg, transparent 0 1.35rem, rgb(239 189 85 / 0.12) 1.35rem 1.5rem), repeating-linear-gradient(0deg, transparent 0 2.25rem, rgb(139 200 178 / 0.08) 2.25rem 2.3rem);
+}
+
+:root[data-theme="cinematic-mission-control"] .theme-stage-c {
+  right: 14%;
+  bottom: 0;
+  left: 14%;
+  height: 0.32rem;
+  background: repeating-linear-gradient(90deg, var(--warning) 0 2rem, transparent 2rem 2.4rem);
 }
 
 :root[data-theme="cinematic-mission-control"] .site-header {
-  border: 1px solid #71837a;
-  border-top: 0.3rem solid var(--warning);
-  border-radius: 0.18rem;
-  background: linear-gradient(115deg, #2d3c43, #171f27 72%);
-  box-shadow: var(--shadow);
+  border: 0.25rem solid #66776e;
+  border-top-color: #a9b4a7;
+  border-bottom: 0.5rem solid #263538;
+  border-radius: 0.22rem;
+  background:
+    linear-gradient(90deg, rgb(239 189 85 / 0.12), transparent 22% 78%, rgb(139 200 178 / 0.1)),
+    linear-gradient(#405154, #202c30);
+  box-shadow: inset 0 0 0 1px #10191c, var(--shadow);
+}
+
+:root[data-theme="cinematic-mission-control"] .site-header::before {
+  position: absolute;
+  right: 1rem;
+  bottom: -0.39rem;
+  left: 1rem;
+  height: 0.18rem;
+  background: repeating-linear-gradient(90deg, var(--accent) 0 3.2rem, transparent 3.2rem 3.5rem);
+  content: "";
 }
 
 :root[data-theme="cinematic-mission-control"] .site-header::after {
   position: absolute;
+  top: 0.55rem;
   right: 1rem;
-  bottom: 0.48rem;
-  width: min(27rem, 35vw);
-  height: 0.18rem;
-  background: repeating-linear-gradient(90deg, var(--accent) 0 2.4rem, transparent 2.4rem 2.75rem);
+  width: 5.5rem;
+  height: 0.55rem;
+  background: radial-gradient(circle at 10% 50%, var(--success) 0 0.22rem, transparent 0.27rem), radial-gradient(circle at 50% 50%, var(--warning) 0 0.22rem, transparent 0.27rem), radial-gradient(circle at 90% 50%, var(--danger) 0 0.22rem, transparent 0.27rem);
   content: "";
+  filter: drop-shadow(0 0 0.3rem rgb(239 189 85 / 0.28));
 }
 
 :root[data-theme="cinematic-mission-control"] :is(.brand h1, .panel h2, .panel h3, .workspace-tabs [role="tab"]) {
-  font-family: "IBM Plex Mono", monospace;
-  letter-spacing: 0.065em;
+  font-family: "IBM Plex Mono", "Liberation Mono", monospace;
+  letter-spacing: 0.075em;
   text-transform: uppercase;
 }
 
-:root[data-theme="cinematic-mission-control"] .workspace-shell {
-  border: 1px solid #71837a;
-  background: #151e25;
-  box-shadow: 0 0 0 1px rgb(183 231 216 / 0.06) inset, var(--shadow);
-}
+:root[data-theme="cinematic-mission-control"] .brand h1 { color: #f2f4e6; text-shadow: 0 1px #000000; }
 
-:root[data-theme="cinematic-mission-control"] .workspace-tabs {
-  border-bottom: 2px solid #65766d;
-  background: #202c33;
-}
-
-:root[data-theme="cinematic-mission-control"] .workspace-tabs [role="tab"] {
-  border-color: #65766d;
-  border-radius: 0.12rem;
-  background: linear-gradient(#34454b, #202b31);
-  color: var(--muted);
-}
-
-:root[data-theme="cinematic-mission-control"] .workspace-tabs [role="tab"][aria-selected="true"] {
-  border-color: var(--accent-strong);
-  background: linear-gradient(100deg, #f0be57 0 0.28rem, #356b64 0.28rem 100%);
-  color: #ffffff;
-}
-
-:root[data-theme="cinematic-mission-control"] .workspace-deck {
-  background: linear-gradient(145deg, rgb(49 68 75 / 0.55), rgb(13 19 24 / 0.75));
-}
-
-:root[data-theme="cinematic-mission-control"] [data-workspace-pane] {
-  border-color: #4d5d57;
-  background: rgb(17 24 32 / 0.76);
-}
-
-:root[data-theme="cinematic-mission-control"] .panel {
-  position: relative;
-  border: 1px solid #65766d;
-  border-top: 0.24rem solid var(--accent);
-  border-radius: 0.15rem;
-  background:
-    linear-gradient(135deg, rgb(130 197 176 / 0.055), transparent 32%),
-    #202b32;
-  box-shadow: 0 0.58rem 1.25rem rgb(0 0 0 / 0.38);
-}
-
-:root[data-theme="cinematic-mission-control"] #radio-activity-panel {
-  border-color: #8b9c93;
-  border-top-color: var(--warning);
-  background: linear-gradient(90deg, rgb(130 197 176 / 0.11), transparent 52%), #121b21;
-}
-
-:root[data-theme="cinematic-mission-control"] .radio-view-controls {
-  border: 1px solid #65766d;
-  border-left: 0.3rem solid var(--warning);
-  border-radius: 0.15rem;
-  background: #202b32;
-}
-
-:root[data-theme="cinematic-mission-control"] .radio-field-groups {
-  border-color: #4d5d57;
-  background: rgb(130 197 176 / 0.04);
-}
-
-:root[data-theme="cinematic-mission-control"] :is(button, .recording-action, select, input, textarea) {
-  border-color: #71837a;
-  border-radius: 0.12rem;
-  background: linear-gradient(#3a4a4e, #202a30);
-  color: var(--text);
-}
-
-:root[data-theme="cinematic-mission-control"] :is(button, .recording-action):hover:not(:disabled) {
-  border-color: var(--accent-strong);
-  background: #3a625e;
+:root[data-theme="cinematic-mission-control"] :is(.eyebrow, .panel-kicker, .theme-picker label) {
+  color: #d5d9c5;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 :root[data-theme="cinematic-mission-control"] .status-badge {
-  border-radius: 0.12rem;
-  font-family: "IBM Plex Mono", monospace;
-  letter-spacing: 0.06em;
+  border: 0.18rem solid #172022;
+  border-radius: 0.18rem;
+  color: #06130b;
+  background: var(--success);
+  box-shadow: 0 0 0 1px #8ba092, inset 0 0 0.4rem rgb(255 255 255 / 0.26), 0 0 0.7rem rgb(120 213 150 / 0.2);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+
+/* The console's selector bank is physically below the main instrument face. */
+:root[data-theme="cinematic-mission-control"] .workspace-shell {
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 0;
+  border: 0.32rem solid #66776e;
+  border-radius: 0.25rem;
+  background: #1b272a;
+  box-shadow: inset 0 0 0 1px #10181a, var(--shadow);
+}
+
+:root[data-theme="cinematic-mission-control"] .workspace-tabs {
+  grid-row: 2;
+  padding: 0.55rem 0.8rem;
+  border-top: 0.3rem solid #0d1417;
+  background: linear-gradient(#37474a, #222e31);
+}
+
+:root[data-theme="cinematic-mission-control"] .workspace-tabs [role="tab"] {
+  position: relative;
+  min-height: 2.55rem;
+  padding-top: 0.85rem;
+  border: 0.18rem solid #11191b;
+  border-radius: 0.15rem;
+  color: #d1d8c9;
+  background: linear-gradient(#566467, #303d40);
+  box-shadow: inset 0 0 0 1px #7a8881, 0 0.2rem 0 #0b1012;
+}
+
+:root[data-theme="cinematic-mission-control"] .workspace-tabs [role="tab"]::before {
+  position: absolute;
+  top: 0.35rem;
+  left: calc(50% - 0.22rem);
+  width: 0.44rem;
+  height: 0.44rem;
+  border-radius: 50%;
+  background: #505b55;
+  content: "";
+  box-shadow: inset 0 0 0 1px #101716;
+}
+
+:root[data-theme="cinematic-mission-control"] .workspace-tabs [role="tab"][aria-selected="true"] {
+  color: #111811;
+  border-color: #161b17;
+  background-color: #c9ae5a;
+  background-image: linear-gradient(#e2cf8e, #b79a46);
+  box-shadow: inset 0 0 0 1px #fff0aa, 0 0.18rem 0 #5b4819;
+}
+
+:root[data-theme="cinematic-mission-control"] .workspace-tabs [role="tab"][aria-selected="true"]::before {
+  background: var(--success);
+  box-shadow: 0 0 0.55rem var(--success);
+}
+
+:root[data-theme="cinematic-mission-control"] .workspace-deck {
+  grid-row: 1;
+  margin: 0.7rem;
+  border: 0.18rem solid #52645d;
+  background: repeating-linear-gradient(90deg, transparent 0 4.8rem, rgb(139 200 178 / 0.03) 4.8rem 4.85rem), #111b1e;
+  box-shadow: inset 0 0 1.8rem rgb(0 0 0 / 0.38);
+}
+
+:root[data-theme="cinematic-mission-control"] [data-workspace-pane] { border: 0; background: transparent; }
+
+:root[data-theme="cinematic-mission-control"] .panel {
+  position: relative;
+  border: 0.2rem solid #596b63;
+  border-top-color: #85968b;
+  border-radius: 0.18rem;
+  background:
+    linear-gradient(90deg, rgb(239 189 85 / 0.055), transparent 30%),
+    repeating-linear-gradient(0deg, transparent 0 2.6rem, rgb(139 200 178 / 0.035) 2.6rem 2.65rem),
+    #1d2a2d;
+  box-shadow: inset 0 0 0 1px #101718;
+}
+
+:root[data-theme="cinematic-mission-control"] .panel::before {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.7rem;
+  width: 4.6rem;
+  height: 0.42rem;
+  background: radial-gradient(circle at 10% 50%, var(--success) 0 0.16rem, transparent 0.2rem), radial-gradient(circle at 50% 50%, var(--warning) 0 0.16rem, transparent 0.2rem), radial-gradient(circle at 90% 50%, #52605a 0 0.16rem, transparent 0.2rem);
+  content: "";
+}
+
+:root[data-theme="cinematic-mission-control"] .panel-header {
+  border-bottom: 0.25rem double #64766e;
+}
+
+:root[data-theme="cinematic-mission-control"] #radio-activity-panel {
+  border-color: #83948a;
+  border-top-color: var(--warning);
+  background: linear-gradient(90deg, rgb(139 200 178 / 0.09), transparent 46%), #142024;
+}
+
+:root[data-theme="cinematic-mission-control"] .radio-view-controls {
+  border: 0.18rem solid #52635d;
+  border-radius: 0.18rem;
+  background: #263438;
+  box-shadow: inset 0 0 0 1px #101719;
+}
+
+:root[data-theme="cinematic-mission-control"] .scanner-display-hierarchy {
+  gap: 0.35rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+:root[data-theme="cinematic-mission-control"] .scanner-display-hierarchy > div {
+  border: 0.16rem solid #52645d;
+  border-top-color: #87978d;
+  background: linear-gradient(#2c3d40, #172326);
+  box-shadow: inset 0 0 0 1px #101718;
+}
+
+:root[data-theme="cinematic-mission-control"] .scanner-display-hierarchy > div:nth-child(2n) { border-right: 0.16rem solid #52645d; }
+:root[data-theme="cinematic-mission-control"] .scanner-display-hierarchy > div:nth-last-child(-n + 2) { border-bottom: 0.16rem solid #52645d; }
+
+:root[data-theme="cinematic-mission-control"] :is(.radio-summary, .radio-field-groups) {
+  border: 0.16rem solid #4d5e57;
+  border-radius: 0.15rem;
+  background: rgb(31 44 47 / 0.8);
+}
+
+:root[data-theme="cinematic-mission-control"] :is(button, .recording-action, select, input, textarea) {
+  border: 0.15rem solid #283436;
+  border-radius: 0.14rem;
+  color: var(--text);
+  background: linear-gradient(#58676a, #303d40);
+  box-shadow: inset 0 0 0 1px #74837d;
+  font-family: inherit;
+  text-transform: uppercase;
+}
+
+:root[data-theme="cinematic-mission-control"] :is(button, .recording-action):hover:not(:disabled):not([aria-selected="true"]) {
+  border-color: var(--accent-strong);
+  background: #456962;
+}
+
+:root[data-theme="cinematic-mission-control"] button[aria-pressed="true"] {
+  color: #14160b;
+  border-color: #111713;
+  background: var(--warning);
+}
+
+@media (width < 1280px), (height < 720px), (aspect-ratio < 3/2) {
+  :root[data-theme="cinematic-mission-control"] .workspace-shell { grid-template-rows: auto minmax(0, 1fr); }
+  :root[data-theme="cinematic-mission-control"] .workspace-tabs { grid-row: 1; padding: 0.3rem; border-top: 0; border-bottom: 0.25rem solid #0d1417; }
+  :root[data-theme="cinematic-mission-control"] .workspace-tabs [role="tab"] { min-height: 1.9rem; padding-top: 0.3rem; }
+  :root[data-theme="cinematic-mission-control"] .workspace-tabs [role="tab"]::before { display: none; }
+  :root[data-theme="cinematic-mission-control"] .workspace-deck { grid-row: 2; margin: 0; }
+  :root[data-theme="cinematic-mission-control"] .panel::before { display: none; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cinematic-mission-control"] .site-header::after { animation: mission-annunciator 4s steps(2, end) infinite; }
+}
+
+@keyframes mission-annunciator { 50% { opacity: 0.6; } }
 
 @media (prefers-reduced-motion: reduce) {
   :root[data-theme="cinematic-mission-control"] *,
@@ -143,6 +291,289 @@
 
 @media (forced-colors: active) {
   :root[data-theme="cinematic-mission-control"] { --background: Canvas; --surface: Canvas; --surface-emphasis: Canvas; --text: CanvasText; --muted: CanvasText; --border: CanvasText; --accent: Highlight; --accent-strong: Highlight; --focus: Highlight; }
-  :root[data-theme="cinematic-mission-control"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups) { background: Canvas; box-shadow: none; }
-  :root[data-theme="cinematic-mission-control"] .site-header::after { display: none; }
+  :root[data-theme="cinematic-mission-control"] .theme-stage { display: none; }
+  :root[data-theme="cinematic-mission-control"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups, .scanner-display-hierarchy > div) { background: Canvas; box-shadow: none; }
+  :root[data-theme="cinematic-mission-control"] :is(.site-header, .panel)::before,
+  :root[data-theme="cinematic-mission-control"] :is(.site-header, .panel)::after,
+  :root[data-theme="cinematic-mission-control"] .workspace-tabs [role="tab"]::before { display: none; }
 }
+
+/* Full-HD production environment: a physical period telemetry room. */
+@media (min-width: 1280px) and (min-height: 720px) and (min-aspect-ratio: 3/2) {
+  :root[data-theme="cinematic-mission-control"] .theme-stage > span { display: none; }
+  :root[data-theme="cinematic-mission-control"]
+    .cinematic-stage-art
+    [data-cinematic-scene="mission-control"] { display: inline; }
+  :root[data-theme="cinematic-mission-control"] .cinematic-stage-art { opacity: 0.94; }
+  :root[data-theme="cinematic-mission-control"] body { background: #171714; }
+
+  :root[data-theme="cinematic-mission-control"] .site-header {
+    margin-inline: 19vw;
+    border: 0.34rem solid #30322c;
+    border-radius: 0.3rem;
+    background:
+      linear-gradient(180deg, rgb(112 108 91 / 0.96), rgb(55 56 50 / 0.96)),
+      repeating-linear-gradient(90deg, transparent 0 7rem, rgb(241 227 184 / 0.04) 7rem 7.08rem);
+    box-shadow: inset 0 0 0 1px #c9bd97, inset 0 -0.7rem #2b2d28, 0 1rem 2.5rem rgb(0 0 0 / 0.58);
+  }
+
+  /* Reserve a labeled clear zone between the copy and the corner fasteners. */
+  :root[data-theme="cinematic-mission-control"] .site-header > .brand {
+    margin-inline-start: 2.15rem;
+  }
+
+  :root[data-theme="cinematic-mission-control"] .site-header > .header-actions {
+    margin-inline-end: 2.15rem;
+  }
+
+  :root[data-theme="cinematic-mission-control"] .site-header::before,
+  :root[data-theme="cinematic-mission-control"] .site-header::after {
+    top: 50%;
+    width: 1.15rem;
+    height: 1.15rem;
+    border: 0.18rem solid #191b18;
+    border-radius: 50%;
+    background: #d6c99f;
+    content: "";
+    box-shadow: inset 0 0 0 1px #5f5b4d;
+    translate: 0 -50%;
+  }
+
+  :root[data-theme="cinematic-mission-control"] .site-header::before { left: 0.65rem; }
+  :root[data-theme="cinematic-mission-control"] .site-header::after { right: 0.65rem; bottom: auto; }
+
+  :root[data-theme="cinematic-mission-control"] .workspace-shell {
+    margin-inline: 16vw;
+    border: 0.46rem solid #2e302b;
+    border-radius: 0.35rem;
+    background: rgb(31 33 29 / 0.54);
+    box-shadow: inset 0 0 0 1px #a69e82, inset 0 0 3rem rgb(0 0 0 / 0.28), 0 1.4rem 3rem rgb(0 0 0 / 0.62);
+  }
+
+  :root[data-theme="cinematic-mission-control"] .workspace-deck {
+    border: 0;
+    background:
+      linear-gradient(90deg, rgb(35 38 33 / 0.82), rgb(9 16 11 / 0.32) 16% 84%, rgb(35 38 33 / 0.82));
+    box-shadow: inset 0 0 3rem rgb(0 0 0 / 0.34);
+  }
+
+  :root[data-theme="cinematic-mission-control"] .workspace-tabs {
+    position: relative;
+    z-index: 4;
+    gap: 0.62rem;
+    padding: 0.7rem 1rem 0.9rem;
+    border-top: 0.5rem solid #20221e;
+    background: linear-gradient(180deg, #67665a, #3d3f38);
+    box-shadow: inset 0 1px #c0b798, inset 0 -0.65rem #292b26;
+  }
+
+  :root[data-theme="cinematic-mission-control"] .workspace-tabs [role="tab"] {
+    position: relative;
+    display: grid !important;
+    grid-template-rows: 0.9rem minmax(1.1rem, auto);
+    row-gap: 0.4rem;
+    align-content: center;
+    align-items: center !important;
+    justify-items: center !important;
+    min-height: 4.4rem !important;
+    padding: 0.45rem 0.55rem !important;
+    border: 0.2rem solid #20221e;
+    background: linear-gradient(#77776b, #44463f);
+    box-shadow: inset 0 0 0 1px #a9a28a, inset 0 -0.5rem #30322d, 0 0.35rem 0.5rem rgb(0 0 0 / 0.32);
+    line-height: 1;
+  }
+
+  :root[data-theme="cinematic-mission-control"] .workspace-tabs [role="tab"]::before {
+    position: static;
+    grid-row: 1;
+    align-self: center;
+    justify-self: center;
+    width: 1.35rem;
+    height: 0.56rem;
+    border: 0.14rem solid #252720;
+    border-radius: 0.1rem;
+    background: #4c5c43;
+    box-shadow: inset 0 0 0 1px #80906d;
+    translate: none;
+  }
+
+  :root[data-theme="cinematic-mission-control"] .workspace-tabs [role="tab"]::after {
+    position: absolute;
+    top: 1.72rem;
+    right: 0.45rem;
+    left: 0.45rem;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #9a967f 18% 82%, transparent);
+    content: "";
+    opacity: 0.72;
+    pointer-events: none;
+  }
+
+  :root[data-theme="cinematic-mission-control"]
+    .workspace-tabs
+    [role="tab"][aria-selected="true"]::before {
+    background: #f2c750;
+    box-shadow: 0 0 0.7rem rgb(242 199 80 / 0.55), inset 0 0 0 1px #fff1aa;
+  }
+
+  :root[data-theme="cinematic-mission-control"] #radio-activity-panel {
+    border: 0.44rem solid #2f322c;
+    border-radius: 0.9rem;
+    background:
+      radial-gradient(ellipse at 50% 60%, rgb(41 91 53 / 0.18), transparent 42%),
+      linear-gradient(90deg, rgb(40 44 38 / 0.9), rgb(8 21 13 / 0.34) 15% 85%, rgb(40 44 38 / 0.9));
+    box-shadow: inset 0 0 0 1px #aaa287, inset 0 0 4rem rgb(0 0 0 / 0.38);
+  }
+
+  :root[data-theme="cinematic-mission-control"] .radio-view-controls {
+    border: 0.24rem solid #30342e;
+    background: linear-gradient(#727267, #454740);
+    box-shadow: inset 0 0 0 1px #aaa38a, inset 0 -0.38rem #2a2c27;
+  }
+
+  :root[data-theme="cinematic-mission-control"] .scanner-display-hierarchy {
+    gap: 0.45rem;
+    padding: 0.45rem;
+    border: 0.36rem solid #2c2f29;
+    border-radius: 1.3rem;
+    background: #171a16;
+    box-shadow: inset 0 0 1.4rem rgb(0 0 0 / 0.6), 0 0.6rem 1.1rem rgb(0 0 0 / 0.35);
+  }
+
+  :root[data-theme="cinematic-mission-control"] .scanner-display-hierarchy > div {
+    border: 0.15rem solid #5d735c;
+    border-radius: 0.8rem;
+    background:
+      repeating-linear-gradient(0deg, rgb(107 183 105 / 0.035) 0 1px, transparent 1px 4px),
+      radial-gradient(ellipse at 50% 48%, #183821, #06110a 72%);
+    box-shadow: inset 0 0 1.1rem rgb(72 167 80 / 0.1);
+    text-shadow: 0 0 0.6rem rgb(119 229 123 / 0.25);
+  }
+
+  :root[data-theme="cinematic-mission-control"] .radio-summary {
+    border: 0.24rem solid #30342e;
+    background: linear-gradient(#63635a, #3e403a);
+    box-shadow: inset 0 0 0 1px #99927d;
+  }
+
+  :root[data-theme="cinematic-mission-control"] .radio-field-groups {
+    position: relative;
+    isolation: isolate;
+    border: 0.48rem solid #2c2f29;
+    border-radius: 1.5rem;
+    background:
+      repeating-linear-gradient(0deg, rgb(104 185 105 / 0.025) 0 1px, transparent 1px 5px),
+      radial-gradient(ellipse at 50% 44%, rgb(28 69 38 / 0.22), rgb(3 11 6 / 0.6) 64%);
+    box-shadow: inset 0 0 0 1px #566553, inset 0 0 3.5rem rgb(0 0 0 / 0.54);
+  }
+
+  :root[data-theme="cinematic-mission-control"] .radio-field-group {
+    position: relative;
+    z-index: 2;
+    background: transparent;
+  }
+
+  :root[data-theme="cinematic-mission-control"] .radio-field-group h3 {
+    position: relative;
+    z-index: 4;
+    width: max-content;
+    margin-inline: auto;
+    padding: 0.18rem 1.4rem;
+    border: 0.14rem solid #495749;
+    border-radius: 999px;
+    color: #a7e6a1;
+    background: #0a1a0e;
+    text-shadow: 0 0 0.5rem rgb(111 222 110 / 0.35);
+  }
+
+  :root[data-theme="cinematic-mission-control"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list {
+    display: grid !important;
+    height: calc(100% - 1.6rem);
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-rows: repeat(5, minmax(0, 1fr)) !important;
+    gap: 0.22rem 4.8rem !important;
+    padding: 0.3rem 1.2rem 0.7rem;
+  }
+
+  :root[data-theme="cinematic-mission-control"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > div {
+    align-self: center;
+    padding: 0.3rem 0.52rem;
+    border: 1px solid #4f6b51;
+    border-radius: 0.5rem;
+    background: rgb(7 25 12 / 0.88);
+    box-shadow: inset 0 0 0.7rem rgb(85 190 88 / 0.055), 0 0.3rem 0.6rem rgb(0 0 0 / 0.3);
+  }
+
+  :root[data-theme="cinematic-mission-control"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > div:nth-child(-n + 5) { grid-column: 1; }
+  :root[data-theme="cinematic-mission-control"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > div:nth-child(n + 6) { grid-column: 2; }
+  :root[data-theme="cinematic-mission-control"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > :is(:nth-child(1), :nth-child(6)) { grid-row: 1; }
+  :root[data-theme="cinematic-mission-control"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > :is(:nth-child(2), :nth-child(7)) { grid-row: 2; }
+  :root[data-theme="cinematic-mission-control"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > :is(:nth-child(3), :nth-child(8)) { grid-row: 3; }
+  :root[data-theme="cinematic-mission-control"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > :is(:nth-child(4), :nth-child(9)) { grid-row: 4; }
+  :root[data-theme="cinematic-mission-control"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > :is(:nth-child(5), :nth-child(10)) { grid-row: 5; }
+
+  :root[data-theme="cinematic-mission-control"]
+    #radio-activity-panel
+    [data-hold-scope][data-hold-state="held"] {
+    border-color: #f0c348 !important;
+    background: radial-gradient(ellipse at 50% 48%, #514213, #171506 72%) !important;
+    box-shadow: inset 0 0 0 0.16rem #f0c348, 0 0 1rem rgb(240 195 72 / 0.3) !important;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cinematic-mission-control"] .mission-crt-trace { animation: mission-trace-run 6.5s linear infinite; }
+  :root[data-theme="cinematic-mission-control"] .mission-trajectory { animation: mission-plotter-run 18s linear infinite; stroke-dasharray: 22 10; }
+  :root[data-theme="cinematic-mission-control"] .mission-needle-a { animation: mission-needle-a 11s ease-in-out infinite; transform-origin: 190px 178px; }
+  :root[data-theme="cinematic-mission-control"] .mission-needle-b { animation: mission-needle-b 13s ease-in-out infinite; transform-origin: 190px 178px; }
+  :root[data-theme="cinematic-mission-control"] .mission-annunciators { animation: mission-lamp-test 16s steps(1, end) infinite; }
+}
+
+@keyframes mission-trace-run { to { stroke-dashoffset: -180; } }
+@keyframes mission-plotter-run { to { stroke-dashoffset: -256; } }
+@keyframes mission-needle-a { 0%, 100% { transform: rotate(-5deg); } 52% { transform: rotate(9deg); } }
+@keyframes mission-needle-b { 0%, 100% { transform: rotate(7deg); } 48% { transform: rotate(-8deg); } }
+@keyframes mission-lamp-test { 0%, 91%, 100% { opacity: 0.9; } 92% { opacity: 0.62; } 94% { opacity: 1; } }
+
+/* A held scope trips a physical annunciator circuit and meter response. */
+:root[data-theme="cinematic-mission-control"]:has(
+  #radio-activity-panel [data-hold-state="held"]
+) .mission-annunciators {
+  filter: saturate(1.5) brightness(1.14) drop-shadow(0 0 0.7rem rgb(240 195 72 / 0.48));
+}
+
+:root[data-theme="cinematic-mission-control"]:has(
+  #radio-activity-panel [data-hold-state="held"]
+) :is(.mission-crt-trace, .mission-needle) {
+  stroke: #f7d75d;
+  filter: drop-shadow(0 0 0.35rem rgb(247 215 93 / 0.7));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cinematic-mission-control"]:has(
+    #radio-activity-panel [data-hold-state="held"]
+  ) .mission-annunciators {
+    animation: mission-hold-lamp 1.25s steps(2, end) infinite;
+  }
+
+  :root[data-theme="cinematic-mission-control"]:has(
+    #radio-activity-panel [data-hold-state="held"]
+  ) .mission-needle {
+    animation: mission-hold-needle 1.9s ease-in-out infinite;
+    transform-origin: 190px 178px;
+  }
+}
+
+@keyframes mission-hold-lamp { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
+@keyframes mission-hold-needle { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(12deg); } }

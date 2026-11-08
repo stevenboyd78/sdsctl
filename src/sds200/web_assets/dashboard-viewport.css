@@ -144,7 +144,7 @@
     min-width: 0 !important;
   }
   html[data-kiosk-compact="true"] .scanner-display-hierarchy {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     padding: 0.4rem !important;
     gap: 0.6rem !important;
   }
@@ -217,7 +217,10 @@
   html[data-kiosk-compact="true"] .waterfall-controls :is(button, select) {
     min-height: 44px !important;
     font-size: 0.85rem !important;
+    font-family: system-ui, sans-serif !important;
+    letter-spacing: normal !important;
     padding: 0.35rem !important;
+    text-transform: none !important;
   }
   html[data-kiosk-compact="true"] .waterfall-panel > .waterfall-visuals {
     flex: 1 0 9.75rem !important;
@@ -642,7 +645,7 @@
 
   .scanner-display-hierarchy {
     display: grid !important;
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     margin: 0 !important;
     overflow: hidden !important;
   }
@@ -1605,6 +1608,240 @@
   }
 
   /*
+   * Trusted built-in production skins may deliberately recompose the mode
+   * selector on roomy displays. Keep those exceptions in this protected
+   * layer so managed themes still cannot change viewport geometry, and bound
+   * every exception away from compact or short viewports.
+   */
+  @media (min-width: 1280px) and (min-height: 720px) and (min-aspect-ratio: 3/2) {
+    :root[data-theme="cinematic-tactical-field"] .workspace-shell {
+      grid-template-columns: clamp(8.8rem, 11vw, 12rem) minmax(0, 1fr) !important;
+      grid-template-rows: minmax(0, 1fr) !important;
+    }
+
+    :root[data-theme="cinematic-tactical-field"] .workspace-tabs {
+      grid-column: 1 !important;
+      grid-row: 1 !important;
+      grid-template-columns: minmax(0, 1fr) !important;
+      grid-template-rows: repeat(6, minmax(0, 1fr)) !important;
+    }
+
+    :root[data-theme="cinematic-tactical-field"] .workspace-tabs-with-home-assistant {
+      grid-template-columns: minmax(0, 1fr) !important;
+      grid-template-rows: repeat(7, minmax(0, 1fr)) !important;
+    }
+
+    :root[data-theme="cinematic-tactical-field"] .workspace-deck {
+      grid-column: 2 !important;
+      grid-row: 1 !important;
+    }
+
+    :root[data-theme="cinematic-cyberpunk-night"] .workspace-shell {
+      grid-template-columns: minmax(0, 1fr) clamp(9rem, 12vw, 13rem) !important;
+      grid-template-rows: minmax(0, 1fr) !important;
+    }
+
+    :root[data-theme="cinematic-cyberpunk-night"] .workspace-tabs {
+      grid-column: 2 !important;
+      grid-row: 1 !important;
+      grid-template-columns: minmax(0, 1fr) !important;
+      grid-template-rows: repeat(6, minmax(0, 1fr)) !important;
+    }
+
+    :root[data-theme="cinematic-cyberpunk-night"] .workspace-tabs-with-home-assistant {
+      grid-template-columns: minmax(0, 1fr) !important;
+      grid-template-rows: repeat(7, minmax(0, 1fr)) !important;
+    }
+
+    :root[data-theme="cinematic-cyberpunk-night"] .workspace-deck {
+      grid-column: 1 !important;
+      grid-row: 1 !important;
+    }
+
+    :root[data-theme="cinematic-galactic-operations"] .workspace-tabs {
+      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+      grid-template-rows: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    :root[data-theme="cinematic-galactic-operations"] .workspace-tabs-with-home-assistant {
+      grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+      grid-template-rows: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    :root[data-theme="cinematic-mission-control"] .workspace-shell {
+      grid-template-rows: minmax(0, 1fr) auto !important;
+    }
+
+    :root[data-theme="cinematic-mission-control"] .workspace-tabs {
+      grid-row: 2 !important;
+    }
+
+    :root[data-theme="cinematic-mission-control"] .workspace-deck {
+      grid-row: 1 !important;
+    }
+
+    :root[data-theme="cinematic-wizarding-archive"] #radio-activity-panel {
+      width: calc(100% - 16vw) !important;
+      margin-inline: 8vw !important;
+    }
+
+    :root[data-theme="cinematic-galactic-operations"] #radio-activity-panel {
+      width: calc(100% - 18vw) !important;
+      margin-inline: 9vw !important;
+    }
+
+    :root[data-theme="cinematic-cyberpunk-night"] #radio-activity-panel {
+      width: calc(100% - 4vw) !important;
+      margin-left: 4vw !important;
+    }
+
+    /*
+     * The managed viewport layer is deliberately last in the cascade. Restore
+     * each hero scene's own instrument geometry here so the shared auto-fit
+     * safety grid cannot flatten the production compositions back into the
+     * same two-column dashboard.
+     */
+    :root[data-theme="cinematic-carrier-air-wing"]
+      .radio-field-group[data-radio-group="hierarchy"]
+      .radio-field-list {
+      grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+      grid-template-rows: auto minmax(0, 1fr) auto !important;
+      gap: 0.35rem 0.55rem !important;
+    }
+
+    :root[data-theme="cinematic-tactical-field"]
+      .radio-field-group[data-radio-group="hierarchy"]
+      .radio-field-list {
+      grid-template-columns: minmax(10rem, 15rem) minmax(17rem, 1fr) minmax(10rem, 15rem) !important;
+      grid-template-rows: repeat(5, minmax(0, 1fr)) !important;
+      gap: 0.3rem 0.6rem !important;
+    }
+
+    :root[data-theme="cinematic-wizarding-archive"]
+      .radio-field-group[data-radio-group="hierarchy"]
+      .radio-field-list {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      grid-template-rows: repeat(5, minmax(0, 1fr)) !important;
+      gap: 0.28rem 7rem !important;
+    }
+
+    :root[data-theme="cinematic-galactic-operations"]
+      .radio-field-group[data-radio-group="hierarchy"]
+      .radio-field-list {
+      grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+      grid-template-rows: minmax(0, 1fr) auto auto !important;
+      gap: 0.3rem 0.5rem !important;
+    }
+
+    :root[data-theme="cinematic-mission-control"]
+      .radio-field-group[data-radio-group="hierarchy"]
+      .radio-field-list {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      grid-template-rows: repeat(5, minmax(0, 1fr)) !important;
+      gap: 0.22rem 4.8rem !important;
+    }
+
+    :root[data-theme="cinematic-cyberpunk-night"]
+      .radio-field-group[data-radio-group="hierarchy"]
+      .radio-field-list {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      grid-template-rows: repeat(5, minmax(0, 1fr)) !important;
+      gap: 0.25rem 16vw !important;
+    }
+
+    :root:is(
+      [data-theme="cinematic-carrier-air-wing"],
+      [data-theme="cinematic-tactical-field"],
+      [data-theme="cinematic-wizarding-archive"],
+      [data-theme="cinematic-galactic-operations"],
+      [data-theme="cinematic-mission-control"],
+      [data-theme="cinematic-cyberpunk-night"]
+    ) #radio-activity-panel > .panel-header {
+      padding-inline: 0.35rem 3.25rem !important;
+    }
+
+    :root:is(
+      [data-theme="cinematic-carrier-air-wing"],
+      [data-theme="cinematic-galactic-operations"],
+      [data-theme="cinematic-cyberpunk-night"]
+    ) .workspace-tabs [role="tab"]:focus-visible {
+      outline-offset: -0.24rem !important;
+    }
+  }
+
+  /* Theme decoration must never erase the semantic held-field treatment. */
+  #radio-activity-panel [data-hold-scope][data-hold-state="held"] {
+    background: var(
+      --hold-field-background,
+      color-mix(in srgb, var(--warning) 18%, var(--surface-emphasis))
+    ) !important;
+    box-shadow: inset 0 0 0 0.16rem
+      var(--hold-field-border, var(--warning)) !important;
+  }
+
+  #radio-activity-panel [data-hold-scope][data-hold-state="held"] dt {
+    color: var(--hold-field-label, var(--warning)) !important;
+  }
+
+  #radio-activity-panel [data-hold-scope][data-hold-state="held"] dd {
+    color: var(--hold-field-value, var(--text)) !important;
+  }
+
+  /*
+   * The six production skins deliberately become restrained colorways below
+   * the roomy-display boundary. Normalize display type there so expansive
+   * lettering never clips compact controls or metadata.
+   */
+  @media (width < 1280px), (height < 720px), (aspect-ratio < 3/2) {
+    :root:is(
+      [data-theme="cinematic-carrier-air-wing"],
+      [data-theme="cinematic-tactical-field"],
+      [data-theme="cinematic-wizarding-archive"],
+      [data-theme="cinematic-galactic-operations"],
+      [data-theme="cinematic-mission-control"],
+      [data-theme="cinematic-cyberpunk-night"]
+    ) {
+      font-family: system-ui, sans-serif !important;
+    }
+
+    :root:is(
+      [data-theme="cinematic-carrier-air-wing"],
+      [data-theme="cinematic-tactical-field"],
+      [data-theme="cinematic-wizarding-archive"],
+      [data-theme="cinematic-galactic-operations"],
+      [data-theme="cinematic-mission-control"],
+      [data-theme="cinematic-cyberpunk-night"]
+    ) :is(
+      h1,
+      h2,
+      h3,
+      button,
+      select,
+      input,
+      textarea,
+      dt,
+      dd,
+      .recording-item-meta,
+      .workspace-tabs [role="tab"]
+    ) {
+      font-family: system-ui, sans-serif !important;
+      letter-spacing: normal !important;
+    }
+
+    :root:is(
+      [data-theme="cinematic-carrier-air-wing"],
+      [data-theme="cinematic-tactical-field"],
+      [data-theme="cinematic-wizarding-archive"],
+      [data-theme="cinematic-galactic-operations"],
+      [data-theme="cinematic-mission-control"],
+      [data-theme="cinematic-cyberpunk-night"]
+    ) :is(button, select, input, textarea) {
+      text-transform: none !important;
+    }
+
+  }
+
+  /*
    * Forced-color presentation is part of the shared accessibility contract.
    * Keep this in the first cascade layer so built-in and managed themes cannot
    * leave author colors or text fill on browser-supplied system surfaces.
@@ -1638,6 +1875,17 @@
       color: CanvasText !important;
       -webkit-text-fill-color: currentColor !important;
       text-shadow: none !important;
+    }
+
+    #radio-activity-panel [data-hold-scope][data-hold-state="held"] {
+      border-color: Highlight !important;
+      background: Canvas !important;
+      box-shadow: inset 0 0 0 0.16rem Highlight !important;
+    }
+
+    #radio-activity-panel [data-hold-scope][data-hold-state="held"] :is(dt, dd) {
+      color: CanvasText !important;
+      -webkit-text-fill-color: CanvasText !important;
     }
 
     .site-header,
@@ -1725,6 +1973,16 @@
     }
 
     .theme-stage {
+      display: none !important;
+    }
+
+    .panel,
+    .workspace-tabs [role="tab"] {
+      clip-path: none !important;
+    }
+
+    .panel::before,
+    .panel::after {
       display: none !important;
     }
   }
