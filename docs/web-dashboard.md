@@ -887,7 +887,7 @@ exercise optional pointer, scale and telemetry visibility. This fixture is not
 a claim of installed Home Assistant acceptance or a change to scanner cadence.
 
 The audit reuses the same fictional demo service and one isolated Chrome
-session. It resizes that session through all four reference CSS viewports and
+session. It resizes that session through all five reference CSS viewports and
 DPR transitions, exercises every built-in theme and all six panes, drives
 recording pagination and focus, reveals all 35 radio fields, and probes adaptive
 screen mappings, reduced motion, forced colors/high contrast, the browser-zoom
@@ -906,7 +906,7 @@ pixels, or at least 18.66 CSS pixels with a bold weight. This standards-derived
 floor is shared by authoritative visible radio values and enabled control text;
 themes do not receive individual tolerances. The audit writes no gallery
 images. Use `--help` for executable overrides or `--list` to inspect the
-672-case matrix without opening Chrome.
+840-case matrix without opening Chrome.
 
 The browser performs one initial `/api/v1/status` request and opens
 `/api/v1/events` with the same origin. The event response uses

@@ -253,6 +253,7 @@
 
 :root[data-theme="cinematic-wizarding-archive"] :is(button, .recording-action):hover:not(:disabled):not([aria-selected="true"]) {
   border-color: var(--accent-strong);
+  color: var(--text);
   background: #745126;
   box-shadow: 0 0 0.8rem rgb(226 185 91 / 0.2);
 }

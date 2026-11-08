@@ -148,6 +148,13 @@ def test_compact_panes_leave_room_for_taller_bundled_fonts() -> None:
     )[0]
     assert "overflow-wrap: anywhere !important" in phone_current
     assert "white-space: normal !important" in phone_current
+    phone_viewport = css.split("@media (max-width: 44rem) and (min-height: 28rem)", 1)[1].split(
+        "@media (max-width: 26rem) and (min-height: 28rem)", 1
+    )[0]
+    assert ".scanner-hold-scope:has(#scanner-hold-department)" in phone_viewport
+    assert "grid-template-columns: minmax(0, 1fr) 3.95rem !important" in phone_viewport
+    assert "#scanner-hold-department-state" in phone_viewport
+    assert "min-width: 3.95rem !important" in phone_viewport
     lcars = files("sds200.web_assets").joinpath("lcars-v2.css").read_text()
     phone_lcars = lcars.split("@media (max-width: 43.99rem) and (min-height: 28rem)", 1)[1].split(
         "/* A secondary Site line", 1

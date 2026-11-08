@@ -34,11 +34,13 @@ test('complete findings JSON is deterministic and retains every failure', () => 
       {context: 'system/800x480@1/scanner', message: 'first fixture'},
       {context: 'lcars/390x844@2/recordings', message: 'second fixture'},
     ],
+    hoverContrastCases: 2,
     ingressDiagnosticsCases: 3,
     ingressHomeAssistantCases: 3,
     lcarsNavigationTransitionCases: 3,
     panoramaBoundaryCases: 30,
-    systemPaletteCases: 189,
+    phoneUnknownHoldCases: 28,
+    systemPaletteCases: 210,
   };
   const serialized = serializeFindingsReport(result);
   assert.ok(serialized.endsWith('\n'));
@@ -48,7 +50,7 @@ test('complete findings JSON is deterministic and retains every failure', () => 
   assert.deepEqual(report.result, result);
   assert.equal(report.result.failures.length, 2);
   assert.equal(report.matrix.themes.length, 28);
-  assert.equal(report.matrix.viewports.length, 4);
+  assert.equal(report.matrix.viewports.length, 5);
   assert.equal(report.matrix.panes.length, 6);
   assert.equal(serializeFindingsReport(result), serialized);
 });

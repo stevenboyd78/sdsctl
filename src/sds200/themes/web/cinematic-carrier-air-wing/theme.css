@@ -266,6 +266,7 @@
 }
 
 :root[data-theme="cinematic-carrier-air-wing"] :is(button, .recording-action):hover:not(:disabled):not([aria-selected="true"]) {
+  color: var(--text);
   border-color: var(--warning);
   background: #1b5874;
 }

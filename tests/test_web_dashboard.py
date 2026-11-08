@@ -608,14 +608,17 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
         hold_state = response.text.index(
             f'id="scanner-hold-{scope}-state"', hold_button
         )
+        hold_state_end = response.text.index("</span>", hold_state)
         assert current < hold_button < hold_state
+        assert "Unavailable" in response.text[current:hold_button]
         assert (
             f'aria-describedby="scanner-current-{scope} '
             f'scanner-hold-{scope}-state"'
         ) in response.text[hold_button:hold_state]
         assert 'aria-pressed="false"' in response.text[hold_button:hold_state]
-        assert 'data-state="unknown"' in response.text[hold_state:]
-        assert "Unavailable" in response.text[hold_state:]
+        assert 'data-state="unknown"' in response.text[hold_state:hold_state_end]
+        assert "Unknown" in response.text[hold_state:hold_state_end]
+        assert "Unavailable" not in response.text[hold_state:hold_state_end]
     for scope in ("system", "department", "site", "channel"):
         suffix = "" if scope == "channel" else f"-{scope}"
         assert f'id="scanner-previous{suffix}"' in response.text
@@ -1011,6 +1014,7 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert "setScannerCurrentSelection" in script.text
     assert 'setScannerCurrentSelection("system", radio.system)' in script.text
     assert 'setScannerCurrentSelection("channel", radio.channel)' in script.text
+    assert '!known ? "Unknown" : held ? "Held" : "Not held"' in script.text
     assert 'held ? "Held" : "Not held"' in script.text
     assert 'held ? "held" : "released"' in script.text
     assert "indicator.hidden = !held" not in script.text

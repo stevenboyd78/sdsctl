@@ -257,6 +257,7 @@
 }
 
 :root[data-theme="cinematic-galactic-operations"] :is(button, .recording-action):hover:not(:disabled):not([aria-selected="true"]) {
+  color: var(--text);
   border-color: var(--accent);
   background: #164862;
   box-shadow: 0 0 0.7rem rgb(110 216 255 / 0.2);

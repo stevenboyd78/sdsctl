@@ -51,6 +51,7 @@ export const THEMES = Object.freeze([
 
 export const VIEWPORTS = Object.freeze([
   Object.freeze({name: "full-hd", width: 1920, height: 1080, dpr: 1}),
+  Object.freeze({name: "desktop-windowed", width: 1920, height: 900, dpr: 1}),
   Object.freeze({name: "laptop", width: 1366, height: 768, dpr: 1}),
   Object.freeze({name: "scanner-landscape", width: 800, height: 480, dpr: 1}),
   Object.freeze({name: "phone", width: 390, height: 844, dpr: 2}),
@@ -129,9 +130,9 @@ const HELP = `\
 Usage: node scripts/audit_web_dashboard_browser.mjs [options]
 
 Run the deterministic dashboard and Home Assistant waterfall-card browser audit in one local
-Chrome/Chromium session. The audit writes no PNGs. It covers all 672 built-in
+Chrome/Chromium session. The audit writes no PNGs. It covers all 840 built-in
 theme × reference CSS viewport × workspace pane cases, 30 exact panoramic-boundary
-cases for the six hero environments, all 189 explicit System
+cases for the six hero environments, all 210 explicit System
 palette responsive cases, plus media-preference, enlarged-text,
 pagination-focus, trusted Tab/Shift+Tab traversal, WCAG AA contrast, complete
 adaptive-presentation, DPR-transition, and prefixed-URL probes. It also covers
@@ -155,7 +156,7 @@ Options:
   --waterfall-only    Run only the Home Assistant waterfall-card regression/lifecycle audit
   --waterfall-screenshot-dir PATH
                       Write three sanitized waterfall-card reference PNGs
-  --list              List the 672 matrix cases without opening Chrome
+  --list              List the 840 matrix cases without opening Chrome
   -h, --help          Show this help and exit
 
 The default command requires Node.js 24 or newer, starts the existing fictional-data server from
@@ -990,8 +991,66 @@ async function clickElement(cdp, selector) {
   await frames(cdp);
 }
 
+async function movePointerAway(cdp) {
+  await cdp.send("Input.dispatchMouseEvent", {
+    type: "mouseMoved",
+    x: 0,
+    y: 0,
+  });
+  await frames(cdp);
+}
+
+async function hoverElement(cdp, selector) {
+  const point = await evaluate(
+    cdp,
+    `(() => {
+      const element = document.querySelector(${JSON.stringify(selector)});
+      if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
+        return null;
+      }
+      element.scrollIntoView({block: "nearest", inline: "nearest"});
+      const rect = element.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      const hit = document.elementFromPoint(x, y);
+      return {
+        hit: hit instanceof Element ? {
+          classes: Array.from(hit.classList).slice(0, 2),
+          id: hit.id,
+          tag: hit.localName,
+        } : null,
+        owned: hit instanceof Element && (hit === element || element.contains(hit)),
+        rect: {
+          bottom: rect.bottom,
+          left: rect.left,
+          right: rect.right,
+          top: rect.top,
+        },
+        x,
+        y,
+      };
+    })()`,
+  );
+  if (point === null) {
+    return {failures: [`${selector} is unavailable for trusted hover acquisition`]};
+  }
+  if (!point.owned) {
+    return {failures: [
+      `${selector} center is occluded before trusted hover dispatch: ` +
+        `${JSON.stringify({hit: point.hit, rect: point.rect, x: point.x, y: point.y})}`,
+    ]};
+  }
+  await cdp.send("Input.dispatchMouseEvent", {
+    type: "mouseMoved",
+    x: point.x,
+    y: point.y,
+  });
+  return {failures: []};
+}
+
 async function activatePane(cdp, pane) {
   await clickElement(cdp, `#pane-tab-${pane}`);
+  await movePointerAway(cdp);
 }
 
 export function browserAuditLibrary() {
@@ -1314,6 +1373,19 @@ export function browserAuditLibrary() {
     return failures;
   }
 
+  function hoverReadability(selector) {
+    const element = document.querySelector(selector);
+    if (!(element instanceof HTMLElement)) {
+      return {failures: [`${selector} is unavailable for hover contrast`]};
+    }
+    const failures = [];
+    if (!element.matches(":hover")) {
+      failures.push(`${selector} did not enter its trusted hover state`);
+    }
+    failures.push(...readabilityFailures(element, `${selector} hover control text`));
+    return {failures};
+  }
+
   function radioValueFailures(field) {
     const failures = [];
     if ((field.textContent ?? "").trim() === "") {
@@ -1615,6 +1687,60 @@ export function browserAuditLibrary() {
         failures.push("open front-panel key grid overflows horizontally");
       }
       frontPanelDrawer.open = false;
+    }
+    return {failures};
+  }
+
+  function phoneUnknownHoldState() {
+    const failures = paneState("controls");
+    const snapshots = [];
+    const scopes = ["system", "department", "site", "channel"];
+    try {
+      for (const scope of scopes) {
+        const state = document.querySelector(`#scanner-hold-${scope}-state`);
+        if (!(state instanceof HTMLElement)) {
+          failures.push(`unknown-state phone audit is missing the ${scope} state`);
+          continue;
+        }
+        snapshots.push({
+          dataState: state.dataset.state,
+          state,
+          text: state.textContent,
+        });
+        state.textContent = "Unknown";
+        state.dataset.state = "unknown";
+      }
+      for (const scope of scopes) {
+        const suffix = scope === "channel" ? "" : `-${scope}`;
+        const controls = [
+          document.querySelector(`#scanner-hold-${scope}`),
+          document.querySelector(`#scanner-hold-${scope}-state`),
+          document.querySelector(`#scanner-previous${suffix}`),
+          document.querySelector(`#scanner-next${suffix}`),
+        ];
+        for (const control of controls) {
+          if (!(control instanceof HTMLElement) || !rendered(control)) {
+            failures.push(`${scope} unknown-state phone control is not rendered`);
+            continue;
+          }
+          if (control.scrollWidth > control.clientWidth + tolerance) {
+            failures.push(
+              `${label(control)} clips unknown-state phone text ` +
+                `(${control.scrollWidth.toFixed(1)} > ${control.clientWidth.toFixed(1)})`,
+            );
+          }
+          const clipping = clippingAncestor(control, textRect(control));
+          if (clipping !== null) {
+            failures.push(`${label(control)} unknown-state text is clipped by ${label(clipping)}`);
+          }
+        }
+      }
+    } finally {
+      for (const {dataState, state, text} of snapshots) {
+        state.textContent = text;
+        if (dataState === undefined) delete state.dataset.state;
+        else state.dataset.state = dataState;
+      }
     }
     return {failures};
   }
@@ -2339,6 +2465,35 @@ export function browserAuditLibrary() {
     return failures;
   }
 
+  function radioFieldCardIntersectionFailures(container) {
+    if (!(container instanceof HTMLElement) || !rendered(container)) return [];
+    const failures = [];
+    const cards = Array.from(container.children).filter(
+      (card) => card instanceof HTMLElement && rendered(card),
+    );
+    for (let leftIndex = 0; leftIndex < cards.length; leftIndex++) {
+      const leftCard = cards[leftIndex];
+      const leftRect = leftCard.getBoundingClientRect();
+      for (let rightIndex = leftIndex + 1; rightIndex < cards.length; rightIndex++) {
+        const rightCard = cards[rightIndex];
+        const rightRect = rightCard.getBoundingClientRect();
+        const overlapWidth = Math.min(leftRect.right, rightRect.right) -
+          Math.max(leftRect.left, rightRect.left);
+        const overlapHeight = Math.min(leftRect.bottom, rightRect.bottom) -
+          Math.max(leftRect.top, rightRect.top);
+        if (overlapWidth <= tolerance || overlapHeight <= tolerance) continue;
+        const leftName = leftCard.querySelector("dt")?.textContent?.trim() ?? label(leftCard);
+        const rightName = rightCard.querySelector("dt")?.textContent?.trim() ?? label(rightCard);
+        failures.push(
+          `${label(container)} cards ${JSON.stringify(leftName)} and ` +
+            `${JSON.stringify(rightName)} overlap by ` +
+            `${overlapWidth.toFixed(1)}x${overlapHeight.toFixed(1)}px`,
+        );
+      }
+    }
+    return failures;
+  }
+
   function radioFields(fieldIds) {
     const failures = [];
     const seen = new Set();
@@ -2366,6 +2521,11 @@ export function browserAuditLibrary() {
       if (visibleGroups.length !== 1 || visibleGroups[0]?.dataset.radioGroup !== view) {
         failures.push(`radio field group state does not match ${view}`);
       }
+      failures.push(
+        ...radioFieldCardIntersectionFailures(
+          visibleGroups[0]?.querySelector(".radio-field-list"),
+        ),
+      );
 
       for (const id of fieldIds) {
         const field = document.getElementById(id);
@@ -2614,9 +2774,11 @@ export function browserAuditLibrary() {
     forcedColors,
     ingressDiagnosticsLayout,
     ingressHomeAssistantLayout,
+    hoverReadability,
     keyboardTabState,
     normal,
     paginationState,
+    phoneUnknownHoldState,
     prefixedUrls,
     radioFields,
     radioValueFailures,
@@ -2785,6 +2947,33 @@ async function auditSequentialFocus(cdp, collector, theme) {
       reverse: true,
     });
   }
+}
+
+async function auditWorkspaceTabHoverContrast(cdp, collector, theme, viewport) {
+  let cases = 0;
+  const auditHover = async (pane) => {
+    const selector = `#pane-tab-${pane}`;
+    const acquisition = await hoverElement(cdp, selector);
+    const context =
+      `${theme}/${viewport.width}x${viewport.height}@${viewport.dpr}/hover/${pane}`;
+    collector.add(
+      context,
+      acquisition.failures.length > 0
+        ? acquisition
+        : await evaluate(
+          cdp,
+          `window.__sdsctlBrowserAudit.hoverReadability(${JSON.stringify(selector)})`,
+        ),
+    );
+    cases += 1;
+  };
+
+  await activatePane(cdp, "scanner");
+  for (const pane of PANES.slice(1)) await auditHover(pane);
+  await activatePane(cdp, "controls");
+  await auditHover("scanner");
+  await movePointerAway(cdp);
+  return cases;
 }
 
 async function auditPagination(cdp, collector, context) {
@@ -3044,7 +3233,9 @@ export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
   await navigate(cdp, `${baseUrl}/`, timeoutMs);
 
   let caseCount = 0;
+  let hoverContrastCases = 0;
   let lcarsNavigationTransitionCases = 0;
+  let phoneUnknownHoldCases = 0;
   let systemPaletteCases = 0;
   const systemPalettes = await evaluate(
     cdp,
@@ -3136,6 +3327,21 @@ export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
         );
         await auditAccessibility(cdp, collector, context, pane);
       }
+      if (viewport.name === "phone") {
+        await activatePane(cdp, "controls");
+        phoneUnknownHoldCases += 1;
+        collector.add(
+          `${theme}/${viewport.width}x${viewport.height}@${viewport.dpr}/` +
+            "controls/unknown-hold-state",
+          await evaluate(cdp, "window.__sdsctlBrowserAudit.phoneUnknownHoldState()"),
+        );
+      }
+      hoverContrastCases += await auditWorkspaceTabHoverContrast(
+        cdp,
+        collector,
+        theme,
+        viewport,
+      );
       console.log(
         `Audited ${theme.padEnd(16)} ${viewport.width}x${viewport.height}` +
           ` DPR ${viewport.dpr}: ${PANES.length} panes`,
@@ -3245,10 +3451,12 @@ export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
   return {
     caseCount,
     failures: collector.failures,
+    hoverContrastCases,
     ingressDiagnosticsCases,
     ingressHomeAssistantCases,
     lcarsNavigationTransitionCases,
     panoramaBoundaryCases,
+    phoneUnknownHoldCases,
     systemPaletteCases,
   };
 }
@@ -4564,6 +4772,11 @@ async function run(options) {
         `internal Ingress Diagnostics count mismatch: ${result.ingressDiagnosticsCases}`,
       );
     }
+    if (result.hoverContrastCases !== THEMES.length * VIEWPORTS.length * PANES.length) {
+      throw new Error(
+        `internal hover contrast count mismatch: ${result.hoverContrastCases}`,
+      );
+    }
     if (result.ingressHomeAssistantCases !== THEMES.length * 3) {
       throw new Error(
         `internal Ingress Home Assistant count mismatch: ${result.ingressHomeAssistantCases}`,
@@ -4573,6 +4786,11 @@ async function run(options) {
       throw new Error(
         `internal LCARS navigation-transition count mismatch: ` +
           `${result.lcarsNavigationTransitionCases}`,
+      );
+    }
+    if (result.phoneUnknownHoldCases !== THEMES.length) {
+      throw new Error(
+        `internal phone unknown hold-state count mismatch: ${result.phoneUnknownHoldCases}`,
       );
     }
     if (
@@ -4621,9 +4839,11 @@ async function run(options) {
       `PASS: ${result.caseCount} matrix cases plus ${result.panoramaBoundaryCases} ` +
         `hero panoramic-boundary cases, theme switching, all 35 radio ` +
         "fields, Simple/Detail and adaptive screens, trusted Tab/Shift+Tab and " +
-        "pagination focus, WCAG AA normal/forced-color contrast, reduced motion, " +
+        `pagination focus, ${result.hoverContrastCases} explicit workspace-tab hover states, ` +
+        "WCAG AA normal/hover/forced-color contrast, reduced motion, " +
         "enlarged-text scrolling escape, DPR changes, 12 phone recording font " +
-        `variants, ${result.lcarsNavigationTransitionCases} LCARS navigation-breakpoint ` +
+        `variants, ${result.phoneUnknownHoldCases} phone unknown hold-state cases, ` +
+        `${result.lcarsNavigationTransitionCases} LCARS navigation-breakpoint ` +
         `cases, prefixed URLs, all ${result.ingressHomeAssistantCases} ` +
         `Ingress-only Home Assistant workspaces, ${result.systemPaletteCases} ` +
         `responsive System-palette cases, all ${result.ingressDiagnosticsCases} read-only Ingress ` +

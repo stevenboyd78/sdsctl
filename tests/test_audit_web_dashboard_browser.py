@@ -84,7 +84,7 @@ def test_browser_audit_help_documents_scope_and_dependencies() -> None:
     assert completed.returncode == 0
     assert completed.stderr == ""
     for contract in (
-        "all 672 built-in",
+        "all 840 built-in",
         "30 exact panoramic-boundary",
         "writes no PNGs",
         "enlarged-text",
@@ -124,8 +124,8 @@ def test_browser_audit_list_is_the_complete_cartesian_matrix() -> None:
     assert completed.stderr == ""
     lines = completed.stdout.splitlines()
     cases = lines[:-1]
-    assert len(cases) == 672
-    assert lines[-1] == "Matrix cases: 672; screenshots written: 0"
+    assert len(cases) == 840
+    assert lines[-1] == "Matrix cases: 840; screenshots written: 0"
 
     themes = {
         "system",
@@ -159,6 +159,7 @@ def test_browser_audit_list_is_the_complete_cartesian_matrix() -> None:
     }
     viewports = {
         "viewport=1920x1080@1",
+        "viewport=1920x900@1",
         "viewport=1366x768@1",
         "viewport=800x480@1",
         "viewport=390x844@2",
@@ -181,7 +182,7 @@ def test_browser_audit_list_is_the_complete_cartesian_matrix() -> None:
         token for line in cases for token in line.split() if token.startswith("viewport=")
     } == viewports
     assert {token for line in cases for token in line.split() if token.startswith("pane=")} == panes
-    assert len(set(cases)) == 672
+    assert len(set(cases)) == 840
 
 
 def test_browser_audit_rejects_invalid_arguments_without_opening_chrome() -> None:
@@ -197,6 +198,13 @@ def test_browser_audit_rejects_invalid_arguments_without_opening_chrome() -> Non
 def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> None:
     source = _SCRIPT.read_text(encoding="utf-8")
     assert "non-System live daemon status wraps onto multiple lines" not in source
+    hover_source = source.split("async function hoverElement", 1)[1].split(
+        "async function activatePane", 1
+    )[0]
+    assert "elementFromPoint" in hover_source
+    assert "owned:" in hover_source
+    assert "occluded before trusted hover dispatch" in hover_source
+    assert "await frames(cdp)" not in hover_source
 
     for contract in (
         "semanticInteractiveSelector",
@@ -207,6 +215,13 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         "modifiers: reverse ? 8 : 0",
         "minimumTextContrast = 4.5",
         "minimumLargeTextContrast = 3",
+        "auditWorkspaceTabHoverContrast",
+        "hoverReadability",
+        "internal hover contrast count mismatch",
+        "explicit workspace-tab hover states",
+        "phoneUnknownHoldState",
+        "unknown-hold-state",
+        "internal phone unknown hold-state count mismatch",
         "controlContext",
         "ingressDiagnosticsLayout",
         "Scanner panel does not fill the Diagnostics workspace",
@@ -243,6 +258,8 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         "120 * rootFontSize",
         "hierarchyFieldAlignmentFailures",
         "compact Channel field has no separation before Site",
+        "radioFieldCardIntersectionFailures",
+        "overlap by",
         "headline panoramic scene is not rendered under reduced motion",
         "const reducedMotionViewport = hero",
         "? {width: 1920, height: 1080, dpr: 1}",

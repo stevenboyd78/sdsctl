@@ -290,6 +290,44 @@ def test_mission_control_full_hd_tabs_reserve_a_separate_lamp_lane() -> None:
     assert "top: 1.72rem;" in divider[1]
 
 
+def test_mission_control_windowed_desktop_hierarchy_uses_single_line_cards() -> None:
+    stylesheet = read_built_in_web_theme_stylesheet(
+        built_in_web_theme_registry().require("cinematic-mission-control")
+    ).decode("utf-8")
+    windowed = stylesheet.split(
+        "@media (min-width: 1280px) and (min-height: 720px) and "
+        "(max-height: 999px) and (min-aspect-ratio: 3/2)",
+        1,
+    )[1]
+    card = re.search(r"\.radio-field-list\s*> div\s*\{([^}]+)\}", windowed)
+
+    assert card is not None
+    assert "grid-template-columns: minmax(0, 1fr) auto;" in card[1]
+    assert "align-items: center;" in card[1]
+    assert "padding-block: 0.12rem;" in card[1]
+    assert "text-align: end;" in windowed
+
+
+def test_mission_control_short_production_hierarchy_uses_compact_instrument_bank() -> None:
+    viewport = files("sds200.web_assets").joinpath("dashboard-viewport.css").read_text()
+    compact = viewport.split(
+        "@media (min-width: 1280px) and (min-height: 720px) and "
+        "(max-height: 800px) and (min-aspect-ratio: 3/2)",
+        1,
+    )[1]
+    field_list = re.search(r"\.radio-field-list\s*\{([^}]+)\}", compact)
+    card = re.search(r"\.radio-field-list\s*> div\s*\{([^}]+)\}", compact)
+
+    assert field_list is not None and card is not None
+    assert "grid-template-columns: repeat(4, minmax(0, 1fr)) !important;" in field_list[1]
+    assert "grid-template-rows: repeat(3, auto) !important;" in field_list[1]
+    assert "align-content: start !important;" in field_list[1]
+    assert "gap: 0.0625rem 0.35rem !important;" in field_list[1]
+    assert "grid-column: auto !important;" in card[1]
+    assert "grid-row: auto !important;" in card[1]
+    assert "padding-block: 0 !important;" in card[1]
+
+
 @pytest.mark.parametrize(
     ("identifier", "scene", "prefix", "motion_markers", "hold_marker"),
     HERO_CINEMATIC_THEMES,
@@ -368,6 +406,35 @@ def test_light_cinematic_theme_hover_preserves_selected_tab(identifier: str) -> 
     stylesheet = read_built_in_web_theme_stylesheet(theme).decode("utf-8")
 
     assert ':hover:not(:disabled):not([aria-selected="true"])' in stylesheet
+
+
+@pytest.mark.parametrize(
+    "identifier",
+    (
+        "cinematic-mission-control",
+        "cinematic-cold-war-radar",
+        "cinematic-dieselpunk-command",
+        "cinematic-steampunk-telegraph",
+        "cinematic-retro-arcade",
+        "cinematic-desert-empire",
+        "cinematic-carrier-air-wing",
+        "cinematic-art-deco-radio",
+        "cinematic-solarpunk",
+        "cinematic-national-parks",
+        "cinematic-galactic-operations",
+        "cinematic-noir-detective",
+        "cinematic-wizarding-archive",
+        "cinematic-tactical-field",
+    ),
+)
+def test_cinematic_hover_states_use_accessible_foreground(identifier: str) -> None:
+    theme = built_in_web_theme_registry().require(identifier)
+    stylesheet = read_built_in_web_theme_stylesheet(theme).decode("utf-8")
+    hover = stylesheet.split(
+        ":is(button, .recording-action):hover:not(:disabled)", 1
+    )[1].split("}", 1)[0]
+
+    assert "color: var(--text);" in hover
 
 
 @pytest.mark.parametrize(

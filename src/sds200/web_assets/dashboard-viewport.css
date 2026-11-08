@@ -1028,6 +1028,16 @@
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     }
 
+    /* The longer Department label needs a little more of its action row on
+       phones; preserve the shared button padding and the outer 2x2 rhythm. */
+    .scanner-hold-scope:has(#scanner-hold-department) .scanner-hold-action {
+      grid-template-columns: minmax(0, 1fr) 3.95rem !important;
+    }
+
+    #scanner-hold-department-state {
+      min-width: 3.95rem !important;
+    }
+
     .scanner-hold-action button,
     .scanner-hold-state {
       min-width: 0 !important;
@@ -1919,6 +1929,29 @@
       [data-theme="cinematic-cyberpunk-night"]
     ) .workspace-tabs [role="tab"]:focus-visible {
       outline-offset: -0.24rem !important;
+    }
+  }
+
+  /* Mission Control's short production console cannot fit five telemetry
+   * rows vertically. Keep this geometry in the protected viewport layer so
+   * its normal two-column hero restoration cannot override the 4x3 bank. */
+  @media (min-width: 1280px) and (min-height: 720px) and (max-height: 800px) and (min-aspect-ratio: 3/2) {
+    :root[data-theme="cinematic-mission-control"]
+      .radio-field-group[data-radio-group="hierarchy"]
+      .radio-field-list {
+      grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+      grid-template-rows: repeat(3, auto) !important;
+      align-content: start !important;
+      gap: 0.0625rem 0.35rem !important;
+    }
+
+    :root[data-theme="cinematic-mission-control"]
+      .radio-field-group[data-radio-group="hierarchy"]
+      .radio-field-list
+      > div {
+      grid-column: auto !important;
+      grid-row: auto !important;
+      padding-block: 0 !important;
     }
   }
 

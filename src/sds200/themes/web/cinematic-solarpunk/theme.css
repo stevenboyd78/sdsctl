@@ -23,7 +23,7 @@
 :root[data-theme="cinematic-solarpunk"] .radio-view-controls { border: 1px solid #7ba185; border-radius: 0.9rem; background: #e3efd9; }
 :root[data-theme="cinematic-solarpunk"] .radio-field-groups { border-color: #94b69a; background: rgb(38 123 85 / 0.035); }
 :root[data-theme="cinematic-solarpunk"] :is(button, .recording-action, select, input, textarea) { border-color: #7ba185; border-radius: 999px; background: linear-gradient(#ffffff, #dcebd0); color: var(--text); }
-:root[data-theme="cinematic-solarpunk"] :is(button, .recording-action):hover:not(:disabled):not([aria-selected="true"]) { border-color: #145f3d; background: #d0edcf; }
+:root[data-theme="cinematic-solarpunk"] :is(button, .recording-action):hover:not(:disabled):not([aria-selected="true"]) { color: var(--text); border-color: #145f3d; background: #d0edcf; }
 :root[data-theme="cinematic-solarpunk"] .status-badge { border-radius: 999px; }
 @media (prefers-reduced-motion: reduce) { :root[data-theme="cinematic-solarpunk"] *, :root[data-theme="cinematic-solarpunk"] *::before, :root[data-theme="cinematic-solarpunk"] *::after { animation: none !important; transition: none !important; } }
 @media (forced-colors: active) { :root[data-theme="cinematic-solarpunk"] { --background: Canvas; --surface: Canvas; --surface-emphasis: Canvas; --text: CanvasText; --muted: CanvasText; --border: CanvasText; --accent: Highlight; --accent-strong: Highlight; --focus: Highlight; } :root[data-theme="cinematic-solarpunk"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups) { background: Canvas; box-shadow: none; } :root[data-theme="cinematic-solarpunk"] .site-header::after { display: none; } }

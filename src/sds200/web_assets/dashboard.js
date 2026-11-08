@@ -2350,7 +2350,7 @@ function setScannerHoldControl(id, scope, available, known, held) {
   button.disabled = !available;
   button.textContent = held ? `Release ${scope}` : `Hold ${scope}`;
   button.setAttribute("aria-pressed", held ? "true" : "false");
-  indicator.textContent = !known ? "Unavailable" : held ? "Held" : "Not held";
+  indicator.textContent = !known ? "Unknown" : held ? "Held" : "Not held";
   indicator.dataset.state = !known ? "unknown" : held ? "held" : "released";
 }
 

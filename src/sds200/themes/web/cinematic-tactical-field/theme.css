@@ -251,6 +251,7 @@
 
 :root[data-theme="cinematic-tactical-field"] :is(button, .recording-action):hover:not(:disabled):not([aria-selected="true"]) {
   border-color: var(--accent-strong);
+  color: var(--text);
   background: #435433;
 }
 
