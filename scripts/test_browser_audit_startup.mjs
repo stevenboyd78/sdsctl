@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
+import {mkdtemp, readFile, rm} from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import {
   captureChildOutput,
   parseArguments,
+  serializeFindingsReport,
   waitForHttp,
+  writeFindingsReport,
 } from './audit_web_dashboard_browser.mjs';
 
 const url = 'http://127.0.0.1:12345/json/version';
@@ -20,6 +25,66 @@ test('Chrome startup and later browser operations have independent deadlines', (
   ]);
   assert.equal(explicit.startupTimeoutMs, 75000);
   assert.equal(explicit.timeoutMs, 25000);
+});
+
+test('complete findings JSON is deterministic and retains every failure', () => {
+  const result = {
+    caseCount: 2,
+    failures: [
+      {context: 'system/800x480@1/scanner', message: 'first fixture'},
+      {context: 'lcars/390x844@2/recordings', message: 'second fixture'},
+    ],
+    ingressDiagnosticsCases: 3,
+    ingressHomeAssistantCases: 3,
+    lcarsNavigationTransitionCases: 3,
+    panoramaBoundaryCases: 30,
+    systemPaletteCases: 189,
+  };
+  const serialized = serializeFindingsReport(result);
+  assert.ok(serialized.endsWith('\n'));
+  const report = JSON.parse(serialized);
+  assert.equal(report.schemaVersion, 1);
+  assert.equal(report.audit, 'web-dashboard-browser');
+  assert.deepEqual(report.result, result);
+  assert.equal(report.result.failures.length, 2);
+  assert.equal(report.matrix.themes.length, 28);
+  assert.equal(report.matrix.viewports.length, 4);
+  assert.equal(report.matrix.panes.length, 6);
+  assert.equal(serializeFindingsReport(result), serialized);
+});
+
+test('complete findings JSON writes every failure into a nested directory', async () => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'sdsctl-findings-test-'));
+  const outputPath = path.join(temporaryRoot, 'nested', 'browser-findings.json');
+  const result = {
+    caseCount: 1,
+    failures: Array.from({length: 205}, (_, index) => ({
+      context: `fixture/${index}`,
+      message: `finding ${index}`,
+    })),
+  };
+  try {
+    await writeFindingsReport(outputPath, result);
+    const report = JSON.parse(await readFile(outputPath, 'utf8'));
+    assert.deepEqual(report.result, result);
+    assert.equal(report.result.failures.length, 205);
+    assert.equal(report.result.failures.at(-1).message, 'finding 204');
+  } finally {
+    await rm(temporaryRoot, {force: true, recursive: true});
+  }
+});
+
+test('findings JSON path is explicit and limited to the complete matrix', () => {
+  const options = parseArguments(['--findings-json', 'reports/browser-findings.json']);
+  assert.ok(options.findingsJsonPath.endsWith('/reports/browser-findings.json'));
+  assert.throws(
+    () => parseArguments(['--findings-json', 'findings.json', '--waterfall-only']),
+    /requires the complete dashboard matrix audit/,
+  );
+  assert.throws(
+    () => parseArguments(['--findings-json', 'findings.json', '--list']),
+    /requires the complete dashboard matrix audit/,
+  );
 });
 
 test('cold Chrome readiness may pass after the operation deadline without weakening it', async () => {

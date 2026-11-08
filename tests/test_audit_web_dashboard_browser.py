@@ -104,6 +104,7 @@ def test_browser_audit_help_documents_scope_and_dependencies() -> None:
         "final-stream cleanup",
         "--waterfall-only",
         "--waterfall-screenshot-dir",
+        "--findings-json",
         "--startup-timeout-ms",
         "three sanitized waterfall-card reference PNGs",
         "Node.js 24 or newer",
@@ -195,6 +196,7 @@ def test_browser_audit_rejects_invalid_arguments_without_opening_chrome() -> Non
 
 def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> None:
     source = _SCRIPT.read_text(encoding="utf-8")
+    assert "non-System live daemon status wraps onto multiple lines" not in source
 
     for contract in (
         "semanticInteractiveSelector",
@@ -218,11 +220,15 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         "desktop typography controls are not centered in their own non-overlapping column",
         "Hidden typography control is rendered",
         "Narrow typography menu controls are inaccessible or too small",
+        "Narrow LCARS appearance menu controls are inaccessible or too small",
         "export async function runMatrix",
         "Advanced Home Assistant guidance is unreachable at the end of the workspace",
         "System palette controller, document, and selector disagree",
         "System palette selector is exposed for ${expectedTheme}",
-        "non-System live daemon status wraps onto multiple lines",
+        "non-System live daemon status has no readable geometry",
+        "non-System live daemon status is outside the overview content box",
+        "non-System live daemon status text is clipped by its own box",
+        "non-System live daemon status overlaps the appearance controls",
         "switchSystemPalette",
         "systemPaletteChoices.slice(1)",
         "responsive System-palette cases",
@@ -377,8 +383,7 @@ def test_internal_capture_bridge_rejects_bad_arguments_without_opening_chrome() 
 
 def test_browser_audit_is_a_ci_and_release_gate() -> None:
     command = (
-        "node scripts/audit_web_dashboard_browser.mjs "
-        "--startup-timeout-ms 90000 --timeout-ms 30000"
+        "node scripts/audit_web_dashboard_browser.mjs --startup-timeout-ms 90000 --timeout-ms 30000"
     )
     setup_node = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
 

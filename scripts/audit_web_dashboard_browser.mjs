@@ -150,6 +150,8 @@ Options:
   --startup-timeout-ms N
                       Chrome process readiness timeout (default: 90000)
   --timeout-ms N      CDP and dashboard operation timeout (default: 20000)
+  --findings-json PATH
+                      Write the complete deterministic matrix result as JSON
   --waterfall-only    Run only the Home Assistant waterfall-card regression/lifecycle audit
   --waterfall-screenshot-dir PATH
                       Write three sanitized waterfall-card reference PNGs
@@ -167,6 +169,7 @@ export function parseArguments(argv) {
   const options = {
     baseUrl: null,
     chrome: null,
+    findingsJsonPath: null,
     help: false,
     list: false,
     python: null,
@@ -187,6 +190,7 @@ export function parseArguments(argv) {
     } else if ([
       "--base-url",
       "--chrome",
+      "--findings-json",
       "--python",
       "--startup-timeout-ms",
       "--timeout-ms",
@@ -203,6 +207,8 @@ export function parseArguments(argv) {
         options.chrome = value;
       } else if (argument === "--python") {
         options.python = value;
+      } else if (argument === "--findings-json") {
+        options.findingsJsonPath = path.resolve(value);
       } else if (argument === "--waterfall-screenshot-dir") {
         options.waterfallScreenshotDirectory = path.resolve(value);
       } else if (argument === "--timeout-ms") {
@@ -233,7 +239,28 @@ export function parseArguments(argv) {
     parsed.search = "";
     options.baseUrl = parsed.toString().replace(/\/$/, "");
   }
+  if (options.findingsJsonPath !== null && (options.list || options.waterfallOnly)) {
+    throw new Error("--findings-json requires the complete dashboard matrix audit");
+  }
   return options;
+}
+
+export function serializeFindingsReport(result) {
+  return `${JSON.stringify({
+    audit: "web-dashboard-browser",
+    matrix: {
+      panes: PANES,
+      themes: THEMES,
+      viewports: VIEWPORTS,
+    },
+    result,
+    schemaVersion: 1,
+  }, null, 2)}\n`;
+}
+
+export async function writeFindingsReport(outputPath, result) {
+  await mkdir(path.dirname(outputPath), {recursive: true});
+  await writeFile(outputPath, serializeFindingsReport(result), "utf8");
 }
 
 function listCases() {
@@ -1666,8 +1693,12 @@ export function browserAuditLibrary() {
       Number.parseFloat(overviewStyle.paddingLeft);
     const contentRight = overviewRect.right - Number.parseFloat(overviewStyle.borderRightWidth) -
       Number.parseFloat(overviewStyle.paddingRight);
+    const contentTop = overviewRect.top + Number.parseFloat(overviewStyle.borderTopWidth) +
+      Number.parseFloat(overviewStyle.paddingTop);
+    const contentBottom = overviewRect.bottom - Number.parseFloat(overviewStyle.borderBottomWidth) -
+      Number.parseFloat(overviewStyle.paddingBottom);
     const messageRect = message.getBoundingClientRect();
-    const lineHeight = Number.parseFloat(messageStyle.lineHeight);
+    const messageTextRect = textRect(message);
     // The independently added typography layout intentionally centers controls
     // in a third desktop column. Small layouts still require two columns.
     const appearance = [
@@ -1705,8 +1736,37 @@ export function browserAuditLibrary() {
     if (Math.abs(messageRect.right - contentRight) > tolerance) {
       failures.push("non-System live daemon status is not right-aligned");
     }
-    if (Number.isFinite(lineHeight) && messageRect.height > lineHeight * 1.5) {
-      failures.push("non-System live daemon status wraps onto multiple lines");
+    if (
+      (message.textContent ?? "").trim() === "" ||
+      messageRect.width <= tolerance ||
+      messageRect.height <= tolerance ||
+      messageTextRect.width <= tolerance ||
+      messageTextRect.height <= tolerance
+    ) {
+      failures.push("non-System live daemon status has no readable geometry");
+    }
+    if (
+      messageRect.left < contentLeft - tolerance ||
+      messageRect.top < contentTop - tolerance ||
+      messageRect.right > contentRight + tolerance ||
+      messageRect.bottom > contentBottom + tolerance
+    ) {
+      failures.push("non-System live daemon status is outside the overview content box");
+    }
+    if (outside(messageTextRect, messageRect)) {
+      failures.push("non-System live daemon status text is clipped by its own box");
+    }
+    if (appearance !== undefined) {
+      const appearanceRect = appearance.getBoundingClientRect();
+      const overlaps = !(
+        messageRect.right <= appearanceRect.left + tolerance ||
+        messageRect.left >= appearanceRect.right - tolerance ||
+        messageRect.bottom <= appearanceRect.top + tolerance ||
+        messageRect.top >= appearanceRect.bottom - tolerance
+      );
+      if (overlaps) {
+        failures.push("non-System live daemon status overlaps the appearance controls");
+      }
     }
     return failures;
   }
@@ -3940,22 +4000,38 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
           await document.fonts.ready;
           const typography = document.querySelector('#theme-typography-pickers');
           const fontPicker = document.querySelector('#theme-font-picker');
-          for (const node of [typography, fontPicker]) {
+          const lcarsAppearance = document.querySelector('#lcars-v2-appearance-pickers');
+          for (const node of [typography, fontPicker, lcarsAppearance]) {
             if (node.hidden && getComputedStyle(node).display !== 'none') {
               throw new Error('Hidden typography control is rendered: ' + node.id);
             }
           }
           if (matchMedia('(max-width: 65rem)').matches) {
             const menu = document.querySelector('#native-menu');
-            if (!menu.contains(typography)) throw new Error('Narrow display typography is outside menu');
             document.querySelector('#native-menu-toggle').click();
-            const selectors = [...typography.querySelectorAll('select')]
-              .filter(node => node.getClientRects().length > 0);
-            if (!typography.hidden && (selectors.length === 0 || selectors.some(node => {
-              const rect = node.getBoundingClientRect();
-              const bounds = menu.getBoundingClientRect();
-              return rect.height < 44 || rect.left < bounds.left || rect.right > bounds.right + 1;
-            }))) throw new Error('Narrow typography menu controls are inaccessible or too small');
+            const menuGroups = [
+              {
+                node: typography,
+                outside: 'Narrow display typography is outside menu',
+                invalid: 'Narrow typography menu controls are inaccessible or too small',
+              },
+              {
+                node: lcarsAppearance,
+                outside: 'Narrow LCARS appearance controls are outside menu',
+                invalid: 'Narrow LCARS appearance menu controls are inaccessible or too small',
+              },
+            ];
+            for (const group of menuGroups) {
+              if (group.node.hidden) continue;
+              if (!menu.contains(group.node)) throw new Error(group.outside);
+              const selectors = [...group.node.querySelectorAll('select')]
+                .filter(node => node.getClientRects().length > 0);
+              if (selectors.length === 0 || selectors.some(node => {
+                const rect = node.getBoundingClientRect();
+                const bounds = menu.getBoundingClientRect();
+                return rect.height < 44 || rect.left < bounds.left || rect.right > bounds.right + 1;
+              })) throw new Error(group.invalid);
+            }
             menu.close();
           }
           const overview = document.querySelector('.overview').getBoundingClientRect();
@@ -4506,6 +4582,10 @@ async function run(options) {
       throw new Error(
         `internal panoramic-boundary count mismatch: ${result.panoramaBoundaryCases}`,
       );
+    }
+    if (options.findingsJsonPath !== null) {
+      await writeFindingsReport(options.findingsJsonPath, result);
+      console.log(`Wrote complete browser findings to ${options.findingsJsonPath}`);
     }
     if (result.failures.length > 0) {
       console.error(`\nBrowser acceptance failed with ${result.failures.length} finding(s):`);
