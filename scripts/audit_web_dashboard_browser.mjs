@@ -3614,6 +3614,18 @@ export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
             context,
             await evaluate(cdp, "window.__sdsctlBrowserAudit.controlContext()"),
           );
+          if (viewport.name === "phone") {
+            // Audit the unknown hold presentation while Controls is already
+            // active. Diagnostics refreshes its client inventory
+            // asynchronously and can move the sticky phone tabs, so a second
+            // Controls activation after the pane loop is both redundant and
+            // vulnerable to dispatching against changing geometry.
+            phoneUnknownHoldCases += 1;
+            collector.add(
+              `${context}/unknown-hold-state`,
+              await evaluate(cdp, "window.__sdsctlBrowserAudit.phoneUnknownHoldState()"),
+            );
+          }
         } else if (pane === "recordings") {
           await auditPagination(cdp, collector, context);
         }
@@ -3625,15 +3637,6 @@ export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
           ),
         );
         await auditAccessibility(cdp, collector, context, pane);
-      }
-      if (viewport.name === "phone") {
-        await activatePane(cdp, "controls");
-        phoneUnknownHoldCases += 1;
-        collector.add(
-          `${theme}/${viewport.width}x${viewport.height}@${viewport.dpr}/` +
-            "controls/unknown-hold-state",
-          await evaluate(cdp, "window.__sdsctlBrowserAudit.phoneUnknownHoldState()"),
-        );
       }
       hoverContrastCases += await auditWorkspaceTabHoverContrast(
         cdp,

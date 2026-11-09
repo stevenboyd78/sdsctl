@@ -364,6 +364,22 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         assert contract in source
 
 
+def test_phone_unknown_hold_audit_reuses_the_existing_controls_activation() -> None:
+    source = _SCRIPT.read_text(encoding="utf-8")
+    run_matrix = source.split("export async function runMatrix", 1)[1].split(
+        "export async function openChrome", 1
+    )[0]
+    controls_branch = run_matrix.split('} else if (pane === "controls") {', 1)[1].split(
+        '} else if (pane === "recordings") {', 1
+    )[0]
+
+    assert 'if (viewport.name === "phone") {' in controls_branch
+    assert "phoneUnknownHoldCases += 1" in controls_branch
+    assert "window.__sdsctlBrowserAudit.phoneUnknownHoldState()" in controls_branch
+    assert "`${context}/unknown-hold-state`" in controls_branch
+    assert 'await activatePane(cdp, "controls")' not in run_matrix
+
+
 def test_internal_capture_bridge_documents_and_enforces_exact_cdp_viewports() -> None:
     completed = _run_capture_node("--help")
 
