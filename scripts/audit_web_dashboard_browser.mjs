@@ -1027,6 +1027,7 @@ async function pressKey(cdp, key, code, virtualKeyCode, {modifiers = 0} = {}) {
 let trustedClickSequence = 0;
 const TRUSTED_CLICK_MAX_ATTEMPTS = 3;
 const TRUSTED_CLICK_MAX_POINTER_MOVES = 3;
+const TRUSTED_CLICK_MAX_PHYSICAL_ATTEMPTS = 2;
 
 function sameClickGeometry(left, right) {
   return left !== null && right !== null &&
@@ -1055,8 +1056,8 @@ async function cleanupTrustedClickWitness(cdp, witnessToken) {
       const key = Symbol.for("sdsctl.browser-audit.trusted-click-witness");
       const record = globalThis[key];
       if (record?.token !== ${witnessToken}) return {clicked: null, matched: false};
-      if (record.element instanceof Element && typeof record.listener === "function") {
-        record.element.removeEventListener("click", record.listener, true);
+      if (record.listenerTarget instanceof EventTarget && typeof record.listener === "function") {
+        record.listenerTarget.removeEventListener("click", record.listener, true);
       }
       delete globalThis[key];
       return {clicked: record.clicked, matched: true};
@@ -1065,6 +1066,10 @@ async function cleanupTrustedClickWitness(cdp, witnessToken) {
 }
 
 export async function clickElement(cdp, selector) {
+  return clickElementWithRecovery(cdp, selector, 1);
+}
+
+async function clickElementWithRecovery(cdp, selector, physicalAttempt) {
   let point = null;
   let witnessToken = null;
   const observationHistory = [];
@@ -1210,10 +1215,19 @@ export async function clickElement(cdp, selector) {
           if (!(element instanceof HTMLElement) || element.matches(":disabled")) return false;
           const key = Symbol.for("sdsctl.browser-audit.trusted-click-witness");
           const previous = globalThis[key];
-          if (previous?.element instanceof Element && typeof previous.listener === "function") {
-            previous.element.removeEventListener("click", previous.listener, true);
+          if (
+            previous?.listenerTarget instanceof EventTarget &&
+            typeof previous.listener === "function"
+          ) {
+            previous.listenerTarget.removeEventListener("click", previous.listener, true);
           }
-          const record = {clicked: null, element, listener: null, token: ${attemptWitnessToken}};
+          const record = {
+            clicked: null,
+            element,
+            listener: null,
+            listenerTarget: document,
+            token: ${attemptWitnessToken},
+          };
           record.listener = event => {
             record.clicked = {
               isTrusted: event.isTrusted,
@@ -1225,7 +1239,15 @@ export async function clickElement(cdp, selector) {
               } : null,
             };
           };
-          element.addEventListener("click", record.listener, {capture: true, once: true});
+          // Observe every click at the document capture boundary. A null
+          // receipt then proves the released press caused no DOM click at all,
+          // rather than merely no click on the intended target. That proof is
+          // required before the single bounded post-press recovery below.
+          record.listenerTarget.addEventListener(
+            "click",
+            record.listener,
+            {capture: true, once: true},
+          );
           globalThis[key] = record;
           return true;
         })()`,
@@ -1455,10 +1477,21 @@ export async function clickElement(cdp, selector) {
     }
   }
   if (dispatchError !== null) throw dispatchError;
+  if (
+    !pressValid && clickWitness === null &&
+    physicalAttempt < TRUSTED_CLICK_MAX_PHYSICAL_ATTEMPTS
+  ) {
+    // A compact sticky control can move synchronously with mousePressed after
+    // all pre-dispatch checks passed. The document-scoped witness proves the
+    // released sequence completed no click anywhere, so one fresh acquisition
+    // is safe and still preserves exactly-once click semantics.
+    await movePointerAway(cdp);
+    return clickElementWithRecovery(cdp, selector, physicalAttempt + 1);
+  }
   if (!pressValid || !clickWitness?.isTrusted || !clickWitness?.owned) {
     throw new Error(
       `${selector} did not complete one owned trusted click: ` +
-        `${JSON.stringify({clickWitness, point, pressReceipt})}`,
+        `${JSON.stringify({clickWitness, physicalAttempt, point, pressReceipt})}`,
     );
   }
 }

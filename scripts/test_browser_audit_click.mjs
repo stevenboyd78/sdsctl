@@ -27,19 +27,25 @@ class ScriptedTargetCdp {
     failures = {},
     initial,
     pressGeometry,
+    releaseClicks = null,
   }) {
     this.armedScript = armed;
     this.confirmedScript = confirmed;
     this.dispatchScript = dispatch;
     this.initialScript = initial;
-    this.pressGeometry = pressGeometry;
+    this.pressGeometryScript = Array.isArray(pressGeometry)
+      ? pressGeometry
+      : [pressGeometry];
+    this.releaseClicks = releaseClicks;
     this.initialMeasurements = 0;
     this.confirmedMeasurements = 0;
     this.armedMeasurements = 0;
     this.dispatchMeasurements = 0;
+    this.pressMeasurements = 0;
+    this.releaseMeasurements = 0;
     this.failures = {...failures};
     this.lastArmedValue = null;
-    this.clickRecorded = false;
+    this.clickRecorded = null;
     this.witnessActive = false;
     this.events = [];
   }
@@ -65,7 +71,10 @@ class ScriptedTargetCdp {
   async send(method, parameters) {
     if (method === "Input.dispatchMouseEvent") {
       if (parameters.type === "mouseReleased" && this.witnessActive) {
-        this.clickRecorded = true;
+        const index = this.releaseMeasurements++;
+        this.clickRecorded = this.releaseClicks === null
+          ? {isTrusted: true, owned: true, target: {id: "fixture-target"}}
+          : this.releaseClicks[index];
       }
       this.events.push({method, ...parameters});
       return {};
@@ -86,18 +95,16 @@ class ScriptedTargetCdp {
       });
       return this.result(true);
     }
-    if (source.includes("const record = {clicked: null")) {
+    if (source.includes("listenerTarget: document")) {
       this.events.push({kind: "witness-armed"});
-      this.clickRecorded = false;
+      this.clickRecorded = null;
       this.witnessActive = true;
       return this.result(true);
     }
     if (source.includes("trusted-click-witness cleanup")) {
       this.events.push({kind: "witness-disarmed"});
       const matched = this.witnessActive;
-      const clicked = matched && this.clickRecorded
-        ? {isTrusted: true, owned: true, target: {id: "fixture-target"}}
-        : null;
+      const clicked = matched ? this.clickRecorded : null;
       this.witnessActive = false;
       return this.result({clicked, matched});
     }
@@ -136,12 +143,17 @@ class ScriptedTargetCdp {
     }
     if (source.includes("pressedPointOwned")) {
       this.maybeReject("press-receipt");
+      const scripted = this.take(
+        this.pressGeometryScript,
+        "pressMeasurements",
+        "press receipt",
+      );
       const value = {
-        ...this.pressGeometry,
         active: true,
         centerOwned: true,
         focused: true,
         pressedPointOwned: true,
+        ...scripted,
       };
       this.events.push({kind: "press-receipt", value});
       return this.result(value);
@@ -545,6 +557,110 @@ test("post-press protocol rejection still releases and cleans the witness", asyn
   assert.equal(cleanup.length, 1);
   assert.ok(cdp.events.indexOf(presses[0]) < cdp.events.indexOf(releases[0]));
   assert.ok(cdp.events.indexOf(releases[0]) < cdp.events.indexOf(cleanup[0]));
+  assert.equal(cdp.witnessActive, false);
+});
+
+test("post-press movement retries once after a document witness proves no click", async () => {
+  const cdp = new ScriptedTargetCdp({
+    armed: [
+      {...GEOMETRY_A, stabilizedPointOwned: true},
+      {...GEOMETRY_B, stabilizedPointOwned: true},
+    ],
+    confirmed: [GEOMETRY_A, GEOMETRY_A, GEOMETRY_B, GEOMETRY_B],
+    initial: [GEOMETRY_A, GEOMETRY_B],
+    pressGeometry: [
+      {
+        ...GEOMETRY_B,
+        active: false,
+        focused: false,
+        pressedPointOwned: false,
+      },
+      GEOMETRY_B,
+    ],
+    releaseClicks: [
+      null,
+      {isTrusted: true, owned: true, target: {id: "fixture-target"}},
+    ],
+  });
+
+  await clickElement(cdp, "#fixture-target");
+
+  const presses = cdp.events.filter(event => event.type === "mousePressed");
+  const releases = cdp.events.filter(event => event.type === "mouseReleased");
+  assert.equal(presses.length, 2);
+  assert.equal(releases.length, 2);
+  assert.equal(cdp.events.filter(event => event.kind === "witness-armed").length, 2);
+  assert.equal(cdp.events.filter(event => event.kind === "witness-disarmed").length, 2);
+  assert.equal(pointerAwayEvents(cdp).length, 1);
+  assert.deepEqual({x: presses[1].x, y: presses[1].y}, {
+    x: GEOMETRY_B.x,
+    y: GEOMETRY_B.y,
+  });
+  assert.equal(cdp.witnessActive, false);
+});
+
+test("post-press movement never retries after any click was witnessed", async () => {
+  const cdp = new ScriptedTargetCdp({
+    armed: [{...GEOMETRY_A, stabilizedPointOwned: true}],
+    confirmed: [GEOMETRY_A, GEOMETRY_A],
+    initial: [GEOMETRY_A],
+    pressGeometry: [{
+      ...GEOMETRY_B,
+      active: false,
+      focused: false,
+      pressedPointOwned: false,
+    }],
+    releaseClicks: [
+      {isTrusted: true, owned: false, target: {id: "other-control"}},
+    ],
+  });
+
+  await assert.rejects(
+    clickElement(cdp, "#fixture-target"),
+    /did not complete one owned trusted click/,
+  );
+
+  assert.equal(cdp.events.filter(event => event.type === "mousePressed").length, 1);
+  assert.equal(cdp.events.filter(event => event.type === "mouseReleased").length, 1);
+  assert.equal(cdp.events.filter(event => event.kind === "witness-armed").length, 1);
+  assert.equal(pointerAwayEvents(cdp).length, 0);
+  assert.equal(cdp.witnessActive, false);
+});
+
+test("persistent post-press movement exhausts one safe retry", async () => {
+  const cdp = new ScriptedTargetCdp({
+    armed: [
+      {...GEOMETRY_A, stabilizedPointOwned: true},
+      {...GEOMETRY_B, stabilizedPointOwned: true},
+    ],
+    confirmed: [GEOMETRY_A, GEOMETRY_A, GEOMETRY_B, GEOMETRY_B],
+    initial: [GEOMETRY_A, GEOMETRY_B],
+    pressGeometry: [
+      {
+        ...GEOMETRY_B,
+        active: false,
+        focused: false,
+        pressedPointOwned: false,
+      },
+      {
+        ...GEOMETRY_A,
+        active: false,
+        focused: false,
+        pressedPointOwned: false,
+      },
+    ],
+    releaseClicks: [null, null],
+  });
+
+  await assert.rejects(
+    clickElement(cdp, "#fixture-target"),
+    /"physicalAttempt":2/,
+  );
+
+  assert.equal(cdp.events.filter(event => event.type === "mousePressed").length, 2);
+  assert.equal(cdp.events.filter(event => event.type === "mouseReleased").length, 2);
+  assert.equal(cdp.events.filter(event => event.kind === "witness-armed").length, 2);
+  assert.equal(pointerAwayEvents(cdp).length, 1);
   assert.equal(cdp.witnessActive, false);
 });
 
