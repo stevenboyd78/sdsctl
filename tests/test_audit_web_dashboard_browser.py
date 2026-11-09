@@ -38,6 +38,19 @@ def test_browser_palette_focus_probe_contract() -> None:
     assert completed.stderr == ""
 
 
+def test_browser_trusted_click_geometry_contract() -> None:
+    if _NODE is None:
+        pytest.skip("Node.js is unavailable")
+    completed = subprocess.run(
+        [_NODE, "--test", "scripts/test_browser_audit_click.mjs"],
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stderr == ""
+
+
 def test_browser_lcars_reachability_contract() -> None:
     if _NODE is None:
         pytest.skip("Node.js is unavailable")
@@ -206,8 +219,13 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
     assert "for (let attempt = 1; attempt <= 2; attempt += 1)" in click_source
     assert "for (let pointerMove = 1; pointerMove <= 3; pointerMove += 1)" in click_source
     assert "after 2 settled attempts with 3 pointer moves each" in click_source
+    assert "candidate.owned && candidate.hovered" in click_source
     assert "confirmed.owned && confirmed.hovered" in click_source
+    assert "sameClickGeometry(candidate, confirmed)" in click_source
     assert "candidate = confirmed" in click_source
+    assert "stabilizedPointOwned" in click_source
+    assert "sameClickGeometry(point, armedPoint)" in click_source
+    assert "trusted-click-witness cleanup before geometry reacquisition" in click_source
     assert 'element.matches(":active")' in click_source
     assert "pressedPointOwned" in click_source
     assert "centerOwned" in click_source
@@ -233,10 +251,23 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         'hovered: element.matches(":hover")', click_confirm_index
     )
     click_convergence_index = click_source.index(
-        "confirmed.owned && confirmed.hovered", click_confirm_hover_index
+        "sameClickGeometry(candidate, confirmed)", click_confirm_hover_index
+    )
+    click_witness_arm_index = click_source.index("const witnessArmed", click_convergence_index)
+    click_post_arm_settle_index = click_source.index("await frames(cdp)", click_witness_arm_index)
+    click_armed_point_index = click_source.index(
+        "const armedPoint = await evaluate", click_post_arm_settle_index
+    )
+    click_post_arm_owner_index = click_source.index("stabilizedPointOwned", click_armed_point_index)
+    click_post_arm_stability_index = click_source.index(
+        "sameClickGeometry(point, armedPoint)", click_post_arm_owner_index
+    )
+    click_disarm_index = click_source.index(
+        "trusted-click-witness cleanup before geometry reacquisition",
+        click_post_arm_stability_index,
     )
     click_exhaustion_index = click_source.index(
-        "after 2 settled attempts with 3 pointer moves each"
+        "after 2 settled attempts with 3 pointer moves each and post-arm checks"
     )
     click_dispatch_index = click_source.index('type: "mousePressed"')
     click_press_receipt_index = click_source.index("const pressReceipt", click_dispatch_index)
@@ -255,6 +286,12 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         < click_confirm_hit_index
         < click_confirm_hover_index
         < click_convergence_index
+        < click_witness_arm_index
+        < click_post_arm_settle_index
+        < click_armed_point_index
+        < click_post_arm_owner_index
+        < click_post_arm_stability_index
+        < click_disarm_index
         < click_exhaustion_index
         < click_dispatch_index
         < click_press_receipt_index

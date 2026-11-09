@@ -1019,8 +1019,16 @@ async function pressKey(cdp, key, code, virtualKeyCode, {modifiers = 0} = {}) {
 
 let trustedClickSequence = 0;
 
-async function clickElement(cdp, selector) {
+function sameClickGeometry(left, right) {
+  return left !== null && right !== null &&
+    left.x === right.x && left.y === right.y &&
+    left.rect.left === right.rect.left && left.rect.right === right.rect.right &&
+    left.rect.top === right.rect.top && left.rect.bottom === right.rect.bottom;
+}
+
+export async function clickElement(cdp, selector) {
   let point = null;
+  let witnessToken = null;
   const observationHistory = [];
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     const available = await evaluate(
@@ -1079,7 +1087,8 @@ async function clickElement(cdp, selector) {
     // Trusted pointer movement can itself activate hover styling that changes
     // sticky phone geometry. Follow the remeasured center through at most
     // three pre-dispatch moves, crossing a rendering boundary and requiring
-    // both center ownership and real :hover state before the one click.
+    // two consecutive owned, truly hovered observations with identical
+    // geometry before the one click.
     let candidate = initial;
     for (let pointerMove = 1; pointerMove <= 3; pointerMove += 1) {
       if (!candidate.owned) break;
@@ -1123,58 +1132,132 @@ async function clickElement(cdp, selector) {
         throw new Error(`cannot click ${selector}`);
       }
       observationHistory.push({attempt, pointerMove, ...confirmed});
-      if (confirmed.owned && confirmed.hovered) {
+      if (
+        candidate.owned && candidate.hovered &&
+        confirmed.owned && confirmed.hovered &&
+        sameClickGeometry(candidate, confirmed)
+      ) {
         point = confirmed;
         break;
       }
       candidate = confirmed;
     }
-    if (point !== null) break;
+    if (point === null) {
+      if (attempt < 2) await movePointerAway(cdp);
+      continue;
+    }
+
+    const attemptWitnessToken = ++trustedClickSequence;
+    const witnessArmed = await evaluate(
+      cdp,
+      `(() => {
+        const element = document.querySelector(${JSON.stringify(selector)});
+        if (!(element instanceof HTMLElement) || element.matches(":disabled")) return false;
+        const key = Symbol.for("sdsctl.browser-audit.trusted-click-witness");
+        const previous = globalThis[key];
+        if (previous?.element instanceof Element && typeof previous.listener === "function") {
+          previous.element.removeEventListener("click", previous.listener, true);
+        }
+        const record = {clicked: null, element, listener: null, token: ${attemptWitnessToken}};
+        record.listener = event => {
+          record.clicked = {
+            isTrusted: event.isTrusted,
+            owned: event.target instanceof Node &&
+              (event.target === element || element.contains(event.target)),
+            target: event.target instanceof Element ? {
+              id: event.target.id,
+              tag: event.target.localName,
+            } : null,
+          };
+        };
+        element.addEventListener("click", record.listener, {capture: true, once: true});
+        globalThis[key] = record;
+        return true;
+      })()`,
+    );
+    if (!witnessArmed) {
+      throw new Error(`cannot arm trusted click witness for ${selector}`);
+    }
+
+    // Arming the listener is another asynchronous boundary. Give pending
+    // layout work a chance to finish, then prove the stabilized center and
+    // the pointer's existing coordinate are still owned before dispatching.
+    await frames(cdp);
+    const armedPoint = await evaluate(
+      cdp,
+      `(() => {
+        const element = document.querySelector(${JSON.stringify(selector)});
+        if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
+          return null;
+        }
+        const rect = element.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        const stabilizedHit = document.elementFromPoint(${point.x}, ${point.y});
+        return {
+          hit: hit instanceof Element ? {
+            classes: Array.from(hit.classList).slice(0, 2),
+            id: hit.id,
+            tag: hit.localName,
+          } : null,
+          hovered: element.matches(":hover"),
+          owned: hit instanceof Element && (hit === element || element.contains(hit)),
+          rect: {
+            bottom: rect.bottom,
+            left: rect.left,
+            right: rect.right,
+            top: rect.top,
+          },
+          stabilizedPointOwned: stabilizedHit instanceof Element &&
+            (stabilizedHit === element || element.contains(stabilizedHit)),
+          x,
+          y,
+        };
+      })()`,
+    );
+    observationHistory.push({attempt, postArm: true, ...armedPoint});
+    if (
+      armedPoint !== null && armedPoint.owned && armedPoint.hovered &&
+      armedPoint.stabilizedPointOwned && sameClickGeometry(point, armedPoint)
+    ) {
+      point = armedPoint;
+      witnessToken = attemptWitnessToken;
+      break;
+    }
+
+    const witnessDisarmed = await evaluate(
+      cdp,
+      `(() => {
+        /* trusted-click-witness cleanup before geometry reacquisition */
+        const key = Symbol.for("sdsctl.browser-audit.trusted-click-witness");
+        const record = globalThis[key];
+        if (record?.token !== ${attemptWitnessToken}) return false;
+        if (record.element instanceof Element && typeof record.listener === "function") {
+          record.element.removeEventListener("click", record.listener, true);
+        }
+        delete globalThis[key];
+        return true;
+      })()`,
+    );
+    if (!witnessDisarmed) {
+      throw new Error(`cannot disarm trusted click witness for ${selector}`);
+    }
+    point = null;
     if (attempt < 2) await movePointerAway(cdp);
   }
   if (
-    point === null ||
+    point === null || witnessToken === null ||
     point.x < 0 ||
     point.y < 0 ||
     point.x > Number.MAX_SAFE_INTEGER ||
     point.y > Number.MAX_SAFE_INTEGER
   ) {
     throw new Error(
-      `${selector} center remained occluded before trusted click dispatch ` +
-        `after 2 settled attempts with 3 pointer moves each: ` +
+      `${selector} center remained unstable before trusted click dispatch ` +
+        `after 2 settled attempts with 3 pointer moves each and post-arm checks: ` +
         `${JSON.stringify(observationHistory)}`,
     );
-  }
-  const witnessToken = ++trustedClickSequence;
-  const witnessArmed = await evaluate(
-    cdp,
-    `(() => {
-      const element = document.querySelector(${JSON.stringify(selector)});
-      if (!(element instanceof HTMLElement) || element.matches(":disabled")) return false;
-      const key = Symbol.for("sdsctl.browser-audit.trusted-click-witness");
-      const previous = globalThis[key];
-      if (previous?.element instanceof Element && typeof previous.listener === "function") {
-        previous.element.removeEventListener("click", previous.listener, true);
-      }
-      const record = {clicked: null, element, listener: null, token: ${witnessToken}};
-      record.listener = event => {
-        record.clicked = {
-          isTrusted: event.isTrusted,
-          owned: event.target instanceof Node &&
-            (event.target === element || element.contains(event.target)),
-          target: event.target instanceof Element ? {
-            id: event.target.id,
-            tag: event.target.localName,
-          } : null,
-        };
-      };
-      element.addEventListener("click", record.listener, {capture: true, once: true});
-      globalThis[key] = record;
-      return true;
-    })()`,
-  );
-  if (!witnessArmed) {
-    throw new Error(`cannot arm trusted click witness for ${selector}`);
   }
   await cdp.send("Input.dispatchMouseEvent", {
     button: "left",
@@ -1207,7 +1290,7 @@ async function clickElement(cdp, selector) {
     })()`,
   );
   const pressValid = pressReceipt !== null && pressReceipt.active &&
-    pressReceipt.focused && pressReceipt.centerOwned;
+    pressReceipt.focused && pressReceipt.centerOwned && pressReceipt.pressedPointOwned;
   const releasePoint = pressValid ? pressReceipt : point;
   await cdp.send("Input.dispatchMouseEvent", {
     button: "left",
