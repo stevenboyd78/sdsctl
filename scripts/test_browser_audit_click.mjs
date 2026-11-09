@@ -6,6 +6,7 @@ function geometry({top, bottom}) {
   const left = 10;
   const right = 30;
   return {
+    focused: true,
     hit: {classes: [], id: "fixture-target", tag: "button"},
     hovered: true,
     owned: true,
@@ -19,14 +20,27 @@ const GEOMETRY_A = geometry({top: 100, bottom: 120});
 const GEOMETRY_B = geometry({top: 79.0625, bottom: 99.0625});
 
 class ScriptedTargetCdp {
-  constructor({armed, confirmed, initial, pressGeometry}) {
+  constructor({
+    armed,
+    confirmed,
+    dispatch = null,
+    failures = {},
+    initial,
+    pressGeometry,
+  }) {
     this.armedScript = armed;
     this.confirmedScript = confirmed;
+    this.dispatchScript = dispatch;
     this.initialScript = initial;
     this.pressGeometry = pressGeometry;
     this.initialMeasurements = 0;
     this.confirmedMeasurements = 0;
     this.armedMeasurements = 0;
+    this.dispatchMeasurements = 0;
+    this.failures = {...failures};
+    this.lastArmedValue = null;
+    this.clickRecorded = false;
+    this.witnessActive = false;
     this.events = [];
   }
 
@@ -40,8 +54,19 @@ class ScriptedTargetCdp {
     return script[index];
   }
 
+  maybeReject(kind) {
+    const remaining = this.failures[kind] ?? 0;
+    if (remaining <= 0) return;
+    this.failures[kind] = remaining - 1;
+    this.events.push({kind: `${kind}-rejected`});
+    throw new Error(`injected ${kind} failure`);
+  }
+
   async send(method, parameters) {
     if (method === "Input.dispatchMouseEvent") {
+      if (parameters.type === "mouseReleased" && this.witnessActive) {
+        this.clickRecorded = true;
+      }
       this.events.push({method, ...parameters});
       return {};
     }
@@ -57,28 +82,60 @@ class ScriptedTargetCdp {
           source.indexOf("element.scrollIntoView"),
         focusVerified: source.includes("document.activeElement === element"),
         kind: "target-prepared",
-        preventScroll: source.includes("element.focus({preventScroll: true})"),
+        nativeFocusScroll: source.includes("element.focus({preventScroll: false})"),
       });
       return this.result(true);
     }
     if (source.includes("const record = {clicked: null")) {
       this.events.push({kind: "witness-armed"});
+      this.clickRecorded = false;
+      this.witnessActive = true;
       return this.result(true);
     }
-    if (source.includes("trusted-click-witness cleanup before geometry reacquisition")) {
+    if (source.includes("trusted-click-witness cleanup")) {
       this.events.push({kind: "witness-disarmed"});
-      return this.result(true);
+      const matched = this.witnessActive;
+      const clicked = matched && this.clickRecorded
+        ? {isTrusted: true, owned: true, target: {id: "fixture-target"}}
+        : null;
+      this.witnessActive = false;
+      return this.result({clicked, matched});
+    }
+    if (source.includes("dispatchPointOwned")) {
+      const index = this.dispatchMeasurements++;
+      const scripted = this.dispatchScript === null
+        ? {
+          ...this.lastArmedValue,
+          dispatchPointOwned: true,
+        }
+        : this.dispatchScript[index];
+      assert.notEqual(scripted, undefined, `Unexpected final-dispatch measurement ${index + 1}`);
+      const value = {
+        focused: true,
+        witnessCurrent: true,
+        ...scripted,
+      };
+      this.events.push({kind: "final-dispatch-measurement", value});
+      return this.result(value);
     }
     if (source.includes("stabilizedPointOwned")) {
-      const value = this.take(
+      this.maybeReject("post-arm");
+      const scripted = this.take(
         this.armedScript,
         "armedMeasurements",
         "post-arm",
       );
+      const value = {
+        focused: true,
+        witnessCurrent: true,
+        ...scripted,
+      };
+      this.lastArmedValue = value;
       this.events.push({kind: "post-arm-measurement", value});
       return this.result(value);
     }
     if (source.includes("pressedPointOwned")) {
+      this.maybeReject("press-receipt");
       const value = {
         ...this.pressGeometry,
         active: true,
@@ -91,6 +148,7 @@ class ScriptedTargetCdp {
     }
     if (source.includes("return record?.token ===")) {
       this.events.push({kind: "witness-read"});
+      this.witnessActive = false;
       return this.result({isTrusted: true, owned: true, target: {id: "fixture-target"}});
     }
     if (source.includes('hovered: element.matches(":hover")')) {
@@ -116,7 +174,7 @@ class ScriptedTargetCdp {
   }
 }
 
-test("target focus is settled without scrolling before initial geometry", async () => {
+test("target native focus scroll is settled before initial geometry", async () => {
   const cdp = new ScriptedTargetCdp({
     armed: [{...GEOMETRY_A, stabilizedPointOwned: true}],
     confirmed: [GEOMETRY_A, GEOMETRY_A],
@@ -134,14 +192,15 @@ test("target focus is settled without scrolling before initial geometry", async 
     focusBeforeMeasurement: true,
     focusVerified: true,
     kind: "target-prepared",
-    preventScroll: true,
+    nativeFocusScroll: true,
   });
   assert.ok(cdp.events.indexOf(preparation) < cdp.events.indexOf(frame));
   assert.ok(cdp.events.indexOf(frame) < cdp.events.indexOf(initial));
   assert.ok(cdp.events.indexOf(initial) < cdp.events.indexOf(press));
   assert.equal(cdp.events.filter(event => event.type === "mousePressed").length, 1);
   assert.equal(cdp.events.filter(event => event.type === "mouseReleased").length, 1);
-  assert.equal(cdp.events.filter(event => event.kind === "witness-read").length, 1);
+  assert.equal(cdp.events.filter(event => event.kind === "witness-disarmed").length, 1);
+  assert.equal(cdp.witnessActive, false);
 });
 
 test("moving target is reacquired before exactly one trusted press and release", async () => {
@@ -165,7 +224,7 @@ test("moving target is reacquired before exactly one trusted press and release",
   assert.equal(cdp.initialMeasurements, 2);
   assert.equal(cdp.confirmedMeasurements, 4);
   assert.equal(witnessArms.length, 2);
-  assert.equal(witnessDisarms.length, 1);
+  assert.equal(witnessDisarms.length, 2);
   assert.equal(postArmChecks.length, 2);
   assert.equal(presses.length, 1);
   assert.equal(releases.length, 1);
@@ -231,7 +290,7 @@ test("oscillating target gets one final bounded reacquisition", async () => {
   assert.equal(cdp.initialMeasurements, 3);
   assert.equal(cdp.confirmedMeasurements, 7);
   assert.equal(witnessArms.length, 2);
-  assert.equal(witnessDisarms.length, 1);
+  assert.equal(witnessDisarms.length, 2);
   assert.equal(postArmChecks.length, 2);
   assert.equal(pointerAwayEvents(cdp).length, 2);
   assert.equal(presses.length, 1);
@@ -251,13 +310,14 @@ test("oscillating target gets one final bounded reacquisition", async () => {
   const secondPostArm = cdp.events.indexOf(postArmChecks[1]);
   const press = cdp.events.indexOf(presses[0]);
   const release = cdp.events.indexOf(releases[0]);
-  const witnessRead = cdp.events.findIndex(event => event.kind === "witness-read");
+  const finalCleanup = cdp.events.indexOf(witnessDisarms[1]);
   assert.ok(firstPostArm < disarm);
   assert.ok(disarm < secondArm);
   assert.ok(secondArm < secondPostArm);
   assert.ok(secondPostArm < press);
   assert.ok(press < release);
-  assert.ok(release < witnessRead);
+  assert.ok(release < finalCleanup);
+  assert.equal(cdp.witnessActive, false);
 });
 
 test("persistent oscillation exhausts the bounded budget without a press", async () => {
@@ -265,7 +325,7 @@ test("persistent oscillation exhausts the bounded budget without a press", async
 
   await assert.rejects(
     clickElement(cdp, "#fixture-target"),
-    /after 3 settled attempts with 3 pointer moves each and post-arm checks/,
+    /after 3 settled attempts with 3 acquisition moves each plus final alignment and post-arm\/final-dispatch checks/,
   );
 
   assert.equal(cdp.initialMeasurements, 3);
@@ -274,6 +334,252 @@ test("persistent oscillation exhausts the bounded budget without a press", async
   assert.equal(pointerAwayEvents(cdp).length, 2);
   assert.equal(cdp.events.filter(event => event.kind === "witness-armed").length, 2);
   assert.equal(cdp.events.filter(event => event.kind === "witness-disarmed").length, 2);
+  assert.equal(cdp.events.filter(event => event.type === "mousePressed").length, 0);
+  assert.equal(cdp.events.filter(event => event.type === "mouseReleased").length, 0);
+  assert.equal(cdp.events.filter(event => event.kind === "witness-read").length, 0);
+});
+
+test("post-arm focus loss is reacquired before physical dispatch", async () => {
+  const cdp = new ScriptedTargetCdp({
+    armed: [
+      {...GEOMETRY_A, focused: false, stabilizedPointOwned: true},
+      {...GEOMETRY_A, stabilizedPointOwned: true},
+    ],
+    confirmed: [GEOMETRY_A, GEOMETRY_A, GEOMETRY_A, GEOMETRY_A],
+    initial: [GEOMETRY_A, GEOMETRY_A],
+    pressGeometry: GEOMETRY_A,
+  });
+
+  await clickElement(cdp, "#fixture-target");
+
+  assert.equal(cdp.events.filter(event => event.kind === "witness-armed").length, 2);
+  assert.equal(cdp.events.filter(event => event.kind === "witness-disarmed").length, 2);
+  assert.equal(cdp.events.filter(event => event.kind === "final-dispatch-measurement").length, 1);
+  assert.equal(cdp.events.filter(event => event.type === "mousePressed").length, 1);
+  assert.equal(cdp.events.filter(event => event.type === "mouseReleased").length, 1);
+});
+
+test("post-arm witness identity loss is reacquired before physical dispatch", async () => {
+  const cdp = new ScriptedTargetCdp({
+    armed: [
+      {...GEOMETRY_A, stabilizedPointOwned: true, witnessCurrent: false},
+      {...GEOMETRY_A, stabilizedPointOwned: true},
+    ],
+    confirmed: [GEOMETRY_A, GEOMETRY_A, GEOMETRY_A, GEOMETRY_A],
+    initial: [GEOMETRY_A, GEOMETRY_A],
+    pressGeometry: GEOMETRY_A,
+  });
+
+  await clickElement(cdp, "#fixture-target");
+
+  assert.equal(cdp.events.filter(event => event.kind === "witness-armed").length, 2);
+  assert.equal(cdp.events.filter(event => event.kind === "witness-disarmed").length, 2);
+  assert.equal(cdp.events.filter(event => event.kind === "final-dispatch-measurement").length, 1);
+  assert.equal(cdp.events.filter(event => event.type === "mousePressed").length, 1);
+  assert.equal(cdp.events.filter(event => event.type === "mouseReleased").length, 1);
+  assert.equal(cdp.witnessActive, false);
+});
+
+test("post-arm protocol rejection disarms with zero physical dispatch", async () => {
+  const cdp = new ScriptedTargetCdp({
+    armed: [{...GEOMETRY_A, stabilizedPointOwned: true}],
+    confirmed: [GEOMETRY_A, GEOMETRY_A],
+    failures: {"post-arm": 1},
+    initial: [GEOMETRY_A],
+    pressGeometry: GEOMETRY_A,
+  });
+
+  await assert.rejects(
+    clickElement(cdp, "#fixture-target"),
+    /injected post-arm failure/,
+  );
+
+  assert.equal(cdp.events.filter(event => event.kind === "witness-armed").length, 1);
+  assert.equal(cdp.events.filter(event => event.kind === "witness-disarmed").length, 1);
+  assert.equal(cdp.events.filter(event => event.type === "mousePressed").length, 0);
+  assert.equal(cdp.events.filter(event => event.type === "mouseReleased").length, 0);
+  assert.equal(cdp.witnessActive, false);
+});
+
+test("final pre-dispatch shift is reacquired before one trusted click", async () => {
+  const cdp = new ScriptedTargetCdp({
+    armed: [
+      {...GEOMETRY_A, stabilizedPointOwned: true},
+      {...GEOMETRY_B, stabilizedPointOwned: true},
+    ],
+    confirmed: [GEOMETRY_A, GEOMETRY_A, GEOMETRY_B, GEOMETRY_B],
+    dispatch: [
+      {...GEOMETRY_B, dispatchPointOwned: false},
+      {...GEOMETRY_B, dispatchPointOwned: true},
+    ],
+    initial: [GEOMETRY_A, GEOMETRY_B],
+    pressGeometry: GEOMETRY_B,
+  });
+
+  await clickElement(cdp, "#fixture-target");
+
+  const finalChecks = cdp.events.filter(
+    event => event.kind === "final-dispatch-measurement",
+  );
+  const postArmChecks = cdp.events.filter(event => event.kind === "post-arm-measurement");
+  const witnessArms = cdp.events.filter(event => event.kind === "witness-armed");
+  const witnessDisarms = cdp.events.filter(event => event.kind === "witness-disarmed");
+  const presses = cdp.events.filter(event => event.type === "mousePressed");
+  const releases = cdp.events.filter(event => event.type === "mouseReleased");
+
+  assert.equal(finalChecks.length, 2);
+  assert.equal(witnessArms.length, 2);
+  assert.equal(witnessDisarms.length, 2);
+  assert.equal(presses.length, 1);
+  assert.equal(releases.length, 1);
+  assert.deepEqual({x: presses[0].x, y: presses[0].y}, {
+    x: GEOMETRY_B.x,
+    y: GEOMETRY_B.y,
+  });
+
+  const firstPostArm = cdp.events.indexOf(postArmChecks[0]);
+  const firstFinalMove = cdp.events.findIndex(
+    (event, index) => index > firstPostArm && event.type === "mouseMoved" &&
+      event.x === GEOMETRY_A.x && event.y === GEOMETRY_A.y,
+  );
+  const firstFinalCheck = cdp.events.indexOf(finalChecks[0]);
+  const disarm = cdp.events.indexOf(witnessDisarms[0]);
+  const secondArm = cdp.events.indexOf(witnessArms[1]);
+  const secondPostArm = cdp.events.indexOf(postArmChecks[1]);
+  const secondFinalCheck = cdp.events.indexOf(finalChecks[1]);
+  const press = cdp.events.indexOf(presses[0]);
+  assert.ok(firstPostArm < firstFinalMove);
+  assert.ok(firstFinalMove < firstFinalCheck);
+  assert.ok(firstFinalCheck < disarm);
+  assert.ok(disarm < secondArm);
+  assert.ok(secondArm < secondPostArm);
+  assert.ok(secondPostArm < secondFinalCheck);
+  assert.ok(secondFinalCheck < press);
+});
+
+test("final-dispatch witness identity loss is reacquired before one trusted click", async () => {
+  const cdp = new ScriptedTargetCdp({
+    armed: [
+      {...GEOMETRY_A, stabilizedPointOwned: true},
+      {...GEOMETRY_A, stabilizedPointOwned: true},
+    ],
+    confirmed: [GEOMETRY_A, GEOMETRY_A, GEOMETRY_A, GEOMETRY_A],
+    dispatch: [
+      {...GEOMETRY_A, dispatchPointOwned: true, witnessCurrent: false},
+      {...GEOMETRY_A, dispatchPointOwned: true},
+    ],
+    initial: [GEOMETRY_A, GEOMETRY_A],
+    pressGeometry: GEOMETRY_A,
+  });
+
+  await clickElement(cdp, "#fixture-target");
+
+  assert.equal(cdp.events.filter(event => event.kind === "final-dispatch-measurement").length, 2);
+  assert.equal(cdp.events.filter(event => event.kind === "witness-armed").length, 2);
+  assert.equal(cdp.events.filter(event => event.kind === "witness-disarmed").length, 2);
+  assert.equal(cdp.events.filter(event => event.type === "mousePressed").length, 1);
+  assert.equal(cdp.events.filter(event => event.type === "mouseReleased").length, 1);
+  assert.equal(cdp.witnessActive, false);
+});
+
+test("persistent final-dispatch witness identity loss exhausts without a press", async () => {
+  const cdp = new ScriptedTargetCdp({
+    armed: [
+      {...GEOMETRY_A, stabilizedPointOwned: true},
+      {...GEOMETRY_A, stabilizedPointOwned: true},
+      {...GEOMETRY_A, stabilizedPointOwned: true},
+    ],
+    confirmed: [
+      GEOMETRY_A,
+      GEOMETRY_A,
+      GEOMETRY_A,
+      GEOMETRY_A,
+      GEOMETRY_A,
+      GEOMETRY_A,
+    ],
+    dispatch: [
+      {...GEOMETRY_A, dispatchPointOwned: true, witnessCurrent: false},
+      {...GEOMETRY_A, dispatchPointOwned: true, witnessCurrent: false},
+      {...GEOMETRY_A, dispatchPointOwned: true, witnessCurrent: false},
+    ],
+    initial: [GEOMETRY_A, GEOMETRY_A, GEOMETRY_A],
+    pressGeometry: GEOMETRY_A,
+  });
+
+  await assert.rejects(
+    clickElement(cdp, "#fixture-target"),
+    /center remained unstable before trusted click dispatch/,
+  );
+
+  assert.equal(cdp.events.filter(event => event.kind === "final-dispatch-measurement").length, 3);
+  assert.equal(cdp.events.filter(event => event.kind === "witness-armed").length, 3);
+  assert.equal(cdp.events.filter(event => event.kind === "witness-disarmed").length, 3);
+  assert.equal(cdp.events.filter(event => event.type === "mousePressed").length, 0);
+  assert.equal(cdp.events.filter(event => event.type === "mouseReleased").length, 0);
+  assert.equal(cdp.witnessActive, false);
+});
+
+test("post-press protocol rejection still releases and cleans the witness", async () => {
+  const cdp = new ScriptedTargetCdp({
+    armed: [{...GEOMETRY_A, stabilizedPointOwned: true}],
+    confirmed: [GEOMETRY_A, GEOMETRY_A],
+    failures: {"press-receipt": 1},
+    initial: [GEOMETRY_A],
+    pressGeometry: GEOMETRY_A,
+  });
+
+  await assert.rejects(
+    clickElement(cdp, "#fixture-target"),
+    /injected press-receipt failure/,
+  );
+
+  const presses = cdp.events.filter(event => event.type === "mousePressed");
+  const releases = cdp.events.filter(event => event.type === "mouseReleased");
+  const cleanup = cdp.events.filter(event => event.kind === "witness-disarmed");
+  assert.equal(presses.length, 1);
+  assert.equal(releases.length, 1);
+  assert.deepEqual({x: releases[0].x, y: releases[0].y}, {
+    x: GEOMETRY_A.x,
+    y: GEOMETRY_A.y,
+  });
+  assert.equal(cleanup.length, 1);
+  assert.ok(cdp.events.indexOf(presses[0]) < cdp.events.indexOf(releases[0]));
+  assert.ok(cdp.events.indexOf(releases[0]) < cdp.events.indexOf(cleanup[0]));
+  assert.equal(cdp.witnessActive, false);
+});
+
+test("persistent final pre-dispatch movement exhausts without a press", async () => {
+  const cdp = new ScriptedTargetCdp({
+    armed: [
+      {...GEOMETRY_A, stabilizedPointOwned: true},
+      {...GEOMETRY_B, stabilizedPointOwned: true},
+      {...GEOMETRY_A, stabilizedPointOwned: true},
+    ],
+    confirmed: [
+      GEOMETRY_A,
+      GEOMETRY_A,
+      GEOMETRY_B,
+      GEOMETRY_B,
+      GEOMETRY_A,
+      GEOMETRY_A,
+    ],
+    dispatch: [
+      {...GEOMETRY_B, dispatchPointOwned: false},
+      {...GEOMETRY_A, dispatchPointOwned: false},
+      {...GEOMETRY_B, dispatchPointOwned: false},
+    ],
+    initial: [GEOMETRY_A, GEOMETRY_B, GEOMETRY_A],
+    pressGeometry: GEOMETRY_A,
+  });
+
+  await assert.rejects(
+    clickElement(cdp, "#fixture-target"),
+    /after 3 settled attempts with 3 acquisition moves each plus final alignment and post-arm\/final-dispatch checks/,
+  );
+
+  assert.equal(cdp.dispatchMeasurements, 3);
+  assert.equal(cdp.events.filter(event => event.kind === "witness-armed").length, 3);
+  assert.equal(cdp.events.filter(event => event.kind === "witness-disarmed").length, 3);
   assert.equal(cdp.events.filter(event => event.type === "mousePressed").length, 0);
   assert.equal(cdp.events.filter(event => event.type === "mouseReleased").length, 0);
   assert.equal(cdp.events.filter(event => event.kind === "witness-read").length, 0);

@@ -1028,6 +1028,35 @@ function sameClickGeometry(left, right) {
     left.rect.top === right.rect.top && left.rect.bottom === right.rect.bottom;
 }
 
+function preserveTrustedClickError(primary, secondary, phase) {
+  const error = secondary instanceof Error ? secondary : new Error(String(secondary));
+  if (primary === null) return error;
+  const suppressed = Array.isArray(primary.trustedClickSuppressed)
+    ? primary.trustedClickSuppressed
+    : [];
+  suppressed.push({message: error.message, phase});
+  primary.trustedClickSuppressed = suppressed;
+  return primary;
+}
+
+async function cleanupTrustedClickWitness(cdp, witnessToken) {
+  return evaluate(
+    cdp,
+    `(() => {
+      /* trusted-click-witness cleanup before geometry reacquisition or exit;
+         token-scoped so one click cannot remove another click's witness */
+      const key = Symbol.for("sdsctl.browser-audit.trusted-click-witness");
+      const record = globalThis[key];
+      if (record?.token !== ${witnessToken}) return {clicked: null, matched: false};
+      if (record.element instanceof Element && typeof record.listener === "function") {
+        record.element.removeEventListener("click", record.listener, true);
+      }
+      delete globalThis[key];
+      return {clicked: record.clicked, matched: true};
+    })()`,
+  );
+}
+
 export async function clickElement(cdp, selector) {
   let point = null;
   let witnessToken = null;
@@ -1041,11 +1070,11 @@ export async function clickElement(cdp, selector) {
           return false;
         }
         element.scrollIntoView({block: "nearest", inline: "nearest"});
-        // A sticky phone tab can receive a native focus scroll synchronously
-        // with mousePressed, after all pre-dispatch geometry checks. Resolve
-        // that focus state without scrolling before the first measurement so
-        // the one physical press cannot be dispatched at a stale coordinate.
-        element.focus({preventScroll: true});
+        // A sticky phone control can receive a native focus scroll
+        // synchronously with mousePressed. Perform that same visibility work
+        // before the first measurement so the one physical press cannot be
+        // dispatched at a coordinate from the pre-focus layout.
+        element.focus({preventScroll: false});
         return document.activeElement === element || element.contains(document.activeElement);
       })()`,
     );
@@ -1070,6 +1099,7 @@ export async function clickElement(cdp, selector) {
         const y = rect.top + rect.height / 2;
         const hit = document.elementFromPoint(x, y);
         return {
+          focused: document.activeElement === element || element.contains(document.activeElement),
           hit: hit instanceof Element ? {
             classes: Array.from(hit.classList).slice(0, 2),
             id: hit.id,
@@ -1122,6 +1152,7 @@ export async function clickElement(cdp, selector) {
           const y = rect.top + rect.height / 2;
           const hit = document.elementFromPoint(x, y);
           return {
+            focused: document.activeElement === element || element.contains(document.activeElement),
             hit: hit instanceof Element ? {
               classes: Array.from(hit.classList).slice(0, 2),
               id: hit.id,
@@ -1145,8 +1176,8 @@ export async function clickElement(cdp, selector) {
       }
       observationHistory.push({attempt, pointerMove, ...confirmed});
       if (
-        candidate.owned && candidate.hovered &&
-        confirmed.owned && confirmed.hovered &&
+        candidate.focused && candidate.owned && candidate.hovered &&
+        confirmed.focused && confirmed.owned && confirmed.hovered &&
         sameClickGeometry(candidate, confirmed)
       ) {
         point = confirmed;
@@ -1160,101 +1191,163 @@ export async function clickElement(cdp, selector) {
     }
 
     const attemptWitnessToken = ++trustedClickSequence;
-    const witnessArmed = await evaluate(
-      cdp,
-      `(() => {
-        const element = document.querySelector(${JSON.stringify(selector)});
-        if (!(element instanceof HTMLElement) || element.matches(":disabled")) return false;
-        const key = Symbol.for("sdsctl.browser-audit.trusted-click-witness");
-        const previous = globalThis[key];
-        if (previous?.element instanceof Element && typeof previous.listener === "function") {
-          previous.element.removeEventListener("click", previous.listener, true);
-        }
-        const record = {clicked: null, element, listener: null, token: ${attemptWitnessToken}};
-        record.listener = event => {
-          record.clicked = {
-            isTrusted: event.isTrusted,
-            owned: event.target instanceof Node &&
-              (event.target === element || element.contains(event.target)),
-            target: event.target instanceof Element ? {
-              id: event.target.id,
-              tag: event.target.localName,
-            } : null,
+    let attemptAccepted = false;
+    let attemptError = null;
+    try {
+      // The arm request itself is inside the cleanup scope because the page
+      // can install its listener before a protocol response is lost.
+      const witnessArmed = await evaluate(
+        cdp,
+        `(() => {
+          const element = document.querySelector(${JSON.stringify(selector)});
+          if (!(element instanceof HTMLElement) || element.matches(":disabled")) return false;
+          const key = Symbol.for("sdsctl.browser-audit.trusted-click-witness");
+          const previous = globalThis[key];
+          if (previous?.element instanceof Element && typeof previous.listener === "function") {
+            previous.element.removeEventListener("click", previous.listener, true);
+          }
+          const record = {clicked: null, element, listener: null, token: ${attemptWitnessToken}};
+          record.listener = event => {
+            record.clicked = {
+              isTrusted: event.isTrusted,
+              owned: event.target instanceof Node &&
+                (event.target === element || element.contains(event.target)),
+              target: event.target instanceof Element ? {
+                id: event.target.id,
+                tag: event.target.localName,
+              } : null,
+            };
           };
-        };
-        element.addEventListener("click", record.listener, {capture: true, once: true});
-        globalThis[key] = record;
-        return true;
-      })()`,
-    );
-    if (!witnessArmed) {
-      throw new Error(`cannot arm trusted click witness for ${selector}`);
-    }
+          element.addEventListener("click", record.listener, {capture: true, once: true});
+          globalThis[key] = record;
+          return true;
+        })()`,
+      );
+      if (!witnessArmed) {
+        throw new Error(`cannot arm trusted click witness for ${selector}`);
+      }
 
-    // Arming the listener is another asynchronous boundary. Give pending
-    // layout work a chance to finish, then prove the stabilized center and
-    // the pointer's existing coordinate are still owned before dispatching.
-    await frames(cdp);
-    const armedPoint = await evaluate(
-      cdp,
-      `(() => {
-        const element = document.querySelector(${JSON.stringify(selector)});
-        if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
-          return null;
+      // Arming the listener is another asynchronous boundary. Give pending
+      // layout work a chance to finish, then prove the stabilized center and
+      // the pointer's existing coordinate are still owned before dispatching.
+      await frames(cdp);
+      const armedPoint = await evaluate(
+        cdp,
+        `(() => {
+          const element = document.querySelector(${JSON.stringify(selector)});
+          if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
+            return null;
+          }
+          const rect = element.getBoundingClientRect();
+          const x = rect.left + rect.width / 2;
+          const y = rect.top + rect.height / 2;
+          const hit = document.elementFromPoint(x, y);
+          const stabilizedHit = document.elementFromPoint(${point.x}, ${point.y});
+          const key = Symbol.for("sdsctl.browser-audit.trusted-click-witness");
+          const record = globalThis[key];
+          return {
+            focused: document.activeElement === element || element.contains(document.activeElement),
+            hit: hit instanceof Element ? {
+              classes: Array.from(hit.classList).slice(0, 2),
+              id: hit.id,
+              tag: hit.localName,
+            } : null,
+            hovered: element.matches(":hover"),
+            owned: hit instanceof Element && (hit === element || element.contains(hit)),
+            rect: {
+              bottom: rect.bottom,
+              left: rect.left,
+              right: rect.right,
+              top: rect.top,
+            },
+            stabilizedPointOwned: stabilizedHit instanceof Element &&
+              (stabilizedHit === element || element.contains(stabilizedHit)),
+            witnessCurrent: record?.token === ${attemptWitnessToken} && record.element === element,
+            x,
+            y,
+          };
+        })()`,
+      );
+      observationHistory.push({attempt, postArm: true, ...armedPoint});
+      if (
+        armedPoint !== null && armedPoint.focused && armedPoint.owned && armedPoint.hovered &&
+        armedPoint.stabilizedPointOwned && armedPoint.witnessCurrent &&
+        sameClickGeometry(point, armedPoint)
+      ) {
+        // Close the last asynchronous gap before dispatch. Re-align the trusted
+        // pointer with the accepted center, cross the frame/font boundary once
+        // more, and require the still-focused witness target to own both its
+        // center and the already-positioned pointer coordinate.
+        await cdp.send("Input.dispatchMouseEvent", {
+          type: "mouseMoved",
+          x: armedPoint.x,
+          y: armedPoint.y,
+        });
+        await frames(cdp);
+        const dispatchPoint = await evaluate(
+          cdp,
+          `(() => {
+            const element = document.querySelector(${JSON.stringify(selector)});
+            if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
+              return null;
+            }
+            const rect = element.getBoundingClientRect();
+            const x = rect.left + rect.width / 2;
+            const y = rect.top + rect.height / 2;
+            const hit = document.elementFromPoint(x, y);
+            const dispatchHit = document.elementFromPoint(${armedPoint.x}, ${armedPoint.y});
+            const key = Symbol.for("sdsctl.browser-audit.trusted-click-witness");
+            const record = globalThis[key];
+            return {
+              dispatchPointOwned: dispatchHit instanceof Element &&
+                (dispatchHit === element || element.contains(dispatchHit)),
+              focused: document.activeElement === element || element.contains(document.activeElement),
+              hit: hit instanceof Element ? {
+                classes: Array.from(hit.classList).slice(0, 2),
+                id: hit.id,
+                tag: hit.localName,
+              } : null,
+              hovered: element.matches(":hover"),
+              owned: hit instanceof Element && (hit === element || element.contains(hit)),
+              rect: {
+                bottom: rect.bottom,
+                left: rect.left,
+                right: rect.right,
+                top: rect.top,
+              },
+              witnessCurrent: record?.token === ${attemptWitnessToken} && record.element === element,
+              x,
+              y,
+            };
+          })()`,
+        );
+        observationHistory.push({attempt, preDispatch: true, ...dispatchPoint});
+        if (
+          dispatchPoint !== null && dispatchPoint.dispatchPointOwned && dispatchPoint.focused &&
+          dispatchPoint.hovered && dispatchPoint.owned && dispatchPoint.witnessCurrent &&
+          sameClickGeometry(armedPoint, dispatchPoint)
+        ) {
+          point = dispatchPoint;
+          witnessToken = attemptWitnessToken;
+          attemptAccepted = true;
         }
-        const rect = element.getBoundingClientRect();
-        const x = rect.left + rect.width / 2;
-        const y = rect.top + rect.height / 2;
-        const hit = document.elementFromPoint(x, y);
-        const stabilizedHit = document.elementFromPoint(${point.x}, ${point.y});
-        return {
-          hit: hit instanceof Element ? {
-            classes: Array.from(hit.classList).slice(0, 2),
-            id: hit.id,
-            tag: hit.localName,
-          } : null,
-          hovered: element.matches(":hover"),
-          owned: hit instanceof Element && (hit === element || element.contains(hit)),
-          rect: {
-            bottom: rect.bottom,
-            left: rect.left,
-            right: rect.right,
-            top: rect.top,
-          },
-          stabilizedPointOwned: stabilizedHit instanceof Element &&
-            (stabilizedHit === element || element.contains(stabilizedHit)),
-          x,
-          y,
-        };
-      })()`,
-    );
-    observationHistory.push({attempt, postArm: true, ...armedPoint});
-    if (
-      armedPoint !== null && armedPoint.owned && armedPoint.hovered &&
-      armedPoint.stabilizedPointOwned && sameClickGeometry(point, armedPoint)
-    ) {
-      point = armedPoint;
-      witnessToken = attemptWitnessToken;
-      break;
-    }
-
-    const witnessDisarmed = await evaluate(
-      cdp,
-      `(() => {
-        /* trusted-click-witness cleanup before geometry reacquisition */
-        const key = Symbol.for("sdsctl.browser-audit.trusted-click-witness");
-        const record = globalThis[key];
-        if (record?.token !== ${attemptWitnessToken}) return false;
-        if (record.element instanceof Element && typeof record.listener === "function") {
-          record.element.removeEventListener("click", record.listener, true);
+      }
+    } catch (error) {
+      attemptError = preserveTrustedClickError(attemptError, error, "pre-dispatch");
+    } finally {
+      if (!attemptAccepted) {
+        try {
+          const cleanup = await cleanupTrustedClickWitness(cdp, attemptWitnessToken);
+          if (!cleanup?.matched) {
+            throw new Error(`cannot disarm current trusted click witness for ${selector}`);
+          }
+        } catch (error) {
+          attemptError = preserveTrustedClickError(attemptError, error, "pre-dispatch-cleanup");
         }
-        delete globalThis[key];
-        return true;
-      })()`,
-    );
-    if (!witnessDisarmed) {
-      throw new Error(`cannot disarm trusted click witness for ${selector}`);
+      }
     }
+    if (attemptError !== null) throw attemptError;
+    if (attemptAccepted) break;
     point = null;
     if (attempt < TRUSTED_CLICK_MAX_ATTEMPTS) await movePointerAway(cdp);
   }
@@ -1268,63 +1361,93 @@ export async function clickElement(cdp, selector) {
     throw new Error(
       `${selector} center remained unstable before trusted click dispatch ` +
         `after ${TRUSTED_CLICK_MAX_ATTEMPTS} settled attempts with ` +
-        `${TRUSTED_CLICK_MAX_POINTER_MOVES} pointer moves each and post-arm checks: ` +
+        `${TRUSTED_CLICK_MAX_POINTER_MOVES} acquisition moves each plus final alignment and ` +
+        `post-arm/final-dispatch checks: ` +
         `${JSON.stringify(observationHistory)}`,
     );
   }
-  await cdp.send("Input.dispatchMouseEvent", {
-    button: "left",
-    clickCount: 1,
-    type: "mousePressed",
-    x: point.x,
-    y: point.y,
-  });
-  const pressReceipt = await evaluate(
-    cdp,
-    `(() => {
-      const element = document.querySelector(${JSON.stringify(selector)});
-      if (!(element instanceof HTMLElement)) return null;
-      const rect = element.getBoundingClientRect();
-      const x = rect.left + rect.width / 2;
-      const y = rect.top + rect.height / 2;
-      const centerHit = document.elementFromPoint(x, y);
-      const pressedHit = document.elementFromPoint(${point.x}, ${point.y});
-      return {
-        active: element.matches(":active"),
-        centerOwned: centerHit instanceof Element &&
-          (centerHit === element || element.contains(centerHit)),
-        focused: document.activeElement === element || element.contains(document.activeElement),
-        pressedPointOwned: pressedHit instanceof Element &&
-          (pressedHit === element || element.contains(pressedHit)),
-        rect: {bottom: rect.bottom, left: rect.left, right: rect.right, top: rect.top},
-        x,
-        y,
-      };
-    })()`,
-  );
-  const pressValid = pressReceipt !== null && pressReceipt.active &&
-    pressReceipt.focused && pressReceipt.centerOwned && pressReceipt.pressedPointOwned;
-  const releasePoint = pressValid ? pressReceipt : point;
-  await cdp.send("Input.dispatchMouseEvent", {
-    button: "left",
-    clickCount: 1,
-    type: "mouseReleased",
-    x: releasePoint.x,
-    y: releasePoint.y,
-  });
-  await frames(cdp);
-  const clickWitness = await evaluate(
-    cdp,
-    `(() => {
-      const key = Symbol.for("sdsctl.browser-audit.trusted-click-witness");
-      const record = globalThis[key];
-      if (record?.element instanceof Element && typeof record.listener === "function") {
-        record.element.removeEventListener("click", record.listener, true);
+  let clickWitness = null;
+  let dispatchError = null;
+  let pressReceipt = null;
+  let pressValid = false;
+  let pressSucceeded = false;
+  let releasePoint = point;
+  try {
+    try {
+      await cdp.send("Input.dispatchMouseEvent", {
+        button: "left",
+        clickCount: 1,
+        type: "mousePressed",
+        x: point.x,
+        y: point.y,
+      });
+      pressSucceeded = true;
+    } catch (error) {
+      dispatchError = preserveTrustedClickError(dispatchError, error, "mouse-press");
+    }
+    if (pressSucceeded) {
+      try {
+        pressReceipt = await evaluate(
+          cdp,
+          `(() => {
+            const element = document.querySelector(${JSON.stringify(selector)});
+            if (!(element instanceof HTMLElement)) return null;
+            const rect = element.getBoundingClientRect();
+            const x = rect.left + rect.width / 2;
+            const y = rect.top + rect.height / 2;
+            const centerHit = document.elementFromPoint(x, y);
+            const pressedHit = document.elementFromPoint(${point.x}, ${point.y});
+            return {
+              active: element.matches(":active"),
+              centerOwned: centerHit instanceof Element &&
+                (centerHit === element || element.contains(centerHit)),
+              focused: document.activeElement === element || element.contains(document.activeElement),
+              pressedPointOwned: pressedHit instanceof Element &&
+                (pressedHit === element || element.contains(pressedHit)),
+              rect: {bottom: rect.bottom, left: rect.left, right: rect.right, top: rect.top},
+              x,
+              y,
+            };
+          })()`,
+        );
+        pressValid = pressReceipt !== null && pressReceipt.active &&
+          pressReceipt.focused && pressReceipt.centerOwned && pressReceipt.pressedPointOwned;
+        if (pressValid) releasePoint = pressReceipt;
+      } catch (error) {
+        dispatchError = preserveTrustedClickError(dispatchError, error, "press-receipt");
+      } finally {
+        try {
+          await cdp.send("Input.dispatchMouseEvent", {
+            button: "left",
+            clickCount: 1,
+            type: "mouseReleased",
+            x: releasePoint.x,
+            y: releasePoint.y,
+          });
+        } catch (error) {
+          dispatchError = preserveTrustedClickError(dispatchError, error, "mouse-release");
+        }
       }
-      if (record?.token === ${witnessToken}) delete globalThis[key];
-      return record?.token === ${witnessToken} ? record.clicked : null;
-    })()`,
-  );
+    }
+    if (dispatchError === null) {
+      try {
+        await frames(cdp);
+      } catch (error) {
+        dispatchError = preserveTrustedClickError(dispatchError, error, "post-release-settle");
+      }
+    }
+  } finally {
+    try {
+      const cleanup = await cleanupTrustedClickWitness(cdp, witnessToken);
+      if (!cleanup?.matched) {
+        throw new Error(`cannot clean current trusted click witness for ${selector}`);
+      }
+      clickWitness = cleanup.clicked;
+    } catch (error) {
+      dispatchError = preserveTrustedClickError(dispatchError, error, "post-dispatch-cleanup");
+    }
+  }
+  if (dispatchError !== null) throw dispatchError;
   if (!pressValid || !clickWitness?.isTrusted || !clickWitness?.owned) {
     throw new Error(
       `${selector} did not complete one owned trusted click: ` +

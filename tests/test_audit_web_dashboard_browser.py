@@ -214,6 +214,9 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
     click_source = source.split("async function clickElement", 1)[1].split(
         "async function movePointerAway", 1
     )[0]
+    cleanup_source = source.split("async function cleanupTrustedClickWitness", 1)[1].split(
+        "export async function clickElement", 1
+    )[0]
     assert "const TRUSTED_CLICK_MAX_ATTEMPTS = 3" in source
     assert "const TRUSTED_CLICK_MAX_POINTER_MOVES = 3" in source
     assert "elementFromPoint" in click_source
@@ -221,14 +224,39 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
     assert "attempt <= TRUSTED_CLICK_MAX_ATTEMPTS" in click_source
     assert "pointerMove <= TRUSTED_CLICK_MAX_POINTER_MOVES" in click_source
     assert "after ${TRUSTED_CLICK_MAX_ATTEMPTS} settled attempts" in click_source
-    assert "candidate.owned && candidate.hovered" in click_source
-    assert "confirmed.owned && confirmed.hovered" in click_source
+    assert "candidate.focused && candidate.owned && candidate.hovered" in click_source
+    assert "confirmed.focused && confirmed.owned && confirmed.hovered" in click_source
     assert "sameClickGeometry(candidate, confirmed)" in click_source
     assert "candidate = confirmed" in click_source
     assert "stabilizedPointOwned" in click_source
+    assert "dispatchPointOwned" in click_source
+    assert "armedPoint.stabilizedPointOwned && armedPoint.witnessCurrent" in click_source
+    assert (
+        "dispatchPoint.hovered && dispatchPoint.owned && "
+        "dispatchPoint.witnessCurrent" in click_source
+    )
     assert "sameClickGeometry(point, armedPoint)" in click_source
-    assert "trusted-click-witness cleanup before geometry reacquisition" in click_source
-    assert "element.focus({preventScroll: true})" in click_source
+    assert "sameClickGeometry(armedPoint, dispatchPoint)" in click_source
+    assert "trusted-click-witness cleanup before geometry reacquisition or exit" in cleanup_source
+    assert "record?.token !== ${witnessToken}" in cleanup_source
+    assert "delete globalThis[key]" in cleanup_source
+    assert "return {clicked: record.clicked, matched: true}" in cleanup_source
+    assert "preserveTrustedClickError" in source
+    assert "primary.trustedClickSuppressed" in source
+    assert "let attemptAccepted = false" in click_source
+    assert "let attemptError = null" in click_source
+    assert "cleanupTrustedClickWitness(cdp, attemptWitnessToken)" in click_source
+    assert "cleanupTrustedClickWitness(cdp, witnessToken)" in click_source
+    assert 'preserveTrustedClickError(attemptError, error, "pre-dispatch")' in click_source
+    assert 'preserveTrustedClickError(attemptError, error, "pre-dispatch-cleanup")' in click_source
+    assert 'preserveTrustedClickError(dispatchError, error, "press-receipt")' in click_source
+    assert 'preserveTrustedClickError(dispatchError, error, "mouse-release")' in click_source
+    assert (
+        'preserveTrustedClickError(dispatchError, error, "post-dispatch-cleanup")' in click_source
+    )
+    assert "if (dispatchError !== null) throw dispatchError" in click_source
+    assert "element.focus({preventScroll: false})" in click_source
+    assert "element.focus({preventScroll: true})" not in click_source
     assert "document.activeElement === element" in click_source
     assert 'element.matches(":active")' in click_source
     assert "pressedPointOwned" in click_source
@@ -267,21 +295,64 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         "const armedPoint = await evaluate", click_post_arm_settle_index
     )
     click_post_arm_owner_index = click_source.index("stabilizedPointOwned", click_armed_point_index)
+    click_post_arm_witness_index = click_source.index(
+        "armedPoint.witnessCurrent", click_post_arm_owner_index
+    )
     click_post_arm_stability_index = click_source.index(
-        "sameClickGeometry(point, armedPoint)", click_post_arm_owner_index
+        "sameClickGeometry(point, armedPoint)", click_post_arm_witness_index
+    )
+    click_final_move_index = click_source.index(
+        'type: "mouseMoved"', click_post_arm_stability_index
+    )
+    click_final_settle_index = click_source.index("await frames(cdp)", click_final_move_index)
+    click_dispatch_point_index = click_source.index(
+        "const dispatchPoint = await evaluate", click_final_settle_index
+    )
+    click_dispatch_owner_index = click_source.index(
+        "dispatchPointOwned", click_dispatch_point_index
+    )
+    click_dispatch_focus_index = click_source.index(
+        "dispatchPoint.focused", click_dispatch_owner_index
+    )
+    click_dispatch_witness_index = click_source.index(
+        "dispatchPoint.witnessCurrent", click_dispatch_focus_index
+    )
+    click_dispatch_stability_index = click_source.index(
+        "sameClickGeometry(armedPoint, dispatchPoint)", click_dispatch_witness_index
+    )
+    click_attempt_accepted_index = click_source.index(
+        "attemptAccepted = true", click_dispatch_stability_index
+    )
+    click_pre_dispatch_finally_index = click_source.index(
+        "} finally {", click_attempt_accepted_index
     )
     click_disarm_index = click_source.index(
-        "trusted-click-witness cleanup before geometry reacquisition",
-        click_post_arm_stability_index,
+        "cleanupTrustedClickWitness(cdp, attemptWitnessToken)",
+        click_pre_dispatch_finally_index,
+    )
+    click_attempt_error_index = click_source.index(
+        "if (attemptError !== null) throw attemptError", click_disarm_index
     )
     click_exhaustion_index = click_source.index(
         "after ${TRUSTED_CLICK_MAX_ATTEMPTS} settled attempts"
     )
     click_dispatch_index = click_source.index('type: "mousePressed"')
-    click_press_receipt_index = click_source.index("const pressReceipt", click_dispatch_index)
-    click_release_index = click_source.index('type: "mouseReleased"')
-    click_witness_index = click_source.index("const clickWitness", click_release_index)
+    click_press_receipt_index = click_source.index(
+        "pressReceipt = await evaluate", click_dispatch_index
+    )
+    click_release_finally_index = click_source.index("} finally {", click_press_receipt_index)
+    click_release_index = click_source.index('type: "mouseReleased"', click_release_finally_index)
     click_post_dispatch_index = click_source.index("await frames(cdp)", click_release_index)
+    click_cleanup_finally_index = click_source.index("} finally {", click_post_dispatch_index)
+    click_witness_index = click_source.index(
+        "cleanupTrustedClickWitness(cdp, witnessToken)", click_cleanup_finally_index
+    )
+    click_dispatch_error_index = click_source.index(
+        "if (dispatchError !== null) throw dispatchError", click_witness_index
+    )
+    click_witness_validation_index = click_source.index(
+        "!pressValid || !clickWitness?.isTrusted", click_dispatch_error_index
+    )
     assert (
         click_scroll_index
         < click_focus_index
@@ -300,14 +371,29 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         < click_post_arm_settle_index
         < click_armed_point_index
         < click_post_arm_owner_index
+        < click_post_arm_witness_index
         < click_post_arm_stability_index
+        < click_final_move_index
+        < click_final_settle_index
+        < click_dispatch_point_index
+        < click_dispatch_owner_index
+        < click_dispatch_focus_index
+        < click_dispatch_witness_index
+        < click_dispatch_stability_index
+        < click_attempt_accepted_index
+        < click_pre_dispatch_finally_index
         < click_disarm_index
+        < click_attempt_error_index
         < click_exhaustion_index
         < click_dispatch_index
         < click_press_receipt_index
+        < click_release_finally_index
         < click_release_index
         < click_post_dispatch_index
+        < click_cleanup_finally_index
         < click_witness_index
+        < click_dispatch_error_index
+        < click_witness_validation_index
     )
 
     hover_source = source.split("async function hoverElement", 1)[1].split(
