@@ -1018,6 +1018,8 @@ async function pressKey(cdp, key, code, virtualKeyCode, {modifiers = 0} = {}) {
 }
 
 let trustedClickSequence = 0;
+const TRUSTED_CLICK_MAX_ATTEMPTS = 3;
+const TRUSTED_CLICK_MAX_POINTER_MOVES = 3;
 
 function sameClickGeometry(left, right) {
   return left !== null && right !== null &&
@@ -1030,7 +1032,7 @@ export async function clickElement(cdp, selector) {
   let point = null;
   let witnessToken = null;
   const observationHistory = [];
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
+  for (let attempt = 1; attempt <= TRUSTED_CLICK_MAX_ATTEMPTS; attempt += 1) {
     const available = await evaluate(
       cdp,
       `(() => {
@@ -1090,7 +1092,11 @@ export async function clickElement(cdp, selector) {
     // two consecutive owned, truly hovered observations with identical
     // geometry before the one click.
     let candidate = initial;
-    for (let pointerMove = 1; pointerMove <= 3; pointerMove += 1) {
+    for (
+      let pointerMove = 1;
+      pointerMove <= TRUSTED_CLICK_MAX_POINTER_MOVES;
+      pointerMove += 1
+    ) {
       if (!candidate.owned) break;
       await cdp.send("Input.dispatchMouseEvent", {
         type: "mouseMoved",
@@ -1143,7 +1149,7 @@ export async function clickElement(cdp, selector) {
       candidate = confirmed;
     }
     if (point === null) {
-      if (attempt < 2) await movePointerAway(cdp);
+      if (attempt < TRUSTED_CLICK_MAX_ATTEMPTS) await movePointerAway(cdp);
       continue;
     }
 
@@ -1244,7 +1250,7 @@ export async function clickElement(cdp, selector) {
       throw new Error(`cannot disarm trusted click witness for ${selector}`);
     }
     point = null;
-    if (attempt < 2) await movePointerAway(cdp);
+    if (attempt < TRUSTED_CLICK_MAX_ATTEMPTS) await movePointerAway(cdp);
   }
   if (
     point === null || witnessToken === null ||
@@ -1255,7 +1261,8 @@ export async function clickElement(cdp, selector) {
   ) {
     throw new Error(
       `${selector} center remained unstable before trusted click dispatch ` +
-        `after 2 settled attempts with 3 pointer moves each and post-arm checks: ` +
+        `after ${TRUSTED_CLICK_MAX_ATTEMPTS} settled attempts with ` +
+        `${TRUSTED_CLICK_MAX_POINTER_MOVES} pointer moves each and post-arm checks: ` +
         `${JSON.stringify(observationHistory)}`,
     );
   }

@@ -214,11 +214,13 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
     click_source = source.split("async function clickElement", 1)[1].split(
         "async function movePointerAway", 1
     )[0]
+    assert "const TRUSTED_CLICK_MAX_ATTEMPTS = 3" in source
+    assert "const TRUSTED_CLICK_MAX_POINTER_MOVES = 3" in source
     assert "elementFromPoint" in click_source
     assert "owned:" in click_source
-    assert "for (let attempt = 1; attempt <= 2; attempt += 1)" in click_source
-    assert "for (let pointerMove = 1; pointerMove <= 3; pointerMove += 1)" in click_source
-    assert "after 2 settled attempts with 3 pointer moves each" in click_source
+    assert "attempt <= TRUSTED_CLICK_MAX_ATTEMPTS" in click_source
+    assert "pointerMove <= TRUSTED_CLICK_MAX_POINTER_MOVES" in click_source
+    assert "after ${TRUSTED_CLICK_MAX_ATTEMPTS} settled attempts" in click_source
     assert "candidate.owned && candidate.hovered" in click_source
     assert "confirmed.owned && confirmed.hovered" in click_source
     assert "sameClickGeometry(candidate, confirmed)" in click_source
@@ -267,7 +269,7 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         click_post_arm_stability_index,
     )
     click_exhaustion_index = click_source.index(
-        "after 2 settled attempts with 3 pointer moves each and post-arm checks"
+        "after ${TRUSTED_CLICK_MAX_ATTEMPTS} settled attempts"
     )
     click_dispatch_index = click_source.index('type: "mousePressed"')
     click_press_receipt_index = click_source.index("const pressReceipt", click_dispatch_index)
