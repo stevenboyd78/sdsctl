@@ -185,15 +185,17 @@ for(const invalid of ["http://192.0.2.1","https://example.com/path","https://use
 // Execute the actual classic dashboard functions without loading its unrelated
 // scanner/graph rendering code. The real browser harness checks full-page wiring.
 const dashboard = await readFile(new URL("../../src/sds200/web_assets/dashboard.js",import.meta.url),"utf8");
-const functions = dashboard.slice(dashboard.indexOf("function requireNativeLogin()"),
-  dashboard.indexOf("function syncDisplayNavigation()"));
+const functions = "let nativeMenuController = null;\n" +
+  dashboard.slice(dashboard.indexOf("function requireNativeLogin()"),
+    dashboard.indexOf("function initializeNativeMenu("));
 const savedRecordingStop = dashboard.slice(dashboard.indexOf("function stopSavedRecording()"),
   dashboard.indexOf("function recordingsPageCount("));
 function dashboardFixture(managed, reply) {
   const node=tag=>({tagName:tag.toUpperCase(),children:[],hidden:true,
     append(...children){this.children.push(...children);},prepend(...children){this.children.unshift(...children);},
+    replaceChildren(...children){this.children=children;},
     setAttribute(){}});
-  const f={timers:[],navigations:[],requests:[],listeners:[],cleared:[],stops:[],closed:0,mimicStops:0,
+  const f={timers:[],navigations:[],requests:[],listeners:[],cleared:[],stops:[],closed:0,invalidations:0,mimicStops:0,
     savedSource:'fixture.wav',savedLoads:0,savedSyncs:0}, banner=node('div');
   const savedPlayer={pause(){f.stops.push('recording');},
     getAttribute(name){assert.equal(name,'src');return f.savedSource;},
@@ -202,7 +204,7 @@ function dashboardFixture(managed, reply) {
     authenticationRequired:false,nativeSessionTimer:null,currentDaemonHello:{},savedPlaybackGeneration:0,
     mimicDisplay:{stop(){f.mimicStops++;}},
     document:{documentElement:{dataset:{}},getElementById:id=>id==='native-menu'?{close(){f.closed++;}}:null,
-      createElement:node},
+      createElement:node,createTextNode:text=>({textContent:text})},
     window:{setTimeout:(fn,ms)=>{f.timers.push({fn,ms});return 1;},clearTimeout:id=>f.cleared.push(id),
       addEventListener:(type,listener,capture)=>f.listeners.push({type,listener,capture}),
       location:{replace:url=>f.navigations.push(url)}},
@@ -211,7 +213,13 @@ function dashboardFixture(managed, reply) {
     stopEventStream(){f.stops.push('events');},stopWaterfallStream(){f.stops.push('waterfall');},
     stopAudioPlayback(){f.stops.push('audio');},setScannerControls(){f.stops.push('controls');},
     clearFrontPanelInventory(){},
-    initializeDisplayNavigation:form=>{f.form=form;},setOverallStatus(){},AbortSignal,
+    // This fixture exercises the recovery/session coordinator. Real-Chrome
+    // acceptance owns the menu DOM, focus and navigation wiring contracts.
+    initializeNativeMenu:(form,button)=>{
+      f.form=form;f.logoutButton=button;
+      return {invalidate(){f.invalidations++;return false;}};
+    },
+    initializeDisplayNavigation:menu=>{f.menu=menu;},setOverallStatus(){},AbortSignal,
     fetch:async(url,options)=>{f.requests.push({url,options});
       if(reply instanceof Error) throw reply;
       if(typeof reply==='function')return reply(url,options);
@@ -337,7 +345,8 @@ for(const change of [e=>{e.isTrusted=false;},e=>{e.target={...e.target};},
 test('manual display sign-out keeps normal form submission and expiry behavior',async()=>{
   const f=dashboardFixture(false,enrolledSession);await f.scope.initializeNativeSession();
   f.submit();assert.equal(f.scope.authenticationRequired,false);
-  f.scope.requireNativeLogin();assert.equal(f.closed,1);assert.deepEqual(f.navigations,[]);
+  f.scope.requireNativeLogin();assert.equal(f.invalidations,1);assert.equal(f.closed,0);
+  assert.deepEqual(f.navigations,[]);
 });
 for(const call of ['initializeNativeSession','refreshManagedNativeSession']) {
   test(`late ${call} response cannot re-arm activity after trusted sign-out`,async()=>{
