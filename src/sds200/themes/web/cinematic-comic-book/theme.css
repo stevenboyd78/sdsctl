@@ -1,0 +1,29 @@
+/* Original halftone comic-panel presentation. */
+:root[data-theme="cinematic-comic-book"] {
+  color-scheme: light;
+  --background: #f5e9c9; --surface: #fff8e5; --surface-emphasis: #f2dca7;
+  --text: #17130f; --muted: #574d40; --border: #17130f;
+  --accent: #1660a8; --accent-strong: #0e4478; --success: #28753f;
+  --warning: #8a5a00; --danger: #b52e35; --focus: #000000;
+  --shadow: 0.45rem 0.45rem 0 #17130f; --radius-small: 0; --radius-large: 0;
+  --hold-field-background: #ffe381; --hold-field-border: #17130f; --hold-field-label: #5e3c00; --hold-field-value: #17130f;
+}
+:root[data-theme="cinematic-comic-book"] body { background: radial-gradient(circle, rgb(23 19 15 / 0.12) 0 1px, transparent 1.4px), linear-gradient(135deg, rgb(226 54 55 / 0.07), transparent 40%), #f5e9c9; background-size: 0.65rem 0.65rem, auto, auto; }
+:root[data-theme="cinematic-comic-book"] .site-header { position: relative; border: 3px solid #17130f; border-radius: 0; background: linear-gradient(110deg, #fff8e5, #ffd95e); box-shadow: var(--shadow); }
+:root[data-theme="cinematic-comic-book"] .site-header::after { position: absolute; right: 1rem; bottom: 0.45rem; width: min(28rem, 36vw); height: 0.35rem; border: 2px solid #17130f; background: linear-gradient(90deg, #e23637 0 33%, #ffd95e 33% 66%, #1660a8 66%); content: ""; }
+:root[data-theme="cinematic-comic-book"] :is(.brand h1, .panel h2, .panel h3, .workspace-tabs [role="tab"]) { font-family: "Barlow Condensed", sans-serif; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+:root[data-theme="cinematic-comic-book"] .workspace-shell { border: 3px solid #17130f; border-radius: 0; background: #fff8e5; box-shadow: var(--shadow); }
+:root[data-theme="cinematic-comic-book"] .workspace-tabs { border-bottom: 3px solid #17130f; background: #f2dca7; }
+:root[data-theme="cinematic-comic-book"] .workspace-tabs [role="tab"] { border: 2px solid #17130f; border-radius: 0; background: #fff8e5; color: #322a22; }
+:root[data-theme="cinematic-comic-book"] .workspace-tabs [role="tab"][aria-selected="true"] { background: #1660a8; color: #fff; box-shadow: 0.2rem 0.2rem 0 #17130f; }
+:root[data-theme="cinematic-comic-book"] .workspace-deck { background: rgb(255 248 229 / 0.78); }
+:root[data-theme="cinematic-comic-book"] [data-workspace-pane] { border: 2px solid #17130f; background: rgb(255 248 229 / 0.82); }
+:root[data-theme="cinematic-comic-book"] .panel { border: 3px solid #17130f; border-radius: 0; background: linear-gradient(135deg, rgb(255 217 94 / 0.22), transparent 34%), #fff8e5; box-shadow: 0.3rem 0.3rem 0 #17130f; }
+:root[data-theme="cinematic-comic-book"] #radio-activity-panel { border-color: #17130f; background: linear-gradient(90deg, rgb(22 96 168 / 0.12), transparent 50%), #fff8e5; }
+:root[data-theme="cinematic-comic-book"] .radio-view-controls { border: 3px solid #17130f; border-radius: 0; background: #f2dca7; }
+:root[data-theme="cinematic-comic-book"] .radio-field-groups { border: 2px solid #17130f; background: rgb(22 96 168 / 0.04); }
+:root[data-theme="cinematic-comic-book"] :is(button, .recording-action, select, input, textarea) { border: 2px solid #17130f; border-radius: 0; background: #fff8e5; color: var(--text); }
+:root[data-theme="cinematic-comic-book"] :is(button, .recording-action):hover:not(:disabled):not([aria-selected="true"]) { background: #ffd95e; box-shadow: 0.2rem 0.2rem 0 #17130f; }
+:root[data-theme="cinematic-comic-book"] .status-badge { border: 2px solid #17130f; border-radius: 0; text-transform: uppercase; }
+@media (prefers-reduced-motion: reduce) { :root[data-theme="cinematic-comic-book"] *, :root[data-theme="cinematic-comic-book"] *::before, :root[data-theme="cinematic-comic-book"] *::after { animation: none !important; transition: none !important; } }
+@media (forced-colors: active) { :root[data-theme="cinematic-comic-book"] { --background: Canvas; --surface: Canvas; --surface-emphasis: Canvas; --text: CanvasText; --muted: CanvasText; --border: CanvasText; --accent: Highlight; --accent-strong: Highlight; --focus: Highlight; } :root[data-theme="cinematic-comic-book"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups) { background: Canvas; box-shadow: none; } :root[data-theme="cinematic-comic-book"] .site-header::after { display: none; } }

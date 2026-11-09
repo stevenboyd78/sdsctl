@@ -1,0 +1,607 @@
+/*
+ * Original neon megacity operations interface. Layered signage, scanlines,
+ * asymmetric rails, and cut-panel geometry use no franchise marks or art.
+ */
+:root[data-theme="cinematic-cyberpunk-night"] {
+  color-scheme: dark;
+  --background: #04030a;
+  --surface: #0d0a17;
+  --surface-emphasis: #171024;
+  --text: #fbf7ff;
+  --muted: #b7a9cd;
+  --border: #583b72;
+  --accent: #16f4ff;
+  --accent-strong: #a2fbff;
+  --success: #4df297;
+  --warning: #ffe650;
+  --danger: #ff318f;
+  --focus: #ffffff;
+  --shadow: 0 1rem 3rem rgb(0 0 0 / 0.76);
+  --radius-small: 0;
+  --radius-large: 0;
+  --hold-field-background: #3d330d;
+  --hold-field-border: #ffe650;
+  --hold-field-label: #fff491;
+  --hold-field-value: #ffffff;
+  font-family: "Orbitron", "IBM Plex Sans", sans-serif;
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] body {
+  background:
+    linear-gradient(120deg, rgb(22 244 255 / 0.11), transparent 24%),
+    linear-gradient(240deg, rgb(255 49 143 / 0.13), transparent 28%),
+    repeating-linear-gradient(0deg, rgb(255 255 255 / 0.018) 0 1px, transparent 1px 4px),
+    #04030a;
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .theme-stage { display: block; }
+
+:root[data-theme="cinematic-cyberpunk-night"] .theme-stage-a {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 42%;
+  background:
+    linear-gradient(70deg, transparent 0 8%, rgb(22 244 255 / 0.08) 8.2% 8.7%, transparent 9% 18%, rgb(255 49 143 / 0.07) 18.2% 18.7%, transparent 19%),
+    repeating-linear-gradient(90deg, transparent 0 3.5rem, rgb(255 49 143 / 0.06) 3.5rem 3.65rem),
+    linear-gradient(0deg, rgb(5 2 13 / 0.94), transparent);
+  clip-path: polygon(0 24%, 8% 24%, 8% 4%, 14% 4%, 14% 35%, 22% 35%, 22% 0, 30% 0, 30% 44%, 39% 44%, 39% 18%, 46% 18%, 46% 38%, 55% 38%, 55% 8%, 64% 8%, 64% 29%, 73% 29%, 73% 0, 82% 0, 82% 42%, 91% 42%, 91% 18%, 100% 18%, 100% 100%, 0 100%);
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .theme-stage-b,
+:root[data-theme="cinematic-cyberpunk-night"] .theme-stage-c {
+  top: -20%;
+  width: 1px;
+  height: 145%;
+  background: linear-gradient(transparent, var(--accent) 45%, transparent 72%);
+  box-shadow: 0 0 1rem var(--accent);
+  transform: rotate(24deg);
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .theme-stage-b { left: 19%; }
+:root[data-theme="cinematic-cyberpunk-night"] .theme-stage-c { right: 19%; transform: rotate(-24deg); background: linear-gradient(transparent, var(--danger) 45%, transparent 72%); box-shadow: 0 0 1rem var(--danger); }
+
+:root[data-theme="cinematic-cyberpunk-night"] .theme-stage-d {
+  top: 12%;
+  left: -4rem;
+  width: 13rem;
+  height: 13rem;
+  border: 1px solid rgb(22 244 255 / 0.2);
+  border-radius: 50%;
+  background: repeating-conic-gradient(rgb(22 244 255 / 0.14) 0 1deg, transparent 1deg 18deg);
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .site-header {
+  border: 1px solid #754f91;
+  border-left: 0.6rem solid var(--danger);
+  border-right: 0.6rem solid var(--accent);
+  border-radius: 0;
+  background:
+    linear-gradient(112deg, rgb(255 49 143 / 0.14), transparent 35%),
+    linear-gradient(248deg, rgb(22 244 255 / 0.12), transparent 34%),
+    #0c0915;
+  box-shadow: -0.6rem 0 1.8rem rgb(255 49 143 / 0.16), 0.6rem 0 1.8rem rgb(22 244 255 / 0.13), var(--shadow);
+  clip-path: polygon(0 0, 44% 0, 46% 0.55rem, 68% 0.55rem, 70% 0, 100% 0, 100% calc(100% - 1rem), calc(100% - 1rem) 100%, 0 100%);
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .site-header::before {
+  position: absolute;
+  right: 1rem;
+  bottom: 0.45rem;
+  width: min(34rem, 42vw);
+  height: 0.22rem;
+  background: linear-gradient(90deg, var(--danger), transparent 36% 42%, var(--accent));
+  content: "";
+  box-shadow: 0 0 0.8rem rgb(22 244 255 / 0.55);
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .site-header::after {
+  position: absolute;
+  top: 0.45rem;
+  left: 45%;
+  width: 9rem;
+  height: 0.2rem;
+  background: repeating-linear-gradient(90deg, var(--warning) 0 0.9rem, transparent 0.9rem 1.2rem);
+  content: "";
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] :is(.brand h1, .panel h2, .panel h3, .workspace-tabs [role="tab"]) {
+  font-family: "Orbitron", "IBM Plex Sans", sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .brand h1 {
+  color: #ffffff;
+  text-shadow: -0.08rem 0 var(--danger), 0.08rem 0 var(--accent), 0 0 1rem rgb(22 244 255 / 0.24);
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] :is(.eyebrow, .panel-kicker, .theme-picker label) {
+  color: var(--accent);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .status-badge {
+  border: 1px solid var(--success);
+  border-radius: 0;
+  background: #091312;
+  box-shadow: -0.2rem 0 var(--danger), 0.2rem 0 var(--accent), 0 0 1rem rgb(77 242 151 / 0.24);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+/* Wide displays reserve an asymmetric neon command rail on the right. */
+:root[data-theme="cinematic-cyberpunk-night"] .workspace-shell {
+  grid-template-columns: minmax(0, 1fr) clamp(9rem, 12vw, 13rem);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+  border: 1px solid #67457f;
+  border-radius: 0;
+  background: #080610;
+  box-shadow: inset 0 0 0 1px rgb(22 244 255 / 0.05), var(--shadow);
+  clip-path: polygon(1.2rem 0, 100% 0, 100% calc(100% - 1.2rem), calc(100% - 1.2rem) 100%, 0 100%, 0 1.2rem);
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .workspace-tabs {
+  grid-column: 2;
+  grid-row: 1;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: repeat(6, minmax(0, 1fr));
+  gap: 0.45rem;
+  padding: 1rem 0.65rem;
+  border-left: 0.25rem solid #2f183f;
+  background: linear-gradient(90deg, #0c0715, #171023);
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .workspace-tabs-with-home-assistant {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: repeat(7, minmax(0, 1fr));
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .workspace-tabs [role="tab"] {
+  min-height: 0;
+  border: 1px solid #65417d;
+  border-radius: 0;
+  color: #b9a5cc;
+  background: linear-gradient(105deg, #241334, #0d0915 72%);
+  clip-path: polygon(0.8rem 0, 100% 0, 100% calc(100% - 0.8rem), calc(100% - 0.8rem) 100%, 0 100%, 0 0.8rem);
+  text-align: right;
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .workspace-tabs [role="tab"]:nth-child(2n) { border-color: #286a77; }
+
+:root[data-theme="cinematic-cyberpunk-night"] .workspace-tabs [role="tab"][aria-selected="true"] {
+  color: #ffffff;
+  border-color: var(--accent);
+  background-color: #173f4c;
+  background-image: linear-gradient(100deg, var(--danger) 0 0.3rem, #173f4c 0.3rem 100%);
+  box-shadow: inset 0 0 1rem rgb(22 244 255 / 0.17), 0 0 0.8rem rgb(22 244 255 / 0.22);
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .workspace-deck {
+  grid-column: 1;
+  grid-row: 1;
+  margin: 0.6rem;
+  border: 1px solid #49315e;
+  background:
+    linear-gradient(115deg, rgb(22 244 255 / 0.06), transparent 27%),
+    linear-gradient(245deg, rgb(255 49 143 / 0.07), transparent 31%),
+    repeating-linear-gradient(0deg, rgb(255 255 255 / 0.012) 0 1px, transparent 1px 4px),
+    #05040b;
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] [data-workspace-pane] { border: 0; background: transparent; }
+
+:root[data-theme="cinematic-cyberpunk-night"] .panel {
+  position: relative;
+  border: 1px solid #63417c;
+  border-top: 0.25rem solid var(--accent);
+  border-radius: 0;
+  background:
+    linear-gradient(125deg, rgb(22 244 255 / 0.08), transparent 30%),
+    linear-gradient(305deg, rgb(255 49 143 / 0.075), transparent 26%),
+    rgb(9 6 16 / 0.96);
+  box-shadow: inset 0 0 2.6rem rgb(22 244 255 / 0.035);
+  clip-path: polygon(1rem 0, calc(100% - 2.2rem) 0, 100% 2.2rem, 100% 100%, 0 100%, 0 1rem);
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .panel::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, transparent 0 3px, rgb(255 255 255 / 0.012) 3px 4px);
+  content: "";
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .panel::after {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.75rem;
+  width: 7rem;
+  height: 0.22rem;
+  background: linear-gradient(90deg, var(--danger), transparent 42% 49%, var(--accent));
+  content: "";
+  box-shadow: 0 0 0.65rem rgb(22 244 255 / 0.4);
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .panel-header { border-bottom: 1px solid #59356f; }
+
+:root[data-theme="cinematic-cyberpunk-night"] #radio-activity-panel {
+  border-color: #8c62a3;
+  border-top-color: var(--danger);
+  background: linear-gradient(90deg, rgb(22 244 255 / 0.11), transparent 45%), linear-gradient(270deg, rgb(255 49 143 / 0.08), transparent 32%), #07040e;
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .radio-view-controls {
+  border: 1px solid #63417c;
+  border-left: 0.32rem solid var(--danger);
+  border-radius: 0;
+  background: rgb(17 10 28 / 0.9);
+  clip-path: polygon(0.75rem 0, 100% 0, 100% 100%, 0 100%, 0 0.75rem);
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .scanner-display-hierarchy {
+  gap: 0.45rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .scanner-display-hierarchy > div {
+  border: 1px solid #5c3c74;
+  border-left: 0.25rem solid var(--accent);
+  background: linear-gradient(110deg, #17102a, #08060f 68%);
+  clip-path: polygon(0.7rem 0, 100% 0, 100% calc(100% - 0.7rem), calc(100% - 0.7rem) 100%, 0 100%, 0 0.7rem);
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .scanner-display-hierarchy > div:nth-child(2n) { border-right: 1px solid #5c3c74; border-left-color: var(--danger); }
+:root[data-theme="cinematic-cyberpunk-night"] .scanner-display-hierarchy > div:nth-last-child(-n + 2) { border-bottom: 1px solid #5c3c74; }
+
+:root[data-theme="cinematic-cyberpunk-night"] :is(.radio-summary, .radio-field-groups) {
+  border-color: #4b315f;
+  border-radius: 0;
+  background: rgb(20 12 31 / 0.76);
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] :is(button, .recording-action, select, input, textarea) {
+  border: 1px solid #694483;
+  border-radius: 0;
+  color: var(--text);
+  background: linear-gradient(110deg, #251536, #0d0916);
+  font-family: inherit;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+  clip-path: polygon(0.4rem 0, 100% 0, 100% calc(100% - 0.4rem), calc(100% - 0.4rem) 100%, 0 100%);
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] :is(button, .recording-action):hover:not(:disabled):not([aria-selected="true"]) {
+  border-color: var(--accent);
+  background: #173e4b;
+  box-shadow: 0 0 0.8rem rgb(22 244 255 / 0.2);
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] button[aria-pressed="true"] {
+  color: #071014;
+  border-color: var(--warning);
+  background: var(--warning);
+}
+
+@media (width < 1280px), (height < 720px), (aspect-ratio < 3/2) {
+  :root[data-theme="cinematic-cyberpunk-night"] .workspace-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    clip-path: none;
+  }
+  :root[data-theme="cinematic-cyberpunk-night"] .workspace-tabs,
+  :root[data-theme="cinematic-cyberpunk-night"] .workspace-tabs-with-home-assistant {
+    grid-column: 1;
+    grid-row: 1;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-rows: minmax(0, 1fr);
+    padding: 0.35rem;
+    border-left: 0;
+    border-bottom: 0.22rem solid #2f183f;
+  }
+  :root[data-theme="cinematic-cyberpunk-night"] .workspace-tabs-with-home-assistant { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  :root[data-theme="cinematic-cyberpunk-night"] .workspace-tabs [role="tab"] { text-align: center; }
+  :root[data-theme="cinematic-cyberpunk-night"] .workspace-deck { grid-column: 1; grid-row: 2; margin: 0.35rem; }
+  :root[data-theme="cinematic-cyberpunk-night"] :is(.site-header, .panel) { clip-path: none; }
+  :root[data-theme="cinematic-cyberpunk-night"] .panel::after { display: none; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cinematic-cyberpunk-night"] .theme-stage-d { animation: cyber-dial 36s linear infinite; }
+  :root[data-theme="cinematic-cyberpunk-night"] .site-header::before { animation: cyber-pulse 3.5s steps(3, end) infinite; }
+}
+
+@keyframes cyber-dial { to { rotate: 360deg; } }
+@keyframes cyber-pulse { 50% { opacity: 0.55; } }
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="cinematic-cyberpunk-night"] *,
+  :root[data-theme="cinematic-cyberpunk-night"] *::before,
+  :root[data-theme="cinematic-cyberpunk-night"] *::after { animation: none !important; transition: none !important; }
+}
+
+@media (forced-colors: active) {
+  :root[data-theme="cinematic-cyberpunk-night"] { --background: Canvas; --surface: Canvas; --surface-emphasis: Canvas; --text: CanvasText; --muted: CanvasText; --border: CanvasText; --accent: Highlight; --accent-strong: Highlight; --focus: Highlight; }
+  :root[data-theme="cinematic-cyberpunk-night"] .theme-stage { display: none; }
+  :root[data-theme="cinematic-cyberpunk-night"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups, .scanner-display-hierarchy > div) { background: Canvas; box-shadow: none; clip-path: none; }
+  :root[data-theme="cinematic-cyberpunk-night"] :is(.site-header, .panel)::before,
+  :root[data-theme="cinematic-cyberpunk-night"] :is(.site-header, .panel)::after { display: none; }
+}
+
+/* Full-HD production environment: an asymmetric rain-soaked megacity terminal. */
+@media (min-width: 1280px) and (min-height: 720px) and (min-aspect-ratio: 3/2) {
+  :root[data-theme="cinematic-cyberpunk-night"] .theme-stage > span { display: none; }
+  :root[data-theme="cinematic-cyberpunk-night"]
+    .cinematic-stage-art
+    [data-cinematic-scene="cyberpunk-night"] { display: inline; }
+  :root[data-theme="cinematic-cyberpunk-night"] .cinematic-stage-art { opacity: 0.97; }
+  :root[data-theme="cinematic-cyberpunk-night"] body { background: #03020c; }
+
+  :root[data-theme="cinematic-cyberpunk-night"] .site-header {
+    margin-right: 14vw;
+    border: 1px solid rgb(65 241 255 / 0.62);
+    border-left: 0.5rem solid #ff35d3;
+    background:
+      linear-gradient(105deg, rgb(11 12 35 / 0.94), rgb(28 6 47 / 0.7) 64%, rgb(4 25 35 / 0.9)),
+      repeating-linear-gradient(90deg, transparent 0 5rem, rgb(85 242 255 / 0.035) 5rem 5.08rem);
+    box-shadow: inset 0 0 1.6rem rgb(255 42 210 / 0.07), 0 0 2.5rem rgb(15 221 255 / 0.12), 0 1rem 3rem rgb(0 0 0 / 0.65);
+  }
+
+  :root[data-theme="cinematic-cyberpunk-night"] .workspace-shell {
+    border: 1px solid rgb(63 237 255 / 0.54);
+    background:
+      linear-gradient(90deg, rgb(5 9 25 / 0.68), rgb(18 6 36 / 0.3) 25% 74%, rgb(5 18 28 / 0.72)),
+      radial-gradient(circle at 65% 28%, rgb(255 43 211 / 0.08), transparent 34%);
+    box-shadow: inset 0 0 0 1px rgb(255 51 214 / 0.08), inset 0 0 5rem rgb(0 0 0 / 0.28), 0 1rem 4rem rgb(0 0 0 / 0.72);
+  }
+
+  :root[data-theme="cinematic-cyberpunk-night"] .workspace-tabs {
+    position: relative;
+    padding: 3.2rem 0.55rem 0.7rem;
+    border-left: 0.45rem solid #ff31d1;
+    background:
+      linear-gradient(90deg, rgb(29 8 48 / 0.96), rgb(4 20 30 / 0.95)),
+      repeating-linear-gradient(0deg, transparent 0 4rem, rgb(66 235 255 / 0.055) 4rem 4.08rem);
+    box-shadow: inset 1px 0 rgb(255 138 232 / 0.34), -0.8rem 0 2.5rem rgb(255 26 209 / 0.08);
+  }
+
+  :root[data-theme="cinematic-cyberpunk-night"] .workspace-tabs::before {
+    position: absolute;
+    top: 0.6rem;
+    left: 50%;
+    width: 3.2rem;
+    aspect-ratio: 1;
+    border: 0.2rem solid #57efff;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle, #ff37d5 0 14%, transparent 16% 34%, #56efff 35% 39%, transparent 41%),
+      repeating-conic-gradient(#54edff 0 2deg, transparent 2deg 20deg);
+    content: "";
+    box-shadow: 0 0 1rem rgb(76 236 255 / 0.3), inset 0 0 0.8rem rgb(255 42 213 / 0.24);
+    translate: -50% 0;
+  }
+
+  :root[data-theme="cinematic-cyberpunk-night"] .workspace-tabs [role="tab"] {
+    position: relative;
+    border: 1px solid rgb(99 60 129 / 0.8);
+    border-right: 0.3rem solid #47eaff;
+    background: linear-gradient(100deg, rgb(42 14 62 / 0.96), rgb(4 19 30 / 0.94));
+    box-shadow: inset 0 1px rgb(255 116 229 / 0.08), inset 0 -0.28rem rgb(0 0 0 / 0.3);
+  }
+
+  :root[data-theme="cinematic-cyberpunk-night"] .workspace-tabs [role="tab"]::before {
+    position: absolute;
+    top: 50%;
+    left: -0.48rem;
+    width: 0.7rem;
+    height: 0.16rem;
+    background: #ff37d5;
+    content: "";
+    box-shadow: 0 0 0.55rem #ff37d5;
+    translate: 0 -50%;
+  }
+
+  :root[data-theme="cinematic-cyberpunk-night"]
+    .workspace-tabs
+    [role="tab"][aria-selected="true"] {
+    color: #031116;
+    border-color: #fff16f;
+    border-right-color: #fff16f;
+    background: linear-gradient(90deg, #fff16f, #55edff 64%, #ff4bd8);
+    background-color: #ff4bd8;
+    box-shadow: 0 0 1.2rem rgb(83 238 255 / 0.36);
+  }
+
+  :root[data-theme="cinematic-cyberpunk-night"] .workspace-deck {
+    border: 0;
+    background:
+      linear-gradient(90deg, rgb(3 7 20 / 0.78), transparent 24% 76%, rgb(17 4 28 / 0.74)),
+      rgb(4 5 17 / 0.22);
+    box-shadow: inset 0 0 5rem rgb(0 0 0 / 0.3);
+  }
+
+  :root[data-theme="cinematic-cyberpunk-night"] #radio-activity-panel {
+    width: auto !important;
+    margin-left: 4vw;
+    border: 1px solid rgb(78 236 255 / 0.58);
+    border-left: 0.34rem solid #ff38d4;
+    background:
+      radial-gradient(ellipse at 55% 58%, transparent 0 17rem, rgb(9 4 24 / 0.28) 30rem),
+      linear-gradient(90deg, rgb(5 9 26 / 0.78), rgb(28 5 42 / 0.24) 22% 78%, rgb(4 18 27 / 0.74));
+    box-shadow: inset 0 0 0 1px rgb(255 51 213 / 0.07), inset 0 0 4rem rgb(0 0 0 / 0.28);
+  }
+
+  :root[data-theme="cinematic-cyberpunk-night"] .radio-view-controls {
+    border: 1px solid rgb(86 224 246 / 0.48);
+    border-left: 0.3rem solid #ff35d2;
+    background: rgb(10 9 30 / 0.72);
+  }
+
+  :root[data-theme="cinematic-cyberpunk-night"] .scanner-display-hierarchy {
+    gap: 0.5rem;
+    padding: 0.45rem;
+    border: 1px solid rgb(75 229 249 / 0.38);
+    background: rgb(3 7 22 / 0.5);
+  }
+
+  :root[data-theme="cinematic-cyberpunk-night"] .scanner-display-hierarchy > div {
+    position: relative;
+    border: 1px solid rgb(85 229 249 / 0.52);
+    border-left: 0.3rem solid #ff36d2;
+    background:
+      linear-gradient(110deg, rgb(34 10 55 / 0.9), rgb(3 21 31 / 0.78)),
+      repeating-linear-gradient(0deg, transparent 0 0.9rem, rgb(84 238 255 / 0.035) 0.9rem 0.96rem);
+    box-shadow: inset 0 0 1rem rgb(73 233 255 / 0.06), 0 0.35rem 0.8rem rgb(0 0 0 / 0.28);
+  }
+
+  :root[data-theme="cinematic-cyberpunk-night"] .scanner-display-hierarchy > div:nth-child(2n) {
+    border-left-color: #fff16f;
+    border-right-color: #ff36d2;
+  }
+
+  :root[data-theme="cinematic-cyberpunk-night"] .radio-summary {
+    border: 1px solid rgb(77 224 246 / 0.45);
+    background: rgb(8 7 26 / 0.68);
+  }
+
+  :root[data-theme="cinematic-cyberpunk-night"] .radio-field-groups {
+    position: relative;
+    isolation: isolate;
+    border: 1px solid rgb(81 233 255 / 0.42);
+    border-left: 0.38rem solid #ff38d5;
+    background:
+      radial-gradient(ellipse at 56% 44%, transparent 0 18rem, rgb(8 3 23 / 0.34) 32rem),
+      linear-gradient(100deg, rgb(8 5 27 / 0.76), transparent 24% 76%, rgb(18 4 28 / 0.72));
+    box-shadow: inset 0 0 4rem rgb(0 0 0 / 0.32);
+  }
+
+  :root[data-theme="cinematic-cyberpunk-night"] .radio-field-group {
+    position: relative;
+    z-index: 2;
+    background: transparent;
+  }
+
+  :root[data-theme="cinematic-cyberpunk-night"] .radio-field-group h3 {
+    position: relative;
+    z-index: 4;
+    width: max-content;
+    padding: 0.18rem 1.4rem 0.18rem 0.5rem;
+    border-left: 0.32rem solid #ff3bd7;
+    border-bottom: 1px solid #55edff;
+    color: #9ff7ff;
+    background: linear-gradient(90deg, rgb(35 8 57 / 0.94), transparent);
+    letter-spacing: 0.17em;
+  }
+
+  :root[data-theme="cinematic-cyberpunk-night"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list {
+    display: grid !important;
+    height: calc(100% - 1.5rem);
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-rows: repeat(5, minmax(0, 1fr)) !important;
+    gap: 0.25rem 16vw !important;
+    padding: 0.35rem 2.3rem 0.5rem;
+  }
+
+  :root[data-theme="cinematic-cyberpunk-night"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > div {
+    align-self: center;
+    padding: 0.32rem 0.52rem;
+    border: 1px solid rgb(78 229 250 / 0.48);
+    border-left: 0.28rem solid #ff3ad6;
+    background: linear-gradient(105deg, rgb(34 9 56 / 0.94), rgb(3 20 31 / 0.86));
+    box-shadow: 0 0 0.8rem rgb(45 227 255 / 0.08), inset 0 1px rgb(255 101 225 / 0.08);
+    clip-path: polygon(0.5rem 0, 100% 0, 100% calc(100% - 0.5rem), calc(100% - 0.5rem) 100%, 0 100%);
+  }
+
+  :root[data-theme="cinematic-cyberpunk-night"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > div:nth-child(-n + 5) { grid-column: 1; transform: skewY(-0.7deg); }
+  :root[data-theme="cinematic-cyberpunk-night"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > div:nth-child(n + 6) { grid-column: 2; transform: skewY(0.7deg); }
+  :root[data-theme="cinematic-cyberpunk-night"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > :is(:nth-child(1), :nth-child(6)) { grid-row: 1; }
+  :root[data-theme="cinematic-cyberpunk-night"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > :is(:nth-child(2), :nth-child(7)) { grid-row: 2; }
+  :root[data-theme="cinematic-cyberpunk-night"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > :is(:nth-child(3), :nth-child(8)) { grid-row: 3; }
+  :root[data-theme="cinematic-cyberpunk-night"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > :is(:nth-child(4), :nth-child(9)) { grid-row: 4; }
+  :root[data-theme="cinematic-cyberpunk-night"] .radio-field-group[data-radio-group="hierarchy"] .radio-field-list > :is(:nth-child(5), :nth-child(10)) { grid-row: 5; }
+
+  :root[data-theme="cinematic-cyberpunk-night"]
+    #radio-activity-panel
+    [data-hold-scope][data-hold-state="held"] {
+    border-color: #fff16f !important;
+    border-left-color: #fff16f !important;
+    background: linear-gradient(105deg, rgb(91 76 9 / 0.94), rgb(22 25 14 / 0.86), rgb(42 7 48 / 0.84)) !important;
+    box-shadow: inset 0 0 0 0.14rem #fff16f, 0 0 1.25rem rgb(255 241 111 / 0.32) !important;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cinematic-cyberpunk-night"] .cyber-rain-far { animation: cyber-rain-far 5.8s linear infinite; }
+  :root[data-theme="cinematic-cyberpunk-night"] .cyber-rain-near { animation: cyber-rain-near 3.2s linear infinite; }
+  :root[data-theme="cinematic-cyberpunk-night"] .cyber-train { animation: cyber-train-pass 21s ease-in-out infinite; }
+  :root[data-theme="cinematic-cyberpunk-night"] .cyber-holo-ring-a { animation: cyber-holo-a 34s linear infinite; transform-origin: 400px 330px; }
+  :root[data-theme="cinematic-cyberpunk-night"] .cyber-holo-ring-b { animation: cyber-holo-b 47s linear infinite; transform-origin: 400px 330px; }
+  :root[data-theme="cinematic-cyberpunk-night"] .cyber-scan-beam { animation: cyber-scan-beam 9s ease-in-out infinite; }
+  :root[data-theme="cinematic-cyberpunk-night"] .cyber-neon-signs { animation: cyber-sign-flicker 19s steps(1, end) infinite; }
+}
+
+@keyframes cyber-rain-far { to { transform: translate3d(-2rem, 16rem, 0); } }
+@keyframes cyber-rain-near { to { transform: translate3d(-3.5rem, 25rem, 0); } }
+@keyframes cyber-train-pass {
+  0%, 8% { transform: translate(856px, 410px) translateX(-38rem); opacity: 0; }
+  16% { transform: translate(856px, 410px) translateX(-24rem); opacity: 1; }
+  76% { transform: translate(856px, 410px) translateX(30rem); opacity: 1; }
+  88%, 100% { transform: translate(856px, 410px) translateX(52rem); opacity: 0; }
+}
+@keyframes cyber-holo-a { to { transform: rotate(360deg); } }
+@keyframes cyber-holo-b {
+  from { transform: rotate(28deg); }
+  to { transform: rotate(-332deg); }
+}
+@keyframes cyber-scan-beam { 0%, 100% { transform: translate(-6rem, 2rem); opacity: 0.28; } 50% { transform: translate(7rem, -3rem); opacity: 0.8; } }
+@keyframes cyber-sign-flicker { 0%, 91%, 94%, 100% { opacity: 1; } 92% { opacity: 0.42; } 93% { opacity: 0.82; } }
+
+/* A held scope hard-locks the hologram and overloads the surrounding neon. */
+:root[data-theme="cinematic-cyberpunk-night"]:has(
+  #radio-activity-panel [data-hold-state="held"]
+) .cyber-hologram {
+  filter: drop-shadow(0 0 1rem rgb(255 52 215 / 0.78)) drop-shadow(0 0 0.8rem rgb(54 239 255 / 0.58));
+}
+
+:root[data-theme="cinematic-cyberpunk-night"]:has(
+  #radio-activity-panel [data-hold-state="held"]
+) :is(.cyber-scan-beam, .cyber-neon-signs) {
+  opacity: 1;
+  filter: saturate(1.55) brightness(1.22);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cinematic-cyberpunk-night"]:has(
+    #radio-activity-panel [data-hold-state="held"]
+  ) .cyber-hologram {
+    animation: cyber-hold-glitch 1.65s steps(2, end) infinite;
+  }
+
+  :root[data-theme="cinematic-cyberpunk-night"]:has(
+    #radio-activity-panel [data-hold-state="held"]
+  ) .cyber-neon-signs {
+    animation: cyber-hold-sign 0.9s steps(2, end) infinite;
+  }
+}
+
+@keyframes cyber-hold-glitch {
+  0%, 100% { transform: translate(558px, 278px); }
+  48% { transform: translate(562px, 276px); }
+  52% { transform: translate(554px, 280px); }
+}
+@keyframes cyber-hold-sign { 0%, 100% { opacity: 0.72; } 50% { opacity: 1; } }

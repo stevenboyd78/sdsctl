@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "interface": "web",
+  "id": "cinematic-noir-detective",
+  "label": "Noir Detective",
+  "order": 1160,
+  "stylesheet": "theme.css",
+  "color_scheme": "dark",
+  "theme_colors": {"light": "#11110f", "dark": "#11110f"}
+}

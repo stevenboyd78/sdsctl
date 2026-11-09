@@ -14,7 +14,7 @@ from .exceptions import SDS200Error
 WEB_THEME_MANIFEST_SCHEMA_VERSION = 1
 WEB_THEME_INTERFACE = "web"
 WEB_THEME_MANIFEST_FILENAME = "manifest.json"
-BUILT_IN_WEB_THEME_IDS = (
+CORE_WEB_THEME_IDS = (
     "system",
     "lcars",
     "matrix",
@@ -22,6 +22,33 @@ BUILT_IN_WEB_THEME_IDS = (
     "amateur-radio",
     "pip-boy-inspired",
 )
+
+CINEMATIC_WEB_THEME_IDS = (
+    "cinematic-mission-control",
+    "cinematic-cyberpunk-night",
+    "cinematic-synthwave",
+    "cinematic-cold-war-radar",
+    "cinematic-dieselpunk-command",
+    "cinematic-steampunk-telegraph",
+    "cinematic-retro-arcade",
+    "cinematic-y2k-media",
+    "cinematic-mecha-operations",
+    "cinematic-comic-book",
+    "cinematic-wizarding-archive",
+    "cinematic-gothic-cathedral",
+    "cinematic-fantasy-cartographer",
+    "cinematic-desert-empire",
+    "cinematic-carrier-air-wing",
+    "cinematic-motorsport-pit-wall",
+    "cinematic-noir-detective",
+    "cinematic-art-deco-radio",
+    "cinematic-solarpunk",
+    "cinematic-national-parks",
+    "cinematic-galactic-operations",
+    "cinematic-tactical-field",
+)
+
+BUILT_IN_WEB_THEME_IDS = CORE_WEB_THEME_IDS + CINEMATIC_WEB_THEME_IDS
 
 # Retired built-in identities stay reserved for saved-preference migration.
 # Keep these in sync with normalizeTheme in web_assets/theme-bootstrap.js.

@@ -19,15 +19,13 @@ from fastapi.testclient import TestClient
 
 from scripts import generate_web_dashboard_screenshots as screenshots
 from sds200.web_dashboard import create_web_dashboard_app
-
-_EXPECTED_THEMES = (
-    "system",
-    "lcars",
-    "matrix",
-    "first-responder",
-    "amateur-radio",
-    "pip-boy-inspired",
+from sds200.web_themes import (
+    BUILT_IN_WEB_THEME_IDS,
+    CINEMATIC_WEB_THEME_IDS,
+    CORE_WEB_THEME_IDS,
 )
+
+_EXPECTED_THEMES = BUILT_IN_WEB_THEME_IDS
 _EXPECTED_VIEWPORTS = (
     ("1920x1080", 1920, 1080, 1),
     ("1366x768", 1366, 768, 1),
@@ -36,8 +34,11 @@ _EXPECTED_VIEWPORTS = (
 )
 _EXPECTED_CAPTURES = tuple(
     (f"theme-{theme}-{suffix}.png", theme, width, height, dpr, "scanner")
-    for theme in _EXPECTED_THEMES
+    for theme in CORE_WEB_THEME_IDS
     for suffix, width, height, dpr in _EXPECTED_VIEWPORTS
+) + tuple(
+    (f"theme-{theme}-1920x1080.png", theme, 1920, 1080, 1, "scanner")
+    for theme in CINEMATIC_WEB_THEME_IDS
 ) + (
     ("theme-system-waterfall-1920x1080.png", "system", 1920, 1080, 1, "waterfall"),
     (
@@ -223,7 +224,7 @@ def test_capture_inventory_covers_every_theme_and_reference_viewport() -> None:
     }
     assert reference_captures == {
         (theme, width, height, dpr)
-        for theme in _EXPECTED_THEMES
+        for theme in CORE_WEB_THEME_IDS
         for _suffix, width, height, dpr in _EXPECTED_VIEWPORTS
         if (width, height) != (1920, 1080)
     }

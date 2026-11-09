@@ -4,7 +4,7 @@
  * Run the dashboard and Home Assistant waterfall-card acceptance in one Chrome.
  *
  * This intentionally uses only Node built-ins and Chrome DevTools Protocol.
- * It writes no screenshots; the 26-image documentation gallery remains the
+ * It writes no screenshots; the 48-image documentation gallery remains the
  * responsibility of generate_web_dashboard_screenshots.py.
  */
 
@@ -25,13 +25,53 @@ export const THEMES = Object.freeze([
   "first-responder",
   "amateur-radio",
   "pip-boy-inspired",
+  "cinematic-mission-control",
+  "cinematic-cyberpunk-night",
+  "cinematic-synthwave",
+  "cinematic-cold-war-radar",
+  "cinematic-dieselpunk-command",
+  "cinematic-steampunk-telegraph",
+  "cinematic-retro-arcade",
+  "cinematic-y2k-media",
+  "cinematic-mecha-operations",
+  "cinematic-comic-book",
+  "cinematic-wizarding-archive",
+  "cinematic-gothic-cathedral",
+  "cinematic-fantasy-cartographer",
+  "cinematic-desert-empire",
+  "cinematic-carrier-air-wing",
+  "cinematic-motorsport-pit-wall",
+  "cinematic-noir-detective",
+  "cinematic-art-deco-radio",
+  "cinematic-solarpunk",
+  "cinematic-national-parks",
+  "cinematic-galactic-operations",
+  "cinematic-tactical-field",
 ]);
 
 export const VIEWPORTS = Object.freeze([
   Object.freeze({name: "full-hd", width: 1920, height: 1080, dpr: 1}),
+  Object.freeze({name: "desktop-windowed", width: 1920, height: 900, dpr: 1}),
   Object.freeze({name: "laptop", width: 1366, height: 768, dpr: 1}),
   Object.freeze({name: "scanner-landscape", width: 800, height: 480, dpr: 1}),
   Object.freeze({name: "phone", width: 390, height: 844, dpr: 2}),
+]);
+
+const HERO_PANORAMA_SCENES = Object.freeze([
+  Object.freeze({theme: "cinematic-carrier-air-wing", scene: "carrier-air-wing"}),
+  Object.freeze({theme: "cinematic-tactical-field", scene: "tactical-field"}),
+  Object.freeze({theme: "cinematic-wizarding-archive", scene: "wizarding-archive"}),
+  Object.freeze({theme: "cinematic-galactic-operations", scene: "galactic-operations"}),
+  Object.freeze({theme: "cinematic-mission-control", scene: "mission-control"}),
+  Object.freeze({theme: "cinematic-cyberpunk-night", scene: "cyberpunk-night"}),
+]);
+
+const HERO_PANORAMA_BOUNDARIES = Object.freeze([
+  Object.freeze({width: 1280, height: 720, panorama: true}),
+  Object.freeze({width: 1440, height: 960, panorama: true}),
+  Object.freeze({width: 1440, height: 961, panorama: false}),
+  Object.freeze({width: 1279, height: 720, panorama: false}),
+  Object.freeze({width: 1280, height: 719, panorama: false}),
 ]);
 
 export const PANES = Object.freeze([
@@ -90,8 +130,9 @@ const HELP = `\
 Usage: node scripts/audit_web_dashboard_browser.mjs [options]
 
 Run the deterministic dashboard and Home Assistant waterfall-card browser audit in one local
-Chrome/Chromium session. The audit writes no PNGs. It covers all 144 built-in
-theme × reference CSS viewport × workspace pane cases, all 189 explicit System
+Chrome/Chromium session. The audit writes no PNGs. It covers all 840 built-in
+theme × reference CSS viewport × workspace pane cases, 30 exact panoramic-boundary
+cases for the six hero environments, all 210 explicit System
 palette responsive cases, plus media-preference, enlarged-text,
 pagination-focus, trusted Tab/Shift+Tab traversal, WCAG AA contrast, complete
 adaptive-presentation, DPR-transition, and prefixed-URL probes. It also covers
@@ -110,10 +151,12 @@ Options:
   --startup-timeout-ms N
                       Chrome process readiness timeout (default: 90000)
   --timeout-ms N      CDP and dashboard operation timeout (default: 20000)
+  --findings-json PATH
+                      Write the complete deterministic matrix result as JSON
   --waterfall-only    Run only the Home Assistant waterfall-card regression/lifecycle audit
   --waterfall-screenshot-dir PATH
                       Write three sanitized waterfall-card reference PNGs
-  --list              List the 144 matrix cases without opening Chrome
+  --list              List the 840 matrix cases without opening Chrome
   -h, --help          Show this help and exit
 
 The default command requires Node.js 24 or newer, starts the existing fictional-data server from
@@ -127,6 +170,7 @@ export function parseArguments(argv) {
   const options = {
     baseUrl: null,
     chrome: null,
+    findingsJsonPath: null,
     help: false,
     list: false,
     python: null,
@@ -147,6 +191,7 @@ export function parseArguments(argv) {
     } else if ([
       "--base-url",
       "--chrome",
+      "--findings-json",
       "--python",
       "--startup-timeout-ms",
       "--timeout-ms",
@@ -163,6 +208,8 @@ export function parseArguments(argv) {
         options.chrome = value;
       } else if (argument === "--python") {
         options.python = value;
+      } else if (argument === "--findings-json") {
+        options.findingsJsonPath = path.resolve(value);
       } else if (argument === "--waterfall-screenshot-dir") {
         options.waterfallScreenshotDirectory = path.resolve(value);
       } else if (argument === "--timeout-ms") {
@@ -193,7 +240,28 @@ export function parseArguments(argv) {
     parsed.search = "";
     options.baseUrl = parsed.toString().replace(/\/$/, "");
   }
+  if (options.findingsJsonPath !== null && (options.list || options.waterfallOnly)) {
+    throw new Error("--findings-json requires the complete dashboard matrix audit");
+  }
   return options;
+}
+
+export function serializeFindingsReport(result) {
+  return `${JSON.stringify({
+    audit: "web-dashboard-browser",
+    matrix: {
+      panes: PANES,
+      themes: THEMES,
+      viewports: VIEWPORTS,
+    },
+    result,
+    schemaVersion: 1,
+  }, null, 2)}\n`;
+}
+
+export async function writeFindingsReport(outputPath, result) {
+  await mkdir(path.dirname(outputPath), {recursive: true});
+  await writeFile(outputPath, serializeFindingsReport(result), "utf8");
 }
 
 function listCases() {
@@ -313,7 +381,7 @@ export async function waitForHttp(url, timeoutMs, child = null, {
     attempts, outcomes: Object.fromEntries(outcomes),
     exitCode: child?.exitCode ?? null, signalCode: child?.signalCode ?? null});
   while (now() < deadline) {
-    if (child !== null && child.exitCode !== null) {
+    if (child !== null && (child.exitCode !== null || child.signalCode !== null)) {
       throw new Error(`process exited before ${url} became ready; readiness=${diagnostic()}`);
     }
     attempts += 1;
@@ -334,17 +402,85 @@ export async function waitForHttp(url, timeoutMs, child = null, {
   throw new Error(`timed out waiting for ${url}: ${String(lastError)}; readiness=${diagnostic()}`);
 }
 
-export async function stopChild(child) {
-  if (child === null || child.exitCode !== null) {
-    return;
+const childStopOperations = new WeakMap();
+
+function childIsTerminal(child) {
+  return child.exitCode !== null || child.signalCode !== null;
+}
+
+function signalChildAndWait(child, signal, timeoutMs) {
+  if (childIsTerminal(child)) {
+    return Promise.resolve(true);
   }
-  child.kill("SIGTERM");
-  const exited = new Promise((resolve) => child.once("exit", resolve));
-  const timeout = delay(5_000).then(() => "timeout");
-  if ((await Promise.race([exited, timeout])) === "timeout") {
-    child.kill("SIGKILL");
-    await new Promise((resolve) => child.once("exit", resolve));
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer = null;
+    const finish = (terminal, error = null) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
+      child.removeListener("exit", onExit);
+      if (error !== null) {
+        reject(error);
+      } else {
+        resolve(terminal);
+      }
+    };
+    const onExit = () => finish(true);
+    child.once("exit", onExit);
+    if (childIsTerminal(child)) {
+      finish(true);
+      return;
+    }
+    try {
+      child.kill(signal);
+    } catch (error) {
+      if (childIsTerminal(child)) {
+        finish(true);
+        return;
+      }
+      if (error?.code !== "ESRCH") {
+        finish(false, error);
+        return;
+      }
+    }
+    if (childIsTerminal(child)) {
+      finish(true);
+      return;
+    }
+    timer = setTimeout(() => finish(childIsTerminal(child)), timeoutMs);
+  });
+}
+
+export function stopChild(child, {termTimeoutMs = 5_000, killTimeoutMs = 5_000} = {}) {
+  if (child === null || childIsTerminal(child)) {
+    return Promise.resolve();
   }
+  const existing = childStopOperations.get(child);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const operation = (async () => {
+    if (await signalChildAndWait(child, "SIGTERM", termTimeoutMs)) {
+      return;
+    }
+    if (await signalChildAndWait(child, "SIGKILL", killTimeoutMs)) {
+      return;
+    }
+    throw new Error(`child did not exit after SIGTERM (${termTimeoutMs}ms) and ` +
+      `SIGKILL (${killTimeoutMs}ms); exitCode=${child.exitCode} signalCode=${child.signalCode}`);
+  })();
+  const tracked = operation.finally(() => {
+    if (childStopOperations.get(child) === tracked) {
+      childStopOperations.delete(child);
+    }
+  });
+  childStopOperations.set(child, tracked);
+  return tracked;
 }
 
 async function websocketText(data) {
@@ -881,22 +1017,121 @@ async function pressKey(cdp, key, code, virtualKeyCode, {modifiers = 0} = {}) {
   await frames(cdp);
 }
 
+let trustedClickSequence = 0;
+
 async function clickElement(cdp, selector) {
-  const point = await evaluate(
-    cdp,
-    `(() => {
-      const element = document.querySelector(${JSON.stringify(selector)});
-      if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
-        return null;
+  let point = null;
+  const observationHistory = [];
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const available = await evaluate(
+      cdp,
+      `(() => {
+        const element = document.querySelector(${JSON.stringify(selector)});
+        if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
+          return false;
+        }
+        element.scrollIntoView({block: "nearest", inline: "nearest"});
+        return true;
+      })()`,
+    );
+    if (!available) {
+      throw new Error(`cannot click ${selector}`);
+    }
+
+    // Scrolling can move sticky controls or reflow a compact workspace. Cross
+    // a rendering boundary before measuring the coordinate that will receive
+    // trusted pointer movement, rather than using a pre-layout position.
+    await frames(cdp);
+    const initial = await evaluate(
+      cdp,
+      `(() => {
+        const element = document.querySelector(${JSON.stringify(selector)});
+        if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
+          return null;
+        }
+        const rect = element.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        return {
+          hit: hit instanceof Element ? {
+            classes: Array.from(hit.classList).slice(0, 2),
+            id: hit.id,
+            tag: hit.localName,
+          } : null,
+          owned: hit instanceof Element && (hit === element || element.contains(hit)),
+          rect: {
+            bottom: rect.bottom,
+            left: rect.left,
+            right: rect.right,
+            top: rect.top,
+          },
+          x,
+          y,
+        };
+      })()`,
+    );
+    if (initial === null) {
+      throw new Error(`cannot click ${selector}`);
+    }
+    observationHistory.push({attempt, pointerMove: 0, ...initial});
+
+    // Trusted pointer movement can itself activate hover styling that changes
+    // sticky phone geometry. Follow the remeasured center through at most
+    // three pre-dispatch moves, crossing a rendering boundary and requiring
+    // both center ownership and real :hover state before the one click.
+    let candidate = initial;
+    for (let pointerMove = 1; pointerMove <= 3; pointerMove += 1) {
+      if (!candidate.owned) break;
+      await cdp.send("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        x: candidate.x,
+        y: candidate.y,
+      });
+      await frames(cdp);
+      const confirmed = await evaluate(
+        cdp,
+        `(() => {
+          const element = document.querySelector(${JSON.stringify(selector)});
+          if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
+            return null;
+          }
+          const rect = element.getBoundingClientRect();
+          const x = rect.left + rect.width / 2;
+          const y = rect.top + rect.height / 2;
+          const hit = document.elementFromPoint(x, y);
+          return {
+            hit: hit instanceof Element ? {
+              classes: Array.from(hit.classList).slice(0, 2),
+              id: hit.id,
+              tag: hit.localName,
+            } : null,
+            hovered: element.matches(":hover"),
+            owned: hit instanceof Element && (hit === element || element.contains(hit)),
+            rect: {
+              bottom: rect.bottom,
+              left: rect.left,
+              right: rect.right,
+              top: rect.top,
+            },
+            x,
+            y,
+          };
+        })()`,
+      );
+      if (confirmed === null) {
+        throw new Error(`cannot click ${selector}`);
       }
-      element.scrollIntoView({block: "nearest", inline: "nearest"});
-      const rect = element.getBoundingClientRect();
-      return {
-        x: rect.left + rect.width / 2,
-        y: rect.top + rect.height / 2,
-      };
-    })()`,
-  );
+      observationHistory.push({attempt, pointerMove, ...confirmed});
+      if (confirmed.owned && confirmed.hovered) {
+        point = confirmed;
+        break;
+      }
+      candidate = confirmed;
+    }
+    if (point !== null) break;
+    if (attempt < 2) await movePointerAway(cdp);
+  }
   if (
     point === null ||
     point.x < 0 ||
@@ -904,7 +1139,42 @@ async function clickElement(cdp, selector) {
     point.x > Number.MAX_SAFE_INTEGER ||
     point.y > Number.MAX_SAFE_INTEGER
   ) {
-    throw new Error(`cannot click ${selector}`);
+    throw new Error(
+      `${selector} center remained occluded before trusted click dispatch ` +
+        `after 2 settled attempts with 3 pointer moves each: ` +
+        `${JSON.stringify(observationHistory)}`,
+    );
+  }
+  const witnessToken = ++trustedClickSequence;
+  const witnessArmed = await evaluate(
+    cdp,
+    `(() => {
+      const element = document.querySelector(${JSON.stringify(selector)});
+      if (!(element instanceof HTMLElement) || element.matches(":disabled")) return false;
+      const key = Symbol.for("sdsctl.browser-audit.trusted-click-witness");
+      const previous = globalThis[key];
+      if (previous?.element instanceof Element && typeof previous.listener === "function") {
+        previous.element.removeEventListener("click", previous.listener, true);
+      }
+      const record = {clicked: null, element, listener: null, token: ${witnessToken}};
+      record.listener = event => {
+        record.clicked = {
+          isTrusted: event.isTrusted,
+          owned: event.target instanceof Node &&
+            (event.target === element || element.contains(event.target)),
+          target: event.target instanceof Element ? {
+            id: event.target.id,
+            tag: event.target.localName,
+          } : null,
+        };
+      };
+      element.addEventListener("click", record.listener, {capture: true, once: true});
+      globalThis[key] = record;
+      return true;
+    })()`,
+  );
+  if (!witnessArmed) {
+    throw new Error(`cannot arm trusted click witness for ${selector}`);
   }
   await cdp.send("Input.dispatchMouseEvent", {
     button: "left",
@@ -913,18 +1183,173 @@ async function clickElement(cdp, selector) {
     x: point.x,
     y: point.y,
   });
+  const pressReceipt = await evaluate(
+    cdp,
+    `(() => {
+      const element = document.querySelector(${JSON.stringify(selector)});
+      if (!(element instanceof HTMLElement)) return null;
+      const rect = element.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      const centerHit = document.elementFromPoint(x, y);
+      const pressedHit = document.elementFromPoint(${point.x}, ${point.y});
+      return {
+        active: element.matches(":active"),
+        centerOwned: centerHit instanceof Element &&
+          (centerHit === element || element.contains(centerHit)),
+        focused: document.activeElement === element || element.contains(document.activeElement),
+        pressedPointOwned: pressedHit instanceof Element &&
+          (pressedHit === element || element.contains(pressedHit)),
+        rect: {bottom: rect.bottom, left: rect.left, right: rect.right, top: rect.top},
+        x,
+        y,
+      };
+    })()`,
+  );
+  const pressValid = pressReceipt !== null && pressReceipt.active &&
+    pressReceipt.focused && pressReceipt.centerOwned;
+  const releasePoint = pressValid ? pressReceipt : point;
   await cdp.send("Input.dispatchMouseEvent", {
     button: "left",
     clickCount: 1,
     type: "mouseReleased",
-    x: point.x,
-    y: point.y,
+    x: releasePoint.x,
+    y: releasePoint.y,
+  });
+  await frames(cdp);
+  const clickWitness = await evaluate(
+    cdp,
+    `(() => {
+      const key = Symbol.for("sdsctl.browser-audit.trusted-click-witness");
+      const record = globalThis[key];
+      if (record?.element instanceof Element && typeof record.listener === "function") {
+        record.element.removeEventListener("click", record.listener, true);
+      }
+      if (record?.token === ${witnessToken}) delete globalThis[key];
+      return record?.token === ${witnessToken} ? record.clicked : null;
+    })()`,
+  );
+  if (!pressValid || !clickWitness?.isTrusted || !clickWitness?.owned) {
+    throw new Error(
+      `${selector} did not complete one owned trusted click: ` +
+        `${JSON.stringify({clickWitness, point, pressReceipt})}`,
+    );
+  }
+}
+
+async function movePointerAway(cdp) {
+  await cdp.send("Input.dispatchMouseEvent", {
+    type: "mouseMoved",
+    x: 0,
+    y: 0,
   });
   await frames(cdp);
 }
 
+async function hoverElement(cdp, selector) {
+  let lastObservation = null;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const available = await evaluate(
+      cdp,
+      `(() => {
+        const element = document.querySelector(${JSON.stringify(selector)});
+        if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
+          return false;
+        }
+        element.scrollIntoView({block: "nearest", inline: "nearest"});
+        return true;
+      })()`,
+    );
+    if (!available) {
+      return {failures: [`${selector} is unavailable for trusted hover acquisition`]};
+    }
+
+    // Phone navigation is sticky and wraps onto two rows. Let scroll and
+    // sticky layout settle before measuring the coordinate that will receive
+    // the trusted pointer input.
+    await frames(cdp);
+    const point = await evaluate(
+      cdp,
+      `(() => {
+        const element = document.querySelector(${JSON.stringify(selector)});
+        if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
+          return null;
+        }
+        const rect = element.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        return {
+          hit: hit instanceof Element ? {
+            classes: Array.from(hit.classList).slice(0, 2),
+            id: hit.id,
+            tag: hit.localName,
+          } : null,
+          owned: hit instanceof Element && (hit === element || element.contains(hit)),
+          rect: {
+            bottom: rect.bottom,
+            left: rect.left,
+            right: rect.right,
+            top: rect.top,
+          },
+          x,
+          y,
+        };
+      })()`,
+    );
+    if (point === null) {
+      return {failures: [`${selector} is unavailable for trusted hover acquisition`]};
+    }
+    if (!point.owned) {
+      return {failures: [
+        `${selector} center is occluded before trusted hover dispatch: ` +
+          `${JSON.stringify({hit: point.hit, rect: point.rect, x: point.x, y: point.y})}`,
+      ]};
+    }
+    await cdp.send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: point.x,
+      y: point.y,
+    });
+    // CDP can acknowledge trusted pointer input before Chrome exposes the new
+    // :hover match to a following Runtime.evaluate call. Cross a rendering
+    // boundary, then confirm acquisition before contrast is measured.
+    await frames(cdp);
+    lastObservation = await evaluate(
+      cdp,
+      `(() => {
+        const element = document.querySelector(${JSON.stringify(selector)});
+        if (!(element instanceof HTMLElement)) return null;
+        const rect = element.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        return {
+          hovered: element.matches(":hover"),
+          owned: hit instanceof Element && (hit === element || element.contains(hit)),
+          rect: {
+            bottom: rect.bottom,
+            left: rect.left,
+            right: rect.right,
+            top: rect.top,
+          },
+          x,
+          y,
+        };
+      })()`,
+    );
+    if (lastObservation?.hovered) return {failures: []};
+    if (attempt < 2) await movePointerAway(cdp);
+  }
+  return {failures: [
+    `${selector} did not enter its trusted hover state after 2 settled attempts: ` +
+      JSON.stringify(lastObservation),
+  ]};
+}
+
 async function activatePane(cdp, pane) {
   await clickElement(cdp, `#pane-tab-${pane}`);
+  await movePointerAway(cdp);
 }
 
 export function browserAuditLibrary() {
@@ -1247,6 +1672,19 @@ export function browserAuditLibrary() {
     return failures;
   }
 
+  function hoverReadability(selector) {
+    const element = document.querySelector(selector);
+    if (!(element instanceof HTMLElement)) {
+      return {failures: [`${selector} is unavailable for hover contrast`]};
+    }
+    const failures = [];
+    if (!element.matches(":hover")) {
+      failures.push(`${selector} did not enter its trusted hover state`);
+    }
+    failures.push(...readabilityFailures(element, `${selector} hover control text`));
+    return {failures};
+  }
+
   function radioValueFailures(field) {
     const failures = [];
     if ((field.textContent ?? "").trim() === "") {
@@ -1552,6 +1990,60 @@ export function browserAuditLibrary() {
     return {failures};
   }
 
+  function phoneUnknownHoldState() {
+    const failures = paneState("controls");
+    const snapshots = [];
+    const scopes = ["system", "department", "site", "channel"];
+    try {
+      for (const scope of scopes) {
+        const state = document.querySelector(`#scanner-hold-${scope}-state`);
+        if (!(state instanceof HTMLElement)) {
+          failures.push(`unknown-state phone audit is missing the ${scope} state`);
+          continue;
+        }
+        snapshots.push({
+          dataState: state.dataset.state,
+          state,
+          text: state.textContent,
+        });
+        state.textContent = "Unknown";
+        state.dataset.state = "unknown";
+      }
+      for (const scope of scopes) {
+        const suffix = scope === "channel" ? "" : `-${scope}`;
+        const controls = [
+          document.querySelector(`#scanner-hold-${scope}`),
+          document.querySelector(`#scanner-hold-${scope}-state`),
+          document.querySelector(`#scanner-previous${suffix}`),
+          document.querySelector(`#scanner-next${suffix}`),
+        ];
+        for (const control of controls) {
+          if (!(control instanceof HTMLElement) || !rendered(control)) {
+            failures.push(`${scope} unknown-state phone control is not rendered`);
+            continue;
+          }
+          if (control.scrollWidth > control.clientWidth + tolerance) {
+            failures.push(
+              `${label(control)} clips unknown-state phone text ` +
+                `(${control.scrollWidth.toFixed(1)} > ${control.clientWidth.toFixed(1)})`,
+            );
+          }
+          const clipping = clippingAncestor(control, textRect(control));
+          if (clipping !== null) {
+            failures.push(`${label(control)} unknown-state text is clipped by ${label(clipping)}`);
+          }
+        }
+      }
+    } finally {
+      for (const {dataState, state, text} of snapshots) {
+        state.textContent = text;
+        if (dataState === undefined) delete state.dataset.state;
+        else state.dataset.state = dataState;
+      }
+    }
+    return {failures};
+  }
+
   function subpanelButtonGeometry(expectedPane) {
     const failures = [];
     // Prominent LCARS Scanner filters are a separate role from compact utility
@@ -1626,8 +2118,12 @@ export function browserAuditLibrary() {
       Number.parseFloat(overviewStyle.paddingLeft);
     const contentRight = overviewRect.right - Number.parseFloat(overviewStyle.borderRightWidth) -
       Number.parseFloat(overviewStyle.paddingRight);
+    const contentTop = overviewRect.top + Number.parseFloat(overviewStyle.borderTopWidth) +
+      Number.parseFloat(overviewStyle.paddingTop);
+    const contentBottom = overviewRect.bottom - Number.parseFloat(overviewStyle.borderBottomWidth) -
+      Number.parseFloat(overviewStyle.paddingBottom);
     const messageRect = message.getBoundingClientRect();
-    const lineHeight = Number.parseFloat(messageStyle.lineHeight);
+    const messageTextRect = textRect(message);
     // The independently added typography layout intentionally centers controls
     // in a third desktop column. Small layouts still require two columns.
     const appearance = [
@@ -1665,8 +2161,37 @@ export function browserAuditLibrary() {
     if (Math.abs(messageRect.right - contentRight) > tolerance) {
       failures.push("non-System live daemon status is not right-aligned");
     }
-    if (Number.isFinite(lineHeight) && messageRect.height > lineHeight * 1.5) {
-      failures.push("non-System live daemon status wraps onto multiple lines");
+    if (
+      (message.textContent ?? "").trim() === "" ||
+      messageRect.width <= tolerance ||
+      messageRect.height <= tolerance ||
+      messageTextRect.width <= tolerance ||
+      messageTextRect.height <= tolerance
+    ) {
+      failures.push("non-System live daemon status has no readable geometry");
+    }
+    if (
+      messageRect.left < contentLeft - tolerance ||
+      messageRect.top < contentTop - tolerance ||
+      messageRect.right > contentRight + tolerance ||
+      messageRect.bottom > contentBottom + tolerance
+    ) {
+      failures.push("non-System live daemon status is outside the overview content box");
+    }
+    if (outside(messageTextRect, messageRect)) {
+      failures.push("non-System live daemon status text is clipped by its own box");
+    }
+    if (appearance !== undefined) {
+      const appearanceRect = appearance.getBoundingClientRect();
+      const overlaps = !(
+        messageRect.right <= appearanceRect.left + tolerance ||
+        messageRect.left >= appearanceRect.right - tolerance ||
+        messageRect.bottom <= appearanceRect.top + tolerance ||
+        messageRect.top >= appearanceRect.bottom - tolerance
+      );
+      if (overlaps) {
+        failures.push("non-System live daemon status overlaps the appearance controls");
+      }
     }
     return failures;
   }
@@ -2173,6 +2698,26 @@ export function browserAuditLibrary() {
         );
       }
     }
+    const hierarchy = document.querySelector(".scanner-display-hierarchy");
+    const channel = document.querySelector(
+      '.scanner-display-hierarchy > [data-hold-scope="channel"]',
+    );
+    if (
+      hierarchy instanceof HTMLElement &&
+      channel instanceof HTMLElement &&
+      rendered(hierarchy) &&
+      getComputedStyle(hierarchy).gridTemplateColumns.split(" ").length === 1
+    ) {
+      const dividerWidth = Number.parseFloat(
+        getComputedStyle(channel).borderBottomWidth,
+      );
+      const rowGap = Number.parseFloat(getComputedStyle(hierarchy).rowGap);
+      const hasDivider = Number.isFinite(dividerWidth) && dividerWidth > 0;
+      const hasThemeSpacing = Number.isFinite(rowGap) && rowGap > 0;
+      if (!hasDivider && !hasThemeSpacing) {
+        failures.push("compact Channel field has no separation before Site");
+      }
+    }
     return failures;
   }
 
@@ -2219,6 +2764,35 @@ export function browserAuditLibrary() {
     return failures;
   }
 
+  function radioFieldCardIntersectionFailures(container) {
+    if (!(container instanceof HTMLElement) || !rendered(container)) return [];
+    const failures = [];
+    const cards = Array.from(container.children).filter(
+      (card) => card instanceof HTMLElement && rendered(card),
+    );
+    for (let leftIndex = 0; leftIndex < cards.length; leftIndex++) {
+      const leftCard = cards[leftIndex];
+      const leftRect = leftCard.getBoundingClientRect();
+      for (let rightIndex = leftIndex + 1; rightIndex < cards.length; rightIndex++) {
+        const rightCard = cards[rightIndex];
+        const rightRect = rightCard.getBoundingClientRect();
+        const overlapWidth = Math.min(leftRect.right, rightRect.right) -
+          Math.max(leftRect.left, rightRect.left);
+        const overlapHeight = Math.min(leftRect.bottom, rightRect.bottom) -
+          Math.max(leftRect.top, rightRect.top);
+        if (overlapWidth <= tolerance || overlapHeight <= tolerance) continue;
+        const leftName = leftCard.querySelector("dt")?.textContent?.trim() ?? label(leftCard);
+        const rightName = rightCard.querySelector("dt")?.textContent?.trim() ?? label(rightCard);
+        failures.push(
+          `${label(container)} cards ${JSON.stringify(leftName)} and ` +
+            `${JSON.stringify(rightName)} overlap by ` +
+            `${overlapWidth.toFixed(1)}x${overlapHeight.toFixed(1)}px`,
+        );
+      }
+    }
+    return failures;
+  }
+
   function radioFields(fieldIds) {
     const failures = [];
     const seen = new Set();
@@ -2246,6 +2820,11 @@ export function browserAuditLibrary() {
       if (visibleGroups.length !== 1 || visibleGroups[0]?.dataset.radioGroup !== view) {
         failures.push(`radio field group state does not match ${view}`);
       }
+      failures.push(
+        ...radioFieldCardIntersectionFailures(
+          visibleGroups[0]?.querySelector(".radio-field-list"),
+        ),
+      );
 
       for (const id of fieldIds) {
         const field = document.getElementById(id);
@@ -2494,9 +3073,11 @@ export function browserAuditLibrary() {
     forcedColors,
     ingressDiagnosticsLayout,
     ingressHomeAssistantLayout,
+    hoverReadability,
     keyboardTabState,
     normal,
     paginationState,
+    phoneUnknownHoldState,
     prefixedUrls,
     radioFields,
     radioValueFailures,
@@ -2667,6 +3248,33 @@ async function auditSequentialFocus(cdp, collector, theme) {
   }
 }
 
+async function auditWorkspaceTabHoverContrast(cdp, collector, theme, viewport) {
+  let cases = 0;
+  const auditHover = async (pane) => {
+    const selector = `#pane-tab-${pane}`;
+    const acquisition = await hoverElement(cdp, selector);
+    const context =
+      `${theme}/${viewport.width}x${viewport.height}@${viewport.dpr}/hover/${pane}`;
+    collector.add(
+      context,
+      acquisition.failures.length > 0
+        ? acquisition
+        : await evaluate(
+          cdp,
+          `window.__sdsctlBrowserAudit.hoverReadability(${JSON.stringify(selector)})`,
+        ),
+    );
+    cases += 1;
+  };
+
+  await activatePane(cdp, "scanner");
+  for (const pane of PANES.slice(1)) await auditHover(pane);
+  await activatePane(cdp, "controls");
+  await auditHover("scanner");
+  await movePointerAway(cdp);
+  return cases;
+}
+
 async function auditPagination(cdp, collector, context) {
   collector.add(
     context,
@@ -2765,8 +3373,12 @@ async function auditPagination(cdp, collector, context) {
 }
 
 async function auditMediaPreferences(cdp, collector, theme) {
-  const viewport = {width: 800, height: 480, dpr: 1};
-  await setViewport(cdp, viewport);
+  const hero = HERO_PANORAMA_SCENES.find((candidate) => candidate.theme === theme);
+  const compactViewport = {width: 800, height: 480, dpr: 1};
+  const reducedMotionViewport = hero
+    ? {width: 1920, height: 1080, dpr: 1}
+    : compactViewport;
+  await setViewport(cdp, reducedMotionViewport);
   await activatePane(cdp, "scanner");
 
   await cdp.send("Emulation.setEmulatedMedia", {
@@ -2774,11 +3386,35 @@ async function auditMediaPreferences(cdp, collector, theme) {
     media: "screen",
   });
   await frames(cdp);
+  if (hero) {
+    collector.add(
+      `${theme}/reduced-motion/panorama-scene`,
+      await evaluate(
+        cdp,
+        `(() => {
+          const failures = [];
+          const scene = document.querySelector(
+            ${JSON.stringify(`[data-cinematic-scene="${hero.scene}"]`)},
+          );
+          const rendered = scene instanceof Element &&
+            getComputedStyle(scene).display !== "none" &&
+            getComputedStyle(scene).visibility !== "hidden" &&
+            scene.getClientRects().length > 0;
+          if (!rendered) {
+            failures.push("headline panoramic scene is not rendered under reduced motion");
+          }
+          return {failures};
+        })()`,
+      ),
+    );
+  }
   collector.add(
     `${theme}/reduced-motion`,
     await evaluate(cdp, "window.__sdsctlBrowserAudit.reducedMotion()"),
   );
 
+  await setViewport(cdp, compactViewport);
+  await activatePane(cdp, "scanner");
   await cdp.send("Emulation.setEmulatedMedia", {
     features: [
       {name: "forced-colors", value: "active"},
@@ -2828,13 +3464,77 @@ async function auditEnlargedText(cdp, collector, theme) {
   await frames(cdp);
 }
 
+async function auditHeroPanoramaBoundaries(cdp, collector) {
+  let caseCount = 0;
+  for (const {theme, scene} of HERO_PANORAMA_SCENES) {
+    collector.add(
+      `${theme}/panorama-boundary/theme-switch`,
+      await evaluate(
+        cdp,
+        `window.__sdsctlBrowserAudit.switchTheme(${JSON.stringify(theme)})`,
+      ),
+    );
+    for (const viewport of HERO_PANORAMA_BOUNDARIES) {
+      caseCount += 1;
+      await setViewport(cdp, {...viewport, dpr: 1});
+      await activatePane(cdp, "scanner");
+      await frames(cdp);
+      const context =
+        `${theme}/${viewport.width}x${viewport.height}@1/` +
+        `${viewport.panorama ? "panorama" : "compact"}-boundary/scanner`;
+      const sceneSelector = `[data-cinematic-scene="${scene}"]`;
+      collector.add(
+        context,
+        await evaluate(
+          cdp,
+          `(() => {
+            const failures = [];
+            const production = matchMedia(
+              "(min-width: 1280px) and (min-height: 720px) and (min-aspect-ratio: 3/2)",
+            ).matches;
+            const compact = matchMedia(
+              "(width < 1280px), (height < 720px), (aspect-ratio < 3/2)",
+            ).matches;
+            const expected = ${JSON.stringify(viewport.panorama)};
+            const scene = document.querySelector(
+              ${JSON.stringify(sceneSelector)},
+            );
+            const visible = scene !== null && getComputedStyle(scene).display !== "none";
+            if (production !== expected) {
+              failures.push("production query is " + production + " instead of " + expected);
+            }
+            if (compact === production) {
+              failures.push("production and compact queries overlap or leave a gap");
+            }
+            if (visible !== expected) {
+              failures.push("scene visibility is " + visible + " instead of " + expected);
+            }
+            return {failures};
+          })()`,
+        ),
+      );
+      collector.add(
+        context,
+        await evaluate(
+          cdp,
+          `window.__sdsctlBrowserAudit.normal("scanner", ${JSON.stringify(theme)})`,
+        ),
+      );
+      await auditAccessibility(cdp, collector, context, "scanner");
+    }
+  }
+  return caseCount;
+}
+
 export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
   const collector = new FailureCollector();
   await setViewport(cdp, VIEWPORTS[0]);
   await navigate(cdp, `${baseUrl}/`, timeoutMs);
 
   let caseCount = 0;
+  let hoverContrastCases = 0;
   let lcarsNavigationTransitionCases = 0;
+  let phoneUnknownHoldCases = 0;
   let systemPaletteCases = 0;
   const systemPalettes = await evaluate(
     cdp,
@@ -2926,6 +3626,21 @@ export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
         );
         await auditAccessibility(cdp, collector, context, pane);
       }
+      if (viewport.name === "phone") {
+        await activatePane(cdp, "controls");
+        phoneUnknownHoldCases += 1;
+        collector.add(
+          `${theme}/${viewport.width}x${viewport.height}@${viewport.dpr}/` +
+            "controls/unknown-hold-state",
+          await evaluate(cdp, "window.__sdsctlBrowserAudit.phoneUnknownHoldState()"),
+        );
+      }
+      hoverContrastCases += await auditWorkspaceTabHoverContrast(
+        cdp,
+        collector,
+        theme,
+        viewport,
+      );
       console.log(
         `Audited ${theme.padEnd(16)} ${viewport.width}x${viewport.height}` +
           ` DPR ${viewport.dpr}: ${PANES.length} panes`,
@@ -2955,6 +3670,9 @@ export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
     await auditMediaPreferences(cdp, collector, theme);
     await auditEnlargedText(cdp, collector, theme);
   }
+
+  const panoramaBoundaryCases = await auditHeroPanoramaBoundaries(cdp, collector);
+  console.log(`Audited ${panoramaBoundaryCases} hero panoramic-boundary cases`);
 
   await cdp.send("Emulation.setEmulatedMedia", {features: [], media: "screen"});
   await setViewport(cdp, {width: 800, height: 480, dpr: 1});
@@ -3032,9 +3750,12 @@ export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
   return {
     caseCount,
     failures: collector.failures,
+    hoverContrastCases,
     ingressDiagnosticsCases,
     ingressHomeAssistantCases,
     lcarsNavigationTransitionCases,
+    panoramaBoundaryCases,
+    phoneUnknownHoldCases,
     systemPaletteCases,
   };
 }
@@ -3786,22 +4507,38 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
           await document.fonts.ready;
           const typography = document.querySelector('#theme-typography-pickers');
           const fontPicker = document.querySelector('#theme-font-picker');
-          for (const node of [typography, fontPicker]) {
+          const lcarsAppearance = document.querySelector('#lcars-v2-appearance-pickers');
+          for (const node of [typography, fontPicker, lcarsAppearance]) {
             if (node.hidden && getComputedStyle(node).display !== 'none') {
               throw new Error('Hidden typography control is rendered: ' + node.id);
             }
           }
           if (matchMedia('(max-width: 65rem)').matches) {
             const menu = document.querySelector('#native-menu');
-            if (!menu.contains(typography)) throw new Error('Narrow display typography is outside menu');
             document.querySelector('#native-menu-toggle').click();
-            const selectors = [...typography.querySelectorAll('select')]
-              .filter(node => node.getClientRects().length > 0);
-            if (!typography.hidden && (selectors.length === 0 || selectors.some(node => {
-              const rect = node.getBoundingClientRect();
-              const bounds = menu.getBoundingClientRect();
-              return rect.height < 44 || rect.left < bounds.left || rect.right > bounds.right + 1;
-            }))) throw new Error('Narrow typography menu controls are inaccessible or too small');
+            const menuGroups = [
+              {
+                node: typography,
+                outside: 'Narrow display typography is outside menu',
+                invalid: 'Narrow typography menu controls are inaccessible or too small',
+              },
+              {
+                node: lcarsAppearance,
+                outside: 'Narrow LCARS appearance controls are outside menu',
+                invalid: 'Narrow LCARS appearance menu controls are inaccessible or too small',
+              },
+            ];
+            for (const group of menuGroups) {
+              if (group.node.hidden) continue;
+              if (!menu.contains(group.node)) throw new Error(group.outside);
+              const selectors = [...group.node.querySelectorAll('select')]
+                .filter(node => node.getClientRects().length > 0);
+              if (selectors.length === 0 || selectors.some(node => {
+                const rect = node.getBoundingClientRect();
+                const bounds = menu.getBoundingClientRect();
+                return rect.height < 44 || rect.left < bounds.left || rect.right > bounds.right + 1;
+              })) throw new Error(group.invalid);
+            }
             menu.close();
           }
           const overview = document.querySelector('.overview').getBoundingClientRect();
@@ -3829,9 +4566,11 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
         await refreshWhenIdle();
         const outageMarkedStale = document.querySelector('#dashboard-message').textContent.includes('stale');
         const outageVisible = document.querySelector('#dashboard-message').getBoundingClientRect().height > 0;
+        const outageState = document.querySelector('#dashboard-message').dataset.state;
         window.__kioskAudit.offline = false;
         await refreshWhenIdle();
         const recovered = !authenticationRequired && document.querySelector('#status-badge').dataset.state !== 'offline';
+        const recoveredState = document.querySelector('#dashboard-message').dataset.state;
         startEventStream();
         if (document.documentElement.dataset.kioskCompact === 'true') document.querySelector('#native-menu-toggle').click();
         window.__kioskAudit.expired = true;
@@ -3842,13 +4581,15 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
         await refreshRecordings();
         startEventStream();
         reconcileWaterfallDemand();
-        return {geometry, visibleTabs, rejectedPane, liveCanvas, outageMarkedStale, outageVisible, recovered,
+        return {geometry, visibleTabs, rejectedPane, liveCanvas, outageMarkedStale, outageVisible,
+          outageState, recovered, recoveredState,
           loginVisible: document.querySelector('#native-session-status').getBoundingClientRect().height > 0,
           menuClosed: !document.querySelector('#native-menu').open,
           boundedReads: window.__kioskAudit.boundedReads,
           message: document.querySelector('#native-session-status').textContent,
           login: document.querySelector('#native-session-status a')?.getAttribute('href'),
           expired: authenticationRequired, eventsClosed: eventSource === null,
+          loginState: document.querySelector('#dashboard-message').dataset.state,
           waterfallClosed: waterfallAbortController === null,
           requestsAtExpiry, requestsAfter: window.__kioskAudit.requests.length,
           paths: window.__kioskAudit.requests,
@@ -3861,9 +4602,10 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
             : g.overviewHeight > 120 || g.gap > 24 || g.bannerGap > 24 ||
               g.gap < -1 || g.bannerGap < -1 || g.workspaceHeight < 150)) ||
           state.rejectedPane !== 'scanner' || !state.liveCanvas || !state.expired ||
-          !state.outageMarkedStale || !state.outageVisible || !state.loginVisible || !state.menuClosed || !state.recovered || !state.boundedReads ||
+          !state.outageMarkedStale || !state.outageVisible || state.outageState !== 'offline' ||
+          !state.loginVisible || !state.menuClosed || !state.recovered || state.recoveredState !== 'online' || !state.boundedReads ||
           !state.eventsClosed || !state.waterfallClosed || state.requestsAtExpiry !== state.requestsAfter ||
-          !state.message.includes('stale') || !state.login?.endsWith('/auth/display/login') ||
+          !state.message.includes('stale') || state.loginState !== 'offline' || !state.login?.endsWith('/auth/display/login') ||
           state.paths.some(path => /\/(scanner\/|recording|audio)/.test(path)) || state.horizontalOverflow) {
         throw new Error(`display kiosk ${viewport.name} failed: ${JSON.stringify(state)}`);
       }
@@ -4157,6 +4899,7 @@ export async function captureDashboardScreenshot({
             current: document.querySelector("#dashboard-message")?.textContent?.trim() ?? null,
             initial: message.initialMessage,
             mutations: message.mutations,
+            state: document.querySelector("#dashboard-message")?.dataset?.state ?? null,
           },
         };
       })()`,
@@ -4176,6 +4919,7 @@ export async function captureDashboardScreenshot({
     if (
       captureState.message?.initial !== SCREENSHOT_STATUS_MESSAGE ||
       captureState.message?.current !== SCREENSHOT_STATUS_MESSAGE ||
+      captureState.message?.state !== "online" ||
       captureState.message?.mutations !== 0
     ) {
       throw new Error(
@@ -4303,7 +5047,7 @@ async function run(options) {
     console.log(`Chrome: ${chrome}`);
     console.log(`Demo server: ${baseUrl}`);
     if (options.waterfallScreenshotDirectory === null) {
-      console.log("Screenshots: disabled (the 26-image gallery is unchanged)");
+      console.log("Screenshots: disabled (the 48-image gallery is unchanged)");
     } else {
       await mkdir(options.waterfallScreenshotDirectory, {recursive: true});
       console.log(`Waterfall card screenshots: ${options.waterfallScreenshotDirectory}`);
@@ -4327,6 +5071,11 @@ async function run(options) {
         `internal Ingress Diagnostics count mismatch: ${result.ingressDiagnosticsCases}`,
       );
     }
+    if (result.hoverContrastCases !== THEMES.length * VIEWPORTS.length * PANES.length) {
+      throw new Error(
+        `internal hover contrast count mismatch: ${result.hoverContrastCases}`,
+      );
+    }
     if (result.ingressHomeAssistantCases !== THEMES.length * 3) {
       throw new Error(
         `internal Ingress Home Assistant count mismatch: ${result.ingressHomeAssistantCases}`,
@@ -4337,6 +5086,23 @@ async function run(options) {
         `internal LCARS navigation-transition count mismatch: ` +
           `${result.lcarsNavigationTransitionCases}`,
       );
+    }
+    if (result.phoneUnknownHoldCases !== THEMES.length) {
+      throw new Error(
+        `internal phone unknown hold-state count mismatch: ${result.phoneUnknownHoldCases}`,
+      );
+    }
+    if (
+      result.panoramaBoundaryCases !==
+      HERO_PANORAMA_SCENES.length * HERO_PANORAMA_BOUNDARIES.length
+    ) {
+      throw new Error(
+        `internal panoramic-boundary count mismatch: ${result.panoramaBoundaryCases}`,
+      );
+    }
+    if (options.findingsJsonPath !== null) {
+      await writeFindingsReport(options.findingsJsonPath, result);
+      console.log(`Wrote complete browser findings to ${options.findingsJsonPath}`);
     }
     if (result.failures.length > 0) {
       console.error(`\nBrowser acceptance failed with ${result.failures.length} finding(s):`);
@@ -4369,14 +5135,17 @@ async function run(options) {
       console.log(`Wrote ${screenshotPath}`);
     }
     console.log(
-      `PASS: ${result.caseCount} matrix cases plus theme switching, all 35 radio ` +
+      `PASS: ${result.caseCount} matrix cases plus ${result.panoramaBoundaryCases} ` +
+        `hero panoramic-boundary cases, theme switching, all 35 radio ` +
         "fields, Simple/Detail and adaptive screens, trusted Tab/Shift+Tab and " +
-        "pagination focus, WCAG AA normal/forced-color contrast, reduced motion, " +
+        `pagination focus, ${result.hoverContrastCases} explicit workspace-tab hover states, ` +
+        "WCAG AA normal/hover/forced-color contrast, reduced motion, " +
         "enlarged-text scrolling escape, DPR changes, 12 phone recording font " +
-        `variants, ${result.lcarsNavigationTransitionCases} LCARS navigation-breakpoint ` +
-        "cases, prefixed URLs, all 18 " +
+        `variants, ${result.phoneUnknownHoldCases} phone unknown hold-state cases, ` +
+        `${result.lcarsNavigationTransitionCases} LCARS navigation-breakpoint ` +
+        `cases, prefixed URLs, all ${result.ingressHomeAssistantCases} ` +
         `Ingress-only Home Assistant workspaces, ${result.systemPaletteCases} ` +
-        "responsive System-palette cases, all 18 read-only Ingress " +
+        `responsive System-palette cases, all ${result.ingressDiagnosticsCases} read-only Ingress ` +
         "Diagnostics layouts, browser Waterfall duration/pointer controls, and " +
         `${waterfallCard.viewportCases} responsive Home Assistant waterfall-card ` +
         "viewports with elapsed history, display-only pointer input, shared " +

@@ -343,12 +343,14 @@ http://127.0.0.1:8000/
 
 Theme selection is presentation-only and browser-local. The deterministic
 built-in picker order is **System**, **LCARS**, **Matrix-inspired**,
-**First Responder**, **Amateur Radio**, and **Pip-Boy-inspired**. System follows
+**First Responder**, **Amateur Radio**, **Pip-Boy-inspired**, followed by the
+22-theme **Cinematic collection** described below. System follows
 the browser or operating-system light/dark preference and remains the stable
 default and safe fallback. It now frames the shared workspace and prominent
 scanner pane around the established scanner-display proportions, hierarchy,
-status treatment, and adaptive screen profiles. The five custom choices are
-more theatrical while preserving the same dashboard semantics:
+status treatment, and adaptive screen profiles. The five established custom
+choices and the cinematic collection are more theatrical while preserving the
+same dashboard semantics:
 
 When **System** is active, a second browser-local selector appears in the center
 of the overview row. **Follow device** preserves the adaptive behavior above.
@@ -391,7 +393,47 @@ message rather than compressing either one.
   screenshots, sounds, proprietary fonts, copied hardware geometry, or remote
   resources.
 
-The seven choices are built-in packages under the installed
+The **Cinematic collection** adds Mission Control, Cyberpunk Night, Synthwave
+Outrun, Cold War Radar, Dieselpunk Command, Steampunk Telegraph, Retro Arcade,
+Y2K Media Center, Mecha Operations, Comic Book, Wizarding Archive, Gothic
+Cathedral, Fantasy Cartographer, Desert Empire, Carrier Air Wing, Motorsport
+Pit Wall, Noir Detective, Art Deco Radio, Solarpunk Communications, National
+Parks Ranger, Galactic Operations, and Tactical Field. These are original
+project-owned visual systems. They evoke broad genres and operating
+environments without franchise names, logos, characters, screenshots, sounds,
+proprietary typefaces, copied interface geometry, or remote resources. Every
+theme retains the same semantic status colors, visible held-field treatment,
+keyboard behavior, reduced-motion fallback, and forced-colors contract.
+
+Six headline panoramic environments deliberately recompose the wide-screen
+workspace instead of acting as palette swaps or instances of one re-themed
+template: Carrier Air Wing uses a flight-deck/HUD frame, Tactical Field a
+left-side map-console rail, Wizarding Archive an illuminated
+book-and-observatory frame, Galactic Operations a two-row bridge command bank,
+Mission Control a bottom-mounted annunciator switch bank, and Cyberpunk Night
+an asymmetric right-side neon rail. Each owns its scene silhouette, instrument
+layout, materials, motion grammar, and scanner-state reaction. The other 16
+Cinematic choices remain distinct themed colorway treatments for compact and
+general-purpose displays rather than claiming the same panoramic scene depth.
+
+A headline panorama activates only when all three conditions hold: the CSS
+viewport is at least 1280 pixels wide, at least 720 pixels high, and at least a
+3:2 aspect ratio. If any condition is false, that theme uses the common compact
+colorway and horizontal-navigation contract. This deliberately includes
+1366x768 as a panoramic desktop while keeping portrait, short, and narrow
+screens compact. Live panoramas use independent scene-native motion;
+`prefers-reduced-motion` retains the complete static composition and every
+state indication.
+
+Held fields also produce a theme-native supplemental response: Carrier locks
+its target/HUD and deck lights; Tactical locks its route and contacts;
+Wizarding responds through constellation ink, seal, and candlelight; Galactic
+energizes tactical rings and subsystem towers; Mission drives annunciators and
+meters; and Cyberpunk overloads its hologram and neon. The actual held field
+remains independently identified in semantic content, color, and static
+treatment, so the decorative response is never the sole indication.
+
+All 28 choices are built-in packages under the installed
 `sds200/themes/web/<theme-name>/` resource hierarchy. Each directory contains
 only a versioned `manifest.json` and its declared `theme.css`. The manifest
 records schema version 1, the `web` interface, stable theme ID, human label,
@@ -670,6 +712,100 @@ not install fonts, change production font preferences, or replace the gallery.
 
 ![Pip-Boy-inspired theme at a 390x844 CSS viewport and DPR2](assets/web-dashboard/theme-pip-boy-inspired-390x844-dpr2.png)
 
+## Cinematic collection — Full HD references
+
+The cinematic gallery uses one authoritative 1920x1080 Scanner-pane reference
+per theme. Compact and phone behavior remains covered by the browser acceptance
+matrix without multiplying the checked-in documentation assets.
+
+### Mission Control
+
+![Mission Control theme at 1920x1080](assets/web-dashboard/theme-cinematic-mission-control-1920x1080.png)
+
+### Cyberpunk Night
+
+![Cyberpunk Night theme at 1920x1080](assets/web-dashboard/theme-cinematic-cyberpunk-night-1920x1080.png)
+
+### Synthwave Outrun
+
+![Synthwave Outrun theme at 1920x1080](assets/web-dashboard/theme-cinematic-synthwave-1920x1080.png)
+
+### Cold War Radar
+
+![Cold War Radar theme at 1920x1080](assets/web-dashboard/theme-cinematic-cold-war-radar-1920x1080.png)
+
+### Dieselpunk Command
+
+![Dieselpunk Command theme at 1920x1080](assets/web-dashboard/theme-cinematic-dieselpunk-command-1920x1080.png)
+
+### Steampunk Telegraph
+
+![Steampunk Telegraph theme at 1920x1080](assets/web-dashboard/theme-cinematic-steampunk-telegraph-1920x1080.png)
+
+### Retro Arcade
+
+![Retro Arcade theme at 1920x1080](assets/web-dashboard/theme-cinematic-retro-arcade-1920x1080.png)
+
+### Y2K Media Center
+
+![Y2K Media Center theme at 1920x1080](assets/web-dashboard/theme-cinematic-y2k-media-1920x1080.png)
+
+### Mecha Operations
+
+![Mecha Operations theme at 1920x1080](assets/web-dashboard/theme-cinematic-mecha-operations-1920x1080.png)
+
+### Comic Book
+
+![Comic Book theme at 1920x1080](assets/web-dashboard/theme-cinematic-comic-book-1920x1080.png)
+
+### Wizarding Archive
+
+![Wizarding Archive theme at 1920x1080](assets/web-dashboard/theme-cinematic-wizarding-archive-1920x1080.png)
+
+### Gothic Cathedral
+
+![Gothic Cathedral theme at 1920x1080](assets/web-dashboard/theme-cinematic-gothic-cathedral-1920x1080.png)
+
+### Fantasy Cartographer
+
+![Fantasy Cartographer theme at 1920x1080](assets/web-dashboard/theme-cinematic-fantasy-cartographer-1920x1080.png)
+
+### Desert Empire
+
+![Desert Empire theme at 1920x1080](assets/web-dashboard/theme-cinematic-desert-empire-1920x1080.png)
+
+### Carrier Air Wing
+
+![Carrier Air Wing theme at 1920x1080](assets/web-dashboard/theme-cinematic-carrier-air-wing-1920x1080.png)
+
+### Motorsport Pit Wall
+
+![Motorsport Pit Wall theme at 1920x1080](assets/web-dashboard/theme-cinematic-motorsport-pit-wall-1920x1080.png)
+
+### Noir Detective
+
+![Noir Detective theme at 1920x1080](assets/web-dashboard/theme-cinematic-noir-detective-1920x1080.png)
+
+### Art Deco Radio
+
+![Art Deco Radio theme at 1920x1080](assets/web-dashboard/theme-cinematic-art-deco-radio-1920x1080.png)
+
+### Solarpunk Communications
+
+![Solarpunk Communications theme at 1920x1080](assets/web-dashboard/theme-cinematic-solarpunk-1920x1080.png)
+
+### National Parks Ranger
+
+![National Parks Ranger theme at 1920x1080](assets/web-dashboard/theme-cinematic-national-parks-1920x1080.png)
+
+### Galactic Operations
+
+![Galactic Operations theme at 1920x1080](assets/web-dashboard/theme-cinematic-galactic-operations-1920x1080.png)
+
+### Tactical Field
+
+![Tactical Field theme at 1920x1080](assets/web-dashboard/theme-cinematic-tactical-field-1920x1080.png)
+
 ### System Waterfall — 1920x1080
 
 ![System theme Waterfall pane at 1920x1080](assets/web-dashboard/theme-system-waterfall-1920x1080.png)
@@ -751,7 +887,7 @@ exercise optional pointer, scale and telemetry visibility. This fixture is not
 a claim of installed Home Assistant acceptance or a change to scanner cadence.
 
 The audit reuses the same fictional demo service and one isolated Chrome
-session. It resizes that session through all four reference CSS viewports and
+session. It resizes that session through all five reference CSS viewports and
 DPR transitions, exercises every built-in theme and all six panes, drives
 recording pagination and focus, reveals all 35 radio fields, and probes adaptive
 screen mappings, reduced motion, forced colors/high contrast, the browser-zoom
@@ -770,7 +906,7 @@ pixels, or at least 18.66 CSS pixels with a bold weight. This standards-derived
 floor is shared by authoritative visible radio values and enabled control text;
 themes do not receive individual tolerances. The audit writes no gallery
 images. Use `--help` for executable overrides or `--list` to inspect the
-144-case matrix without opening Chrome.
+840-case matrix without opening Chrome.
 
 The browser performs one initial `/api/v1/status` request and opens
 `/api/v1/events` with the same origin. The event response uses
@@ -829,8 +965,10 @@ screens clears values that are no longer present rather than retaining stale
 mode-specific details. Raw `screen` and classified `screen_kind` remain separate
 so an unknown future screen is still visible without being misclassified.
 
-The Scanner pane keeps System, Department, and Channel in one prominent stable
-hierarchy. Its **Auto**, **Hierarchy**, **RF**, **Identity**, and **Special**
+The Scanner pane keeps System and Department on the first row, then Channel and
+Site on the second, in one prominent stable two-by-two hierarchy. The wider
+cells give long configured names room while using the pane's vertical space.
+Its **Auto**, **Hierarchy**, **RF**, **Identity**, and **Special**
 controls make every remaining field group explicitly reachable. Auto uses the
 normalized `screen_kind`: Search and Close Call select the RF group and search
 presentation, while Weather and Tone-Out select the Special group and their

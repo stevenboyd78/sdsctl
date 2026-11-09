@@ -112,9 +112,15 @@ def test_hidden_typography_rule_shares_important_display_layer() -> None:
     # The real-Chrome audit additionally checks computed visibility, menu
     # reachability/touch sizing, and the unchanged phone geometry limits.
     script = files("sds200.web_assets").joinpath("dashboard.js").read_text()
+    assert 'relocate(element("lcars-v2-appearance-pickers"), appearance, true)' in script
     assert 'relocate(element("theme-typography-pickers"), appearance, true)' in script
     assert 'narrowAppearance = window.matchMedia("(max-width: 65rem)")' in script
     assert 'narrowAppearance.addEventListener("change", update)' in script
+    lcars = files("sds200.web_assets").joinpath("lcars-v2.css").read_text()
+    menu_select = lcars.split("#native-menu #lcars-v2-appearance-pickers select {", 1)[1].split(
+        "}", 1
+    )[0]
+    assert "min-height: 44px !important" in menu_select
 
 
 def test_compact_landscape_labels_share_selector_row_without_shrinking_controls() -> None:
@@ -131,10 +137,66 @@ def test_compact_landscape_labels_share_selector_row_without_shrinking_controls(
 
 def test_compact_panes_leave_room_for_taller_bundled_fonts() -> None:
     css = files("sds200.web_assets").joinpath("dashboard-viewport.css").read_text()
-    # In narrow recording rows, actions share BOTH filename/metadata rows.
-    # A second, separate action-height row clips with taller bundled fonts.
+    # Generic phone cards retain their established two-row action contract.
+    # The LCARS frame recovers its extra row space in the theme-specific layer.
     phone = css.split(".recording-item-details strong {", 1)[1].split(".recording-action {", 1)[0]
     assert "grid-column: 1 !important" in phone
+    assert "grid-column: 2 !important" in phone
     assert "grid-row: 1 / 3 !important" in phone
-    landscape = css.split(".waterfall-telemetry > div {", 1)[1]
-    assert "padding-block: 0.1rem !important" in landscape
+    phone_current = css.split(".scanner-hold-current-value {", 1)[1].split(
+        ".scanner-hold-action {", 1
+    )[0]
+    assert "overflow-wrap: anywhere !important" in phone_current
+    assert "white-space: normal !important" in phone_current
+    phone_viewport = css.split("@media (max-width: 44rem) and (min-height: 28rem)", 1)[1].split(
+        "@media (max-width: 26rem) and (min-height: 28rem)", 1
+    )[0]
+    assert ".scanner-hold-scope:has(#scanner-hold-department)" in phone_viewport
+    assert "grid-template-columns: minmax(0, 1fr) 3.95rem !important" in phone_viewport
+    assert "#scanner-hold-department-state" in phone_viewport
+    assert "min-width: 3.95rem !important" in phone_viewport
+    lcars = files("sds200.web_assets").joinpath("lcars-v2.css").read_text()
+    phone_lcars = lcars.split("@media (max-width: 43.99rem) and (min-height: 28rem)", 1)[1].split(
+        "/* A secondary Site line", 1
+    )[0]
+    assert ".recording-list" in phone_lcars
+    assert "gap: 0 !important" in phone_lcars
+    assert ".recording-item" in phone_lcars
+    assert "padding-block: 0 !important" in phone_lcars
+
+
+def test_short_landscape_layout_compacts_each_real_chrome_root_cause() -> None:
+    css = files("sds200.web_assets").joinpath("dashboard-viewport.css").read_text()
+    landscape = css.split(
+        "@media (min-width: 44.01rem) and (max-height: 38rem) and (min-height: 28rem)", 1
+    )[1].split("/* At enlarged text or browser zoom", 1)[0]
+    assert "#radio-group-hierarchy .radio-field-list > div" in landscape
+    assert "grid-template-columns: minmax(0, 1fr) auto !important" in landscape
+    assert "#radio-group-hierarchy .radio-field-list dd" in landscape
+    assert "white-space: nowrap !important" in landscape
+    assert "grid-template-columns: repeat(4, minmax(0, 1fr)) !important" in landscape
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr)) !important" in landscape
+    assert "grid-template-rows: repeat(3, minmax(max-content, 1fr)) !important" in landscape
+    assert "grid-template-columns: repeat(3, minmax(0, 1fr)) !important" in landscape
+    assert "#system-palette-picker" in landscape
+    assert "grid-template-columns: auto minmax(7rem, 11rem) !important" in landscape
+    system_message = landscape.split(':root[data-theme="system"] #dashboard-message {', 1)[1].split(
+        "}", 1
+    )[0]
+    assert "width: 100% !important" in system_message
+    assert "max-width: 100% !important" in system_message
+    assert "justify-self: stretch !important" in system_message
+    assert "padding: 0.25rem 0.5rem !important" in system_message
+    recording_list = landscape.split(".recording-list {", 1)[1].split("}", 1)[0]
+    assert "gap: 0 !important" in recording_list
+    recording_item = landscape.split(".recording-item {", 1)[1].split("}", 1)[0]
+    assert "padding-block: 0 !important" in recording_item
+    saved_playback = landscape.split(".saved-playback {", 1)[1].split("}", 1)[0]
+    assert "grid-template-columns: minmax(0, 1fr) auto !important" in saved_playback
+    saved_audio = landscape.split(".saved-playback audio {", 1)[1].split("}", 1)[0]
+    assert "height: 1.35rem !important" in saved_audio
+    saved_controls = landscape.split(".saved-playback .audio-controls {", 1)[1].split("}", 1)[0]
+    assert "flex-wrap: nowrap !important" in saved_controls
+    assert "padding-block: 0 !important" in landscape
+    assert "font-size: 0.6rem !important" in landscape
+    assert "line-height: 1.2 !important" in landscape

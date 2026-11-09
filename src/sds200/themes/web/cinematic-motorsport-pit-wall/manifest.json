@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "interface": "web",
+  "id": "cinematic-motorsport-pit-wall",
+  "label": "Motorsport Pit Wall",
+  "order": 1150,
+  "stylesheet": "theme.css",
+  "color_scheme": "dark",
+  "theme_colors": {"light": "#0d0f11", "dark": "#0d0f11"}
+}

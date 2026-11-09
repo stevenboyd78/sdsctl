@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import fields
 from pathlib import Path
+from xml.etree import ElementTree
 
 import sds200
 from sds200.state import RadioStateSnapshot
@@ -100,6 +101,7 @@ def test_dashboard_exposes_mode_transition_and_unknown_fallback_hooks() -> None:
 def test_dashboard_adaptive_profiles_offer_explicit_field_inspection() -> None:
     dashboard = _asset("dashboard.html")
     script = _asset("dashboard.js")
+    stylesheet = _asset("dashboard.css")
 
     assert 'id="radio-activity-panel"' in dashboard
     assert 'data-screen-kind="unknown"' in dashboard
@@ -113,8 +115,16 @@ def test_dashboard_adaptive_profiles_offer_explicit_field_inspection() -> None:
     hierarchy_start = dashboard.index('class="scanner-display-hierarchy"')
     hierarchy_end = dashboard.index("</dl>", hierarchy_start)
     hierarchy = dashboard[hierarchy_start:hierarchy_end]
-    for target in ("radio-system", "radio-department", "radio-channel"):
+    primary_targets = ("radio-system", "radio-department", "radio-channel", "radio-site")
+    for target in primary_targets:
         assert f'id="{target}"' in hierarchy
+        assert dashboard.count(f'id="{target}"') == 1
+    assert [hierarchy.index(f'id="{target}"') for target in primary_targets] == sorted(
+        hierarchy.index(f'id="{target}"') for target in primary_targets
+    )
+    assert hierarchy.count('data-hold-state="unknown"') == 4
+
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in stylesheet
 
     for kind, title in (
         ("scanning", "Now scanning"),
@@ -127,10 +137,7 @@ def test_dashboard_adaptive_profiles_offer_explicit_field_inspection() -> None:
         assert f'{kind}: "{title}"' in script
 
     assert "function normalizedScreenKind(value)" in script
-    assert (
-        'typeof value === "string" && Object.hasOwn(RADIO_SCREEN_PROFILES, value)'
-        in script
-    )
+    assert 'typeof value === "string" && Object.hasOwn(RADIO_SCREEN_PROFILES, value)' in script
     assert 'element("radio-activity-panel").dataset.screenKind = screenKind;' in script
     assert "renderRadioProfile(radio.screen_kind);" in script
 
@@ -145,3 +152,173 @@ def test_dashboard_adaptive_profiles_offer_explicit_field_inspection() -> None:
     assert 'radioScanFallback === "detail" ? "hierarchy" : null' in script
     assert "element(`radio-group-${fieldGroup}`).hidden = fieldGroup !== group;" in script
     assert "value = toneOutDisplayValue(value);" in script
+
+
+def test_production_skin_recomposition_is_trusted_and_viewport_bounded() -> None:
+    viewport = _asset("dashboard-viewport.css")
+
+    assert (
+        "@media (min-width: 1280px) and (min-height: 720px) and (min-aspect-ratio: 3/2)"
+    ) in viewport
+    assert ("@media (width < 1280px), (height < 720px), (aspect-ratio < 3/2)") in viewport
+    assert "(max-aspect-ratio: 3/2)" not in viewport
+    for theme in (
+        "cinematic-tactical-field",
+        "cinematic-cyberpunk-night",
+        "cinematic-galactic-operations",
+        "cinematic-mission-control",
+    ):
+        assert f':root[data-theme="{theme}"] .workspace-tabs' in viewport
+    assert "grid-template-rows: repeat(6, minmax(0, 1fr)) !important;" in viewport
+    assert "grid-template-columns: repeat(3, minmax(0, 1fr)) !important;" in viewport
+    assert "grid-template-rows: minmax(0, 1fr) auto !important;" in viewport
+    assert "grid-template-rows: auto minmax(0, 1fr) auto !important;" in viewport
+    assert "grid-template-rows: minmax(0, 1fr) auto auto !important;" in viewport
+
+
+def test_cinematic_vector_stage_is_single_decorative_local_resource() -> None:
+    dashboard = _asset("dashboard.html")
+    stage_start = dashboard.index('<div class="theme-stage" aria-hidden="true">')
+    svg_start = dashboard.index("<svg", stage_start)
+    svg_end = dashboard.index("</svg>", svg_start) + len("</svg>")
+    svg_text = dashboard[svg_start:svg_end]
+    svg = ElementTree.fromstring(svg_text)
+
+    assert dashboard.count('class="cinematic-stage-art"') == 1
+    assert svg.attrib == {
+        "class": "cinematic-stage-art",
+        "viewBox": "0 0 1920 1080",
+        "preserveAspectRatio": "xMidYMid slice",
+        "focusable": "false",
+        "role": "presentation",
+    }
+    for forbidden in (
+        "<text",
+        "<a ",
+        "<foreignObject",
+        "<script",
+        "tabindex=",
+        'role="button"',
+        "href=",
+        "src=",
+        "http://",
+        "https://",
+        "data:",
+    ):
+        assert forbidden not in svg_text
+    assert re.search(r"\son[a-z]+\s*=", svg_text, re.IGNORECASE) is None
+
+
+def test_cinematic_stage_declares_six_independent_visual_vocabulary_roots() -> None:
+    dashboard = _asset("dashboard.html")
+    svg_start = dashboard.index("<svg", dashboard.index('class="theme-stage"'))
+    svg_end = dashboard.index("</svg>", svg_start) + len("</svg>")
+    svg = ElementTree.fromstring(dashboard[svg_start:svg_end])
+    scenes = [element for element in svg.findall("./g") if "data-cinematic-scene" in element.attrib]
+    expected = (
+        "carrier-air-wing",
+        "tactical-field",
+        "wizarding-archive",
+        "galactic-operations",
+        "mission-control",
+        "cyberpunk-night",
+    )
+    assert tuple(scene.attrib["data-cinematic-scene"] for scene in scenes) == expected
+
+    prefixes = {
+        "carrier-air-wing": "carrier-",
+        "tactical-field": "tactical-",
+        "wizarding-archive": "archive-",
+        "galactic-operations": "galactic-",
+        "mission-control": "mission-",
+        "cyberpunk-night": "cyber-",
+    }
+    motifs = {
+        "carrier-air-wing": {
+            "carrier-flight-deck",
+            "carrier-hud",
+            "carrier-radar",
+            "carrier-aircraft",
+        },
+        "tactical-field": {
+            "tactical-contours",
+            "tactical-compass",
+            "tactical-route",
+            "tactical-rugged-case",
+        },
+        "wizarding-archive": {
+            "archive-book",
+            "archive-orrery",
+            "archive-astrolabe",
+            "archive-seal",
+        },
+        "galactic-operations": {
+            "galactic-bridge-window",
+            "galactic-planet",
+            "galactic-subsystem-tower",
+            "galactic-tactical",
+        },
+        "mission-control": {
+            "mission-crt-bank",
+            "mission-plotter",
+            "mission-meters",
+            "mission-switch-bank",
+        },
+        "cyberpunk-night": {
+            "cyber-city",
+            "cyber-transit",
+            "cyber-hologram",
+            "cyber-rain",
+        },
+    }
+    class_sets: dict[str, set[str]] = {}
+    for scene in scenes:
+        name = scene.attrib["data-cinematic-scene"]
+        classes = {
+            class_name
+            for element in scene.iter()
+            for class_name in element.attrib.get("class", "").split()
+        }
+        assert classes
+        assert all(class_name.startswith(prefixes[name]) for class_name in classes)
+        assert motifs[name] <= classes
+        class_sets[name] = classes
+    for index, name in enumerate(expected):
+        for other in expected[index + 1 :]:
+            assert class_sets[name].isdisjoint(class_sets[other])
+
+
+def test_cinematic_stage_defaults_hidden_pointer_transparent_and_high_contrast_safe() -> None:
+    stylesheet = _asset("dashboard.css")
+    viewport = _asset("dashboard-viewport.css")
+
+    stage = re.search(r"\.theme-stage\s*\{(?P<body>[^}]+)\}", stylesheet)
+    art = re.search(r"\.cinematic-stage-art\s*\{(?P<body>[^}]+)\}", stylesheet)
+    scenes = re.search(
+        r"\.cinematic-stage-art \[data-cinematic-scene\]\s*\{(?P<body>[^}]+)\}",
+        stylesheet,
+    )
+    assert stage is not None and art is not None and scenes is not None
+    for declaration in (
+        "display: none",
+        "contain: paint",
+        "overflow: hidden",
+        "pointer-events: none",
+    ):
+        assert declaration in stage["body"]
+    for declaration in ("width: 100%", "height: 100%", "pointer-events: none"):
+        assert declaration in art["body"]
+    assert "display: none" in scenes["body"]
+    assert "vector-effect: non-scaling-stroke" in stylesheet
+    forced_colors = viewport.split("@media (forced-colors: active)", 1)[1]
+    assert ".theme-stage" in forced_colors
+    assert "display: none !important" in forced_colors
+
+
+def test_cinematic_hierarchy_instrument_layout_tracks_ten_fields() -> None:
+    dashboard = _asset("dashboard.html")
+    start = dashboard.index('data-radio-group="hierarchy"')
+    end = dashboard.index("</section>", start)
+    hierarchy = dashboard[start:end]
+
+    assert hierarchy.count("<div><dt>") == 10

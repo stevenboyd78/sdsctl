@@ -377,7 +377,7 @@ function initializeDisplayNavigation(logout) {
   };
   relocate(document.querySelector(".theme-picker"), appearance);
   relocate(element("system-palette-picker"), appearance);
-  relocate(element("lcars-v2-appearance-pickers"), appearance);
+  relocate(element("lcars-v2-appearance-pickers"), appearance, true);
   relocate(element("theme-typography-pickers"), appearance, true);
   const details = (parent, id, selectors) => {
     const disclosure = make("details", null, "native-details");
@@ -2350,7 +2350,7 @@ function setScannerHoldControl(id, scope, available, known, held) {
   button.disabled = !available;
   button.textContent = held ? `Release ${scope}` : `Hold ${scope}`;
   button.setAttribute("aria-pressed", held ? "true" : "false");
-  indicator.textContent = !known ? "Unavailable" : held ? "Held" : "Not held";
+  indicator.textContent = !known ? "Unknown" : held ? "Held" : "Not held";
   indicator.dataset.state = !known ? "unknown" : held ? "held" : "released";
 }
 
@@ -2563,6 +2563,12 @@ function psiLabel(snapshot) {
   return "Unavailable";
 }
 
+function setDashboardMessage(state, message) {
+  const node = element("dashboard-message");
+  node.dataset.state = state;
+  node.textContent = message;
+}
+
 function setOverallStatus(state, label, message) {
   if (authenticationRequired) {
     state = "offline";
@@ -2573,7 +2579,7 @@ function setOverallStatus(state, label, message) {
   document.documentElement.dataset.connectionState = state;
   badge.dataset.state = state;
   badge.textContent = label;
-  element("dashboard-message").textContent = message;
+  setDashboardMessage(state, message);
 }
 
 function renderSnapshot(snapshot, message = null) {
@@ -2893,8 +2899,10 @@ function startEventStream() {
     if (eventSource !== source) {
       return;
     }
-    element("dashboard-message").textContent =
-      "Live events are reconnecting; status polling remains active.";
+    setDashboardMessage(
+      "attention",
+      "Live events are reconnecting; status polling remains active.",
+    );
     scheduleEventStreamRestart(source);
     if (nativeAccessMode) void refreshStatus();
   };

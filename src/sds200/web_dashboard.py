@@ -2012,6 +2012,7 @@ def _dashboard_shell(
     )
     return (
         _read_web_asset("dashboard.html")
+        .replace('  <script src="dashboard-file-preview.js"></script>\n', "")
         .replace(
             'class="workspace-tabs"',
             (

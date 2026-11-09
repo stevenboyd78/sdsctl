@@ -1,0 +1,29 @@
+/* Original precision mecha-operations presentation. */
+:root[data-theme="cinematic-mecha-operations"] {
+  color-scheme: light;
+  --background: #e8ebea; --surface: #f8f9f7; --surface-emphasis: #d7dddc;
+  --text: #172128; --muted: #52616a; --border: #728088;
+  --accent: #0c6f9b; --accent-strong: #064f73; --success: #277a4f;
+  --warning: #93610b; --danger: #c33b36; --focus: #003e5f;
+  --shadow: 0 0.8rem 1.8rem rgb(40 52 58 / 0.25); --radius-small: 0.06rem; --radius-large: 0.1rem;
+  --hold-field-background: #fff0b7; --hold-field-border: #93610b; --hold-field-label: #724907; --hold-field-value: #172128;
+}
+:root[data-theme="cinematic-mecha-operations"] body { background: linear-gradient(120deg, rgb(12 111 155 / 0.08), transparent 30%), repeating-linear-gradient(90deg, rgb(23 33 40 / 0.04) 0 1px, transparent 1px 3rem), repeating-linear-gradient(0deg, rgb(23 33 40 / 0.035) 0 1px, transparent 1px 3rem), #e8ebea; }
+:root[data-theme="cinematic-mecha-operations"] .site-header { position: relative; border: 2px solid #728088; border-left: 0.55rem solid var(--danger); border-radius: 0; background: linear-gradient(110deg, #ffffff, #d3dadb 72%); box-shadow: var(--shadow); }
+:root[data-theme="cinematic-mecha-operations"] .site-header::after { position: absolute; right: 1rem; bottom: 0.5rem; width: min(28rem, 36vw); height: 0.28rem; background: repeating-linear-gradient(135deg, #f0a522 0 0.75rem, #172128 0.75rem 1.5rem); content: ""; }
+:root[data-theme="cinematic-mecha-operations"] :is(.brand h1, .panel h2, .panel h3, .workspace-tabs [role="tab"]) { font-family: "Orbitron", sans-serif; letter-spacing: 0.07em; text-transform: uppercase; }
+:root[data-theme="cinematic-mecha-operations"] .workspace-shell { border: 2px solid #728088; border-radius: 0; background: #f2f4f3; box-shadow: var(--shadow); }
+:root[data-theme="cinematic-mecha-operations"] .workspace-tabs { border-bottom: 2px solid #728088; background: #dbe0df; }
+:root[data-theme="cinematic-mecha-operations"] .workspace-tabs [role="tab"] { border-color: #728088; border-radius: 0; background: linear-gradient(#ffffff, #cdd4d4); color: var(--muted); }
+:root[data-theme="cinematic-mecha-operations"] .workspace-tabs [role="tab"][aria-selected="true"] { border-color: #064f73; background-color: #0c6f9b; background-image: linear-gradient(100deg, #c33b36 0 0.32rem, #0c6f9b 0.32rem); color: #fff; }
+:root[data-theme="cinematic-mecha-operations"] .workspace-deck { background: linear-gradient(#eef1f0, #d5dcdb); }
+:root[data-theme="cinematic-mecha-operations"] [data-workspace-pane] { border-color: #8d999f; background: rgb(248 249 247 / 0.8); }
+:root[data-theme="cinematic-mecha-operations"] .panel { border: 2px solid #728088; border-left: 0.3rem solid var(--accent); border-radius: 0; background: linear-gradient(135deg, rgb(12 111 155 / 0.06), transparent 30%), #f8f9f7; box-shadow: 0 0.55rem 1.2rem rgb(40 52 58 / 0.2); }
+:root[data-theme="cinematic-mecha-operations"] #radio-activity-panel { border-color: #586970; border-left-color: var(--danger); background: linear-gradient(90deg, rgb(12 111 155 / 0.09), transparent 50%), #f5f7f6; }
+:root[data-theme="cinematic-mecha-operations"] .radio-view-controls { border: 2px solid #728088; border-left: 0.35rem solid var(--danger); border-radius: 0; background: #e3e8e7; }
+:root[data-theme="cinematic-mecha-operations"] .radio-field-groups { border-color: #8d999f; background: rgb(12 111 155 / 0.035); }
+:root[data-theme="cinematic-mecha-operations"] :is(button, .recording-action, select, input, textarea) { border-color: #728088; border-radius: 0; background: linear-gradient(#ffffff, #d4dbda); color: var(--text); }
+:root[data-theme="cinematic-mecha-operations"] :is(button, .recording-action):hover:not(:disabled):not([aria-selected="true"]) { border-color: #064f73; background: #d4edf5; }
+:root[data-theme="cinematic-mecha-operations"] .status-badge { border-radius: 0; letter-spacing: 0.08em; text-transform: uppercase; }
+@media (prefers-reduced-motion: reduce) { :root[data-theme="cinematic-mecha-operations"] *, :root[data-theme="cinematic-mecha-operations"] *::before, :root[data-theme="cinematic-mecha-operations"] *::after { animation: none !important; transition: none !important; } }
+@media (forced-colors: active) { :root[data-theme="cinematic-mecha-operations"] { --background: Canvas; --surface: Canvas; --surface-emphasis: Canvas; --text: CanvasText; --muted: CanvasText; --border: CanvasText; --accent: Highlight; --accent-strong: Highlight; --focus: Highlight; } :root[data-theme="cinematic-mecha-operations"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups) { background: Canvas; box-shadow: none; } :root[data-theme="cinematic-mecha-operations"] .site-header::after { display: none; } }

@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "interface": "web",
+  "id": "cinematic-art-deco-radio",
+  "label": "Art Deco Radio",
+  "order": 1170,
+  "stylesheet": "theme.css",
+  "color_scheme": "dark",
+  "theme_colors": {"light": "#0d1514", "dark": "#0d1514"}
+}

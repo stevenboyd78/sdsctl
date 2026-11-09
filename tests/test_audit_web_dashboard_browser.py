@@ -84,7 +84,8 @@ def test_browser_audit_help_documents_scope_and_dependencies() -> None:
     assert completed.returncode == 0
     assert completed.stderr == ""
     for contract in (
-        "all 144 built-in",
+        "all 840 built-in",
+        "30 exact panoramic-boundary",
         "writes no PNGs",
         "enlarged-text",
         "pagination-focus",
@@ -103,6 +104,7 @@ def test_browser_audit_help_documents_scope_and_dependencies() -> None:
         "final-stream cleanup",
         "--waterfall-only",
         "--waterfall-screenshot-dir",
+        "--findings-json",
         "--startup-timeout-ms",
         "three sanitized waterfall-card reference PNGs",
         "Node.js 24 or newer",
@@ -122,8 +124,8 @@ def test_browser_audit_list_is_the_complete_cartesian_matrix() -> None:
     assert completed.stderr == ""
     lines = completed.stdout.splitlines()
     cases = lines[:-1]
-    assert len(cases) == 144
-    assert lines[-1] == "Matrix cases: 144; screenshots written: 0"
+    assert len(cases) == 840
+    assert lines[-1] == "Matrix cases: 840; screenshots written: 0"
 
     themes = {
         "system",
@@ -132,9 +134,32 @@ def test_browser_audit_list_is_the_complete_cartesian_matrix() -> None:
         "first-responder",
         "amateur-radio",
         "pip-boy-inspired",
+        "cinematic-mission-control",
+        "cinematic-cyberpunk-night",
+        "cinematic-synthwave",
+        "cinematic-cold-war-radar",
+        "cinematic-dieselpunk-command",
+        "cinematic-steampunk-telegraph",
+        "cinematic-retro-arcade",
+        "cinematic-y2k-media",
+        "cinematic-mecha-operations",
+        "cinematic-comic-book",
+        "cinematic-wizarding-archive",
+        "cinematic-gothic-cathedral",
+        "cinematic-fantasy-cartographer",
+        "cinematic-desert-empire",
+        "cinematic-carrier-air-wing",
+        "cinematic-motorsport-pit-wall",
+        "cinematic-noir-detective",
+        "cinematic-art-deco-radio",
+        "cinematic-solarpunk",
+        "cinematic-national-parks",
+        "cinematic-galactic-operations",
+        "cinematic-tactical-field",
     }
     viewports = {
         "viewport=1920x1080@1",
+        "viewport=1920x900@1",
         "viewport=1366x768@1",
         "viewport=800x480@1",
         "viewport=390x844@2",
@@ -157,7 +182,7 @@ def test_browser_audit_list_is_the_complete_cartesian_matrix() -> None:
         token for line in cases for token in line.split() if token.startswith("viewport=")
     } == viewports
     assert {token for line in cases for token in line.split() if token.startswith("pane=")} == panes
-    assert len(set(cases)) == 144
+    assert len(set(cases)) == 840
 
 
 def test_browser_audit_rejects_invalid_arguments_without_opening_chrome() -> None:
@@ -172,6 +197,94 @@ def test_browser_audit_rejects_invalid_arguments_without_opening_chrome() -> Non
 
 def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> None:
     source = _SCRIPT.read_text(encoding="utf-8")
+    assert "non-System live daemon status wraps onto multiple lines" not in source
+    click_source = source.split("async function clickElement", 1)[1].split(
+        "async function movePointerAway", 1
+    )[0]
+    assert "elementFromPoint" in click_source
+    assert "owned:" in click_source
+    assert "for (let attempt = 1; attempt <= 2; attempt += 1)" in click_source
+    assert "for (let pointerMove = 1; pointerMove <= 3; pointerMove += 1)" in click_source
+    assert "after 2 settled attempts with 3 pointer moves each" in click_source
+    assert "confirmed.owned && confirmed.hovered" in click_source
+    assert "candidate = confirmed" in click_source
+    assert 'element.matches(":active")' in click_source
+    assert "pressedPointOwned" in click_source
+    assert "centerOwned" in click_source
+    assert "clickWitness?.isTrusted" in click_source
+    assert "clickWitness?.owned" in click_source
+    assert click_source.count('type: "mousePressed"') == 1
+    assert click_source.count('type: "mouseReleased"') == 1
+    acquisition_source = click_source.split("if (\n    point === null", 1)[0]
+    assert 'type: "mousePressed"' not in acquisition_source
+    assert 'type: "mouseReleased"' not in acquisition_source
+    click_scroll_index = click_source.index("element.scrollIntoView")
+    click_settle_index = click_source.index("await frames(cdp)", click_scroll_index)
+    click_initial_measure_index = click_source.index("const rect = element.getBoundingClientRect()")
+    click_initial_hit_index = click_source.index("document.elementFromPoint")
+    click_move_index = click_source.index('type: "mouseMoved"')
+    click_hover_settle_index = click_source.index("await frames(cdp)", click_move_index)
+    click_confirm_index = click_source.index("const confirmed = await evaluate")
+    click_confirm_measure_index = click_source.index(
+        "const rect = element.getBoundingClientRect()", click_confirm_index
+    )
+    click_confirm_hit_index = click_source.index("document.elementFromPoint", click_confirm_index)
+    click_confirm_hover_index = click_source.index(
+        'hovered: element.matches(":hover")', click_confirm_index
+    )
+    click_convergence_index = click_source.index(
+        "confirmed.owned && confirmed.hovered", click_confirm_hover_index
+    )
+    click_exhaustion_index = click_source.index(
+        "after 2 settled attempts with 3 pointer moves each"
+    )
+    click_dispatch_index = click_source.index('type: "mousePressed"')
+    click_press_receipt_index = click_source.index("const pressReceipt", click_dispatch_index)
+    click_release_index = click_source.index('type: "mouseReleased"')
+    click_witness_index = click_source.index("const clickWitness", click_release_index)
+    click_post_dispatch_index = click_source.index("await frames(cdp)", click_release_index)
+    assert (
+        click_scroll_index
+        < click_settle_index
+        < click_initial_measure_index
+        < click_initial_hit_index
+        < click_move_index
+        < click_hover_settle_index
+        < click_confirm_index
+        < click_confirm_measure_index
+        < click_confirm_hit_index
+        < click_confirm_hover_index
+        < click_convergence_index
+        < click_exhaustion_index
+        < click_dispatch_index
+        < click_press_receipt_index
+        < click_release_index
+        < click_post_dispatch_index
+        < click_witness_index
+    )
+
+    hover_source = source.split("async function hoverElement", 1)[1].split(
+        "async function activatePane", 1
+    )[0]
+    assert "elementFromPoint" in hover_source
+    assert "owned:" in hover_source
+    assert "occluded before trusted hover dispatch" in hover_source
+    assert "for (let attempt = 1; attempt <= 2; attempt += 1)" in hover_source
+    assert "after 2 settled attempts" in hover_source
+    scroll_index = hover_source.index("element.scrollIntoView")
+    pre_dispatch_settle_index = hover_source.index("await frames(cdp)", scroll_index)
+    measure_index = hover_source.index("const rect = element.getBoundingClientRect()")
+    dispatch_index = hover_source.index('cdp.send("Input.dispatchMouseEvent"')
+    post_dispatch_settle_index = hover_source.index("await frames(cdp)", dispatch_index)
+    confirmation_index = hover_source.index('hovered: element.matches(":hover")')
+    assert (
+        scroll_index
+        < pre_dispatch_settle_index
+        < measure_index
+        < dispatch_index
+        < post_dispatch_settle_index
+        < confirmation_index
+    )
 
     for contract in (
         "semanticInteractiveSelector",
@@ -182,6 +295,13 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         "modifiers: reverse ? 8 : 0",
         "minimumTextContrast = 4.5",
         "minimumLargeTextContrast = 3",
+        "auditWorkspaceTabHoverContrast",
+        "hoverReadability",
+        "internal hover contrast count mismatch",
+        "explicit workspace-tab hover states",
+        "phoneUnknownHoldState",
+        "unknown-hold-state",
+        "internal phone unknown hold-state count mismatch",
         "controlContext",
         "ingressDiagnosticsLayout",
         "Scanner panel does not fill the Diagnostics workspace",
@@ -195,21 +315,34 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         "desktop typography controls are not centered in their own non-overlapping column",
         "Hidden typography control is rendered",
         "Narrow typography menu controls are inaccessible or too small",
+        "Narrow LCARS appearance menu controls are inaccessible or too small",
         "export async function runMatrix",
         "Advanced Home Assistant guidance is unreachable at the end of the workspace",
         "System palette controller, document, and selector disagree",
         "System palette selector is exposed for ${expectedTheme}",
-        "non-System live daemon status wraps onto multiple lines",
+        "non-System live daemon status has no readable geometry",
+        "non-System live daemon status is outside the overview content box",
+        "non-System live daemon status text is clipped by its own box",
+        "non-System live daemon status overlaps the appearance controls",
         "switchSystemPalette",
         "systemPaletteChoices.slice(1)",
         "responsive System-palette cases",
         "internal Ingress Home Assistant count mismatch",
+        "auditHeroPanoramaBoundaries",
+        "panoramic-boundary count mismatch",
+        "(width < 1280px), (height < 720px), (aspect-ratio < 3/2)",
         "current ${scope} hold state",
         "presentationGeometryFailures",
         "shellGeometryFailures",
         "responsive shell target",
         "120 * rootFontSize",
         "hierarchyFieldAlignmentFailures",
+        "compact Channel field has no separation before Site",
+        "radioFieldCardIntersectionFailures",
+        "overlap by",
+        "headline panoramic scene is not rendered under reduced motion",
+        "const reducedMotionViewport = hero",
+        "? {width: 1920, height: 1080, dpr: 1}",
         '["simple", "scanning", "scanning", "Now scanning", "simple", "none"]',
         '["detail", "scanning", "scanning", "Now scanning", "detail", "hierarchy"]',
         "`${theme}/forced-colors/${pane}`",
@@ -347,8 +480,7 @@ def test_internal_capture_bridge_rejects_bad_arguments_without_opening_chrome() 
 
 def test_browser_audit_is_a_ci_and_release_gate() -> None:
     command = (
-        "node scripts/audit_web_dashboard_browser.mjs "
-        "--startup-timeout-ms 90000 --timeout-ms 30000"
+        "node scripts/audit_web_dashboard_browser.mjs --startup-timeout-ms 90000 --timeout-ms 30000"
     )
     setup_node = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
 
