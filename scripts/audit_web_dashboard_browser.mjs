@@ -57,6 +57,11 @@ export const VIEWPORTS = Object.freeze([
   Object.freeze({name: "phone", width: 390, height: 844, dpr: 2}),
 ]);
 
+const OPERATOR_DRAWER_VIEWPORTS = Object.freeze([
+  ...VIEWPORTS,
+  Object.freeze({name: "zoomed", width: 400, height: 240, dpr: 1}),
+]);
+
 const HERO_PANORAMA_SCENES = Object.freeze([
   Object.freeze({theme: "cinematic-carrier-air-wing", scene: "carrier-air-wing"}),
   Object.freeze({theme: "cinematic-tactical-field", scene: "tactical-field"}),
@@ -137,6 +142,8 @@ palette responsive cases, plus media-preference, enlarged-text,
 pagination-focus, trusted Tab/Shift+Tab traversal, WCAG AA contrast, complete
 adaptive-presentation, DPR-transition, and prefixed-URL probes. It also covers
 the LCARS navigation breakpoint immediately below, at, and above 44rem,
+the operator and display-only Display & session drawer at every reference
+viewport plus 400x240 reachability, focus, backdrop, expiry, and stopped-retry probes,
 phone recording controls with alternative system-font metrics, and
 the Home Assistant Ingress Diagnostics layout across all themes at desktop and
 phone widths, plus the authenticated waterfall card at desktop, 800x480, and
@@ -4555,29 +4562,65 @@ async function auditNativeLogin(cdp, baseUrl, timeoutMs, pageFailures) {
   console.log('PASS: native login Show/Hide, keyboard, masking lifecycle, failed login and no-JS form');
 }
 
-async function auditDisplayNavigation(cdp) {
+async function auditNativeDrawer(cdp, {role, exerciseInteractions = false}) {
   await evaluate(cdp, `window.__sdsctlBrowserAudit = (${browserAuditLibrary.toString()})();`);
   await evaluate(cdp, `(async () => {
     for (let attempt=0; attempt<500 && (refreshInProgress || document.querySelector('#status-badge').dataset.state !== 'online'); attempt++) {
       await new Promise(resolve=>setTimeout(resolve,10));
     }
     stopEventStream();
-    if (refreshInProgress) throw new Error('Display navigation status did not settle');
+    if (refreshInProgress) throw new Error('Native drawer status did not settle');
     await refreshStatus();
   })()`);
   await frames(cdp);
   const assertState = async (expression, label) => {
     if (!await evaluate(cdp, expression)) {
       const focus = await evaluate(cdp, `({tag: document.activeElement.tagName, id: document.activeElement.id, open: document.querySelector('#native-menu').open, controls: [...document.querySelectorAll('#native-menu button, #native-menu select, #native-menu input')].map(e=>[e.tagName,e.id,e.type,e.getClientRects().length,e.tabIndex])})`);
-      throw new Error(`Display navigation: ${label} ${JSON.stringify(focus)}`);
+      throw new Error(`${role} native drawer: ${label} ${JSON.stringify(focus)}`);
     }
   };
+  await assertState(`(() => {
+    const unique = ['native-menu', 'native-menu-toggle', 'theme-select',
+      'system-palette-select', 'theme-font-select', 'theme-typography-select',
+      'lcars-v2-palette-select', 'lcars-v2-type-select'];
+    return unique.every(id => document.querySelectorAll('#' + id).length === 1) &&
+      document.querySelectorAll('#native-menu form[action$="auth/logout"]').length === 1 &&
+      document.querySelector('#native-menu .theme-picker') !== null &&
+      document.querySelector('#native-menu #system-palette-picker') !== null &&
+      document.querySelector('#native-menu #lcars-v2-appearance-pickers') !== null &&
+      document.querySelector('#native-menu #theme-typography-pickers') !== null &&
+      document.querySelector('#native-session-summary').textContent.includes(
+        ${JSON.stringify(role === 'display' ? 'Display-only session' : 'Operator session')}) &&
+      (${role === 'display'} || document.querySelector('.native-menu-views').hidden);
+  })()`, 'one canonical drawer/control set and role summary');
   const workspaceBefore = await evaluate(cdp, `JSON.stringify(document.querySelector('.workspace-shell').getBoundingClientRect().toJSON())`);
   await clickElement(cdp, '#native-menu-toggle');
   await assertState(`JSON.stringify(document.querySelector('.workspace-shell').getBoundingClientRect().toJSON()) === ${JSON.stringify(workspaceBefore)}`, 'overlay must not reflow workspace');
   await assertState(`document.querySelector('#native-menu').open &&
     document.querySelector('#native-menu-toggle').getAttribute('aria-expanded') === 'true' &&
     document.querySelector('#native-menu').contains(document.activeElement)`, 'opening/focus');
+  await assertState(`(() => {
+    const menu = document.querySelector('#native-menu');
+    const bounds = menu.getBoundingClientRect();
+    const controls = [...menu.querySelectorAll('button, select, input, textarea, a[href], [tabindex]')]
+      .filter(node => !node.disabled && node.getClientRects().length > 0);
+    return bounds.left >= -1 && bounds.top >= -1 && bounds.right <= innerWidth + 1 &&
+      bounds.bottom <= innerHeight + 1 && menu.scrollWidth <= menu.clientWidth + 1 &&
+      document.documentElement.scrollWidth <= innerWidth && controls.length > 0 &&
+      controls.every(node => {
+        const rect = node.getBoundingClientRect();
+        return rect.width >= 44 && rect.height >= 44;
+      });
+  })()`, 'viewport containment, internal scrolling and 44px controls');
+  await evaluate(cdp, `document.querySelector('#native-menu form button').scrollIntoView({block: 'nearest'})`);
+  await assertState(`(() => {const r=document.querySelector('#native-menu form button').getBoundingClientRect();
+    return r.top >= 0 && r.bottom <= innerHeight;})()`, 'Sign out reachability');
+  if (!exerciseInteractions) {
+    await pressKey(cdp, 'Escape', 'Escape', 27);
+    await assertState(`!document.querySelector('#native-menu').open &&
+      document.activeElement.id === 'native-menu-toggle'`, 'Escape/focus restoration');
+    return;
+  }
   for (let index = 0; index < 14; index++) {
     await pressKey(cdp, 'Tab', 'Tab', 9);
     await assertState(`document.querySelector('#native-menu').contains(document.activeElement)`, 'modal Tab containment');
@@ -4594,8 +4637,22 @@ async function auditDisplayNavigation(cdp) {
   await cdp.send('Input.dispatchKeyEvent', {type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13});
   await frames(cdp);
   await assertState(`document.querySelector('#native-menu').open`, 'keyboard opening');
-  await cdp.send('Input.dispatchMouseEvent', {type: 'mousePressed', x: 780, y: 200, button: 'left', clickCount: 1});
-  await cdp.send('Input.dispatchMouseEvent', {type: 'mouseReleased', x: 780, y: 200, button: 'left', clickCount: 1});
+  const backdrop = await evaluate(cdp, `(() => {
+    const menu = document.querySelector('#native-menu').getBoundingClientRect();
+    const inside = {x: Math.min(menu.right - 8, menu.left + 24), y: Math.min(menu.bottom - 8, menu.top + 24)};
+    const candidates = [{x: innerWidth - 2, y: 2}, {x: innerWidth - 2, y: innerHeight - 2}, {x: 2, y: innerHeight - 2}];
+    const outside = candidates.find(p => p.x < menu.left || p.x > menu.right || p.y < menu.top || p.y > menu.bottom);
+    if (!outside) throw new Error('Native drawer has no backdrop point');
+    return {inside, outside};
+  })()`);
+  await cdp.send('Input.dispatchMouseEvent', {type: 'mouseMoved', ...backdrop.inside});
+  await cdp.send('Input.dispatchMouseEvent', {type: 'mousePressed', ...backdrop.inside, button: 'left', clickCount: 1});
+  await cdp.send('Input.dispatchMouseEvent', {type: 'mouseMoved', ...backdrop.outside, button: 'left'});
+  await cdp.send('Input.dispatchMouseEvent', {type: 'mouseReleased', ...backdrop.outside, button: 'left', clickCount: 1});
+  await frames(cdp);
+  await assertState(`document.querySelector('#native-menu').open`, 'inside-to-outside drag must not dismiss');
+  await cdp.send('Input.dispatchMouseEvent', {type: 'mousePressed', ...backdrop.outside, button: 'left', clickCount: 1});
+  await cdp.send('Input.dispatchMouseEvent', {type: 'mouseReleased', ...backdrop.outside, button: 'left', clickCount: 1});
   await frames(cdp);
   await assertState(`!document.querySelector('#native-menu').open`, 'outside dismissal');
   const touch = await evaluate(cdp, `(() => {const r=document.querySelector('#native-menu-toggle').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
@@ -4603,7 +4660,111 @@ async function auditDisplayNavigation(cdp) {
   await cdp.send('Input.dispatchTouchEvent', {type: 'touchEnd', touchPoints: []});
   await frames(cdp);
   await assertState(`document.querySelector('#native-menu').open`, 'touch opening');
+  const originalTheme = await evaluate(cdp, `document.querySelector('#theme-select').value`);
+  const appearanceScenarios = [
+    {theme: 'system', controls: [
+      {id: 'system-palette-select', dataset: 'systemPalette'},
+    ]},
+    {theme: 'lcars', controls: [
+      {id: 'lcars-v2-palette-select', dataset: 'lcarsV2Palette'},
+      {id: 'lcars-v2-type-select', dataset: 'lcarsV2Type'},
+    ]},
+    {theme: 'matrix', controls: [
+      {id: 'theme-font-select', dataset: 'themeFont'},
+      {id: 'theme-typography-select', dataset: 'themeTypography'},
+    ]},
+  ];
+  for (const scenario of appearanceScenarios) {
+    const selections = await evaluate(cdp, `(async () => {
+      const menu = document.querySelector('#native-menu');
+      const theme = document.querySelector('#theme-select');
+      theme.value = ${JSON.stringify(scenario.theme)};
+      theme.dispatchEvent(new Event('change', {bubbles: true}));
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      await document.fonts.ready;
+      return ${JSON.stringify(scenario.controls)}.map(({id, dataset}) => {
+        const matches = document.querySelectorAll('#' + id);
+        const control = matches[0];
+        if (matches.length !== 1 || !menu.contains(control) || control.getClientRects().length === 0) {
+          throw new Error(${JSON.stringify(role)} + ' appearance control unavailable: ' + id);
+        }
+        const original = control.value;
+        const selected = [...control.options].map(option => option.value)
+          .find(value => value !== original);
+        if (!selected) throw new Error('Appearance control has no alternate value: ' + id);
+        control.value = selected;
+        control.dispatchEvent(new Event('change', {bubbles: true}));
+        return {id, dataset, original, selected};
+      });
+    })()`);
+    await frames(cdp);
+    await clickElement(cdp, '.native-menu-header button');
+    await clickElement(cdp, '#native-menu-toggle');
+    await assertState(`(() => {
+      const menu = document.querySelector('#native-menu');
+      return document.documentElement.dataset.theme === ${JSON.stringify(scenario.theme)} &&
+        document.querySelector('#theme-select').value === ${JSON.stringify(scenario.theme)} &&
+        ${JSON.stringify(selections)}.every(({id, dataset, selected}) => {
+          const matches = document.querySelectorAll('#' + id);
+          return matches.length === 1 && menu.contains(matches[0]) &&
+            matches[0].value === selected && document.documentElement.dataset[dataset] === selected;
+        });
+    })()`, `${scenario.theme} appearance persistence across close/reopen`);
+    await clickElement(cdp, '.native-menu-header button');
+    await setViewport(cdp, {width: 1366, height: 768, dpr: 1});
+    await clickElement(cdp, '#native-menu-toggle');
+    await assertState(`(() => {
+      const menu = document.querySelector('#native-menu');
+      return document.documentElement.dataset.theme === ${JSON.stringify(scenario.theme)} &&
+        document.querySelector('#theme-select').value === ${JSON.stringify(scenario.theme)} &&
+        ${JSON.stringify(selections)}.every(({id, dataset, selected}) => {
+          const matches = document.querySelectorAll('#' + id);
+          return matches.length === 1 && menu.contains(matches[0]) &&
+            matches[0].value === selected && document.documentElement.dataset[dataset] === selected;
+        });
+    })()`, `${scenario.theme} appearance persistence across viewport resize`);
+    await evaluate(cdp, `(() => {
+      for (const {id, original} of ${JSON.stringify(selections)}) {
+        const control = document.querySelector('#' + id);
+        control.value = original;
+        control.dispatchEvent(new Event('change', {bubbles: true}));
+      }
+    })()`);
+    await frames(cdp);
+    await clickElement(cdp, '.native-menu-header button');
+    await setViewport(cdp, {width: 800, height: 480, dpr: 1});
+    await clickElement(cdp, '#native-menu-toggle');
+  }
+  await cdp.send('Emulation.setEmulatedMedia', {features: [
+    {name: 'prefers-color-scheme', value: 'dark'},
+    {name: 'forced-colors', value: 'active'},
+    {name: 'prefers-reduced-motion', value: 'reduce'},
+  ]});
+  await frames(cdp);
+  const forcedFailures = await evaluate(cdp, `window.__sdsctlBrowserAudit.readabilityFailures(
+    document.querySelector('#native-menu'), ${JSON.stringify(role + ' drawer forced colors')})`);
+  if (forcedFailures.length) throw new Error(`${role} drawer forced colors: ${forcedFailures.join('; ')}`);
+  await cdp.send('Emulation.setEmulatedMedia', {features: [
+    {name: 'prefers-color-scheme', value: 'light'},
+    {name: 'forced-colors', value: 'none'},
+    {name: 'prefers-reduced-motion', value: 'no-preference'},
+  ]});
+  await evaluate(cdp, `(() => {
+    const picker = document.querySelector('#theme-select');
+    picker.value = ${JSON.stringify(originalTheme)};
+    picker.dispatchEvent(new Event('change', {bubbles: true}));
+  })()`);
+  await frames(cdp);
   await clickElement(cdp, '.native-menu-header button');
+}
+
+async function auditDisplayNavigation(cdp) {
+  await auditNativeDrawer(cdp, {role: 'display', exerciseInteractions: true});
+  const assertState = async (expression, label) => {
+    if (!await evaluate(cdp, expression)) {
+      throw new Error(`Display navigation: ${label}`);
+    }
+  };
   for (const theme of THEMES) {
     await clickElement(cdp, '#native-menu-toggle');
     await evaluate(cdp, `(() => {
@@ -4613,6 +4774,22 @@ async function auditDisplayNavigation(cdp) {
     await frames(cdp);
     await assertState(`document.querySelector('#native-menu').open &&
       document.querySelector('#native-menu .theme-picker') !== null`, 'appearance retains menu');
+    for (const appearance of ['light', 'dark', 'forced']) {
+      await cdp.send('Emulation.setEmulatedMedia', {features: [
+        {name: 'prefers-color-scheme', value: appearance === 'dark' ? 'dark' : 'light'},
+        {name: 'forced-colors', value: appearance === 'forced' ? 'active' : 'none'},
+      ]});
+      await frames(cdp);
+      const drawerFailures = await evaluate(cdp, `window.__sdsctlBrowserAudit.readabilityFailures(
+        document.querySelector('#native-menu'), 'Compact Display & session drawer')`);
+      if (drawerFailures.length) {
+        throw new Error(`${theme}/${appearance} drawer: ${drawerFailures.join('; ')}`);
+      }
+    }
+    await cdp.send('Emulation.setEmulatedMedia', {features: [
+      {name: 'prefers-color-scheme', value: 'light'}, {name: 'forced-colors', value: 'none'},
+    ]});
+    await frames(cdp);
     await clickElement(cdp, '[data-kiosk-pane="waterfall"]');
     await assertState(`!document.querySelector('#native-menu').open && activeWorkspacePane === 'waterfall' &&
       document.querySelector('[data-kiosk-pane="waterfall"]').getAttribute('aria-current') === 'page' &&
@@ -4665,10 +4842,10 @@ async function auditDisplayNavigation(cdp) {
   await evaluate(cdp, `document.querySelector('#radio-activity-panel').scrollTop = 0`);
   await setViewport(cdp, {width: 1920, height: 1080, dpr: 1});
   await assertState(`document.documentElement.dataset.kioskCompact === 'false' &&
-    document.querySelector('.site-header .theme-picker') !== null &&
-    document.querySelector('.overview #system-palette-picker') !== null &&
+    document.querySelector('#native-menu .theme-picker') !== null &&
+    document.querySelector('#native-menu #system-palette-picker') !== null &&
     document.querySelector('#waterfall-panel > .waterfall-telemetry') !== null &&
-    document.querySelector('.workspace-tabs').getBoundingClientRect().height > 0`, 'desktop restoration');
+    document.querySelector('.workspace-tabs').getBoundingClientRect().height > 0`, 'desktop drawer and display-detail restoration');
   await setViewport(cdp, {width: 400, height: 240, dpr: 1});
   await clickElement(cdp, '#native-menu-toggle');
   await evaluate(cdp, `document.querySelector('#native-menu form button').scrollIntoView({block: 'nearest'})`);
@@ -4710,6 +4887,7 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
         installAuditLibrary: false, waitForDashboardReady: false,
       });
       if (viewport.width === 800) await auditDisplayNavigation(cdp);
+      else await auditNativeDrawer(cdp, {role: 'display'});
       const state = await evaluate(cdp, `(async () => {
         const refreshWhenIdle = async () => {
           for (let attempt = 0; refreshInProgress && attempt < 500; attempt += 1) {
@@ -4735,40 +4913,16 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
               throw new Error('Hidden typography control is rendered: ' + node.id);
             }
           }
-          if (matchMedia('(max-width: 65rem)').matches) {
-            const menu = document.querySelector('#native-menu');
-            document.querySelector('#native-menu-toggle').click();
-            const menuGroups = [
-              {
-                node: typography,
-                outside: 'Narrow display typography is outside menu',
-                invalid: 'Narrow typography menu controls are inaccessible or too small',
-              },
-              {
-                node: lcarsAppearance,
-                outside: 'Narrow LCARS appearance controls are outside menu',
-                invalid: 'Narrow LCARS appearance menu controls are inaccessible or too small',
-              },
-            ];
-            for (const group of menuGroups) {
-              if (group.node.hidden) continue;
-              if (!menu.contains(group.node)) throw new Error(group.outside);
-              const selectors = [...group.node.querySelectorAll('select')]
-                .filter(node => node.getClientRects().length > 0);
-              if (selectors.length === 0 || selectors.some(node => {
-                const rect = node.getBoundingClientRect();
-                const bounds = menu.getBoundingClientRect();
-                return rect.height < 44 || rect.left < bounds.left || rect.right > bounds.right + 1;
-              })) throw new Error(group.invalid);
-            }
-            menu.close();
+          const menu = document.querySelector('#native-menu');
+          if (![typography, lcarsAppearance, document.querySelector('.theme-picker'),
+              document.querySelector('#system-palette-picker')].every(node => menu.contains(node))) {
+            throw new Error('Canonical appearance controls left the native drawer');
           }
           const overview = document.querySelector('.overview').getBoundingClientRect();
-          const banner = document.querySelector('#native-session-status').getBoundingClientRect();
           const workspace = document.querySelector('.workspace-shell').getBoundingClientRect();
           const header = document.querySelector('.site-header').getBoundingClientRect();
           geometry.push({theme, overviewHeight: overview.height,
-            gap: workspace.top - overview.bottom, bannerGap: overview.top - banner.bottom,
+            gap: workspace.top - overview.bottom,
             compact: document.documentElement.dataset.kioskCompact === 'true',
             headerGap: workspace.top - header.bottom, workspaceHeight: workspace.height});
         }
@@ -4794,7 +4948,7 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
         const recovered = !authenticationRequired && document.querySelector('#status-badge').dataset.state !== 'offline';
         const recoveredState = document.querySelector('#dashboard-message').dataset.state;
         startEventStream();
-        if (document.documentElement.dataset.kioskCompact === 'true') document.querySelector('#native-menu-toggle').click();
+        if (!document.querySelector('#native-menu').open) document.querySelector('#native-menu-toggle').click();
         window.__kioskAudit.expired = true;
         await refreshWhenIdle();
         const requestsAtExpiry = window.__kioskAudit.requests.length;
@@ -4807,6 +4961,10 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
           outageState, recovered, recoveredState,
           loginVisible: document.querySelector('#native-session-status').getBoundingClientRect().height > 0,
           menuClosed: !document.querySelector('#native-menu').open,
+          alertContract: document.querySelector('#native-session-status').getAttribute('role') === 'alert' &&
+            document.querySelector('#native-session-status').getAttribute('aria-live') === 'assertive',
+          staleLogoutDisabled: document.querySelector('#native-menu form').hidden ||
+            document.querySelector('#native-menu form button').disabled,
           boundedReads: window.__kioskAudit.boundedReads,
           message: document.querySelector('#native-session-status').textContent,
           login: document.querySelector('#native-session-status a')?.getAttribute('href'),
@@ -4821,11 +4979,12 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
       if (state.visibleTabs.join(',') !== (compact ? '' : 'scanner,waterfall,diagnostics') ||
           state.geometry.some(g => g.compact !== compact || (compact
             ? g.headerGap > 12 || g.headerGap < -1 || g.workspaceHeight < 330
-            : g.overviewHeight > 120 || g.gap > 24 || g.bannerGap > 24 ||
-              g.gap < -1 || g.bannerGap < -1 || g.workspaceHeight < 150)) ||
+            : g.overviewHeight > 120 || g.gap > 24 ||
+              g.gap < -1 || g.workspaceHeight < 150)) ||
           state.rejectedPane !== 'scanner' || !state.liveCanvas || !state.expired ||
           !state.outageMarkedStale || !state.outageVisible || state.outageState !== 'offline' ||
-          !state.loginVisible || !state.menuClosed || !state.recovered || state.recoveredState !== 'online' || !state.boundedReads ||
+          !state.loginVisible || !state.menuClosed || !state.alertContract || !state.staleLogoutDisabled ||
+          !state.recovered || state.recoveredState !== 'online' || !state.boundedReads ||
           !state.eventsClosed || !state.waterfallClosed || state.requestsAtExpiry !== state.requestsAfter ||
           !state.message.includes('stale') || state.loginState !== 'offline' || !state.login?.endsWith('/auth/display/login') ||
           state.paths.some(path => /\/(scanner\/|recording|audio)/.test(path)) || state.horizontalOverflow) {
@@ -4854,6 +5013,85 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
     console.log('PASS: display-only kiosk geometry, restricted UI, Waterfall, network recovery, expiry and stopped retries');
   } finally {
     await cdp.send("Page.removeScriptToEvaluateOnNewDocument", {identifier: installed.identifier});
+  }
+}
+
+async function auditOperatorDrawer(cdp, baseUrl, timeoutMs, pageFailures) {
+  const baseline = pageFailures.length;
+  const installed = await cdp.send("Page.addScriptToEvaluateOnNewDocument", {source: `
+    (() => {
+      const originalFetch = window.fetch;
+      window.__operatorDrawerAudit = {requests: [], expired: false, boundedReads: true};
+      window.fetch = async (url, options) => {
+        const path = new URL(url, location.href).pathname;
+        window.__operatorDrawerAudit.requests.push(path);
+        if (path === '/auth/session' || path === '/api/v1/status') {
+          window.__operatorDrawerAudit.boundedReads &&= options?.signal instanceof AbortSignal;
+        }
+        if (path === '/auth/session') {
+          return new Response(JSON.stringify({display_only: false, remaining_seconds: 28800}),
+            {headers: {'Content-Type': 'application/json'}});
+        }
+        if (window.__operatorDrawerAudit.expired) return new Response('{}', {status: 401});
+        return originalFetch(url, options);
+      };
+    })();
+  `});
+  try {
+    for (const viewport of OPERATOR_DRAWER_VIEWPORTS) {
+      await setViewport(cdp, viewport);
+      await navigate(cdp, baseUrl + '/?kiosk=operator', timeoutMs, {
+        installAuditLibrary: false, waitForDashboardReady: false,
+      });
+      await auditNativeDrawer(cdp, {
+        role: 'operator', exerciseInteractions: viewport.width === 800,
+      });
+      const state = await evaluate(cdp, `(async () => {
+        const menu = document.querySelector('#native-menu');
+        if (!menu.open) document.querySelector('#native-menu-toggle').click();
+        window.__operatorDrawerAudit.expired = true;
+        await refreshStatus();
+        const requestsAtExpiry = window.__operatorDrawerAudit.requests.length;
+        await refreshStatus();
+        await refreshRecordings();
+        startEventStream();
+        reconcileWaterfallDemand();
+        if (${viewport.width === 800}) await new Promise(resolve => setTimeout(resolve, 2200));
+        const banner = document.querySelector('#native-session-status');
+        const logout = document.querySelector('#native-menu form');
+        return {
+          expired: authenticationRequired,
+          menuClosed: !menu.open,
+          expanded: document.querySelector('#native-menu-toggle').getAttribute('aria-expanded'),
+          loginVisible: banner.getBoundingClientRect().height > 0,
+          alertContract: banner.getAttribute('role') === 'alert' && banner.getAttribute('aria-live') === 'assertive',
+          message: banner.textContent,
+          login: banner.querySelector('a')?.getAttribute('href'),
+          staleLogoutDisabled: logout.hidden || logout.querySelector('button').disabled,
+          eventsClosed: eventSource === null,
+          waterfallClosed: waterfallAbortController === null,
+          boundedReads: window.__operatorDrawerAudit.boundedReads,
+          requestsAtExpiry,
+          requestsAfter: window.__operatorDrawerAudit.requests.length,
+          displayViewsHidden: document.querySelector('.native-menu-views').hidden,
+          displayTitleAbsent: document.querySelector('#native-view-title') === null,
+          controlsVisible: document.querySelector('#pane-tab-controls').getBoundingClientRect().height > 0,
+          horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
+        };
+      })()`);
+      if (!state.expired || !state.menuClosed || state.expanded !== 'false' || !state.loginVisible ||
+          !state.alertContract || !state.message.includes('stale') || !state.login?.endsWith('/auth/login') ||
+          !state.staleLogoutDisabled || !state.eventsClosed || !state.waterfallClosed ||
+          !state.boundedReads || state.requestsAtExpiry !== state.requestsAfter ||
+          !state.displayViewsHidden || !state.displayTitleAbsent ||
+          !state.controlsVisible || state.horizontalOverflow) {
+        throw new Error(`operator drawer ${viewport.name} failed: ${JSON.stringify(state)}`);
+      }
+    }
+    if (pageFailures.length !== baseline) throw new Error('Operator drawer raised browser exceptions.');
+    console.log('PASS: operator Display & session drawer geometry, focus, expiry and stopped retries');
+  } finally {
+    await cdp.send('Page.removeScriptToEvaluateOnNewDocument', {identifier: installed.identifier});
   }
 }
 
@@ -5283,6 +5521,7 @@ async function run(options) {
       return;
     }
     await auditNativeLogin(cdp, baseUrl, options.timeoutMs, pageFailures);
+    await auditOperatorDrawer(cdp, baseUrl, options.timeoutMs, pageFailures);
     await auditDisplayKiosk(cdp, baseUrl, options.timeoutMs, pageFailures);
     const result = await runMatrix(cdp, baseUrl, options.timeoutMs, pageFailures);
     if (result.caseCount !== THEMES.length * VIEWPORTS.length * PANES.length) {

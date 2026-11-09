@@ -105,6 +105,7 @@ def test_browser_audit_help_documents_scope_and_dependencies() -> None:
         "trusted Tab/Shift+Tab",
         "WCAG AA",
         "adaptive-presentation",
+        "operator and display-only Display & session drawer",
         "LCARS navigation breakpoint",
         "alternative system-font metrics",
         "DPR-transition",
@@ -196,6 +197,72 @@ def test_browser_audit_list_is_the_complete_cartesian_matrix() -> None:
     } == viewports
     assert {token for line in cases for token in line.split() if token.startswith("pane=")} == panes
     assert len(set(cases)) == 840
+
+
+def test_browser_audit_covers_both_authenticated_native_drawer_roles() -> None:
+    source = _SCRIPT.read_text(encoding="utf-8")
+    demo = Path("scripts/generate_web_dashboard_screenshots.py").read_text(
+        encoding="utf-8",
+    )
+    operator_source = source.split("async function auditOperatorDrawer", 1)[1].split(
+        "export async function openChrome", 1
+    )[0]
+
+    assert "async function auditNativeDrawer" in source
+    assert "async function auditOperatorDrawer" in source
+    assert "async function auditDisplayKiosk" in source
+    assert "role: 'operator'" in source
+    assert "role: 'display'" in source
+    assert "baseUrl + '/?kiosk=operator'" in source
+    assert 'baseUrl + "/?kiosk=display"' in source
+    assert "const OPERATOR_DRAWER_VIEWPORTS = Object.freeze([" in source
+    assert 'Object.freeze({name: "zoomed", width: 400, height: 240, dpr: 1})' in source
+    assert "for (const viewport of OPERATOR_DRAWER_VIEWPORTS)" in operator_source
+    assert "overlay must not reflow workspace" in source
+    assert "viewport containment, internal scrolling and 44px controls" in source
+    assert "inside-to-outside drag must not dismiss" in source
+    assert "Sign out reachability" in source
+    assert "alertContract" in source
+    assert "staleLogoutDisabled" in source
+    assert "requestsAtExpiry !== state.requestsAfter" in source
+    assert source.index("await auditOperatorDrawer") < source.index("await auditDisplayKiosk")
+    assert 'b"kiosk=operator": b"operator"' in demo
+    assert 'b"kiosk=display": b"display"' in demo
+
+
+def test_browser_audit_persists_each_applicable_appearance_control() -> None:
+    source = _SCRIPT.read_text(encoding="utf-8")
+    drawer_source = source.split("async function auditNativeDrawer", 1)[1].split(
+        "async function auditDisplayNavigation", 1
+    )[0]
+    display_navigation = source.split("async function auditDisplayNavigation", 1)[1].split(
+        "async function auditDisplayKiosk", 1
+    )[0]
+    open_theme_drawer = display_navigation.split("for (const theme of THEMES)", 1)[1].split(
+        "await clickElement(cdp, '[data-kiosk-pane=\"waterfall\"]')", 1
+    )[0]
+    unique_ids = drawer_source.split("const unique = [", 1)[1].split("];", 1)[0]
+
+    assert "const appearanceScenarios = [" in drawer_source
+    for theme, control, dataset in (
+        ("system", "system-palette-select", "systemPalette"),
+        ("lcars", "lcars-v2-palette-select", "lcarsV2Palette"),
+        ("lcars", "lcars-v2-type-select", "lcarsV2Type"),
+        ("matrix", "theme-font-select", "themeFont"),
+        ("matrix", "theme-typography-select", "themeTypography"),
+    ):
+        assert f"theme: '{theme}'" in drawer_source
+        assert f"id: '{control}', dataset: '{dataset}'" in drawer_source
+        assert f"'{control}'" in unique_ids
+    assert "appearance persistence across close/reopen" in drawer_source
+    assert "appearance persistence across viewport resize" in drawer_source
+    assert "await setViewport(cdp, {width: 1366, height: 768, dpr: 1})" in drawer_source
+    assert "await setViewport(cdp, {width: 800, height: 480, dpr: 1})" in drawer_source
+    assert "document.querySelectorAll('#' + id)" in drawer_source
+    assert "for (const appearance of ['light', 'dark', 'forced'])" in open_theme_drawer
+    assert "document.querySelector('#native-menu')" in open_theme_drawer
+    assert "Compact Display & session drawer" in open_theme_drawer
+    assert "drawerFailures.length" in open_theme_drawer
 
 
 def test_browser_audit_rejects_invalid_arguments_without_opening_chrome() -> None:
@@ -447,8 +514,8 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         "(contentLeft + contentRight)",
         "desktop typography controls are not centered in their own non-overlapping column",
         "Hidden typography control is rendered",
-        "Narrow typography menu controls are inaccessible or too small",
-        "Narrow LCARS appearance menu controls are inaccessible or too small",
+        "Canonical appearance controls left the native drawer",
+        "viewport containment, internal scrolling and 44px controls",
         "export async function runMatrix",
         "Advanced Home Assistant guidance is unreachable at the end of the workspace",
         "System palette controller, document, and selector disagree",

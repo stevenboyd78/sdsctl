@@ -133,11 +133,12 @@ const managedDeviceEntry = displayOnly &&
   window.location.href === new URL("device-display", webRootUrl).href;
 let authenticationRequired = false;
 let nativeSessionTimer = null;
+let nativeMenuController = null;
 
 function requireNativeLogin() {
   if (!nativeAccessMode || authenticationRequired) return;
   authenticationRequired = true;
-  document.getElementById("native-menu")?.close();
+  const focusDisplaced = nativeMenuController?.invalidate() ?? false;
   stopNativeSessionActivity("Sign in to resume Waterfall. Last data is stale.");
   document.documentElement.dataset.sessionState = "login-required";
   if (managedDeviceEntry) {
@@ -147,12 +148,15 @@ function requireNativeLogin() {
     return;
   }
   const banner = element("native-session-status");
-  banner.textContent = "Login required — updates stopped; displayed data is stale. ";
   const link = document.createElement("a");
   link.href = webUrl(displayOnly ? "auth/display/login" : "auth/login");
   link.textContent = "Sign in again";
-  banner.append(link);
+  banner.replaceChildren(
+    document.createTextNode("Login required — updates stopped; displayed data is stale. "),
+    link,
+  );
   banner.hidden = false;
+  if (focusDisplaced) link.focus();
   setOverallStatus("offline", "Login required", "Sign in again. Displayed data is stale.");
 }
 
@@ -210,6 +214,7 @@ function connectManagedSignOut(logout) {
   const quiesce = () => {
     if (authenticationRequired) return;
     authenticationRequired = true;
+    nativeMenuController?.invalidate();
     stopNativeSessionActivity("Sign-out requested. Last data is stale.");
     document.documentElement.dataset.sessionState = "signing-out";
     setOverallStatus("offline", "Sign-out requested", "Updates stopped. Await the sign-out result; displayed data is stale.");
@@ -238,11 +243,11 @@ async function initializeNativeSession() {
   if (!nativeAccessMode) return;
   const banner = document.createElement("div");
   banner.id = "native-session-status";
-  banner.className = "notice";
-  banner.setAttribute("role", "status");
-  banner.textContent = displayOnly
-    ? "Display-only session — scanner controls, audio and recordings are disabled. "
-    : "Operator session. ";
+  banner.className = "notice notice-error";
+  banner.setAttribute("role", "alert");
+  banner.setAttribute("aria-live", "assertive");
+  banner.setAttribute("aria-atomic", "true");
+  banner.hidden = true;
   const logout = document.createElement("form");
   logout.method = "post";
   logout.action = webUrl("auth/logout");
@@ -250,9 +255,9 @@ async function initializeNativeSession() {
   button.type = "submit";
   button.textContent = "Sign out";
   logout.append(button);
-  banner.append(logout);
   element("main-content").prepend(banner);
-  if (displayOnly) initializeDisplayNavigation(logout);
+  nativeMenuController = initializeNativeMenu(logout, button);
+  if (displayOnly) initializeDisplayNavigation(nativeMenuController);
   connectManagedSignOut(logout);
   try {
     const response = await dashboardFetch(webUrl("auth/session"), {
@@ -276,19 +281,7 @@ async function initializeNativeSession() {
   }
 }
 
-function syncDisplayNavigation() {
-  const labels = {scanner: "Scanner", waterfall: "Waterfall", diagnostics: "Diagnostics"};
-  const title = document.getElementById("native-view-title");
-  if (title) title.textContent = labels[activeWorkspacePane] ?? "Scanner";
-  for (const button of document.querySelectorAll("[data-kiosk-pane]")) {
-    if (button.dataset.kioskPane === activeWorkspacePane) button.setAttribute("aria-current", "page");
-    else button.removeAttribute("aria-current");
-  }
-}
-
-function initializeDisplayNavigation(logout) {
-  // Presentation only: reuse the authorized pane switcher and existing controls.
-  // No credential, request, or scanner-control capability is added here.
+function initializeNativeMenu(logout, logoutButton) {
   const make = (tag, text, className) => {
     const node = document.createElement(tag);
     if (text) node.textContent = text;
@@ -299,68 +292,177 @@ function initializeDisplayNavigation(logout) {
   const heading = document.querySelector(".brand h1");
   const headingRow = make("div", null, "native-menu-heading");
   heading.before(headingRow);
-  const trigger = make("button", "☰");
+  const trigger = make("button", "Display & session");
   trigger.id = "native-menu-toggle";
   trigger.type = "button";
-  trigger.setAttribute("aria-label", "Open dashboard menu");
+  trigger.setAttribute("aria-label", "Open display and session settings");
   trigger.setAttribute("aria-haspopup", "dialog");
   trigger.setAttribute("aria-controls", "native-menu");
   trigger.setAttribute("aria-expanded", "false");
   headingRow.append(trigger, heading);
-  header.append(make("span", "Display-only", "native-access-label"));
+  if (displayOnly) header.append(make("span", "Display-only", "native-access-label"));
 
   const dialog = make("dialog", null, "native-menu");
   dialog.id = "native-menu";
+  dialog.tabIndex = -1;
   dialog.setAttribute("aria-labelledby", "native-menu-title");
   const menuHeader = make("div", null, "native-menu-header");
-  const title = make("h2", "Dashboard menu");
+  const title = make("h2", "Display & session");
   title.id = "native-menu-title";
-  const close = make("button", "Close menu");
-  close.type = "button";
-  close.addEventListener("click", () => dialog.close());
-  menuHeader.append(title, close);
+  const closeButton = make("button", "Close");
+  closeButton.type = "button";
+  closeButton.setAttribute("aria-label", "Close display and session settings");
+  menuHeader.append(title, closeButton);
   const views = make("nav", null, "native-menu-views");
   views.setAttribute("aria-label", "Dashboard views");
+  views.hidden = true;
+  const appearance = make("section", null, "native-menu-appearance");
+  appearance.setAttribute("aria-label", "Appearance");
+  appearance.append(make("h3", "Appearance"));
+  const session = make("section", null, "native-menu-session");
+  const sessionSummary = make(
+    "p",
+    displayOnly
+      ? "Display-only session — scanner controls, audio and recordings are disabled."
+      : "Operator session — scanner controls, audio and recordings are enabled.",
+  );
+  sessionSummary.id = "native-session-summary";
+  sessionSummary.setAttribute("role", "status");
+  session.append(make("h3", "Session"), sessionSummary, logout);
+  dialog.append(menuHeader, views, appearance, session);
+  document.body.append(dialog);
+
+  for (const node of [
+    document.querySelector(".theme-picker"),
+    element("system-palette-picker"),
+    element("lcars-v2-appearance-pickers"),
+    element("theme-typography-pickers"),
+  ]) {
+    if (!(node instanceof HTMLElement)) throw new Error("Native appearance control is unavailable.");
+    node.before(document.createComment("native drawer control position"));
+    appearance.append(node);
+  }
+
+  let invalidated = false;
+  let restoreFocusOnClose = false;
+  let backdropPointerStartedOutside = false;
+  const outsideDialog = event => {
+    const rect = dialog.getBoundingClientRect();
+    return event.clientX < rect.left || event.clientX > rect.right ||
+      event.clientY < rect.top || event.clientY > rect.bottom;
+  };
+  const focusableControls = () => [...dialog.querySelectorAll(
+    "a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex='-1'])",
+  )].filter(node => !node.disabled &&
+    node.getClientRects().length > 0 &&
+    node.closest("[hidden], [inert], [aria-hidden='true']") === null);
+  const close = ({restoreFocus = true} = {}) => {
+    restoreFocusOnClose = restoreFocus;
+    trigger.setAttribute("aria-expanded", "false");
+    if (dialog.open) dialog.close();
+    else {
+      if (restoreFocus && !invalidated && !authenticationRequired &&
+          trigger.getClientRects().length > 0) trigger.focus();
+      restoreFocusOnClose = false;
+    }
+  };
+  const open = () => {
+    if (dialog.open || invalidated || authenticationRequired) return;
+    restoreFocusOnClose = false;
+    dialog.showModal();
+    trigger.setAttribute("aria-expanded", "true");
+    (focusableControls()[0] ?? dialog).focus();
+  };
+  const invalidate = () => {
+    if (invalidated) return false;
+    const active = document.activeElement;
+    const focusDisplaced = active === trigger || (active instanceof Node && dialog.contains(active));
+    invalidated = true;
+    trigger.disabled = true;
+    logoutButton.disabled = true;
+    logout.hidden = true;
+    sessionSummary.textContent = "Session ended — sign in again to resume updates.";
+    close({restoreFocus: false});
+    return focusDisplaced;
+  };
+
+  trigger.addEventListener("click", () => {
+    if (dialog.open) close();
+    else open();
+  });
+  closeButton.addEventListener("click", () => close());
+  dialog.addEventListener("cancel", event => {
+    event.preventDefault();
+    close();
+  });
+  dialog.addEventListener("close", () => {
+    trigger.setAttribute("aria-expanded", "false");
+    if (restoreFocusOnClose && !invalidated && !authenticationRequired &&
+        trigger.getClientRects().length > 0) trigger.focus();
+    restoreFocusOnClose = false;
+  });
+  dialog.addEventListener("keydown", event => {
+    if (event.key !== "Tab") return;
+    const controls = focusableControls();
+    if (controls.length === 0) {
+      event.preventDefault();
+      dialog.focus();
+      return;
+    }
+    const first = controls[0];
+    const last = controls.at(-1);
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialog)) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+  dialog.addEventListener("pointerdown", event => {
+    backdropPointerStartedOutside = event.target === dialog && outsideDialog(event);
+  });
+  dialog.addEventListener("pointercancel", () => { backdropPointerStartedOutside = false; });
+  dialog.addEventListener("click", event => {
+    const dismiss = backdropPointerStartedOutside && event.target === dialog && outsideDialog(event);
+    backdropPointerStartedOutside = false;
+    if (dismiss) close();
+  });
+
+  return {dialog, trigger, views, appearance, sessionSummary, open, close, invalidate};
+}
+
+function syncDisplayNavigation() {
+  const labels = {scanner: "Scanner", waterfall: "Waterfall", diagnostics: "Diagnostics"};
+  const title = document.getElementById("native-view-title");
+  if (title) title.textContent = labels[activeWorkspacePane] ?? "Scanner";
+  for (const button of document.querySelectorAll("[data-kiosk-pane]")) {
+    if (button.dataset.kioskPane === activeWorkspacePane) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  }
+}
+
+function initializeDisplayNavigation(menu) {
+  // Presentation only: reuse the authorized pane switcher and existing controls.
+  // No credential, request, or scanner-control capability is added here.
+  const make = (tag, text, className) => {
+    const node = document.createElement(tag);
+    if (text) node.textContent = text;
+    if (className) node.className = className;
+    return node;
+  };
+  const {views, close, trigger} = menu;
   for (const [pane, label] of Object.entries({scanner: "Scanner", waterfall: "Waterfall", diagnostics: "Diagnostics"})) {
     const button = make("button", label);
     button.type = "button";
     button.dataset.kioskPane = pane;
     button.addEventListener("click", () => {
       activateWorkspacePane(pane);
-      dialog.close();
+      close({restoreFocus: false});
       element("native-view-title").focus();
     });
     views.append(button);
   }
-  const appearance = make("section", null, "native-menu-appearance");
-  appearance.setAttribute("aria-label", "Appearance");
-  appearance.append(make("h3", "Appearance"));
-  const session = make("section", null, "native-menu-session");
-  session.append(make("h3", "Session"), make("p", "Display-only — scanner controls, audio and recordings are disabled."), logout);
-  dialog.append(menuHeader, views, appearance, session);
-  document.body.append(dialog);
-  trigger.addEventListener("click", () => {
-    if (dialog.open) dialog.close();
-    else { dialog.showModal(); trigger.setAttribute("aria-expanded", "true"); }
-  });
-  dialog.addEventListener("close", () => trigger.setAttribute("aria-expanded", "false"));
-  dialog.addEventListener("keydown", event => {
-    if (event.key !== "Tab") return;
-    const controls = [...dialog.querySelectorAll("button, select, a[href]")]
-      .filter(node => !node.disabled && node.getClientRects().length > 0);
-    const first = controls[0];
-    const last = controls.at(-1);
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault(); last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault(); first.focus();
-    }
-  });
-  dialog.addEventListener("click", event => {
-    if (event.target !== dialog) return;
-    const rect = dialog.getBoundingClientRect();
-    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
-  });
 
   const viewTitle = make("h2", "Scanner", "native-view-title");
   viewTitle.id = "native-view-title";
@@ -368,17 +470,13 @@ function initializeDisplayNavigation(logout) {
   document.querySelector(".workspace-tabs").after(viewTitle);
 
   // Remember exact original positions: resizing restores desktop DOM order,
-  // IDs, listeners, theme selection, field inspection and current stream state.
+  // IDs, listeners, field inspection and current stream state.
   const relocations = [];
-  const relocate = (node, destination, narrowAppearance = false) => {
+  const relocate = (node, destination) => {
     const anchor = document.createComment("native compact control position");
     node.before(anchor);
-    relocations.push({node, destination, anchor, narrowAppearance});
+    relocations.push({node, destination, anchor});
   };
-  relocate(document.querySelector(".theme-picker"), appearance);
-  relocate(element("system-palette-picker"), appearance);
-  relocate(element("lcars-v2-appearance-pickers"), appearance, true);
-  relocate(element("theme-typography-pickers"), appearance, true);
   const details = (parent, id, selectors) => {
     const disclosure = make("details", null, "native-details");
     disclosure.id = id;
@@ -415,25 +513,19 @@ function initializeDisplayNavigation(logout) {
   scannerDetails.before(summary("native-scanner-summary", [["Frequency", "radio-frequency"], ["Modulation", "radio-modulation"], ["Signal", "radio-signal"], ["RSSI", "radio-rssi"]]));
   waterfallDetails.before(summary("native-waterfall-summary", [["Lower", "waterfall-frequency-lower"], ["Center", "waterfall-frequency-center"], ["Upper", "waterfall-frequency-upper"], ["Frame rate", "waterfall-frame-rate"]]));
   const compact = window.matchMedia("(max-width: 60rem) and (max-height: 40rem)");
-  // Tall phones keep their ordinary pane layout, but a second overview row of
-  // typography controls steals plot space. Reuse the same menu/controls rather
-  // than shrinking touch targets or removing the user's font preferences.
-  const narrowAppearance = window.matchMedia("(max-width: 65rem)");
   const update = () => {
     const focused = document.activeElement;
-    dialog.close();
+    close({restoreFocus: false});
     document.documentElement.dataset.kioskCompact = String(compact.matches);
     views.hidden = !compact.matches;
-    appearance.hidden = !compact.matches && !narrowAppearance.matches;
-    for (const {node, destination, anchor, narrowAppearance: narrow} of relocations) {
-      if (compact.matches || (narrow && narrowAppearance.matches)) destination.append(node);
+    for (const {node, destination, anchor} of relocations) {
+      if (compact.matches) destination.append(node);
       else anchor.after(node);
     }
     if (focused instanceof HTMLElement && focused !== document.body && focused.getClientRects().length === 0) trigger.focus();
     syncDisplayNavigation();
   };
   compact.addEventListener("change", update);
-  narrowAppearance.addEventListener("change", update);
   update();
 }
 

@@ -257,6 +257,15 @@ failure budget. Existing operator login remains unchanged when no display
 password is configured. `/auth/session` exposes only the authenticated session's
 role and remaining absolute lifetime, without daemon access or credentials.
 
+Authenticated operator and display-only dashboards share one modal
+**Display & session** drawer. It contains the healthy role/session summary,
+canonical Theme/palette/typography controls and the single logout form.
+Compact display-only sessions additionally expose their permitted Scanner,
+Waterfall and Diagnostics views there; their API and pane restrictions do not
+change. Authentication expiry or an HTTP 401 closes and invalidates the drawer,
+stops native activity, and leaves a prominent sign-in-required/stale-data alert
+and role-correct login link visible outside it.
+
 Failed-login accounting uses a one-minute window bounded per peer, across the
 process, and to at most 256 tracked peers. Limits and concurrent-derivation
 admission are checked before spending scrypt work, and malformed submissions
@@ -898,6 +907,14 @@ with an independent inventory of rendered enabled semantic controls. Every
 scanner matrix case selects both Simple and Detail and applies the same
 geometry, clipping, and readability checks to scanning, search, Close Call,
 weather, Tone-Out, and unknown automatic presentations.
+
+The same Real-Chrome acceptance also opens the authenticated native
+**Display & session** drawer for operator and display-only fixtures at the
+authoritative viewports, plus the 400×240 zoom-reachability case. It verifies
+zero workspace reflow, internal scrolling, 44-pixel targets, unique canonical
+controls, keyboard/touch dismissal and focus restoration, appearance
+persistence, compact display-only view switching, and expiry/401 recovery with
+the drawer already open.
 
 Normal and forced-color checks use browser-computed foreground, opacity, and
 ancestor-composited background colors. The audit applies the WCAG 2.x AA text
