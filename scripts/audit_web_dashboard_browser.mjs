@@ -1028,6 +1028,7 @@ let trustedClickSequence = 0;
 const TRUSTED_CLICK_MAX_ATTEMPTS = 3;
 const TRUSTED_CLICK_MAX_POINTER_MOVES = 3;
 const TRUSTED_CLICK_MAX_PHYSICAL_ATTEMPTS = 2;
+const TRUSTED_CLICK_SAFE_RELEASE_POINT = Object.freeze({x: -1, y: -1});
 
 function sameClickGeometry(left, right) {
   return left !== null && right !== null &&
@@ -1400,7 +1401,15 @@ async function clickElementWithRecovery(cdp, selector, physicalAttempt) {
   let pressReceipt = null;
   let pressValid = false;
   let pressSucceeded = false;
-  let releasePoint = point;
+  // If pointer-down moved the compact navigation, the accepted coordinate can
+  // now belong to an adjacent control. Keep the fallback release outside the
+  // viewport and neutral: Chrome synthesizes a root click even for an
+  // off-viewport left release with clickCount zero, while a button-none release
+  // cancels the invalid sequence without a mouseup or DOM click. A valid
+  // receipt replaces this with the intended target's current center and uses
+  // the normal left-button release. The document witness below remains the
+  // authority for whether any click occurred before bounded reacquisition.
+  let releasePoint = TRUSTED_CLICK_SAFE_RELEASE_POINT;
   try {
     try {
       await cdp.send("Input.dispatchMouseEvent", {
@@ -1447,8 +1456,8 @@ async function clickElementWithRecovery(cdp, selector, physicalAttempt) {
       } finally {
         try {
           await cdp.send("Input.dispatchMouseEvent", {
-            button: "left",
-            clickCount: 1,
+            button: pressValid ? "left" : "none",
+            clickCount: pressValid ? 1 : 0,
             type: "mouseReleased",
             x: releasePoint.x,
             y: releasePoint.y,

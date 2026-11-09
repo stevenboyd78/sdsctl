@@ -330,6 +330,11 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
     assert "centerOwned" in click_source
     assert "clickWitness?.isTrusted" in click_source
     assert "clickWitness?.owned" in click_source
+    assert "TRUSTED_CLICK_SAFE_RELEASE_POINT" in click_source
+    assert "let releasePoint = TRUSTED_CLICK_SAFE_RELEASE_POINT" in click_source
+    assert "if (pressValid) releasePoint = pressReceipt" in click_source
+    assert 'button: pressValid ? "left" : "none"' in click_source
+    assert "clickCount: pressValid ? 1 : 0" in click_source
     assert click_source.count('type: "mousePressed"') == 1
     assert click_source.count('type: "mouseReleased"') == 1
     acquisition_source = click_source.split("if (\n    point === null", 1)[0]

@@ -551,9 +551,11 @@ test("post-press protocol rejection still releases and cleans the witness", asyn
   assert.equal(presses.length, 1);
   assert.equal(releases.length, 1);
   assert.deepEqual({x: releases[0].x, y: releases[0].y}, {
-    x: GEOMETRY_A.x,
-    y: GEOMETRY_A.y,
+    x: -1,
+    y: -1,
   });
+  assert.equal(releases[0].button, "none");
+  assert.equal(releases[0].clickCount, 0);
   assert.equal(cleanup.length, 1);
   assert.ok(cdp.events.indexOf(presses[0]) < cdp.events.indexOf(releases[0]));
   assert.ok(cdp.events.indexOf(releases[0]) < cdp.events.indexOf(cleanup[0]));
@@ -592,10 +594,19 @@ test("post-press movement retries once after a document witness proves no click"
   assert.equal(cdp.events.filter(event => event.kind === "witness-armed").length, 2);
   assert.equal(cdp.events.filter(event => event.kind === "witness-disarmed").length, 2);
   assert.equal(pointerAwayEvents(cdp).length, 1);
+  assert.deepEqual({x: releases[0].x, y: releases[0].y}, {x: -1, y: -1});
+  assert.equal(releases[0].button, "none");
+  assert.equal(releases[0].clickCount, 0);
   assert.deepEqual({x: presses[1].x, y: presses[1].y}, {
     x: GEOMETRY_B.x,
     y: GEOMETRY_B.y,
   });
+  assert.deepEqual({x: releases[1].x, y: releases[1].y}, {
+    x: GEOMETRY_B.x,
+    y: GEOMETRY_B.y,
+  });
+  assert.equal(releases[1].button, "left");
+  assert.equal(releases[1].clickCount, 1);
   assert.equal(cdp.witnessActive, false);
 });
 
@@ -621,7 +632,11 @@ test("post-press movement never retries after any click was witnessed", async ()
   );
 
   assert.equal(cdp.events.filter(event => event.type === "mousePressed").length, 1);
-  assert.equal(cdp.events.filter(event => event.type === "mouseReleased").length, 1);
+  const releases = cdp.events.filter(event => event.type === "mouseReleased");
+  assert.equal(releases.length, 1);
+  assert.deepEqual({x: releases[0].x, y: releases[0].y}, {x: -1, y: -1});
+  assert.equal(releases[0].button, "none");
+  assert.equal(releases[0].clickCount, 0);
   assert.equal(cdp.events.filter(event => event.kind === "witness-armed").length, 1);
   assert.equal(pointerAwayEvents(cdp).length, 0);
   assert.equal(cdp.witnessActive, false);
@@ -658,7 +673,16 @@ test("persistent post-press movement exhausts one safe retry", async () => {
   );
 
   assert.equal(cdp.events.filter(event => event.type === "mousePressed").length, 2);
-  assert.equal(cdp.events.filter(event => event.type === "mouseReleased").length, 2);
+  const releases = cdp.events.filter(event => event.type === "mouseReleased");
+  assert.equal(releases.length, 2);
+  assert.deepEqual(
+    releases.map(({x, y}) => ({x, y})),
+    [{x: -1, y: -1}, {x: -1, y: -1}],
+  );
+  assert.deepEqual(
+    releases.map(({button, clickCount}) => ({button, clickCount})),
+    [{button: "none", clickCount: 0}, {button: "none", clickCount: 0}],
+  );
   assert.equal(cdp.events.filter(event => event.kind === "witness-armed").length, 2);
   assert.equal(pointerAwayEvents(cdp).length, 1);
   assert.equal(cdp.witnessActive, false);
