@@ -8,6 +8,7 @@ import {
   captureChildOutput,
   parseArguments,
   serializeFindingsReport,
+  stopChild,
   waitForHttp,
   writeFindingsReport,
 } from './audit_web_dashboard_browser.mjs';
@@ -178,6 +179,18 @@ test('an exited child remains a failure without making an HTTP request', async (
   });
 });
 
+test('a signal-terminated child remains a failure without making an HTTP request', async () => {
+  await assert.rejects(waitForHttp(url, 30000, {exitCode: null, signalCode: 'SIGTERM'}, {
+    now: () => 0,
+    fetcher: async () => assert.fail('Child already exited from a signal'),
+  }), error => {
+    assert.match(error.message, /process exited before/);
+    assert.equal(JSON.parse(error.message.split('; readiness=')[1]).signalCode, 'SIGTERM');
+    assert.equal(JSON.parse(error.message.split('; readiness=')[1]).attempts, 0);
+    return true;
+  });
+});
+
 test('many distinct failures cannot make an unbounded readiness report', async () => {
   let now = 0, code = 0;
   await assert.rejects(waitForHttp(url, 2000, null, {
@@ -219,4 +232,89 @@ test('large child chunks retain a bounded tail and spawn errors are captured', (
   child.emit('error', Object.assign(new Error('fixture spawn'), {code: 'ENOENT'}));
   assert.equal(output().length, 16000);
   assert.ok(output().endsWith('[+0ms] process error=ENOENT\n'));
+});
+
+function fakeChild({exitCode = null, signalCode = null, onKill = () => true} = {}) {
+  const child = Object.assign(new EventEmitter(), {exitCode, signalCode, kills: []});
+  child.kill = signal => {
+    child.kills.push(signal);
+    return onKill(child, signal);
+  };
+  return child;
+}
+
+test('child cleanup is a no-op after normal or signal termination', async () => {
+  const exited = fakeChild({exitCode: 0});
+  const signaled = fakeChild({signalCode: 'SIGTERM'});
+  await stopChild(exited, {termTimeoutMs: 5, killTimeoutMs: 5});
+  await stopChild(signaled, {termTimeoutMs: 5, killTimeoutMs: 5});
+  assert.deepEqual(exited.kills, []);
+  assert.deepEqual(signaled.kills, []);
+  assert.equal(exited.listenerCount('exit'), 0);
+  assert.equal(signaled.listenerCount('exit'), 0);
+});
+
+test('child cleanup observes a synchronous SIGTERM exit', async () => {
+  const child = fakeChild({onKill: (fixture, signal) => {
+    fixture.signalCode = signal;
+    fixture.emit('exit', null, signal);
+    return true;
+  }});
+  await stopChild(child, {termTimeoutMs: 50, killTimeoutMs: 50});
+  assert.deepEqual(child.kills, ['SIGTERM']);
+  assert.equal(child.listenerCount('exit'), 0);
+});
+
+test('child cleanup clears the graceful waiter after an asynchronous exit', async () => {
+  const child = fakeChild({onKill: (fixture, signal) => {
+    setImmediate(() => {
+      fixture.signalCode = signal;
+      fixture.emit('exit', null, signal);
+    });
+    return true;
+  }});
+  await stopChild(child, {termTimeoutMs: 50, killTimeoutMs: 50});
+  assert.deepEqual(child.kills, ['SIGTERM']);
+  assert.equal(child.listenerCount('exit'), 0);
+});
+
+test('child cleanup installs the second waiter before synchronous SIGKILL exit', async () => {
+  const child = fakeChild({onKill: (fixture, signal) => {
+    if (signal === 'SIGKILL') {
+      fixture.signalCode = signal;
+      fixture.emit('exit', null, signal);
+    }
+    return true;
+  }});
+  await stopChild(child, {termTimeoutMs: 5, killTimeoutMs: 50});
+  assert.deepEqual(child.kills, ['SIGTERM', 'SIGKILL']);
+  assert.equal(child.listenerCount('exit'), 0);
+});
+
+test('child cleanup rejects within both bounded waits when exit is never observed', async () => {
+  const child = fakeChild();
+  await assert.rejects(
+    stopChild(child, {termTimeoutMs: 5, killTimeoutMs: 5}),
+    /child did not exit after SIGTERM \(5ms\) and SIGKILL \(5ms\)/,
+  );
+  assert.deepEqual(child.kills, ['SIGTERM', 'SIGKILL']);
+  assert.equal(child.listenerCount('exit'), 0);
+});
+
+test('concurrent child cleanup callers share one signal sequence', async () => {
+  const child = fakeChild({onKill: (fixture, signal) => {
+    setImmediate(() => {
+      fixture.signalCode = signal;
+      fixture.emit('exit', null, signal);
+    });
+    return true;
+  }});
+  const first = stopChild(child, {termTimeoutMs: 50, killTimeoutMs: 50});
+  const second = stopChild(child, {termTimeoutMs: 50, killTimeoutMs: 50});
+  assert.equal(first, second);
+  await Promise.all([first, second]);
+  assert.deepEqual(child.kills, ['SIGTERM']);
+  assert.equal(child.listenerCount('exit'), 0);
+  await stopChild(child, {termTimeoutMs: 5, killTimeoutMs: 5});
+  assert.deepEqual(child.kills, ['SIGTERM']);
 });

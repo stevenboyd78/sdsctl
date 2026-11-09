@@ -198,13 +198,93 @@ def test_browser_audit_rejects_invalid_arguments_without_opening_chrome() -> Non
 def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> None:
     source = _SCRIPT.read_text(encoding="utf-8")
     assert "non-System live daemon status wraps onto multiple lines" not in source
+    click_source = source.split("async function clickElement", 1)[1].split(
+        "async function movePointerAway", 1
+    )[0]
+    assert "elementFromPoint" in click_source
+    assert "owned:" in click_source
+    assert "for (let attempt = 1; attempt <= 2; attempt += 1)" in click_source
+    assert "for (let pointerMove = 1; pointerMove <= 3; pointerMove += 1)" in click_source
+    assert "after 2 settled attempts with 3 pointer moves each" in click_source
+    assert "confirmed.owned && confirmed.hovered" in click_source
+    assert "candidate = confirmed" in click_source
+    assert 'element.matches(":active")' in click_source
+    assert "pressedPointOwned" in click_source
+    assert "centerOwned" in click_source
+    assert "clickWitness?.isTrusted" in click_source
+    assert "clickWitness?.owned" in click_source
+    assert click_source.count('type: "mousePressed"') == 1
+    assert click_source.count('type: "mouseReleased"') == 1
+    acquisition_source = click_source.split("if (\n    point === null", 1)[0]
+    assert 'type: "mousePressed"' not in acquisition_source
+    assert 'type: "mouseReleased"' not in acquisition_source
+    click_scroll_index = click_source.index("element.scrollIntoView")
+    click_settle_index = click_source.index("await frames(cdp)", click_scroll_index)
+    click_initial_measure_index = click_source.index("const rect = element.getBoundingClientRect()")
+    click_initial_hit_index = click_source.index("document.elementFromPoint")
+    click_move_index = click_source.index('type: "mouseMoved"')
+    click_hover_settle_index = click_source.index("await frames(cdp)", click_move_index)
+    click_confirm_index = click_source.index("const confirmed = await evaluate")
+    click_confirm_measure_index = click_source.index(
+        "const rect = element.getBoundingClientRect()", click_confirm_index
+    )
+    click_confirm_hit_index = click_source.index("document.elementFromPoint", click_confirm_index)
+    click_confirm_hover_index = click_source.index(
+        'hovered: element.matches(":hover")', click_confirm_index
+    )
+    click_convergence_index = click_source.index(
+        "confirmed.owned && confirmed.hovered", click_confirm_hover_index
+    )
+    click_exhaustion_index = click_source.index(
+        "after 2 settled attempts with 3 pointer moves each"
+    )
+    click_dispatch_index = click_source.index('type: "mousePressed"')
+    click_press_receipt_index = click_source.index("const pressReceipt", click_dispatch_index)
+    click_release_index = click_source.index('type: "mouseReleased"')
+    click_witness_index = click_source.index("const clickWitness", click_release_index)
+    click_post_dispatch_index = click_source.index("await frames(cdp)", click_release_index)
+    assert (
+        click_scroll_index
+        < click_settle_index
+        < click_initial_measure_index
+        < click_initial_hit_index
+        < click_move_index
+        < click_hover_settle_index
+        < click_confirm_index
+        < click_confirm_measure_index
+        < click_confirm_hit_index
+        < click_confirm_hover_index
+        < click_convergence_index
+        < click_exhaustion_index
+        < click_dispatch_index
+        < click_press_receipt_index
+        < click_release_index
+        < click_post_dispatch_index
+        < click_witness_index
+    )
+
     hover_source = source.split("async function hoverElement", 1)[1].split(
         "async function activatePane", 1
     )[0]
     assert "elementFromPoint" in hover_source
     assert "owned:" in hover_source
     assert "occluded before trusted hover dispatch" in hover_source
-    assert "await frames(cdp)" not in hover_source
+    assert "for (let attempt = 1; attempt <= 2; attempt += 1)" in hover_source
+    assert "after 2 settled attempts" in hover_source
+    scroll_index = hover_source.index("element.scrollIntoView")
+    pre_dispatch_settle_index = hover_source.index("await frames(cdp)", scroll_index)
+    measure_index = hover_source.index("const rect = element.getBoundingClientRect()")
+    dispatch_index = hover_source.index('cdp.send("Input.dispatchMouseEvent"')
+    post_dispatch_settle_index = hover_source.index("await frames(cdp)", dispatch_index)
+    confirmation_index = hover_source.index('hovered: element.matches(":hover")')
+    assert (
+        scroll_index
+        < pre_dispatch_settle_index
+        < measure_index
+        < dispatch_index
+        < post_dispatch_settle_index
+        < confirmation_index
+    )
 
     for contract in (
         "semanticInteractiveSelector",

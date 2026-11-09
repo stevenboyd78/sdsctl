@@ -381,7 +381,7 @@ export async function waitForHttp(url, timeoutMs, child = null, {
     attempts, outcomes: Object.fromEntries(outcomes),
     exitCode: child?.exitCode ?? null, signalCode: child?.signalCode ?? null});
   while (now() < deadline) {
-    if (child !== null && child.exitCode !== null) {
+    if (child !== null && (child.exitCode !== null || child.signalCode !== null)) {
       throw new Error(`process exited before ${url} became ready; readiness=${diagnostic()}`);
     }
     attempts += 1;
@@ -402,17 +402,85 @@ export async function waitForHttp(url, timeoutMs, child = null, {
   throw new Error(`timed out waiting for ${url}: ${String(lastError)}; readiness=${diagnostic()}`);
 }
 
-export async function stopChild(child) {
-  if (child === null || child.exitCode !== null) {
-    return;
+const childStopOperations = new WeakMap();
+
+function childIsTerminal(child) {
+  return child.exitCode !== null || child.signalCode !== null;
+}
+
+function signalChildAndWait(child, signal, timeoutMs) {
+  if (childIsTerminal(child)) {
+    return Promise.resolve(true);
   }
-  child.kill("SIGTERM");
-  const exited = new Promise((resolve) => child.once("exit", resolve));
-  const timeout = delay(5_000).then(() => "timeout");
-  if ((await Promise.race([exited, timeout])) === "timeout") {
-    child.kill("SIGKILL");
-    await new Promise((resolve) => child.once("exit", resolve));
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer = null;
+    const finish = (terminal, error = null) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
+      child.removeListener("exit", onExit);
+      if (error !== null) {
+        reject(error);
+      } else {
+        resolve(terminal);
+      }
+    };
+    const onExit = () => finish(true);
+    child.once("exit", onExit);
+    if (childIsTerminal(child)) {
+      finish(true);
+      return;
+    }
+    try {
+      child.kill(signal);
+    } catch (error) {
+      if (childIsTerminal(child)) {
+        finish(true);
+        return;
+      }
+      if (error?.code !== "ESRCH") {
+        finish(false, error);
+        return;
+      }
+    }
+    if (childIsTerminal(child)) {
+      finish(true);
+      return;
+    }
+    timer = setTimeout(() => finish(childIsTerminal(child)), timeoutMs);
+  });
+}
+
+export function stopChild(child, {termTimeoutMs = 5_000, killTimeoutMs = 5_000} = {}) {
+  if (child === null || childIsTerminal(child)) {
+    return Promise.resolve();
   }
+  const existing = childStopOperations.get(child);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const operation = (async () => {
+    if (await signalChildAndWait(child, "SIGTERM", termTimeoutMs)) {
+      return;
+    }
+    if (await signalChildAndWait(child, "SIGKILL", killTimeoutMs)) {
+      return;
+    }
+    throw new Error(`child did not exit after SIGTERM (${termTimeoutMs}ms) and ` +
+      `SIGKILL (${killTimeoutMs}ms); exitCode=${child.exitCode} signalCode=${child.signalCode}`);
+  })();
+  const tracked = operation.finally(() => {
+    if (childStopOperations.get(child) === tracked) {
+      childStopOperations.delete(child);
+    }
+  });
+  childStopOperations.set(child, tracked);
+  return tracked;
 }
 
 async function websocketText(data) {
@@ -949,22 +1017,121 @@ async function pressKey(cdp, key, code, virtualKeyCode, {modifiers = 0} = {}) {
   await frames(cdp);
 }
 
+let trustedClickSequence = 0;
+
 async function clickElement(cdp, selector) {
-  const point = await evaluate(
-    cdp,
-    `(() => {
-      const element = document.querySelector(${JSON.stringify(selector)});
-      if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
-        return null;
+  let point = null;
+  const observationHistory = [];
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const available = await evaluate(
+      cdp,
+      `(() => {
+        const element = document.querySelector(${JSON.stringify(selector)});
+        if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
+          return false;
+        }
+        element.scrollIntoView({block: "nearest", inline: "nearest"});
+        return true;
+      })()`,
+    );
+    if (!available) {
+      throw new Error(`cannot click ${selector}`);
+    }
+
+    // Scrolling can move sticky controls or reflow a compact workspace. Cross
+    // a rendering boundary before measuring the coordinate that will receive
+    // trusted pointer movement, rather than using a pre-layout position.
+    await frames(cdp);
+    const initial = await evaluate(
+      cdp,
+      `(() => {
+        const element = document.querySelector(${JSON.stringify(selector)});
+        if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
+          return null;
+        }
+        const rect = element.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        return {
+          hit: hit instanceof Element ? {
+            classes: Array.from(hit.classList).slice(0, 2),
+            id: hit.id,
+            tag: hit.localName,
+          } : null,
+          owned: hit instanceof Element && (hit === element || element.contains(hit)),
+          rect: {
+            bottom: rect.bottom,
+            left: rect.left,
+            right: rect.right,
+            top: rect.top,
+          },
+          x,
+          y,
+        };
+      })()`,
+    );
+    if (initial === null) {
+      throw new Error(`cannot click ${selector}`);
+    }
+    observationHistory.push({attempt, pointerMove: 0, ...initial});
+
+    // Trusted pointer movement can itself activate hover styling that changes
+    // sticky phone geometry. Follow the remeasured center through at most
+    // three pre-dispatch moves, crossing a rendering boundary and requiring
+    // both center ownership and real :hover state before the one click.
+    let candidate = initial;
+    for (let pointerMove = 1; pointerMove <= 3; pointerMove += 1) {
+      if (!candidate.owned) break;
+      await cdp.send("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        x: candidate.x,
+        y: candidate.y,
+      });
+      await frames(cdp);
+      const confirmed = await evaluate(
+        cdp,
+        `(() => {
+          const element = document.querySelector(${JSON.stringify(selector)});
+          if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
+            return null;
+          }
+          const rect = element.getBoundingClientRect();
+          const x = rect.left + rect.width / 2;
+          const y = rect.top + rect.height / 2;
+          const hit = document.elementFromPoint(x, y);
+          return {
+            hit: hit instanceof Element ? {
+              classes: Array.from(hit.classList).slice(0, 2),
+              id: hit.id,
+              tag: hit.localName,
+            } : null,
+            hovered: element.matches(":hover"),
+            owned: hit instanceof Element && (hit === element || element.contains(hit)),
+            rect: {
+              bottom: rect.bottom,
+              left: rect.left,
+              right: rect.right,
+              top: rect.top,
+            },
+            x,
+            y,
+          };
+        })()`,
+      );
+      if (confirmed === null) {
+        throw new Error(`cannot click ${selector}`);
       }
-      element.scrollIntoView({block: "nearest", inline: "nearest"});
-      const rect = element.getBoundingClientRect();
-      return {
-        x: rect.left + rect.width / 2,
-        y: rect.top + rect.height / 2,
-      };
-    })()`,
-  );
+      observationHistory.push({attempt, pointerMove, ...confirmed});
+      if (confirmed.owned && confirmed.hovered) {
+        point = confirmed;
+        break;
+      }
+      candidate = confirmed;
+    }
+    if (point !== null) break;
+    if (attempt < 2) await movePointerAway(cdp);
+  }
   if (
     point === null ||
     point.x < 0 ||
@@ -972,7 +1139,42 @@ async function clickElement(cdp, selector) {
     point.x > Number.MAX_SAFE_INTEGER ||
     point.y > Number.MAX_SAFE_INTEGER
   ) {
-    throw new Error(`cannot click ${selector}`);
+    throw new Error(
+      `${selector} center remained occluded before trusted click dispatch ` +
+        `after 2 settled attempts with 3 pointer moves each: ` +
+        `${JSON.stringify(observationHistory)}`,
+    );
+  }
+  const witnessToken = ++trustedClickSequence;
+  const witnessArmed = await evaluate(
+    cdp,
+    `(() => {
+      const element = document.querySelector(${JSON.stringify(selector)});
+      if (!(element instanceof HTMLElement) || element.matches(":disabled")) return false;
+      const key = Symbol.for("sdsctl.browser-audit.trusted-click-witness");
+      const previous = globalThis[key];
+      if (previous?.element instanceof Element && typeof previous.listener === "function") {
+        previous.element.removeEventListener("click", previous.listener, true);
+      }
+      const record = {clicked: null, element, listener: null, token: ${witnessToken}};
+      record.listener = event => {
+        record.clicked = {
+          isTrusted: event.isTrusted,
+          owned: event.target instanceof Node &&
+            (event.target === element || element.contains(event.target)),
+          target: event.target instanceof Element ? {
+            id: event.target.id,
+            tag: event.target.localName,
+          } : null,
+        };
+      };
+      element.addEventListener("click", record.listener, {capture: true, once: true});
+      globalThis[key] = record;
+      return true;
+    })()`,
+  );
+  if (!witnessArmed) {
+    throw new Error(`cannot arm trusted click witness for ${selector}`);
   }
   await cdp.send("Input.dispatchMouseEvent", {
     button: "left",
@@ -981,14 +1183,58 @@ async function clickElement(cdp, selector) {
     x: point.x,
     y: point.y,
   });
+  const pressReceipt = await evaluate(
+    cdp,
+    `(() => {
+      const element = document.querySelector(${JSON.stringify(selector)});
+      if (!(element instanceof HTMLElement)) return null;
+      const rect = element.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      const centerHit = document.elementFromPoint(x, y);
+      const pressedHit = document.elementFromPoint(${point.x}, ${point.y});
+      return {
+        active: element.matches(":active"),
+        centerOwned: centerHit instanceof Element &&
+          (centerHit === element || element.contains(centerHit)),
+        focused: document.activeElement === element || element.contains(document.activeElement),
+        pressedPointOwned: pressedHit instanceof Element &&
+          (pressedHit === element || element.contains(pressedHit)),
+        rect: {bottom: rect.bottom, left: rect.left, right: rect.right, top: rect.top},
+        x,
+        y,
+      };
+    })()`,
+  );
+  const pressValid = pressReceipt !== null && pressReceipt.active &&
+    pressReceipt.focused && pressReceipt.centerOwned;
+  const releasePoint = pressValid ? pressReceipt : point;
   await cdp.send("Input.dispatchMouseEvent", {
     button: "left",
     clickCount: 1,
     type: "mouseReleased",
-    x: point.x,
-    y: point.y,
+    x: releasePoint.x,
+    y: releasePoint.y,
   });
   await frames(cdp);
+  const clickWitness = await evaluate(
+    cdp,
+    `(() => {
+      const key = Symbol.for("sdsctl.browser-audit.trusted-click-witness");
+      const record = globalThis[key];
+      if (record?.element instanceof Element && typeof record.listener === "function") {
+        record.element.removeEventListener("click", record.listener, true);
+      }
+      if (record?.token === ${witnessToken}) delete globalThis[key];
+      return record?.token === ${witnessToken} ? record.clicked : null;
+    })()`,
+  );
+  if (!pressValid || !clickWitness?.isTrusted || !clickWitness?.owned) {
+    throw new Error(
+      `${selector} did not complete one owned trusted click: ` +
+        `${JSON.stringify({clickWitness, point, pressReceipt})}`,
+    );
+  }
 }
 
 async function movePointerAway(cdp) {
@@ -1001,51 +1247,104 @@ async function movePointerAway(cdp) {
 }
 
 async function hoverElement(cdp, selector) {
-  const point = await evaluate(
-    cdp,
-    `(() => {
-      const element = document.querySelector(${JSON.stringify(selector)});
-      if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
-        return null;
-      }
-      element.scrollIntoView({block: "nearest", inline: "nearest"});
-      const rect = element.getBoundingClientRect();
-      const x = rect.left + rect.width / 2;
-      const y = rect.top + rect.height / 2;
-      const hit = document.elementFromPoint(x, y);
-      return {
-        hit: hit instanceof Element ? {
-          classes: Array.from(hit.classList).slice(0, 2),
-          id: hit.id,
-          tag: hit.localName,
-        } : null,
-        owned: hit instanceof Element && (hit === element || element.contains(hit)),
-        rect: {
-          bottom: rect.bottom,
-          left: rect.left,
-          right: rect.right,
-          top: rect.top,
-        },
-        x,
-        y,
-      };
-    })()`,
-  );
-  if (point === null) {
-    return {failures: [`${selector} is unavailable for trusted hover acquisition`]};
+  let lastObservation = null;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const available = await evaluate(
+      cdp,
+      `(() => {
+        const element = document.querySelector(${JSON.stringify(selector)});
+        if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
+          return false;
+        }
+        element.scrollIntoView({block: "nearest", inline: "nearest"});
+        return true;
+      })()`,
+    );
+    if (!available) {
+      return {failures: [`${selector} is unavailable for trusted hover acquisition`]};
+    }
+
+    // Phone navigation is sticky and wraps onto two rows. Let scroll and
+    // sticky layout settle before measuring the coordinate that will receive
+    // the trusted pointer input.
+    await frames(cdp);
+    const point = await evaluate(
+      cdp,
+      `(() => {
+        const element = document.querySelector(${JSON.stringify(selector)});
+        if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
+          return null;
+        }
+        const rect = element.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        return {
+          hit: hit instanceof Element ? {
+            classes: Array.from(hit.classList).slice(0, 2),
+            id: hit.id,
+            tag: hit.localName,
+          } : null,
+          owned: hit instanceof Element && (hit === element || element.contains(hit)),
+          rect: {
+            bottom: rect.bottom,
+            left: rect.left,
+            right: rect.right,
+            top: rect.top,
+          },
+          x,
+          y,
+        };
+      })()`,
+    );
+    if (point === null) {
+      return {failures: [`${selector} is unavailable for trusted hover acquisition`]};
+    }
+    if (!point.owned) {
+      return {failures: [
+        `${selector} center is occluded before trusted hover dispatch: ` +
+          `${JSON.stringify({hit: point.hit, rect: point.rect, x: point.x, y: point.y})}`,
+      ]};
+    }
+    await cdp.send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: point.x,
+      y: point.y,
+    });
+    // CDP can acknowledge trusted pointer input before Chrome exposes the new
+    // :hover match to a following Runtime.evaluate call. Cross a rendering
+    // boundary, then confirm acquisition before contrast is measured.
+    await frames(cdp);
+    lastObservation = await evaluate(
+      cdp,
+      `(() => {
+        const element = document.querySelector(${JSON.stringify(selector)});
+        if (!(element instanceof HTMLElement)) return null;
+        const rect = element.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        return {
+          hovered: element.matches(":hover"),
+          owned: hit instanceof Element && (hit === element || element.contains(hit)),
+          rect: {
+            bottom: rect.bottom,
+            left: rect.left,
+            right: rect.right,
+            top: rect.top,
+          },
+          x,
+          y,
+        };
+      })()`,
+    );
+    if (lastObservation?.hovered) return {failures: []};
+    if (attempt < 2) await movePointerAway(cdp);
   }
-  if (!point.owned) {
-    return {failures: [
-      `${selector} center is occluded before trusted hover dispatch: ` +
-        `${JSON.stringify({hit: point.hit, rect: point.rect, x: point.x, y: point.y})}`,
-    ]};
-  }
-  await cdp.send("Input.dispatchMouseEvent", {
-    type: "mouseMoved",
-    x: point.x,
-    y: point.y,
-  });
-  return {failures: []};
+  return {failures: [
+    `${selector} did not enter its trusted hover state after 2 settled attempts: ` +
+      JSON.stringify(lastObservation),
+  ]};
 }
 
 async function activatePane(cdp, pane) {
