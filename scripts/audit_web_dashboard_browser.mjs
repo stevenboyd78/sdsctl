@@ -1041,16 +1041,22 @@ export async function clickElement(cdp, selector) {
           return false;
         }
         element.scrollIntoView({block: "nearest", inline: "nearest"});
-        return true;
+        // A sticky phone tab can receive a native focus scroll synchronously
+        // with mousePressed, after all pre-dispatch geometry checks. Resolve
+        // that focus state without scrolling before the first measurement so
+        // the one physical press cannot be dispatched at a stale coordinate.
+        element.focus({preventScroll: true});
+        return document.activeElement === element || element.contains(document.activeElement);
       })()`,
     );
     if (!available) {
       throw new Error(`cannot click ${selector}`);
     }
 
-    // Scrolling can move sticky controls or reflow a compact workspace. Cross
-    // a rendering boundary before measuring the coordinate that will receive
-    // trusted pointer movement, rather than using a pre-layout position.
+    // Scrolling or focus can move sticky controls or reflow a compact
+    // workspace. Cross a rendering boundary before measuring the coordinate
+    // that will receive trusted pointer movement, rather than using a
+    // pre-layout position.
     await frames(cdp);
     const initial = await evaluate(
       cdp,

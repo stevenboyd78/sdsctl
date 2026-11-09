@@ -228,6 +228,8 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
     assert "stabilizedPointOwned" in click_source
     assert "sameClickGeometry(point, armedPoint)" in click_source
     assert "trusted-click-witness cleanup before geometry reacquisition" in click_source
+    assert "element.focus({preventScroll: true})" in click_source
+    assert "document.activeElement === element" in click_source
     assert 'element.matches(":active")' in click_source
     assert "pressedPointOwned" in click_source
     assert "centerOwned" in click_source
@@ -239,6 +241,10 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
     assert 'type: "mousePressed"' not in acquisition_source
     assert 'type: "mouseReleased"' not in acquisition_source
     click_scroll_index = click_source.index("element.scrollIntoView")
+    click_focus_index = click_source.index("element.focus", click_scroll_index)
+    click_focus_verified_index = click_source.index(
+        "document.activeElement === element", click_focus_index
+    )
     click_settle_index = click_source.index("await frames(cdp)", click_scroll_index)
     click_initial_measure_index = click_source.index("const rect = element.getBoundingClientRect()")
     click_initial_hit_index = click_source.index("document.elementFromPoint")
@@ -278,6 +284,8 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
     click_post_dispatch_index = click_source.index("await frames(cdp)", click_release_index)
     assert (
         click_scroll_index
+        < click_focus_index
+        < click_focus_verified_index
         < click_settle_index
         < click_initial_measure_index
         < click_initial_hit_index

@@ -52,7 +52,13 @@ class ScriptedTargetCdp {
       return this.result(true);
     }
     if (source.includes("element.scrollIntoView")) {
-      this.events.push({kind: "available"});
+      this.events.push({
+        focusBeforeMeasurement: source.indexOf("element.focus") >
+          source.indexOf("element.scrollIntoView"),
+        focusVerified: source.includes("document.activeElement === element"),
+        kind: "target-prepared",
+        preventScroll: source.includes("element.focus({preventScroll: true})"),
+      });
       return this.result(true);
     }
     if (source.includes("const record = {clicked: null")) {
@@ -109,6 +115,34 @@ class ScriptedTargetCdp {
     assert.fail(`Unexpected Runtime.evaluate source: ${source}`);
   }
 }
+
+test("target focus is settled without scrolling before initial geometry", async () => {
+  const cdp = new ScriptedTargetCdp({
+    armed: [{...GEOMETRY_A, stabilizedPointOwned: true}],
+    confirmed: [GEOMETRY_A, GEOMETRY_A],
+    initial: [GEOMETRY_A],
+    pressGeometry: GEOMETRY_A,
+  });
+  await clickElement(cdp, "#fixture-target");
+
+  const preparation = cdp.events.find(event => event.kind === "target-prepared");
+  const frame = cdp.events.find(event => event.kind === "frame");
+  const initial = cdp.events.find(event => event.kind === "initial-measurement");
+  const press = cdp.events.find(event => event.type === "mousePressed");
+
+  assert.deepEqual(preparation, {
+    focusBeforeMeasurement: true,
+    focusVerified: true,
+    kind: "target-prepared",
+    preventScroll: true,
+  });
+  assert.ok(cdp.events.indexOf(preparation) < cdp.events.indexOf(frame));
+  assert.ok(cdp.events.indexOf(frame) < cdp.events.indexOf(initial));
+  assert.ok(cdp.events.indexOf(initial) < cdp.events.indexOf(press));
+  assert.equal(cdp.events.filter(event => event.type === "mousePressed").length, 1);
+  assert.equal(cdp.events.filter(event => event.type === "mouseReleased").length, 1);
+  assert.equal(cdp.events.filter(event => event.kind === "witness-read").length, 1);
+});
 
 test("moving target is reacquired before exactly one trusted press and release", async () => {
   const cdp = new ScriptedTargetCdp({
