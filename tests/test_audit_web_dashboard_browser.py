@@ -474,8 +474,12 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
     assert "elementFromPoint" in hover_source
     assert "owned:" in hover_source
     assert "occluded before trusted hover dispatch" in hover_source
-    assert "for (let attempt = 1; attempt <= 2; attempt += 1)" in hover_source
-    assert "after 2 settled attempts" in hover_source
+    assert "const TRUSTED_HOVER_MAX_ATTEMPTS = 3" in source
+    assert "attempt <= TRUSTED_HOVER_MAX_ATTEMPTS; attempt += 1" in hover_source
+    assert "observationHistory.push" in hover_source
+    assert "dispatch: point" in hover_source
+    assert "observation: lastObservation" in hover_source
+    assert "`${TRUSTED_HOVER_MAX_ATTEMPTS} settled attempts: `" in hover_source
     scroll_index = hover_source.index("element.scrollIntoView")
     pre_dispatch_settle_index = hover_source.index("await frames(cdp)", scroll_index)
     measure_index = hover_source.index("const rect = element.getBoundingClientRect()")
@@ -689,6 +693,28 @@ def test_internal_capture_bridge_hashes_post_capture_computed_font_state() -> No
     capture_result = capture_source[capture_result_start:capture_result_end]
     assert "computedFontSha256" in capture_result
     assert "inventory" not in capture_result
+
+
+def test_internal_capture_bridge_stabilizes_native_select_text_only_for_capture() -> None:
+    audit_source = _SCRIPT.read_text(encoding="utf-8")
+    capture_start = audit_source.index("export async function captureDashboardScreenshot")
+    capture_end = audit_source.index("\nasync function run(", capture_start)
+    capture_source = audit_source[capture_start:capture_end]
+
+    smoothing = (
+        'document.querySelector("#waterfall-history-policy")\n'
+        '            .style.setProperty("-webkit-font-smoothing", "antialiased");'
+    )
+    assert capture_source.count(smoothing) == 1
+    waterfall_branch = capture_source.index('if (pane === "waterfall") {')
+    smoothing_index = capture_source.index(smoothing)
+    canvas_stability = capture_source.index(
+        "waterfallCanvas = await waitForWaterfallCanvasStability(cdp, timeoutMs);"
+    )
+    screenshot = capture_source.index("const screenshot = await captureStableScreenshot(cdp);")
+    assert waterfall_branch < smoothing_index < canvas_stability < screenshot
+    assert smoothing not in Path("src/sds200/web_assets/dashboard.js").read_text(encoding="utf-8")
+    assert smoothing not in Path("src/sds200/web_assets/dashboard.css").read_text(encoding="utf-8")
 
 
 def test_internal_capture_bridge_rejects_bad_arguments_without_opening_chrome() -> None:
