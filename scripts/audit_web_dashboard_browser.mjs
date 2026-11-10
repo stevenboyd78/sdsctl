@@ -5345,7 +5345,16 @@ export async function captureDashboardScreenshot({
     if (pane === "waterfall") {
       await evaluate(
         cdp,
-        'document.querySelector("#waterfall-frame-rate").textContent = "20.0 fps"',
+        `(() => {
+          document.querySelector("#waterfall-frame-rate").textContent = "20.0 fps";
+          // Fresh headless profiles can alternate LCD and grayscale
+          // antialiasing for a native select's closed label despite identical
+          // DOM, font, viewport, and canvas fingerprints. Freeze only this
+          // capture control to deterministic grayscale text; production
+          // rendering and browser acceptance remain untouched.
+          document.querySelector("#waterfall-history-policy")
+            .style.setProperty("-webkit-font-smoothing", "antialiased");
+        })()`,
       );
       waterfallCanvas = await waitForWaterfallCanvasStability(cdp, timeoutMs);
     }
