@@ -38,6 +38,19 @@ def test_browser_palette_focus_probe_contract() -> None:
     assert completed.stderr == ""
 
 
+def test_browser_trusted_click_geometry_contract() -> None:
+    if _NODE is None:
+        pytest.skip("Node.js is unavailable")
+    completed = subprocess.run(
+        [_NODE, "--test", "scripts/test_browser_audit_click.mjs"],
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stderr == ""
+
+
 def test_browser_lcars_reachability_contract() -> None:
     if _NODE is None:
         pytest.skip("Node.js is unavailable")
@@ -92,6 +105,7 @@ def test_browser_audit_help_documents_scope_and_dependencies() -> None:
         "trusted Tab/Shift+Tab",
         "WCAG AA",
         "adaptive-presentation",
+        "operator and display-only Display & session drawer",
         "LCARS navigation breakpoint",
         "alternative system-font metrics",
         "DPR-transition",
@@ -185,6 +199,72 @@ def test_browser_audit_list_is_the_complete_cartesian_matrix() -> None:
     assert len(set(cases)) == 840
 
 
+def test_browser_audit_covers_both_authenticated_native_drawer_roles() -> None:
+    source = _SCRIPT.read_text(encoding="utf-8")
+    demo = Path("scripts/generate_web_dashboard_screenshots.py").read_text(
+        encoding="utf-8",
+    )
+    operator_source = source.split("async function auditOperatorDrawer", 1)[1].split(
+        "export async function openChrome", 1
+    )[0]
+
+    assert "async function auditNativeDrawer" in source
+    assert "async function auditOperatorDrawer" in source
+    assert "async function auditDisplayKiosk" in source
+    assert "role: 'operator'" in source
+    assert "role: 'display'" in source
+    assert "baseUrl + '/?kiosk=operator'" in source
+    assert 'baseUrl + "/?kiosk=display"' in source
+    assert "const OPERATOR_DRAWER_VIEWPORTS = Object.freeze([" in source
+    assert 'Object.freeze({name: "zoomed", width: 400, height: 240, dpr: 1})' in source
+    assert "for (const viewport of OPERATOR_DRAWER_VIEWPORTS)" in operator_source
+    assert "overlay must not reflow workspace" in source
+    assert "viewport containment, internal scrolling and 44px controls" in source
+    assert "inside-to-outside drag must not dismiss" in source
+    assert "Sign out reachability" in source
+    assert "alertContract" in source
+    assert "staleLogoutDisabled" in source
+    assert "requestsAtExpiry !== state.requestsAfter" in source
+    assert source.index("await auditOperatorDrawer") < source.index("await auditDisplayKiosk")
+    assert 'b"kiosk=operator": b"operator"' in demo
+    assert 'b"kiosk=display": b"display"' in demo
+
+
+def test_browser_audit_persists_each_applicable_appearance_control() -> None:
+    source = _SCRIPT.read_text(encoding="utf-8")
+    drawer_source = source.split("async function auditNativeDrawer", 1)[1].split(
+        "async function auditDisplayNavigation", 1
+    )[0]
+    display_navigation = source.split("async function auditDisplayNavigation", 1)[1].split(
+        "async function auditDisplayKiosk", 1
+    )[0]
+    open_theme_drawer = display_navigation.split("for (const theme of THEMES)", 1)[1].split(
+        "await clickElement(cdp, '[data-kiosk-pane=\"waterfall\"]')", 1
+    )[0]
+    unique_ids = drawer_source.split("const unique = [", 1)[1].split("];", 1)[0]
+
+    assert "const appearanceScenarios = [" in drawer_source
+    for theme, control, dataset in (
+        ("system", "system-palette-select", "systemPalette"),
+        ("lcars", "lcars-v2-palette-select", "lcarsV2Palette"),
+        ("lcars", "lcars-v2-type-select", "lcarsV2Type"),
+        ("matrix", "theme-font-select", "themeFont"),
+        ("matrix", "theme-typography-select", "themeTypography"),
+    ):
+        assert f"theme: '{theme}'" in drawer_source
+        assert f"id: '{control}', dataset: '{dataset}'" in drawer_source
+        assert f"'{control}'" in unique_ids
+    assert "appearance persistence across close/reopen" in drawer_source
+    assert "appearance persistence across viewport resize" in drawer_source
+    assert "await setViewport(cdp, {width: 1366, height: 768, dpr: 1})" in drawer_source
+    assert "await setViewport(cdp, {width: 800, height: 480, dpr: 1})" in drawer_source
+    assert "document.querySelectorAll('#' + id)" in drawer_source
+    assert "for (const appearance of ['light', 'dark', 'forced'])" in open_theme_drawer
+    assert "document.querySelector('#native-menu')" in open_theme_drawer
+    assert "Compact Display & session drawer" in open_theme_drawer
+    assert "drawerFailures.length" in open_theme_drawer
+
+
 def test_browser_audit_rejects_invalid_arguments_without_opening_chrome() -> None:
     for argument in ("--timeout-ms", "--startup-timeout-ms"):
         completed = _run_node(argument, "0")
@@ -201,24 +281,70 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
     click_source = source.split("async function clickElement", 1)[1].split(
         "async function movePointerAway", 1
     )[0]
+    cleanup_source = source.split("async function cleanupTrustedClickWitness", 1)[1].split(
+        "export async function clickElement", 1
+    )[0]
+    assert "const TRUSTED_CLICK_MAX_ATTEMPTS = 3" in source
+    assert "const TRUSTED_CLICK_MAX_POINTER_MOVES = 3" in source
     assert "elementFromPoint" in click_source
     assert "owned:" in click_source
-    assert "for (let attempt = 1; attempt <= 2; attempt += 1)" in click_source
-    assert "for (let pointerMove = 1; pointerMove <= 3; pointerMove += 1)" in click_source
-    assert "after 2 settled attempts with 3 pointer moves each" in click_source
-    assert "confirmed.owned && confirmed.hovered" in click_source
+    assert "attempt <= TRUSTED_CLICK_MAX_ATTEMPTS" in click_source
+    assert "pointerMove <= TRUSTED_CLICK_MAX_POINTER_MOVES" in click_source
+    assert "after ${TRUSTED_CLICK_MAX_ATTEMPTS} settled attempts" in click_source
+    assert "candidate.focused && candidate.owned && candidate.hovered" in click_source
+    assert "confirmed.focused && confirmed.owned && confirmed.hovered" in click_source
+    assert "sameClickGeometry(candidate, confirmed)" in click_source
     assert "candidate = confirmed" in click_source
+    assert "stabilizedPointOwned" in click_source
+    assert "dispatchPointOwned" in click_source
+    assert "armedPoint.stabilizedPointOwned && armedPoint.witnessCurrent" in click_source
+    assert (
+        "dispatchPoint.hovered && dispatchPoint.owned && "
+        "dispatchPoint.witnessCurrent" in click_source
+    )
+    assert "sameClickGeometry(point, armedPoint)" in click_source
+    assert "sameClickGeometry(armedPoint, dispatchPoint)" in click_source
+    assert "trusted-click-witness cleanup before geometry reacquisition or exit" in cleanup_source
+    assert "record?.token !== ${witnessToken}" in cleanup_source
+    assert "delete globalThis[key]" in cleanup_source
+    assert "return {clicked: record.clicked, matched: true}" in cleanup_source
+    assert "preserveTrustedClickError" in source
+    assert "primary.trustedClickSuppressed" in source
+    assert "let attemptAccepted = false" in click_source
+    assert "let attemptError = null" in click_source
+    assert "cleanupTrustedClickWitness(cdp, attemptWitnessToken)" in click_source
+    assert "cleanupTrustedClickWitness(cdp, witnessToken)" in click_source
+    assert 'preserveTrustedClickError(attemptError, error, "pre-dispatch")' in click_source
+    assert 'preserveTrustedClickError(attemptError, error, "pre-dispatch-cleanup")' in click_source
+    assert 'preserveTrustedClickError(dispatchError, error, "press-receipt")' in click_source
+    assert 'preserveTrustedClickError(dispatchError, error, "mouse-release")' in click_source
+    assert (
+        'preserveTrustedClickError(dispatchError, error, "post-dispatch-cleanup")' in click_source
+    )
+    assert "if (dispatchError !== null) throw dispatchError" in click_source
+    assert "element.focus({preventScroll: false})" in click_source
+    assert "element.focus({preventScroll: true})" not in click_source
+    assert "document.activeElement === element" in click_source
     assert 'element.matches(":active")' in click_source
     assert "pressedPointOwned" in click_source
     assert "centerOwned" in click_source
     assert "clickWitness?.isTrusted" in click_source
     assert "clickWitness?.owned" in click_source
+    assert "TRUSTED_CLICK_SAFE_RELEASE_POINT" in click_source
+    assert "let releasePoint = TRUSTED_CLICK_SAFE_RELEASE_POINT" in click_source
+    assert "if (pressValid) releasePoint = pressReceipt" in click_source
+    assert 'button: pressValid ? "left" : "none"' in click_source
+    assert "clickCount: pressValid ? 1 : 0" in click_source
     assert click_source.count('type: "mousePressed"') == 1
     assert click_source.count('type: "mouseReleased"') == 1
     acquisition_source = click_source.split("if (\n    point === null", 1)[0]
     assert 'type: "mousePressed"' not in acquisition_source
     assert 'type: "mouseReleased"' not in acquisition_source
     click_scroll_index = click_source.index("element.scrollIntoView")
+    click_focus_index = click_source.index("element.focus", click_scroll_index)
+    click_focus_verified_index = click_source.index(
+        "document.activeElement === element", click_focus_index
+    )
     click_settle_index = click_source.index("await frames(cdp)", click_scroll_index)
     click_initial_measure_index = click_source.index("const rect = element.getBoundingClientRect()")
     click_initial_hit_index = click_source.index("document.elementFromPoint")
@@ -233,18 +359,76 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         'hovered: element.matches(":hover")', click_confirm_index
     )
     click_convergence_index = click_source.index(
-        "confirmed.owned && confirmed.hovered", click_confirm_hover_index
+        "sameClickGeometry(candidate, confirmed)", click_confirm_hover_index
+    )
+    click_witness_arm_index = click_source.index("const witnessArmed", click_convergence_index)
+    click_post_arm_settle_index = click_source.index("await frames(cdp)", click_witness_arm_index)
+    click_armed_point_index = click_source.index(
+        "const armedPoint = await evaluate", click_post_arm_settle_index
+    )
+    click_post_arm_owner_index = click_source.index("stabilizedPointOwned", click_armed_point_index)
+    click_post_arm_witness_index = click_source.index(
+        "armedPoint.witnessCurrent", click_post_arm_owner_index
+    )
+    click_post_arm_stability_index = click_source.index(
+        "sameClickGeometry(point, armedPoint)", click_post_arm_witness_index
+    )
+    click_final_move_index = click_source.index(
+        'type: "mouseMoved"', click_post_arm_stability_index
+    )
+    click_final_settle_index = click_source.index("await frames(cdp)", click_final_move_index)
+    click_dispatch_point_index = click_source.index(
+        "const dispatchPoint = await evaluate", click_final_settle_index
+    )
+    click_dispatch_owner_index = click_source.index(
+        "dispatchPointOwned", click_dispatch_point_index
+    )
+    click_dispatch_focus_index = click_source.index(
+        "dispatchPoint.focused", click_dispatch_owner_index
+    )
+    click_dispatch_witness_index = click_source.index(
+        "dispatchPoint.witnessCurrent", click_dispatch_focus_index
+    )
+    click_dispatch_stability_index = click_source.index(
+        "sameClickGeometry(armedPoint, dispatchPoint)", click_dispatch_witness_index
+    )
+    click_attempt_accepted_index = click_source.index(
+        "attemptAccepted = true", click_dispatch_stability_index
+    )
+    click_pre_dispatch_finally_index = click_source.index(
+        "} finally {", click_attempt_accepted_index
+    )
+    click_disarm_index = click_source.index(
+        "cleanupTrustedClickWitness(cdp, attemptWitnessToken)",
+        click_pre_dispatch_finally_index,
+    )
+    click_attempt_error_index = click_source.index(
+        "if (attemptError !== null) throw attemptError", click_disarm_index
     )
     click_exhaustion_index = click_source.index(
-        "after 2 settled attempts with 3 pointer moves each"
+        "after ${TRUSTED_CLICK_MAX_ATTEMPTS} settled attempts"
     )
     click_dispatch_index = click_source.index('type: "mousePressed"')
-    click_press_receipt_index = click_source.index("const pressReceipt", click_dispatch_index)
-    click_release_index = click_source.index('type: "mouseReleased"')
-    click_witness_index = click_source.index("const clickWitness", click_release_index)
+    click_press_receipt_index = click_source.index(
+        "pressReceipt = await evaluate", click_dispatch_index
+    )
+    click_release_finally_index = click_source.index("} finally {", click_press_receipt_index)
+    click_release_index = click_source.index('type: "mouseReleased"', click_release_finally_index)
     click_post_dispatch_index = click_source.index("await frames(cdp)", click_release_index)
+    click_cleanup_finally_index = click_source.index("} finally {", click_post_dispatch_index)
+    click_witness_index = click_source.index(
+        "cleanupTrustedClickWitness(cdp, witnessToken)", click_cleanup_finally_index
+    )
+    click_dispatch_error_index = click_source.index(
+        "if (dispatchError !== null) throw dispatchError", click_witness_index
+    )
+    click_witness_validation_index = click_source.index(
+        "!pressValid || !clickWitness?.isTrusted", click_dispatch_error_index
+    )
     assert (
         click_scroll_index
+        < click_focus_index
+        < click_focus_verified_index
         < click_settle_index
         < click_initial_measure_index
         < click_initial_hit_index
@@ -255,12 +439,33 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         < click_confirm_hit_index
         < click_confirm_hover_index
         < click_convergence_index
+        < click_witness_arm_index
+        < click_post_arm_settle_index
+        < click_armed_point_index
+        < click_post_arm_owner_index
+        < click_post_arm_witness_index
+        < click_post_arm_stability_index
+        < click_final_move_index
+        < click_final_settle_index
+        < click_dispatch_point_index
+        < click_dispatch_owner_index
+        < click_dispatch_focus_index
+        < click_dispatch_witness_index
+        < click_dispatch_stability_index
+        < click_attempt_accepted_index
+        < click_pre_dispatch_finally_index
+        < click_disarm_index
+        < click_attempt_error_index
         < click_exhaustion_index
         < click_dispatch_index
         < click_press_receipt_index
+        < click_release_finally_index
         < click_release_index
         < click_post_dispatch_index
+        < click_cleanup_finally_index
         < click_witness_index
+        < click_dispatch_error_index
+        < click_witness_validation_index
     )
 
     hover_source = source.split("async function hoverElement", 1)[1].split(
@@ -314,8 +519,8 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         "(contentLeft + contentRight)",
         "desktop typography controls are not centered in their own non-overlapping column",
         "Hidden typography control is rendered",
-        "Narrow typography menu controls are inaccessible or too small",
-        "Narrow LCARS appearance menu controls are inaccessible or too small",
+        "Canonical appearance controls left the native drawer",
+        "viewport containment, internal scrolling and 44px controls",
         "export async function runMatrix",
         "Advanced Home Assistant guidance is unreachable at the end of the workspace",
         "System palette controller, document, and selector disagree",
@@ -362,6 +567,22 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         "canvas.height > 1024",
     ):
         assert contract in source
+
+
+def test_phone_unknown_hold_audit_reuses_the_existing_controls_activation() -> None:
+    source = _SCRIPT.read_text(encoding="utf-8")
+    run_matrix = source.split("export async function runMatrix", 1)[1].split(
+        "export async function openChrome", 1
+    )[0]
+    controls_branch = run_matrix.split('} else if (pane === "controls") {', 1)[1].split(
+        '} else if (pane === "recordings") {', 1
+    )[0]
+
+    assert 'if (viewport.name === "phone") {' in controls_branch
+    assert "phoneUnknownHoldCases += 1" in controls_branch
+    assert "window.__sdsctlBrowserAudit.phoneUnknownHoldState()" in controls_branch
+    assert "`${context}/unknown-hold-state`" in controls_branch
+    assert 'await activatePane(cdp, "controls")' not in run_matrix
 
 
 def test_internal_capture_bridge_documents_and_enforces_exact_cdp_viewports() -> None:

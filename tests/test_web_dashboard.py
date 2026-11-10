@@ -2247,3 +2247,65 @@ def test_dashboard_layout_uses_dedicated_recording_library_panel() -> None:
     assert 'id="recordings-title"' in recordings_pane
     assert 'id="recordings-previous-page"' in recordings_pane
     assert 'id="recordings-next-page"' in recordings_pane
+
+
+def test_authenticated_display_and_session_drawer_contract() -> None:
+    asset_root = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "sds200"
+        / "web_assets"
+    )
+    script = (asset_root / "dashboard.js").read_text(encoding="utf-8")
+    viewport = (asset_root / "dashboard-viewport.css").read_text(encoding="utf-8")
+
+    assert "let nativeMenuController = null" in script
+    assert "function initializeNativeMenu(logout, logoutButton)" in script
+    assert "nativeMenuController = initializeNativeMenu(logout, button)" in script
+    assert "if (displayOnly) initializeDisplayNavigation(nativeMenuController)" in script
+    assert 'trigger.id = "native-menu-toggle"' in script
+    assert 'const trigger = make("button", "Display & session")' in script
+    assert 'title.id = "native-menu-title"' in script
+    assert 'sessionSummary.id = "native-session-summary"' in script
+    assert 'dialog.id = "native-menu"' in script
+    assert 'document.createComment("native drawer control position")' in script
+    assert "appearance.append(node)" in script
+    assert 'banner.setAttribute("role", "alert")' in script
+    assert 'banner.setAttribute("aria-live", "assertive")' in script
+    assert "banner.hidden = true" in script
+    assert 'displayOnly ? "auth/display/login" : "auth/login"' in script
+    assert "nativeMenuController?.invalidate()" in script
+    assert "logoutButton.disabled = true" in script
+    assert "logout.hidden = true" in script
+    assert 'close({restoreFocus: false})' in script
+    close_source = script.split("const close = ({restoreFocus = true} = {}) => {", 1)[1].split(
+        "const open = () => {", 1
+    )[0]
+    expanded_reset = 'trigger.setAttribute("aria-expanded", "false")'
+    assert close_source.index(expanded_reset) < close_source.index(
+        "if (dialog.open) dialog.close()"
+    )
+    close_event_source = script.split('dialog.addEventListener("close", () => {', 1)[1].split(
+        "});", 1
+    )[0]
+    assert expanded_reset in close_event_source
+    assert (
+        '"a[href], button, input, select, textarea, summary, '
+        "[tabindex]:not([tabindex='-1'])\""
+    ) in script
+    assert 'dialog.addEventListener("pointerdown"' in script
+    assert 'dialog.addEventListener("pointercancel"' in script
+    assert 'backdropPointerStartedOutside && event.target === dialog' in script
+
+    assert "#native-menu[open]" in viewport
+    assert "env(safe-area-inset-top)" in viewport
+    assert "100dvh" in viewport
+    assert "overflow-x: hidden !important" in viewport
+    assert "overflow-y: auto !important" in viewport
+    assert "overscroll-behavior: contain !important" in viewport
+    assert "scrollbar-gutter: stable !important" in viewport
+    assert "[tabindex]:not([tabindex=\"-1\"])" in viewport
+    assert "min-height: 44px !important" in viewport
+    assert 'html[data-access-mode][data-session-state="login-required"] .dashboard' in viewport
+    assert "html[data-access-mode] .dashboard {" not in viewport
+    assert "@media (forced-colors: active)" in viewport

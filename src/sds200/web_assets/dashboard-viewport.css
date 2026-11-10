@@ -10,12 +10,22 @@
 @layer sdsctl-viewport-contract, sdsctl-shared, sdsctl-managed-theme;
 
 @layer sdsctl-viewport-contract {
-  /* Native display navigation uses the same controls, moved rather than copied. */
+  /* Authenticated native navigation uses the same controls, moved rather than copied. */
   .native-menu-heading {
     display: flex !important;
+    position: relative !important;
+    z-index: 30 !important;
+    isolation: isolate !important;
     align-items: center !important;
     gap: 0.65rem !important;
     min-width: 0 !important;
+  }
+
+  #native-menu-toggle {
+    position: relative !important;
+    z-index: 1 !important;
+    pointer-events: auto !important;
+    touch-action: manipulation !important;
   }
 
   .native-access-label,
@@ -27,15 +37,31 @@
 
   #native-menu:not([open]) { display: none !important; }
   #native-menu[open] {
+    --native-menu-inset-top: max(0.5rem, env(safe-area-inset-top));
+    --native-menu-inset-right: max(0.5rem, env(safe-area-inset-right));
+    --native-menu-inset-bottom: max(0.5rem, env(safe-area-inset-bottom));
+    --native-menu-inset-left: max(0.5rem, env(safe-area-inset-left));
     display: block !important;
     position: fixed !important;
-    inset: 0.5rem auto auto 0.5rem !important;
-    width: min(23rem, calc(100vw - 1rem)) !important;
-    max-width: calc(100vw - 1rem) !important;
-    max-height: calc(100dvh - 1rem) !important;
+    inset: var(--native-menu-inset-top) auto auto var(--native-menu-inset-left) !important;
+    width: min(
+      28rem,
+      calc(100vw - var(--native-menu-inset-left) - var(--native-menu-inset-right))
+    ) !important;
+    max-width: calc(
+      100vw - var(--native-menu-inset-left) - var(--native-menu-inset-right)
+    ) !important;
+    max-height: calc(
+      100dvh - var(--native-menu-inset-top) - var(--native-menu-inset-bottom)
+    ) !important;
+    box-sizing: border-box !important;
     margin: 0 !important;
     padding: 0.85rem !important;
-    overflow: auto !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    scrollbar-gutter: stable !important;
+    touch-action: pan-y !important;
   }
   #native-menu .native-menu-header {
     display: flex !important;
@@ -43,9 +69,11 @@
     justify-content: space-between !important;
     gap: 0.5rem !important;
   }
-  #native-menu :is(.native-menu-views, .native-menu-appearance):not([hidden]) {
+  #native-menu :is(.native-menu-views, .native-menu-appearance, .native-menu-session):not([hidden]) {
     display: grid !important;
     gap: 0.5rem !important;
+    width: 100% !important;
+    min-width: 0 !important;
   }
   #native-menu :is(.theme-picker, .system-palette-picker):not([hidden]) {
     display: grid !important;
@@ -53,8 +81,18 @@
     justify-items: stretch !important;
     text-align: left !important;
     gap: 0.25rem !important;
+    width: 100% !important;
+    min-width: 0 !important;
   }
-  #native-menu :is(button, select),
+  #native-menu :is(
+    button,
+    select,
+    input,
+    textarea,
+    a[href],
+    summary,
+    [tabindex]:not([tabindex="-1"])
+  ),
   #native-menu-toggle {
     min-height: 44px !important;
     min-width: 44px !important;
@@ -63,6 +101,19 @@
     font-size: 1rem !important;
     line-height: 1.25 !important;
     white-space: normal !important;
+  }
+  #native-menu :is(select, input, textarea),
+  #native-menu .native-menu-session form,
+  #native-menu .native-menu-session form > :is(button, input) {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  #native-menu :is(button, a[href], summary) { touch-action: manipulation !important; }
+  #native-menu :is(button, select, input, textarea, a[href], summary):focus-visible,
+  #native-menu:focus-visible,
+  #native-menu-toggle:focus-visible {
+    outline: 3px solid var(--focus) !important;
+    outline-offset: 3px !important;
   }
   #native-menu :is(p, label) { font-size: 0.9rem !important; }
   #native-menu h2 { font-size: 1.1rem !important; }
@@ -423,8 +474,8 @@
     inset: clamp(3rem, 12vh, 7rem) var(--pane-padding) auto !important;
   }
 
-  html[data-access-mode] .dashboard {
-    /* The native session banner is an additional content-sized row. */
+  html[data-access-mode][data-session-state="login-required"] .dashboard {
+    /* Only the externally visible recovery alert owns an additional row. */
     grid-template-rows: auto auto minmax(0, 1fr) !important;
   }
 
@@ -2072,6 +2123,46 @@
     #radio-activity-panel [data-hold-scope][data-hold-state="held"] :is(dt, dd) {
       color: CanvasText !important;
       -webkit-text-fill-color: CanvasText !important;
+    }
+
+    #native-menu,
+    #native-menu-toggle {
+      color: CanvasText !important;
+      background: Canvas !important;
+      border: 1px solid CanvasText !important;
+      box-shadow: none !important;
+    }
+
+    #native-menu::backdrop {
+      background: CanvasText !important;
+      opacity: 0.55 !important;
+    }
+
+    #native-menu :is(button, a[href], summary) {
+      color: ButtonText !important;
+      background: ButtonFace !important;
+      border-color: ButtonText !important;
+      -webkit-text-fill-color: ButtonText !important;
+    }
+
+    #native-menu :is(select, input, textarea) {
+      color: FieldText !important;
+      background: Field !important;
+      border-color: FieldText !important;
+      -webkit-text-fill-color: FieldText !important;
+    }
+
+    #native-menu :is(button, select, input, textarea, a[href], summary):focus-visible,
+    #native-menu:focus-visible,
+    #native-menu-toggle:focus-visible {
+      outline-color: Highlight !important;
+    }
+
+    #native-menu [aria-current="page"] {
+      color: HighlightText !important;
+      background: Highlight !important;
+      border-color: Highlight !important;
+      -webkit-text-fill-color: HighlightText !important;
     }
 
     .site-header,

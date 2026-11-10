@@ -183,15 +183,22 @@ header identifies an operator session before using audio or controls. A login
 page, session cookie or saved-password prompt does not reduce the requirement
 to protect the dedicated account and physical display.
 
-### Using a small display
+### Display and session drawer
 
-On short displays such as an 800×480 Pi screen, open the **menu button beside
-Scanner dashboard** to choose Scanner, Waterfall or Diagnostics. Theme and
-System palette are in the same menu; System palette appears when Theme is
-System. Scroll the menu to reach **Sign out** in the separate Session section.
-Changing a view closes the menu; changing appearance leaves it open. Use
-**Close menu**, Escape or a click outside the menu to dismiss it. Keyboard focus
-stays in the open menu. The menu overlays the display without resizing its plots.
+Every authenticated operator and display-only native dashboard has one
+**Display & session** button beside **Scanner dashboard**. It opens an overlay
+drawer containing the current role/session summary, Theme, the theme-specific
+palette and typography choices, and **Sign out**. The existing appearance
+controls are moved into this drawer rather than copied, so selections and
+browser-local preferences remain stable across resizing and repeated opens.
+
+On compact displays such as an 800×480 Pi screen, the display-only drawer also
+offers Scanner, Waterfall and Diagnostics. Changing a view closes the drawer
+and moves focus to the selected view; changing appearance leaves it open.
+Scroll inside the drawer to reach every selector and **Sign out**. Use
+**Close**, Escape or a click on the backdrop to dismiss it. Keyboard focus
+stays inside while it is open and returns to **Display & session** when the
+drawer closes. The drawer overlays the dashboard without resizing its plots.
 
 Connected/connection-error status and the Display-only label stay in the header.
 Sign-in-required and stale-data warnings remain visible without opening a menu.
@@ -200,10 +207,11 @@ Open **Details** for presentation choices, scanner indexes, Waterfall telemetry,
 raw samples and the relative-data disclaimer. Expanded details can scroll within
 the panel. Waterfall values remain relative, not calibrated RF measurements.
 
-On a large display, view tabs and appearance controls remain visible; the header
-menu provides Sign out. Resizing restores the same controls and selections,
-without duplicating them or adding another data connection. Browser zoom can
-make scrolling necessary; it should never make controls unreachable.
+On a large display, the ordinary view tabs remain visible while appearance and
+session actions stay in the same drawer. Resizing keeps the same controls and
+selections without duplicating them or adding another data connection. Browser
+zoom can make internal drawer scrolling necessary; it should never make controls
+or sign-out unreachable.
 
 ## 4. Optional graphical-session service
 

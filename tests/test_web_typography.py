@@ -109,13 +109,16 @@ def test_hidden_typography_rule_shares_important_display_layer() -> None:
     assert "#theme-font-picker[hidden] { display: none !important; }" in layer
     assert "#theme-typography-pickers[hidden]" in layer
     assert "#theme-typography-pickers > div {\n    display: grid !important" in layer
-    # The real-Chrome audit additionally checks computed visibility, menu
+    # The real-Chrome audit additionally checks computed visibility, drawer
     # reachability/touch sizing, and the unchanged phone geometry limits.
     script = files("sds200.web_assets").joinpath("dashboard.js").read_text()
-    assert 'relocate(element("lcars-v2-appearance-pickers"), appearance, true)' in script
-    assert 'relocate(element("theme-typography-pickers"), appearance, true)' in script
-    assert 'narrowAppearance = window.matchMedia("(max-width: 65rem)")' in script
-    assert 'narrowAppearance.addEventListener("change", update)' in script
+    assert "function initializeNativeMenu(logout, logoutButton)" in script
+    assert 'element("lcars-v2-appearance-pickers")' in script
+    assert 'element("theme-typography-pickers")' in script
+    assert 'document.createComment("native drawer control position")' in script
+    assert "appearance.append(node)" in script
+    assert "narrowAppearance" not in script
+    assert "function initializeDisplayNavigation(menu)" in script
     lcars = files("sds200.web_assets").joinpath("lcars-v2.css").read_text()
     menu_select = lcars.split("#native-menu #lcars-v2-appearance-pickers select {", 1)[1].split(
         "}", 1
