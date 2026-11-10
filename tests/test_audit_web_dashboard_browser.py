@@ -474,8 +474,12 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
     assert "elementFromPoint" in hover_source
     assert "owned:" in hover_source
     assert "occluded before trusted hover dispatch" in hover_source
-    assert "for (let attempt = 1; attempt <= 2; attempt += 1)" in hover_source
-    assert "after 2 settled attempts" in hover_source
+    assert "const TRUSTED_HOVER_MAX_ATTEMPTS = 3" in source
+    assert "attempt <= TRUSTED_HOVER_MAX_ATTEMPTS; attempt += 1" in hover_source
+    assert "observationHistory.push" in hover_source
+    assert "dispatch: point" in hover_source
+    assert "observation: lastObservation" in hover_source
+    assert "`${TRUSTED_HOVER_MAX_ATTEMPTS} settled attempts: `" in hover_source
     scroll_index = hover_source.index("element.scrollIntoView")
     pre_dispatch_settle_index = hover_source.index("await frames(cdp)", scroll_index)
     measure_index = hover_source.index("const rect = element.getBoundingClientRect()")
