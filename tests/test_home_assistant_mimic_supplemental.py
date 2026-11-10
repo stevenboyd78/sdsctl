@@ -125,7 +125,8 @@ def test_private_clock_card_in_actual_isolated_browser(bundle):
         ),
         capture_output=True,
         text=True,
-        timeout=90,
+        # Allow the 90-second cold-Chrome readiness contract plus bounded card checks.
+        timeout=180,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "PASS: 9 actual-browser clock layouts" in result.stdout

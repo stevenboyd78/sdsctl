@@ -75,7 +75,8 @@ try{
   const origin='http://127.0.0.1:'+server.address().port, errors=[], requests=[];
   profile=await mkdtemp(path.join(os.tmpdir(),'sdsctl-finite-card-browser-'));
   const port=await availablePort();browser=await openChrome(input.chrome,profile,port);
-  cdp=await CdpClient.connect(await pageWebSocketUrl(port,15000,browser.child),15000);
+  // Cold CI startup is a process-readiness concern, not a reason to weaken CDP operations.
+  cdp=await CdpClient.connect(await pageWebSocketUrl(port,90000,browser.child),15000);
   cdp.on('Runtime.exceptionThrown',event=>errors.push(event.exceptionDetails.text));
   cdp.on('Network.requestWillBeSent',event=>requests.push(event.request.url));
   await cdp.send('Runtime.enable');await cdp.send('Page.enable');await cdp.send('Network.enable');
