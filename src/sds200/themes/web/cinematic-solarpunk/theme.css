@@ -1,0 +1,29 @@
+/* Original optimistic ecological communications presentation. */
+:root[data-theme="cinematic-solarpunk"] {
+  color-scheme: light;
+  --background: #e9f1df; --surface: #fbfff6; --surface-emphasis: #d9e8cb;
+  --text: #183526; --muted: #557061; --border: #7ba185;
+  --accent: #267b55; --accent-strong: #145f3d; --success: #267b55;
+  --warning: #8a6410; --danger: #b34842; --focus: #064c2d;
+  --shadow: 0 0.75rem 1.8rem rgb(43 90 61 / 0.2); --radius-small: 0.8rem; --radius-large: 1.2rem;
+  --hold-field-background: #fff1b2; --hold-field-border: #8a6410; --hold-field-label: #684a08; --hold-field-value: #183526;
+}
+:root[data-theme="cinematic-solarpunk"] body { background: radial-gradient(circle at 12% 8%, rgb(255 212 91 / 0.25), transparent 22%), radial-gradient(ellipse at 85% 10%, rgb(65 151 95 / 0.2), transparent 30%), linear-gradient(130deg, rgb(103 186 203 / 0.15), transparent 40%), #e9f1df; }
+:root[data-theme="cinematic-solarpunk"] .site-header { position: relative; border: 1px solid #87ae91; border-radius: 1.2rem; background: linear-gradient(130deg, #ffffff, #dcebd0); box-shadow: var(--shadow); }
+:root[data-theme="cinematic-solarpunk"] .site-header::after { position: absolute; right: 1.3rem; bottom: 0.55rem; width: min(25rem, 33vw); height: 0.3rem; border-radius: 999px; background: linear-gradient(90deg, #267b55, #78b86b 55%, #e0b94f); content: ""; }
+:root[data-theme="cinematic-solarpunk"] :is(.brand h1, .panel h2, .panel h3) { font-family: "Atkinson Hyperlegible Next", sans-serif; letter-spacing: 0.025em; }
+:root[data-theme="cinematic-solarpunk"] .workspace-shell { border: 1px solid #87ae91; border-radius: 1.2rem; background: rgb(251 255 246 / 0.85); box-shadow: var(--shadow); }
+:root[data-theme="cinematic-solarpunk"] .workspace-tabs { border-bottom: 1px solid #87ae91; background: #dcebd0; }
+:root[data-theme="cinematic-solarpunk"] .workspace-tabs [role="tab"] { border-color: #7ba185; border-radius: 999px; background: #f7fff1; color: var(--muted); }
+:root[data-theme="cinematic-solarpunk"] .workspace-tabs [role="tab"][aria-selected="true"] { border-color: #145f3d; background: #267b55; color: #fff; }
+:root[data-theme="cinematic-solarpunk"] .workspace-deck { background: linear-gradient(rgb(248 255 243 / 0.82), rgb(211 232 198 / 0.72)); }
+:root[data-theme="cinematic-solarpunk"] [data-workspace-pane] { border-color: #94b69a; background: rgb(251 255 246 / 0.78); }
+:root[data-theme="cinematic-solarpunk"] .panel { border: 1px solid #7ba185; border-radius: 0.9rem; background: linear-gradient(145deg, rgb(38 123 85 / 0.06), transparent 30%), #fbfff6; box-shadow: 0 0.5rem 1.15rem rgb(43 90 61 / 0.15); }
+:root[data-theme="cinematic-solarpunk"] #radio-activity-panel { border-color: #628d6f; background: linear-gradient(90deg, rgb(38 123 85 / 0.09), transparent 50%), #f6fff0; }
+:root[data-theme="cinematic-solarpunk"] .radio-view-controls { border: 1px solid #7ba185; border-radius: 0.9rem; background: #e3efd9; }
+:root[data-theme="cinematic-solarpunk"] .radio-field-groups { border-color: #94b69a; background: rgb(38 123 85 / 0.035); }
+:root[data-theme="cinematic-solarpunk"] :is(button, .recording-action, select, input, textarea) { border-color: #7ba185; border-radius: 999px; background: linear-gradient(#ffffff, #dcebd0); color: var(--text); }
+:root[data-theme="cinematic-solarpunk"] :is(button, .recording-action):hover:not(:disabled):not([aria-selected="true"]) { color: var(--text); border-color: #145f3d; background: #d0edcf; }
+:root[data-theme="cinematic-solarpunk"] .status-badge { border-radius: 999px; }
+@media (prefers-reduced-motion: reduce) { :root[data-theme="cinematic-solarpunk"] *, :root[data-theme="cinematic-solarpunk"] *::before, :root[data-theme="cinematic-solarpunk"] *::after { animation: none !important; transition: none !important; } }
+@media (forced-colors: active) { :root[data-theme="cinematic-solarpunk"] { --background: Canvas; --surface: Canvas; --surface-emphasis: Canvas; --text: CanvasText; --muted: CanvasText; --border: CanvasText; --accent: Highlight; --accent-strong: Highlight; --focus: Highlight; } :root[data-theme="cinematic-solarpunk"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups) { background: Canvas; box-shadow: none; } :root[data-theme="cinematic-solarpunk"] .site-header::after { display: none; } }

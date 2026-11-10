@@ -994,11 +994,11 @@ def main() -> None:
         report = json.loads(files["candidate-source.json"])
         if validated_custom_stager_revision(args.source_revision) != report["stager_revision"]:
             raise ValueError("Custom candidate stager checkout changed before verification.")
-    elif not args.verify:
-        if git("rev-parse", "HEAD").decode().strip() != args.source_revision or git(
-            "status", "--porcelain"
-        ):
-            raise ValueError("Stage only the clean current committed checkout.")
+    elif not args.verify and (
+        git("rev-parse", "HEAD").decode().strip() != args.source_revision
+        or git("status", "--porcelain")
+    ):
+        raise ValueError("Stage only the clean current committed checkout.")
     if not args.verify:
         stage(args.destination, files)
     verify(args.destination, files)

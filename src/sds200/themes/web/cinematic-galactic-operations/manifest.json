@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "interface": "web",
+  "id": "cinematic-galactic-operations",
+  "label": "Galactic Operations",
+  "order": 1200,
+  "stylesheet": "theme.css",
+  "color_scheme": "dark",
+  "theme_colors": {"light": "#05080d", "dark": "#05080d"}
+}

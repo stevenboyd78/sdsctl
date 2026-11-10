@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "interface": "web",
+  "id": "cinematic-fantasy-cartographer",
+  "label": "Fantasy Cartographer",
+  "order": 1120,
+  "stylesheet": "theme.css",
+  "color_scheme": "light",
+  "theme_colors": {"light": "#d8c99f", "dark": "#d8c99f"}
+}

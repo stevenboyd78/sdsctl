@@ -19,17 +19,14 @@ For the four non-LCARS themed layouts, **Typography** offers:
   text, and native monospace readouts.
 - **System fonts:** native sans-serif with native monospace readouts throughout.
 
-**Font pairing** appears only where there are alternatives. On wide screens,
-appearance controls are centered between the overview title and connection
-status, matching LCARS. In the full dashboard, widths up to 65rem wrap them onto
-a centered row below the title and status. Small landscape dashboards put each
-label beside its selector in that row, preserving workspace height without
-shrinking the fonts or controls. In display-only mode, those narrow
-screens (including tall phones) keep typography in the dashboard menu's
-Appearance section instead, preserving plot space and full-sized touch controls.
-Compact display-only layouts keep their other appearance controls there too.
-Resizing back to a wide screen restores the same controls and preferences to
-their original positions. A theme with no font alternatives hides Font pairing.
+**Font pairing** appears only where there are alternatives. Ordinary non-native
+dashboards keep the responsive overview placement described above. Authenticated
+operator and display-only native dashboards instead keep Theme, palette and
+typography together in the **Display & session** drawer at every viewport size.
+The drawer overlays the workspace, scrolls internally when space is short and
+retains full-sized touch controls. It moves the canonical controls rather than
+copying them, so resizing and reopening preserve the same nodes, selections and
+preferences. A theme with no font alternatives hides Font pairing.
 Preferences are independent for each theme and stored only in this browser under
 `sdsctl.web.theme-typography.v1`. Switching themes does not overwrite the previous
 theme's choices. Invalid values fall back to defaults; blocked browser storage

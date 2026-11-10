@@ -37,6 +37,7 @@ from sds200.web_dashboard import (
     WEB_DASHBOARD_UNAVAILABLE_DETAIL,
     create_web_dashboard_app,
 )
+from sds200.web_themes import BUILT_IN_WEB_THEME_IDS, built_in_web_theme_registry
 
 
 class FakeDaemonApiClient:
@@ -607,14 +608,17 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
         hold_state = response.text.index(
             f'id="scanner-hold-{scope}-state"', hold_button
         )
+        hold_state_end = response.text.index("</span>", hold_state)
         assert current < hold_button < hold_state
+        assert "Unavailable" in response.text[current:hold_button]
         assert (
             f'aria-describedby="scanner-current-{scope} '
             f'scanner-hold-{scope}-state"'
         ) in response.text[hold_button:hold_state]
         assert 'aria-pressed="false"' in response.text[hold_button:hold_state]
-        assert 'data-state="unknown"' in response.text[hold_state:]
-        assert "Unavailable" in response.text[hold_state:]
+        assert 'data-state="unknown"' in response.text[hold_state:hold_state_end]
+        assert "Unknown" in response.text[hold_state:hold_state_end]
+        assert "Unavailable" not in response.text[hold_state:hold_state_end]
     for scope in ("system", "department", "site", "channel"):
         suffix = "" if scope == "channel" else f"-{scope}"
         assert f'id="scanner-previous{suffix}"' in response.text
@@ -645,6 +649,11 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
     assert 'id="waterfall-fullscreen"' in response.text
     assert "Relative, uncalibrated scanner values" in response.text
     assert 'class="scanner-display-hierarchy"' in response.text
+    for scope in ("system", "department", "site", "channel"):
+        assert (
+            f'data-hold-scope="{scope}" data-hold-state="unknown"'
+            in response.text
+        )
     assert 'id="radio-view-auto"' in response.text
     assert 'id="radio-scan-fallback-select"' in response.text
     assert "media-src 'self'" in response.headers["content-security-policy"]
@@ -671,17 +680,15 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
         '<option value="pip-boy-inspired">Pip-Boy-inspired</option>'
         in response.text
     )
+    for theme in built_in_web_theme_registry().themes:
+        assert (
+            f'<option value="{theme.identifier}">{theme.label}</option>'
+            in response.text
+        )
     assert 'src="assets/theme-bootstrap.js"' in response.text
     assert 'href="assets/dashboard.css"' in response.text
     assert 'href="assets/system-palettes.css"' in response.text
-    for theme in (
-        "system",
-        "lcars",
-        "matrix",
-        "first-responder",
-        "amateur-radio",
-        "pip-boy-inspired",
-    ):
+    for theme in BUILT_IN_WEB_THEME_IDS:
         assert f'href="assets/themes/{theme}/theme.css"' in response.text
     assert response.text.index('href="assets/dashboard.css"') < response.text.index(
         'href="assets/themes/system/theme.css"'
@@ -689,6 +696,9 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
     assert response.text.index('href="assets/themes/pip-boy-inspired/theme.css"') < (
         response.text.index('href="assets/system-palettes.css"')
     )
+    assert response.text.index(
+        'href="assets/themes/cinematic-tactical-field/theme.css"'
+    ) < response.text.index('href="assets/system-palettes.css"')
     assert response.text.index('href="assets/system-palettes.css"') < (
         response.text.index('href="assets/dashboard-viewport.css"')
     )
@@ -696,8 +706,28 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
         response.text.index('src="assets/theme-bootstrap.js"')
     )
     assert 'src="assets/dashboard.js"' in response.text
+    assert 'src="dashboard-file-preview.js"' not in response.text
     assert "<style" not in response.text
     assert "<script>" not in response.text
+
+
+def test_raw_dashboard_source_has_truthful_static_file_preview() -> None:
+    repository_root = Path(__file__).resolve().parents[1]
+    asset_root = repository_root / "src" / "sds200" / "web_assets"
+    dashboard = (asset_root / "dashboard.html").read_text(encoding="utf-8")
+    preview = (asset_root / "dashboard-file-preview.js").read_text(
+        encoding="utf-8",
+    )
+
+    assert 'src="dashboard-file-preview.js"' in dashboard
+    assert 'data-state="loading"' in dashboard
+    assert 'aria-atomic="true"' in dashboard
+    assert 'globalThis.location?.protocol !== "file:"' in preview
+    assert 'dataset.previewMode = "static"' in preview
+    assert "sample data only; no daemon or scanner is connected" in preview
+    assert '"scanner-connected": "Static fixture"' in preview
+    assert '"scanner-endpoint": "No live endpoint"' in preview
+    assert "fetch(" not in preview
 
 
 def test_web_dashboard_serves_packaged_static_assets() -> None:
@@ -714,14 +744,7 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
         system_palette_stylesheet = client.get("/assets/system-palettes.css")
         theme_stylesheets = {
             theme: client.get(f"/assets/themes/{theme}/theme.css")
-            for theme in (
-                "system",
-                "lcars",
-                "matrix",
-                "first-responder",
-                "amateur-radio",
-                "pip-boy-inspired",
-            )
+            for theme in BUILT_IN_WEB_THEME_IDS
         }
         theme_bootstrap = client.get("/assets/theme-bootstrap.js")
         script = client.get("/assets/dashboard.js")
@@ -926,6 +949,8 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert '"matrix"' in theme_bootstrap.text
     assert '"first-responder"' in theme_bootstrap.text
     assert '"amateur-radio"' in theme_bootstrap.text
+    for theme in BUILT_IN_WEB_THEME_IDS:
+        assert json.dumps(theme) in theme_bootstrap.text
     assert "localStorage.getItem" in theme_bootstrap.text
     assert "localStorage.setItem" in theme_bootstrap.text
     assert "document.documentElement.dataset.theme" in theme_bootstrap.text
@@ -979,6 +1004,9 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert 'performScannerControl("reconnect", "Reconnect scanner")' in script.text
     assert 'daemonControlSupported("scanner.hold_state")' in script.text
     assert "setScannerHoldControl" in script.text
+    assert "setScannerFieldHoldState" in script.text
+    for scope in ("system", "department", "site", "channel"):
+        assert f'setScannerFieldHoldState("{scope}",' in script.text
     assert 'radio.channel_hold === "On"' in script.text
     assert "button.disabled = !available" in script.text
     assert 'button.setAttribute("aria-pressed"' in script.text
@@ -986,6 +1014,7 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert "setScannerCurrentSelection" in script.text
     assert 'setScannerCurrentSelection("system", radio.system)' in script.text
     assert 'setScannerCurrentSelection("channel", radio.channel)' in script.text
+    assert '!known ? "Unknown" : held ? "Held" : "Not held"' in script.text
     assert 'held ? "Held" : "Not held"' in script.text
     assert 'held ? "held" : "released"' in script.text
     assert "indicator.hidden = !held" not in script.text
@@ -2218,3 +2247,65 @@ def test_dashboard_layout_uses_dedicated_recording_library_panel() -> None:
     assert 'id="recordings-title"' in recordings_pane
     assert 'id="recordings-previous-page"' in recordings_pane
     assert 'id="recordings-next-page"' in recordings_pane
+
+
+def test_authenticated_display_and_session_drawer_contract() -> None:
+    asset_root = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "sds200"
+        / "web_assets"
+    )
+    script = (asset_root / "dashboard.js").read_text(encoding="utf-8")
+    viewport = (asset_root / "dashboard-viewport.css").read_text(encoding="utf-8")
+
+    assert "let nativeMenuController = null" in script
+    assert "function initializeNativeMenu(logout, logoutButton)" in script
+    assert "nativeMenuController = initializeNativeMenu(logout, button)" in script
+    assert "if (displayOnly) initializeDisplayNavigation(nativeMenuController)" in script
+    assert 'trigger.id = "native-menu-toggle"' in script
+    assert 'const trigger = make("button", "Display & session")' in script
+    assert 'title.id = "native-menu-title"' in script
+    assert 'sessionSummary.id = "native-session-summary"' in script
+    assert 'dialog.id = "native-menu"' in script
+    assert 'document.createComment("native drawer control position")' in script
+    assert "appearance.append(node)" in script
+    assert 'banner.setAttribute("role", "alert")' in script
+    assert 'banner.setAttribute("aria-live", "assertive")' in script
+    assert "banner.hidden = true" in script
+    assert 'displayOnly ? "auth/display/login" : "auth/login"' in script
+    assert "nativeMenuController?.invalidate()" in script
+    assert "logoutButton.disabled = true" in script
+    assert "logout.hidden = true" in script
+    assert 'close({restoreFocus: false})' in script
+    close_source = script.split("const close = ({restoreFocus = true} = {}) => {", 1)[1].split(
+        "const open = () => {", 1
+    )[0]
+    expanded_reset = 'trigger.setAttribute("aria-expanded", "false")'
+    assert close_source.index(expanded_reset) < close_source.index(
+        "if (dialog.open) dialog.close()"
+    )
+    close_event_source = script.split('dialog.addEventListener("close", () => {', 1)[1].split(
+        "});", 1
+    )[0]
+    assert expanded_reset in close_event_source
+    assert (
+        '"a[href], button, input, select, textarea, summary, '
+        "[tabindex]:not([tabindex='-1'])\""
+    ) in script
+    assert 'dialog.addEventListener("pointerdown"' in script
+    assert 'dialog.addEventListener("pointercancel"' in script
+    assert 'backdropPointerStartedOutside && event.target === dialog' in script
+
+    assert "#native-menu[open]" in viewport
+    assert "env(safe-area-inset-top)" in viewport
+    assert "100dvh" in viewport
+    assert "overflow-x: hidden !important" in viewport
+    assert "overflow-y: auto !important" in viewport
+    assert "overscroll-behavior: contain !important" in viewport
+    assert "scrollbar-gutter: stable !important" in viewport
+    assert "[tabindex]:not([tabindex=\"-1\"])" in viewport
+    assert "min-height: 44px !important" in viewport
+    assert 'html[data-access-mode][data-session-state="login-required"] .dashboard' in viewport
+    assert "html[data-access-mode] .dashboard {" not in viewport
+    assert "@media (forced-colors: active)" in viewport

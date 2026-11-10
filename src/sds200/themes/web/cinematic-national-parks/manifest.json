@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "interface": "web",
+  "id": "cinematic-national-parks",
+  "label": "National Parks Ranger",
+  "order": 1190,
+  "stylesheet": "theme.css",
+  "color_scheme": "light",
+  "theme_colors": {"light": "#efe1bd", "dark": "#efe1bd"}
+}

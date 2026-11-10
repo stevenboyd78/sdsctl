@@ -4,7 +4,7 @@
  * Run the dashboard and Home Assistant waterfall-card acceptance in one Chrome.
  *
  * This intentionally uses only Node built-ins and Chrome DevTools Protocol.
- * It writes no screenshots; the 26-image documentation gallery remains the
+ * It writes no screenshots; the 48-image documentation gallery remains the
  * responsibility of generate_web_dashboard_screenshots.py.
  */
 
@@ -25,13 +25,58 @@ export const THEMES = Object.freeze([
   "first-responder",
   "amateur-radio",
   "pip-boy-inspired",
+  "cinematic-mission-control",
+  "cinematic-cyberpunk-night",
+  "cinematic-synthwave",
+  "cinematic-cold-war-radar",
+  "cinematic-dieselpunk-command",
+  "cinematic-steampunk-telegraph",
+  "cinematic-retro-arcade",
+  "cinematic-y2k-media",
+  "cinematic-mecha-operations",
+  "cinematic-comic-book",
+  "cinematic-wizarding-archive",
+  "cinematic-gothic-cathedral",
+  "cinematic-fantasy-cartographer",
+  "cinematic-desert-empire",
+  "cinematic-carrier-air-wing",
+  "cinematic-motorsport-pit-wall",
+  "cinematic-noir-detective",
+  "cinematic-art-deco-radio",
+  "cinematic-solarpunk",
+  "cinematic-national-parks",
+  "cinematic-galactic-operations",
+  "cinematic-tactical-field",
 ]);
 
 export const VIEWPORTS = Object.freeze([
   Object.freeze({name: "full-hd", width: 1920, height: 1080, dpr: 1}),
+  Object.freeze({name: "desktop-windowed", width: 1920, height: 900, dpr: 1}),
   Object.freeze({name: "laptop", width: 1366, height: 768, dpr: 1}),
   Object.freeze({name: "scanner-landscape", width: 800, height: 480, dpr: 1}),
   Object.freeze({name: "phone", width: 390, height: 844, dpr: 2}),
+]);
+
+const OPERATOR_DRAWER_VIEWPORTS = Object.freeze([
+  ...VIEWPORTS,
+  Object.freeze({name: "zoomed", width: 400, height: 240, dpr: 1}),
+]);
+
+const HERO_PANORAMA_SCENES = Object.freeze([
+  Object.freeze({theme: "cinematic-carrier-air-wing", scene: "carrier-air-wing"}),
+  Object.freeze({theme: "cinematic-tactical-field", scene: "tactical-field"}),
+  Object.freeze({theme: "cinematic-wizarding-archive", scene: "wizarding-archive"}),
+  Object.freeze({theme: "cinematic-galactic-operations", scene: "galactic-operations"}),
+  Object.freeze({theme: "cinematic-mission-control", scene: "mission-control"}),
+  Object.freeze({theme: "cinematic-cyberpunk-night", scene: "cyberpunk-night"}),
+]);
+
+const HERO_PANORAMA_BOUNDARIES = Object.freeze([
+  Object.freeze({width: 1280, height: 720, panorama: true}),
+  Object.freeze({width: 1440, height: 960, panorama: true}),
+  Object.freeze({width: 1440, height: 961, panorama: false}),
+  Object.freeze({width: 1279, height: 720, panorama: false}),
+  Object.freeze({width: 1280, height: 719, panorama: false}),
 ]);
 
 export const PANES = Object.freeze([
@@ -84,17 +129,21 @@ const RADIO_FIELD_IDS = Object.freeze([
 ]);
 
 const DEFAULT_TIMEOUT_MS = 20_000;
+const DEFAULT_STARTUP_TIMEOUT_MS = 90_000;
 const SCREENSHOT_STATUS_MESSAGE = "Daemon and scanner status are available.";
 const HELP = `\
 Usage: node scripts/audit_web_dashboard_browser.mjs [options]
 
 Run the deterministic dashboard and Home Assistant waterfall-card browser audit in one local
-Chrome/Chromium session. The audit writes no PNGs. It covers all 144 built-in
-theme × reference CSS viewport × workspace pane cases, all 189 explicit System
+Chrome/Chromium session. The audit writes no PNGs. It covers all 840 built-in
+theme × reference CSS viewport × workspace pane cases, 30 exact panoramic-boundary
+cases for the six hero environments, all 210 explicit System
 palette responsive cases, plus media-preference, enlarged-text,
 pagination-focus, trusted Tab/Shift+Tab traversal, WCAG AA contrast, complete
 adaptive-presentation, DPR-transition, and prefixed-URL probes. It also covers
 the LCARS navigation breakpoint immediately below, at, and above 44rem,
+the operator and display-only Display & session drawer at every reference
+viewport plus 400x240 reachability, focus, backdrop, expiry, and stopped-retry probes,
 phone recording controls with alternative system-font metrics, and
 the Home Assistant Ingress Diagnostics layout across all themes at desktop and
 phone widths, plus the authenticated waterfall card at desktop, 800x480, and
@@ -106,11 +155,15 @@ Options:
   --chrome PATH       Chrome/Chromium executable (auto-detected by default)
   --python PATH       Python used for the demo server (repo .venv by default)
   --base-url URL      Audit an already-running demo server instead of starting one
-  --timeout-ms N      Startup and CDP operation timeout (default: 20000)
+  --startup-timeout-ms N
+                      Chrome process readiness timeout (default: 90000)
+  --timeout-ms N      CDP and dashboard operation timeout (default: 20000)
+  --findings-json PATH
+                      Write the complete deterministic matrix result as JSON
   --waterfall-only    Run only the Home Assistant waterfall-card regression/lifecycle audit
   --waterfall-screenshot-dir PATH
                       Write three sanitized waterfall-card reference PNGs
-  --list              List the 144 matrix cases without opening Chrome
+  --list              List the 840 matrix cases without opening Chrome
   -h, --help          Show this help and exit
 
 The default command requires Node.js 24 or newer, starts the existing fictional-data server from
@@ -120,13 +173,15 @@ then removes only its temporary browser profile. No third-party Node package or
 new Python runtime dependency is required.
 `;
 
-function parseArguments(argv) {
+export function parseArguments(argv) {
   const options = {
     baseUrl: null,
     chrome: null,
+    findingsJsonPath: null,
     help: false,
     list: false,
     python: null,
+    startupTimeoutMs: DEFAULT_STARTUP_TIMEOUT_MS,
     timeoutMs: DEFAULT_TIMEOUT_MS,
     waterfallScreenshotDirectory: null,
     waterfallOnly: false,
@@ -143,7 +198,9 @@ function parseArguments(argv) {
     } else if ([
       "--base-url",
       "--chrome",
+      "--findings-json",
       "--python",
+      "--startup-timeout-ms",
       "--timeout-ms",
       "--waterfall-screenshot-dir",
     ].includes(argument)) {
@@ -158,10 +215,14 @@ function parseArguments(argv) {
         options.chrome = value;
       } else if (argument === "--python") {
         options.python = value;
+      } else if (argument === "--findings-json") {
+        options.findingsJsonPath = path.resolve(value);
       } else if (argument === "--waterfall-screenshot-dir") {
         options.waterfallScreenshotDirectory = path.resolve(value);
-      } else {
+      } else if (argument === "--timeout-ms") {
         options.timeoutMs = Number(value);
+      } else {
+        options.startupTimeoutMs = Number(value);
       }
     } else {
       throw new Error(`unknown argument: ${argument}`);
@@ -170,6 +231,9 @@ function parseArguments(argv) {
 
   if (!Number.isInteger(options.timeoutMs) || options.timeoutMs <= 0) {
     throw new Error("--timeout-ms must be a positive integer");
+  }
+  if (!Number.isInteger(options.startupTimeoutMs) || options.startupTimeoutMs <= 0) {
+    throw new Error("--startup-timeout-ms must be a positive integer");
   }
   if (options.baseUrl !== null) {
     const parsed = new URL(options.baseUrl);
@@ -183,7 +247,28 @@ function parseArguments(argv) {
     parsed.search = "";
     options.baseUrl = parsed.toString().replace(/\/$/, "");
   }
+  if (options.findingsJsonPath !== null && (options.list || options.waterfallOnly)) {
+    throw new Error("--findings-json requires the complete dashboard matrix audit");
+  }
   return options;
+}
+
+export function serializeFindingsReport(result) {
+  return `${JSON.stringify({
+    audit: "web-dashboard-browser",
+    matrix: {
+      panes: PANES,
+      themes: THEMES,
+      viewports: VIEWPORTS,
+    },
+    result,
+    schemaVersion: 1,
+  }, null, 2)}\n`;
+}
+
+export async function writeFindingsReport(outputPath, result) {
+  await mkdir(path.dirname(outputPath), {recursive: true});
+  await writeFile(outputPath, serializeFindingsReport(result), "utf8");
 }
 
 function listCases() {
@@ -303,7 +388,7 @@ export async function waitForHttp(url, timeoutMs, child = null, {
     attempts, outcomes: Object.fromEntries(outcomes),
     exitCode: child?.exitCode ?? null, signalCode: child?.signalCode ?? null});
   while (now() < deadline) {
-    if (child !== null && child.exitCode !== null) {
+    if (child !== null && (child.exitCode !== null || child.signalCode !== null)) {
       throw new Error(`process exited before ${url} became ready; readiness=${diagnostic()}`);
     }
     attempts += 1;
@@ -324,17 +409,85 @@ export async function waitForHttp(url, timeoutMs, child = null, {
   throw new Error(`timed out waiting for ${url}: ${String(lastError)}; readiness=${diagnostic()}`);
 }
 
-export async function stopChild(child) {
-  if (child === null || child.exitCode !== null) {
-    return;
+const childStopOperations = new WeakMap();
+
+function childIsTerminal(child) {
+  return child.exitCode !== null || child.signalCode !== null;
+}
+
+function signalChildAndWait(child, signal, timeoutMs) {
+  if (childIsTerminal(child)) {
+    return Promise.resolve(true);
   }
-  child.kill("SIGTERM");
-  const exited = new Promise((resolve) => child.once("exit", resolve));
-  const timeout = delay(5_000).then(() => "timeout");
-  if ((await Promise.race([exited, timeout])) === "timeout") {
-    child.kill("SIGKILL");
-    await new Promise((resolve) => child.once("exit", resolve));
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer = null;
+    const finish = (terminal, error = null) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
+      child.removeListener("exit", onExit);
+      if (error !== null) {
+        reject(error);
+      } else {
+        resolve(terminal);
+      }
+    };
+    const onExit = () => finish(true);
+    child.once("exit", onExit);
+    if (childIsTerminal(child)) {
+      finish(true);
+      return;
+    }
+    try {
+      child.kill(signal);
+    } catch (error) {
+      if (childIsTerminal(child)) {
+        finish(true);
+        return;
+      }
+      if (error?.code !== "ESRCH") {
+        finish(false, error);
+        return;
+      }
+    }
+    if (childIsTerminal(child)) {
+      finish(true);
+      return;
+    }
+    timer = setTimeout(() => finish(childIsTerminal(child)), timeoutMs);
+  });
+}
+
+export function stopChild(child, {termTimeoutMs = 5_000, killTimeoutMs = 5_000} = {}) {
+  if (child === null || childIsTerminal(child)) {
+    return Promise.resolve();
   }
+  const existing = childStopOperations.get(child);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const operation = (async () => {
+    if (await signalChildAndWait(child, "SIGTERM", termTimeoutMs)) {
+      return;
+    }
+    if (await signalChildAndWait(child, "SIGKILL", killTimeoutMs)) {
+      return;
+    }
+    throw new Error(`child did not exit after SIGTERM (${termTimeoutMs}ms) and ` +
+      `SIGKILL (${killTimeoutMs}ms); exitCode=${child.exitCode} signalCode=${child.signalCode}`);
+  })();
+  const tracked = operation.finally(() => {
+    if (childStopOperations.get(child) === tracked) {
+      childStopOperations.delete(child);
+    }
+  });
+  childStopOperations.set(child, tracked);
+  return tracked;
 }
 
 async function websocketText(data) {
@@ -871,50 +1024,600 @@ async function pressKey(cdp, key, code, virtualKeyCode, {modifiers = 0} = {}) {
   await frames(cdp);
 }
 
-async function clickElement(cdp, selector) {
-  const point = await evaluate(
+let trustedClickSequence = 0;
+const TRUSTED_CLICK_MAX_ATTEMPTS = 3;
+const TRUSTED_CLICK_MAX_POINTER_MOVES = 3;
+const TRUSTED_CLICK_MAX_PHYSICAL_ATTEMPTS = 2;
+const TRUSTED_CLICK_SAFE_RELEASE_POINT = Object.freeze({x: -1, y: -1});
+
+function sameClickGeometry(left, right) {
+  return left !== null && right !== null &&
+    left.x === right.x && left.y === right.y &&
+    left.rect.left === right.rect.left && left.rect.right === right.rect.right &&
+    left.rect.top === right.rect.top && left.rect.bottom === right.rect.bottom;
+}
+
+function preserveTrustedClickError(primary, secondary, phase) {
+  const error = secondary instanceof Error ? secondary : new Error(String(secondary));
+  if (primary === null) return error;
+  const suppressed = Array.isArray(primary.trustedClickSuppressed)
+    ? primary.trustedClickSuppressed
+    : [];
+  suppressed.push({message: error.message, phase});
+  primary.trustedClickSuppressed = suppressed;
+  return primary;
+}
+
+async function cleanupTrustedClickWitness(cdp, witnessToken) {
+  return evaluate(
     cdp,
     `(() => {
-      const element = document.querySelector(${JSON.stringify(selector)});
-      if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
-        return null;
+      /* trusted-click-witness cleanup before geometry reacquisition or exit;
+         token-scoped so one click cannot remove another click's witness */
+      const key = Symbol.for("sdsctl.browser-audit.trusted-click-witness");
+      const record = globalThis[key];
+      if (record?.token !== ${witnessToken}) return {clicked: null, matched: false};
+      if (record.listenerTarget instanceof EventTarget && typeof record.listener === "function") {
+        record.listenerTarget.removeEventListener("click", record.listener, true);
       }
-      element.scrollIntoView({block: "nearest", inline: "nearest"});
-      const rect = element.getBoundingClientRect();
-      return {
-        x: rect.left + rect.width / 2,
-        y: rect.top + rect.height / 2,
-      };
+      delete globalThis[key];
+      return {clicked: record.clicked, matched: true};
     })()`,
   );
+}
+
+export async function clickElement(cdp, selector) {
+  return clickElementWithRecovery(cdp, selector, 1);
+}
+
+async function clickElementWithRecovery(cdp, selector, physicalAttempt) {
+  let point = null;
+  let witnessToken = null;
+  const observationHistory = [];
+  for (let attempt = 1; attempt <= TRUSTED_CLICK_MAX_ATTEMPTS; attempt += 1) {
+    const available = await evaluate(
+      cdp,
+      `(() => {
+        const element = document.querySelector(${JSON.stringify(selector)});
+        if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
+          return false;
+        }
+        element.scrollIntoView({block: "nearest", inline: "nearest"});
+        // A sticky phone control can receive a native focus scroll
+        // synchronously with mousePressed. Perform that same visibility work
+        // before the first measurement so the one physical press cannot be
+        // dispatched at a coordinate from the pre-focus layout.
+        element.focus({preventScroll: false});
+        return document.activeElement === element || element.contains(document.activeElement);
+      })()`,
+    );
+    if (!available) {
+      throw new Error(`cannot click ${selector}`);
+    }
+
+    // Scrolling or focus can move sticky controls or reflow a compact
+    // workspace. Cross a rendering boundary before measuring the coordinate
+    // that will receive trusted pointer movement, rather than using a
+    // pre-layout position.
+    await frames(cdp);
+    const initial = await evaluate(
+      cdp,
+      `(() => {
+        const element = document.querySelector(${JSON.stringify(selector)});
+        if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
+          return null;
+        }
+        const rect = element.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        return {
+          focused: document.activeElement === element || element.contains(document.activeElement),
+          hit: hit instanceof Element ? {
+            classes: Array.from(hit.classList).slice(0, 2),
+            id: hit.id,
+            tag: hit.localName,
+          } : null,
+          owned: hit instanceof Element && (hit === element || element.contains(hit)),
+          rect: {
+            bottom: rect.bottom,
+            left: rect.left,
+            right: rect.right,
+            top: rect.top,
+          },
+          x,
+          y,
+        };
+      })()`,
+    );
+    if (initial === null) {
+      throw new Error(`cannot click ${selector}`);
+    }
+    observationHistory.push({attempt, pointerMove: 0, ...initial});
+
+    // Trusted pointer movement can itself activate hover styling that changes
+    // sticky phone geometry. Follow the remeasured center through at most
+    // three pre-dispatch moves, crossing a rendering boundary and requiring
+    // two consecutive owned, truly hovered observations with identical
+    // geometry before the one click.
+    let candidate = initial;
+    for (
+      let pointerMove = 1;
+      pointerMove <= TRUSTED_CLICK_MAX_POINTER_MOVES;
+      pointerMove += 1
+    ) {
+      if (!candidate.owned) break;
+      await cdp.send("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        x: candidate.x,
+        y: candidate.y,
+      });
+      await frames(cdp);
+      const confirmed = await evaluate(
+        cdp,
+        `(() => {
+          const element = document.querySelector(${JSON.stringify(selector)});
+          if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
+            return null;
+          }
+          const rect = element.getBoundingClientRect();
+          const x = rect.left + rect.width / 2;
+          const y = rect.top + rect.height / 2;
+          const hit = document.elementFromPoint(x, y);
+          return {
+            focused: document.activeElement === element || element.contains(document.activeElement),
+            hit: hit instanceof Element ? {
+              classes: Array.from(hit.classList).slice(0, 2),
+              id: hit.id,
+              tag: hit.localName,
+            } : null,
+            hovered: element.matches(":hover"),
+            owned: hit instanceof Element && (hit === element || element.contains(hit)),
+            rect: {
+              bottom: rect.bottom,
+              left: rect.left,
+              right: rect.right,
+              top: rect.top,
+            },
+            x,
+            y,
+          };
+        })()`,
+      );
+      if (confirmed === null) {
+        throw new Error(`cannot click ${selector}`);
+      }
+      observationHistory.push({attempt, pointerMove, ...confirmed});
+      if (
+        candidate.focused && candidate.owned && candidate.hovered &&
+        confirmed.focused && confirmed.owned && confirmed.hovered &&
+        sameClickGeometry(candidate, confirmed)
+      ) {
+        point = confirmed;
+        break;
+      }
+      candidate = confirmed;
+    }
+    if (point === null) {
+      if (attempt < TRUSTED_CLICK_MAX_ATTEMPTS) await movePointerAway(cdp);
+      continue;
+    }
+
+    const attemptWitnessToken = ++trustedClickSequence;
+    let attemptAccepted = false;
+    let attemptError = null;
+    try {
+      // The arm request itself is inside the cleanup scope because the page
+      // can install its listener before a protocol response is lost.
+      const witnessArmed = await evaluate(
+        cdp,
+        `(() => {
+          const element = document.querySelector(${JSON.stringify(selector)});
+          if (!(element instanceof HTMLElement) || element.matches(":disabled")) return false;
+          const key = Symbol.for("sdsctl.browser-audit.trusted-click-witness");
+          const previous = globalThis[key];
+          if (
+            previous?.listenerTarget instanceof EventTarget &&
+            typeof previous.listener === "function"
+          ) {
+            previous.listenerTarget.removeEventListener("click", previous.listener, true);
+          }
+          const record = {
+            clicked: null,
+            element,
+            listener: null,
+            listenerTarget: document,
+            token: ${attemptWitnessToken},
+          };
+          record.listener = event => {
+            record.clicked = {
+              isTrusted: event.isTrusted,
+              owned: event.target instanceof Node &&
+                (event.target === element || element.contains(event.target)),
+              target: event.target instanceof Element ? {
+                id: event.target.id,
+                tag: event.target.localName,
+              } : null,
+            };
+          };
+          // Observe every click at the document capture boundary. A null
+          // receipt then proves the released press caused no DOM click at all,
+          // rather than merely no click on the intended target. That proof is
+          // required before the single bounded post-press recovery below.
+          record.listenerTarget.addEventListener(
+            "click",
+            record.listener,
+            {capture: true, once: true},
+          );
+          globalThis[key] = record;
+          return true;
+        })()`,
+      );
+      if (!witnessArmed) {
+        throw new Error(`cannot arm trusted click witness for ${selector}`);
+      }
+
+      // Arming the listener is another asynchronous boundary. Give pending
+      // layout work a chance to finish, then prove the stabilized center and
+      // the pointer's existing coordinate are still owned before dispatching.
+      await frames(cdp);
+      const armedPoint = await evaluate(
+        cdp,
+        `(() => {
+          const element = document.querySelector(${JSON.stringify(selector)});
+          if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
+            return null;
+          }
+          const rect = element.getBoundingClientRect();
+          const x = rect.left + rect.width / 2;
+          const y = rect.top + rect.height / 2;
+          const hit = document.elementFromPoint(x, y);
+          const stabilizedHit = document.elementFromPoint(${point.x}, ${point.y});
+          const key = Symbol.for("sdsctl.browser-audit.trusted-click-witness");
+          const record = globalThis[key];
+          return {
+            focused: document.activeElement === element || element.contains(document.activeElement),
+            hit: hit instanceof Element ? {
+              classes: Array.from(hit.classList).slice(0, 2),
+              id: hit.id,
+              tag: hit.localName,
+            } : null,
+            hovered: element.matches(":hover"),
+            owned: hit instanceof Element && (hit === element || element.contains(hit)),
+            rect: {
+              bottom: rect.bottom,
+              left: rect.left,
+              right: rect.right,
+              top: rect.top,
+            },
+            stabilizedPointOwned: stabilizedHit instanceof Element &&
+              (stabilizedHit === element || element.contains(stabilizedHit)),
+            witnessCurrent: record?.token === ${attemptWitnessToken} && record.element === element,
+            x,
+            y,
+          };
+        })()`,
+      );
+      observationHistory.push({attempt, postArm: true, ...armedPoint});
+      if (
+        armedPoint !== null && armedPoint.focused && armedPoint.owned && armedPoint.hovered &&
+        armedPoint.stabilizedPointOwned && armedPoint.witnessCurrent &&
+        sameClickGeometry(point, armedPoint)
+      ) {
+        // Close the last asynchronous gap before dispatch. Re-align the trusted
+        // pointer with the accepted center, cross the frame/font boundary once
+        // more, and require the still-focused witness target to own both its
+        // center and the already-positioned pointer coordinate.
+        await cdp.send("Input.dispatchMouseEvent", {
+          type: "mouseMoved",
+          x: armedPoint.x,
+          y: armedPoint.y,
+        });
+        await frames(cdp);
+        const dispatchPoint = await evaluate(
+          cdp,
+          `(() => {
+            const element = document.querySelector(${JSON.stringify(selector)});
+            if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
+              return null;
+            }
+            const rect = element.getBoundingClientRect();
+            const x = rect.left + rect.width / 2;
+            const y = rect.top + rect.height / 2;
+            const hit = document.elementFromPoint(x, y);
+            const dispatchHit = document.elementFromPoint(${armedPoint.x}, ${armedPoint.y});
+            const key = Symbol.for("sdsctl.browser-audit.trusted-click-witness");
+            const record = globalThis[key];
+            return {
+              dispatchPointOwned: dispatchHit instanceof Element &&
+                (dispatchHit === element || element.contains(dispatchHit)),
+              focused: document.activeElement === element || element.contains(document.activeElement),
+              hit: hit instanceof Element ? {
+                classes: Array.from(hit.classList).slice(0, 2),
+                id: hit.id,
+                tag: hit.localName,
+              } : null,
+              hovered: element.matches(":hover"),
+              owned: hit instanceof Element && (hit === element || element.contains(hit)),
+              rect: {
+                bottom: rect.bottom,
+                left: rect.left,
+                right: rect.right,
+                top: rect.top,
+              },
+              witnessCurrent: record?.token === ${attemptWitnessToken} && record.element === element,
+              x,
+              y,
+            };
+          })()`,
+        );
+        observationHistory.push({attempt, preDispatch: true, ...dispatchPoint});
+        if (
+          dispatchPoint !== null && dispatchPoint.dispatchPointOwned && dispatchPoint.focused &&
+          dispatchPoint.hovered && dispatchPoint.owned && dispatchPoint.witnessCurrent &&
+          sameClickGeometry(armedPoint, dispatchPoint)
+        ) {
+          point = dispatchPoint;
+          witnessToken = attemptWitnessToken;
+          attemptAccepted = true;
+        }
+      }
+    } catch (error) {
+      attemptError = preserveTrustedClickError(attemptError, error, "pre-dispatch");
+    } finally {
+      if (!attemptAccepted) {
+        try {
+          const cleanup = await cleanupTrustedClickWitness(cdp, attemptWitnessToken);
+          if (!cleanup?.matched) {
+            throw new Error(`cannot disarm current trusted click witness for ${selector}`);
+          }
+        } catch (error) {
+          attemptError = preserveTrustedClickError(attemptError, error, "pre-dispatch-cleanup");
+        }
+      }
+    }
+    if (attemptError !== null) throw attemptError;
+    if (attemptAccepted) break;
+    point = null;
+    if (attempt < TRUSTED_CLICK_MAX_ATTEMPTS) await movePointerAway(cdp);
+  }
   if (
-    point === null ||
+    point === null || witnessToken === null ||
     point.x < 0 ||
     point.y < 0 ||
     point.x > Number.MAX_SAFE_INTEGER ||
     point.y > Number.MAX_SAFE_INTEGER
   ) {
-    throw new Error(`cannot click ${selector}`);
+    throw new Error(
+      `${selector} center remained unstable before trusted click dispatch ` +
+        `after ${TRUSTED_CLICK_MAX_ATTEMPTS} settled attempts with ` +
+        `${TRUSTED_CLICK_MAX_POINTER_MOVES} acquisition moves each plus final alignment and ` +
+        `post-arm/final-dispatch checks: ` +
+        `${JSON.stringify(observationHistory)}`,
+    );
   }
+  let clickWitness = null;
+  let dispatchError = null;
+  let pressReceipt = null;
+  let pressValid = false;
+  let pressSucceeded = false;
+  // If pointer-down moved the compact navigation, the accepted coordinate can
+  // now belong to an adjacent control. Keep the fallback release outside the
+  // viewport and neutral: Chrome synthesizes a root click even for an
+  // off-viewport left release with clickCount zero, while a button-none release
+  // cancels the invalid sequence without a mouseup or DOM click. A valid
+  // receipt replaces this with the intended target's current center and uses
+  // the normal left-button release. The document witness below remains the
+  // authority for whether any click occurred before bounded reacquisition.
+  let releasePoint = TRUSTED_CLICK_SAFE_RELEASE_POINT;
+  try {
+    try {
+      await cdp.send("Input.dispatchMouseEvent", {
+        button: "left",
+        clickCount: 1,
+        type: "mousePressed",
+        x: point.x,
+        y: point.y,
+      });
+      pressSucceeded = true;
+    } catch (error) {
+      dispatchError = preserveTrustedClickError(dispatchError, error, "mouse-press");
+    }
+    if (pressSucceeded) {
+      try {
+        pressReceipt = await evaluate(
+          cdp,
+          `(() => {
+            const element = document.querySelector(${JSON.stringify(selector)});
+            if (!(element instanceof HTMLElement)) return null;
+            const rect = element.getBoundingClientRect();
+            const x = rect.left + rect.width / 2;
+            const y = rect.top + rect.height / 2;
+            const centerHit = document.elementFromPoint(x, y);
+            const pressedHit = document.elementFromPoint(${point.x}, ${point.y});
+            return {
+              active: element.matches(":active"),
+              centerOwned: centerHit instanceof Element &&
+                (centerHit === element || element.contains(centerHit)),
+              focused: document.activeElement === element || element.contains(document.activeElement),
+              pressedPointOwned: pressedHit instanceof Element &&
+                (pressedHit === element || element.contains(pressedHit)),
+              rect: {bottom: rect.bottom, left: rect.left, right: rect.right, top: rect.top},
+              x,
+              y,
+            };
+          })()`,
+        );
+        pressValid = pressReceipt !== null && pressReceipt.active &&
+          pressReceipt.focused && pressReceipt.centerOwned && pressReceipt.pressedPointOwned;
+        if (pressValid) releasePoint = pressReceipt;
+      } catch (error) {
+        dispatchError = preserveTrustedClickError(dispatchError, error, "press-receipt");
+      } finally {
+        try {
+          await cdp.send("Input.dispatchMouseEvent", {
+            button: pressValid ? "left" : "none",
+            clickCount: pressValid ? 1 : 0,
+            type: "mouseReleased",
+            x: releasePoint.x,
+            y: releasePoint.y,
+          });
+        } catch (error) {
+          dispatchError = preserveTrustedClickError(dispatchError, error, "mouse-release");
+        }
+      }
+    }
+    if (dispatchError === null) {
+      try {
+        await frames(cdp);
+      } catch (error) {
+        dispatchError = preserveTrustedClickError(dispatchError, error, "post-release-settle");
+      }
+    }
+  } finally {
+    try {
+      const cleanup = await cleanupTrustedClickWitness(cdp, witnessToken);
+      if (!cleanup?.matched) {
+        throw new Error(`cannot clean current trusted click witness for ${selector}`);
+      }
+      clickWitness = cleanup.clicked;
+    } catch (error) {
+      dispatchError = preserveTrustedClickError(dispatchError, error, "post-dispatch-cleanup");
+    }
+  }
+  if (dispatchError !== null) throw dispatchError;
+  if (
+    !pressValid && clickWitness === null &&
+    physicalAttempt < TRUSTED_CLICK_MAX_PHYSICAL_ATTEMPTS
+  ) {
+    // A compact sticky control can move synchronously with mousePressed after
+    // all pre-dispatch checks passed. The document-scoped witness proves the
+    // released sequence completed no click anywhere, so one fresh acquisition
+    // is safe and still preserves exactly-once click semantics.
+    await movePointerAway(cdp);
+    return clickElementWithRecovery(cdp, selector, physicalAttempt + 1);
+  }
+  if (!pressValid || !clickWitness?.isTrusted || !clickWitness?.owned) {
+    throw new Error(
+      `${selector} did not complete one owned trusted click: ` +
+        `${JSON.stringify({clickWitness, physicalAttempt, point, pressReceipt})}`,
+    );
+  }
+}
+
+async function movePointerAway(cdp) {
   await cdp.send("Input.dispatchMouseEvent", {
-    button: "left",
-    clickCount: 1,
-    type: "mousePressed",
-    x: point.x,
-    y: point.y,
-  });
-  await cdp.send("Input.dispatchMouseEvent", {
-    button: "left",
-    clickCount: 1,
-    type: "mouseReleased",
-    x: point.x,
-    y: point.y,
+    type: "mouseMoved",
+    x: 0,
+    y: 0,
   });
   await frames(cdp);
 }
 
+async function hoverElement(cdp, selector) {
+  let lastObservation = null;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const available = await evaluate(
+      cdp,
+      `(() => {
+        const element = document.querySelector(${JSON.stringify(selector)});
+        if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
+          return false;
+        }
+        element.scrollIntoView({block: "nearest", inline: "nearest"});
+        return true;
+      })()`,
+    );
+    if (!available) {
+      return {failures: [`${selector} is unavailable for trusted hover acquisition`]};
+    }
+
+    // Phone navigation is sticky and wraps onto two rows. Let scroll and
+    // sticky layout settle before measuring the coordinate that will receive
+    // the trusted pointer input.
+    await frames(cdp);
+    const point = await evaluate(
+      cdp,
+      `(() => {
+        const element = document.querySelector(${JSON.stringify(selector)});
+        if (!(element instanceof HTMLElement) || element.matches(":disabled")) {
+          return null;
+        }
+        const rect = element.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        return {
+          hit: hit instanceof Element ? {
+            classes: Array.from(hit.classList).slice(0, 2),
+            id: hit.id,
+            tag: hit.localName,
+          } : null,
+          owned: hit instanceof Element && (hit === element || element.contains(hit)),
+          rect: {
+            bottom: rect.bottom,
+            left: rect.left,
+            right: rect.right,
+            top: rect.top,
+          },
+          x,
+          y,
+        };
+      })()`,
+    );
+    if (point === null) {
+      return {failures: [`${selector} is unavailable for trusted hover acquisition`]};
+    }
+    if (!point.owned) {
+      return {failures: [
+        `${selector} center is occluded before trusted hover dispatch: ` +
+          `${JSON.stringify({hit: point.hit, rect: point.rect, x: point.x, y: point.y})}`,
+      ]};
+    }
+    await cdp.send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: point.x,
+      y: point.y,
+    });
+    // CDP can acknowledge trusted pointer input before Chrome exposes the new
+    // :hover match to a following Runtime.evaluate call. Cross a rendering
+    // boundary, then confirm acquisition before contrast is measured.
+    await frames(cdp);
+    lastObservation = await evaluate(
+      cdp,
+      `(() => {
+        const element = document.querySelector(${JSON.stringify(selector)});
+        if (!(element instanceof HTMLElement)) return null;
+        const rect = element.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        return {
+          hovered: element.matches(":hover"),
+          owned: hit instanceof Element && (hit === element || element.contains(hit)),
+          rect: {
+            bottom: rect.bottom,
+            left: rect.left,
+            right: rect.right,
+            top: rect.top,
+          },
+          x,
+          y,
+        };
+      })()`,
+    );
+    if (lastObservation?.hovered) return {failures: []};
+    if (attempt < 2) await movePointerAway(cdp);
+  }
+  return {failures: [
+    `${selector} did not enter its trusted hover state after 2 settled attempts: ` +
+      JSON.stringify(lastObservation),
+  ]};
+}
+
 async function activatePane(cdp, pane) {
   await clickElement(cdp, `#pane-tab-${pane}`);
+  await movePointerAway(cdp);
 }
 
 export function browserAuditLibrary() {
@@ -1237,6 +1940,19 @@ export function browserAuditLibrary() {
     return failures;
   }
 
+  function hoverReadability(selector) {
+    const element = document.querySelector(selector);
+    if (!(element instanceof HTMLElement)) {
+      return {failures: [`${selector} is unavailable for hover contrast`]};
+    }
+    const failures = [];
+    if (!element.matches(":hover")) {
+      failures.push(`${selector} did not enter its trusted hover state`);
+    }
+    failures.push(...readabilityFailures(element, `${selector} hover control text`));
+    return {failures};
+  }
+
   function radioValueFailures(field) {
     const failures = [];
     if ((field.textContent ?? "").trim() === "") {
@@ -1542,6 +2258,60 @@ export function browserAuditLibrary() {
     return {failures};
   }
 
+  function phoneUnknownHoldState() {
+    const failures = paneState("controls");
+    const snapshots = [];
+    const scopes = ["system", "department", "site", "channel"];
+    try {
+      for (const scope of scopes) {
+        const state = document.querySelector(`#scanner-hold-${scope}-state`);
+        if (!(state instanceof HTMLElement)) {
+          failures.push(`unknown-state phone audit is missing the ${scope} state`);
+          continue;
+        }
+        snapshots.push({
+          dataState: state.dataset.state,
+          state,
+          text: state.textContent,
+        });
+        state.textContent = "Unknown";
+        state.dataset.state = "unknown";
+      }
+      for (const scope of scopes) {
+        const suffix = scope === "channel" ? "" : `-${scope}`;
+        const controls = [
+          document.querySelector(`#scanner-hold-${scope}`),
+          document.querySelector(`#scanner-hold-${scope}-state`),
+          document.querySelector(`#scanner-previous${suffix}`),
+          document.querySelector(`#scanner-next${suffix}`),
+        ];
+        for (const control of controls) {
+          if (!(control instanceof HTMLElement) || !rendered(control)) {
+            failures.push(`${scope} unknown-state phone control is not rendered`);
+            continue;
+          }
+          if (control.scrollWidth > control.clientWidth + tolerance) {
+            failures.push(
+              `${label(control)} clips unknown-state phone text ` +
+                `(${control.scrollWidth.toFixed(1)} > ${control.clientWidth.toFixed(1)})`,
+            );
+          }
+          const clipping = clippingAncestor(control, textRect(control));
+          if (clipping !== null) {
+            failures.push(`${label(control)} unknown-state text is clipped by ${label(clipping)}`);
+          }
+        }
+      }
+    } finally {
+      for (const {dataState, state, text} of snapshots) {
+        state.textContent = text;
+        if (dataState === undefined) delete state.dataset.state;
+        else state.dataset.state = dataState;
+      }
+    }
+    return {failures};
+  }
+
   function subpanelButtonGeometry(expectedPane) {
     const failures = [];
     // Prominent LCARS Scanner filters are a separate role from compact utility
@@ -1616,8 +2386,12 @@ export function browserAuditLibrary() {
       Number.parseFloat(overviewStyle.paddingLeft);
     const contentRight = overviewRect.right - Number.parseFloat(overviewStyle.borderRightWidth) -
       Number.parseFloat(overviewStyle.paddingRight);
+    const contentTop = overviewRect.top + Number.parseFloat(overviewStyle.borderTopWidth) +
+      Number.parseFloat(overviewStyle.paddingTop);
+    const contentBottom = overviewRect.bottom - Number.parseFloat(overviewStyle.borderBottomWidth) -
+      Number.parseFloat(overviewStyle.paddingBottom);
     const messageRect = message.getBoundingClientRect();
-    const lineHeight = Number.parseFloat(messageStyle.lineHeight);
+    const messageTextRect = textRect(message);
     // The independently added typography layout intentionally centers controls
     // in a third desktop column. Small layouts still require two columns.
     const appearance = [
@@ -1655,8 +2429,37 @@ export function browserAuditLibrary() {
     if (Math.abs(messageRect.right - contentRight) > tolerance) {
       failures.push("non-System live daemon status is not right-aligned");
     }
-    if (Number.isFinite(lineHeight) && messageRect.height > lineHeight * 1.5) {
-      failures.push("non-System live daemon status wraps onto multiple lines");
+    if (
+      (message.textContent ?? "").trim() === "" ||
+      messageRect.width <= tolerance ||
+      messageRect.height <= tolerance ||
+      messageTextRect.width <= tolerance ||
+      messageTextRect.height <= tolerance
+    ) {
+      failures.push("non-System live daemon status has no readable geometry");
+    }
+    if (
+      messageRect.left < contentLeft - tolerance ||
+      messageRect.top < contentTop - tolerance ||
+      messageRect.right > contentRight + tolerance ||
+      messageRect.bottom > contentBottom + tolerance
+    ) {
+      failures.push("non-System live daemon status is outside the overview content box");
+    }
+    if (outside(messageTextRect, messageRect)) {
+      failures.push("non-System live daemon status text is clipped by its own box");
+    }
+    if (appearance !== undefined) {
+      const appearanceRect = appearance.getBoundingClientRect();
+      const overlaps = !(
+        messageRect.right <= appearanceRect.left + tolerance ||
+        messageRect.left >= appearanceRect.right - tolerance ||
+        messageRect.bottom <= appearanceRect.top + tolerance ||
+        messageRect.top >= appearanceRect.bottom - tolerance
+      );
+      if (overlaps) {
+        failures.push("non-System live daemon status overlaps the appearance controls");
+      }
     }
     return failures;
   }
@@ -2137,6 +2940,7 @@ export function browserAuditLibrary() {
     failures.push(...semanticClipping());
     failures.push(...interactiveReadabilityFailures());
     failures.push(...hierarchyFieldAlignmentFailures());
+    failures.push(...holdFieldStateFailures());
     const visibleFields = fieldIds
       .map((id) => document.getElementById(id))
       .filter((field) => field instanceof HTMLElement && rendered(field));
@@ -2159,6 +2963,98 @@ export function browserAuditLibrary() {
         failures.push(
           `${label(field)} retains ${getComputedStyle(field).minHeight} of ` +
             "minimum height and cannot center with the System field",
+        );
+      }
+    }
+    const hierarchy = document.querySelector(".scanner-display-hierarchy");
+    const channel = document.querySelector(
+      '.scanner-display-hierarchy > [data-hold-scope="channel"]',
+    );
+    if (
+      hierarchy instanceof HTMLElement &&
+      channel instanceof HTMLElement &&
+      rendered(hierarchy) &&
+      getComputedStyle(hierarchy).gridTemplateColumns.split(" ").length === 1
+    ) {
+      const dividerWidth = Number.parseFloat(
+        getComputedStyle(channel).borderBottomWidth,
+      );
+      const rowGap = Number.parseFloat(getComputedStyle(hierarchy).rowGap);
+      const hasDivider = Number.isFinite(dividerWidth) && dividerWidth > 0;
+      const hasThemeSpacing = Number.isFinite(rowGap) && rowGap > 0;
+      if (!hasDivider && !hasThemeSpacing) {
+        failures.push("compact Channel field has no separation before Site");
+      }
+    }
+    return failures;
+  }
+
+  function holdFieldStateFailures() {
+    const failures = [];
+    const expected = {
+      system: "released",
+      department: "released",
+      site: "released",
+      channel: "held",
+    };
+    const fields = Array.from(
+      document.querySelectorAll("#radio-activity-panel [data-hold-scope]"),
+    );
+    if (fields.length !== Object.keys(expected).length) {
+      failures.push(
+        `scanner hierarchy exposes ${fields.length} hold-aware fields, expected 4`,
+      );
+    }
+    for (const [scope, state] of Object.entries(expected)) {
+      const field = document.querySelector(
+        `#radio-activity-panel [data-hold-scope="${scope}"]`,
+      );
+      if (!(field instanceof HTMLElement)) {
+        failures.push(`scanner hierarchy is missing the ${scope} hold-aware field`);
+        continue;
+      }
+      if (field.dataset.holdState !== state) {
+        failures.push(
+          `${scope} field hold state is ${JSON.stringify(field.dataset.holdState)}, ` +
+            `expected ${JSON.stringify(state)}`,
+        );
+      }
+      if (state === "held") {
+        const style = getComputedStyle(field);
+        if (style.backgroundColor === "rgba(0, 0, 0, 0)") {
+          failures.push(`${scope} held field has no theme background`);
+        }
+        if (style.boxShadow === "none") {
+          failures.push(`${scope} held field has no inset boundary treatment`);
+        }
+      }
+    }
+    return failures;
+  }
+
+  function radioFieldCardIntersectionFailures(container) {
+    if (!(container instanceof HTMLElement) || !rendered(container)) return [];
+    const failures = [];
+    const cards = Array.from(container.children).filter(
+      (card) => card instanceof HTMLElement && rendered(card),
+    );
+    for (let leftIndex = 0; leftIndex < cards.length; leftIndex++) {
+      const leftCard = cards[leftIndex];
+      const leftRect = leftCard.getBoundingClientRect();
+      for (let rightIndex = leftIndex + 1; rightIndex < cards.length; rightIndex++) {
+        const rightCard = cards[rightIndex];
+        const rightRect = rightCard.getBoundingClientRect();
+        const overlapWidth = Math.min(leftRect.right, rightRect.right) -
+          Math.max(leftRect.left, rightRect.left);
+        const overlapHeight = Math.min(leftRect.bottom, rightRect.bottom) -
+          Math.max(leftRect.top, rightRect.top);
+        if (overlapWidth <= tolerance || overlapHeight <= tolerance) continue;
+        const leftName = leftCard.querySelector("dt")?.textContent?.trim() ?? label(leftCard);
+        const rightName = rightCard.querySelector("dt")?.textContent?.trim() ?? label(rightCard);
+        failures.push(
+          `${label(container)} cards ${JSON.stringify(leftName)} and ` +
+            `${JSON.stringify(rightName)} overlap by ` +
+            `${overlapWidth.toFixed(1)}x${overlapHeight.toFixed(1)}px`,
         );
       }
     }
@@ -2192,6 +3088,11 @@ export function browserAuditLibrary() {
       if (visibleGroups.length !== 1 || visibleGroups[0]?.dataset.radioGroup !== view) {
         failures.push(`radio field group state does not match ${view}`);
       }
+      failures.push(
+        ...radioFieldCardIntersectionFailures(
+          visibleGroups[0]?.querySelector(".radio-field-list"),
+        ),
+      );
 
       for (const id of fieldIds) {
         const field = document.getElementById(id);
@@ -2440,9 +3341,11 @@ export function browserAuditLibrary() {
     forcedColors,
     ingressDiagnosticsLayout,
     ingressHomeAssistantLayout,
+    hoverReadability,
     keyboardTabState,
     normal,
     paginationState,
+    phoneUnknownHoldState,
     prefixedUrls,
     radioFields,
     radioValueFailures,
@@ -2613,6 +3516,33 @@ async function auditSequentialFocus(cdp, collector, theme) {
   }
 }
 
+async function auditWorkspaceTabHoverContrast(cdp, collector, theme, viewport) {
+  let cases = 0;
+  const auditHover = async (pane) => {
+    const selector = `#pane-tab-${pane}`;
+    const acquisition = await hoverElement(cdp, selector);
+    const context =
+      `${theme}/${viewport.width}x${viewport.height}@${viewport.dpr}/hover/${pane}`;
+    collector.add(
+      context,
+      acquisition.failures.length > 0
+        ? acquisition
+        : await evaluate(
+          cdp,
+          `window.__sdsctlBrowserAudit.hoverReadability(${JSON.stringify(selector)})`,
+        ),
+    );
+    cases += 1;
+  };
+
+  await activatePane(cdp, "scanner");
+  for (const pane of PANES.slice(1)) await auditHover(pane);
+  await activatePane(cdp, "controls");
+  await auditHover("scanner");
+  await movePointerAway(cdp);
+  return cases;
+}
+
 async function auditPagination(cdp, collector, context) {
   collector.add(
     context,
@@ -2711,8 +3641,12 @@ async function auditPagination(cdp, collector, context) {
 }
 
 async function auditMediaPreferences(cdp, collector, theme) {
-  const viewport = {width: 800, height: 480, dpr: 1};
-  await setViewport(cdp, viewport);
+  const hero = HERO_PANORAMA_SCENES.find((candidate) => candidate.theme === theme);
+  const compactViewport = {width: 800, height: 480, dpr: 1};
+  const reducedMotionViewport = hero
+    ? {width: 1920, height: 1080, dpr: 1}
+    : compactViewport;
+  await setViewport(cdp, reducedMotionViewport);
   await activatePane(cdp, "scanner");
 
   await cdp.send("Emulation.setEmulatedMedia", {
@@ -2720,11 +3654,35 @@ async function auditMediaPreferences(cdp, collector, theme) {
     media: "screen",
   });
   await frames(cdp);
+  if (hero) {
+    collector.add(
+      `${theme}/reduced-motion/panorama-scene`,
+      await evaluate(
+        cdp,
+        `(() => {
+          const failures = [];
+          const scene = document.querySelector(
+            ${JSON.stringify(`[data-cinematic-scene="${hero.scene}"]`)},
+          );
+          const rendered = scene instanceof Element &&
+            getComputedStyle(scene).display !== "none" &&
+            getComputedStyle(scene).visibility !== "hidden" &&
+            scene.getClientRects().length > 0;
+          if (!rendered) {
+            failures.push("headline panoramic scene is not rendered under reduced motion");
+          }
+          return {failures};
+        })()`,
+      ),
+    );
+  }
   collector.add(
     `${theme}/reduced-motion`,
     await evaluate(cdp, "window.__sdsctlBrowserAudit.reducedMotion()"),
   );
 
+  await setViewport(cdp, compactViewport);
+  await activatePane(cdp, "scanner");
   await cdp.send("Emulation.setEmulatedMedia", {
     features: [
       {name: "forced-colors", value: "active"},
@@ -2774,13 +3732,77 @@ async function auditEnlargedText(cdp, collector, theme) {
   await frames(cdp);
 }
 
+async function auditHeroPanoramaBoundaries(cdp, collector) {
+  let caseCount = 0;
+  for (const {theme, scene} of HERO_PANORAMA_SCENES) {
+    collector.add(
+      `${theme}/panorama-boundary/theme-switch`,
+      await evaluate(
+        cdp,
+        `window.__sdsctlBrowserAudit.switchTheme(${JSON.stringify(theme)})`,
+      ),
+    );
+    for (const viewport of HERO_PANORAMA_BOUNDARIES) {
+      caseCount += 1;
+      await setViewport(cdp, {...viewport, dpr: 1});
+      await activatePane(cdp, "scanner");
+      await frames(cdp);
+      const context =
+        `${theme}/${viewport.width}x${viewport.height}@1/` +
+        `${viewport.panorama ? "panorama" : "compact"}-boundary/scanner`;
+      const sceneSelector = `[data-cinematic-scene="${scene}"]`;
+      collector.add(
+        context,
+        await evaluate(
+          cdp,
+          `(() => {
+            const failures = [];
+            const production = matchMedia(
+              "(min-width: 1280px) and (min-height: 720px) and (min-aspect-ratio: 3/2)",
+            ).matches;
+            const compact = matchMedia(
+              "(width < 1280px), (height < 720px), (aspect-ratio < 3/2)",
+            ).matches;
+            const expected = ${JSON.stringify(viewport.panorama)};
+            const scene = document.querySelector(
+              ${JSON.stringify(sceneSelector)},
+            );
+            const visible = scene !== null && getComputedStyle(scene).display !== "none";
+            if (production !== expected) {
+              failures.push("production query is " + production + " instead of " + expected);
+            }
+            if (compact === production) {
+              failures.push("production and compact queries overlap or leave a gap");
+            }
+            if (visible !== expected) {
+              failures.push("scene visibility is " + visible + " instead of " + expected);
+            }
+            return {failures};
+          })()`,
+        ),
+      );
+      collector.add(
+        context,
+        await evaluate(
+          cdp,
+          `window.__sdsctlBrowserAudit.normal("scanner", ${JSON.stringify(theme)})`,
+        ),
+      );
+      await auditAccessibility(cdp, collector, context, "scanner");
+    }
+  }
+  return caseCount;
+}
+
 export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
   const collector = new FailureCollector();
   await setViewport(cdp, VIEWPORTS[0]);
   await navigate(cdp, `${baseUrl}/`, timeoutMs);
 
   let caseCount = 0;
+  let hoverContrastCases = 0;
   let lcarsNavigationTransitionCases = 0;
+  let phoneUnknownHoldCases = 0;
   let systemPaletteCases = 0;
   const systemPalettes = await evaluate(
     cdp,
@@ -2860,6 +3882,18 @@ export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
             context,
             await evaluate(cdp, "window.__sdsctlBrowserAudit.controlContext()"),
           );
+          if (viewport.name === "phone") {
+            // Audit the unknown hold presentation while Controls is already
+            // active. Diagnostics refreshes its client inventory
+            // asynchronously and can move the sticky phone tabs, so a second
+            // Controls activation after the pane loop is both redundant and
+            // vulnerable to dispatching against changing geometry.
+            phoneUnknownHoldCases += 1;
+            collector.add(
+              `${context}/unknown-hold-state`,
+              await evaluate(cdp, "window.__sdsctlBrowserAudit.phoneUnknownHoldState()"),
+            );
+          }
         } else if (pane === "recordings") {
           await auditPagination(cdp, collector, context);
         }
@@ -2872,6 +3906,12 @@ export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
         );
         await auditAccessibility(cdp, collector, context, pane);
       }
+      hoverContrastCases += await auditWorkspaceTabHoverContrast(
+        cdp,
+        collector,
+        theme,
+        viewport,
+      );
       console.log(
         `Audited ${theme.padEnd(16)} ${viewport.width}x${viewport.height}` +
           ` DPR ${viewport.dpr}: ${PANES.length} panes`,
@@ -2901,6 +3941,9 @@ export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
     await auditMediaPreferences(cdp, collector, theme);
     await auditEnlargedText(cdp, collector, theme);
   }
+
+  const panoramaBoundaryCases = await auditHeroPanoramaBoundaries(cdp, collector);
+  console.log(`Audited ${panoramaBoundaryCases} hero panoramic-boundary cases`);
 
   await cdp.send("Emulation.setEmulatedMedia", {features: [], media: "screen"});
   await setViewport(cdp, {width: 800, height: 480, dpr: 1});
@@ -2978,9 +4021,12 @@ export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
   return {
     caseCount,
     failures: collector.failures,
+    hoverContrastCases,
     ingressDiagnosticsCases,
     ingressHomeAssistantCases,
     lcarsNavigationTransitionCases,
+    panoramaBoundaryCases,
+    phoneUnknownHoldCases,
     systemPaletteCases,
   };
 }
@@ -3558,29 +4604,65 @@ async function auditNativeLogin(cdp, baseUrl, timeoutMs, pageFailures) {
   console.log('PASS: native login Show/Hide, keyboard, masking lifecycle, failed login and no-JS form');
 }
 
-async function auditDisplayNavigation(cdp) {
+async function auditNativeDrawer(cdp, {role, exerciseInteractions = false}) {
   await evaluate(cdp, `window.__sdsctlBrowserAudit = (${browserAuditLibrary.toString()})();`);
   await evaluate(cdp, `(async () => {
     for (let attempt=0; attempt<500 && (refreshInProgress || document.querySelector('#status-badge').dataset.state !== 'online'); attempt++) {
       await new Promise(resolve=>setTimeout(resolve,10));
     }
     stopEventStream();
-    if (refreshInProgress) throw new Error('Display navigation status did not settle');
+    if (refreshInProgress) throw new Error('Native drawer status did not settle');
     await refreshStatus();
   })()`);
   await frames(cdp);
   const assertState = async (expression, label) => {
     if (!await evaluate(cdp, expression)) {
       const focus = await evaluate(cdp, `({tag: document.activeElement.tagName, id: document.activeElement.id, open: document.querySelector('#native-menu').open, controls: [...document.querySelectorAll('#native-menu button, #native-menu select, #native-menu input')].map(e=>[e.tagName,e.id,e.type,e.getClientRects().length,e.tabIndex])})`);
-      throw new Error(`Display navigation: ${label} ${JSON.stringify(focus)}`);
+      throw new Error(`${role} native drawer: ${label} ${JSON.stringify(focus)}`);
     }
   };
+  await assertState(`(() => {
+    const unique = ['native-menu', 'native-menu-toggle', 'theme-select',
+      'system-palette-select', 'theme-font-select', 'theme-typography-select',
+      'lcars-v2-palette-select', 'lcars-v2-type-select'];
+    return unique.every(id => document.querySelectorAll('#' + id).length === 1) &&
+      document.querySelectorAll('#native-menu form[action$="auth/logout"]').length === 1 &&
+      document.querySelector('#native-menu .theme-picker') !== null &&
+      document.querySelector('#native-menu #system-palette-picker') !== null &&
+      document.querySelector('#native-menu #lcars-v2-appearance-pickers') !== null &&
+      document.querySelector('#native-menu #theme-typography-pickers') !== null &&
+      document.querySelector('#native-session-summary').textContent.includes(
+        ${JSON.stringify(role === 'display' ? 'Display-only session' : 'Operator session')}) &&
+      (${role === 'display'} || document.querySelector('.native-menu-views').hidden);
+  })()`, 'one canonical drawer/control set and role summary');
   const workspaceBefore = await evaluate(cdp, `JSON.stringify(document.querySelector('.workspace-shell').getBoundingClientRect().toJSON())`);
   await clickElement(cdp, '#native-menu-toggle');
   await assertState(`JSON.stringify(document.querySelector('.workspace-shell').getBoundingClientRect().toJSON()) === ${JSON.stringify(workspaceBefore)}`, 'overlay must not reflow workspace');
   await assertState(`document.querySelector('#native-menu').open &&
     document.querySelector('#native-menu-toggle').getAttribute('aria-expanded') === 'true' &&
     document.querySelector('#native-menu').contains(document.activeElement)`, 'opening/focus');
+  await assertState(`(() => {
+    const menu = document.querySelector('#native-menu');
+    const bounds = menu.getBoundingClientRect();
+    const controls = [...menu.querySelectorAll('button, select, input, textarea, a[href], [tabindex]')]
+      .filter(node => !node.disabled && node.getClientRects().length > 0);
+    return bounds.left >= -1 && bounds.top >= -1 && bounds.right <= innerWidth + 1 &&
+      bounds.bottom <= innerHeight + 1 && menu.scrollWidth <= menu.clientWidth + 1 &&
+      document.documentElement.scrollWidth <= innerWidth && controls.length > 0 &&
+      controls.every(node => {
+        const rect = node.getBoundingClientRect();
+        return rect.width >= 44 && rect.height >= 44;
+      });
+  })()`, 'viewport containment, internal scrolling and 44px controls');
+  await evaluate(cdp, `document.querySelector('#native-menu form button').scrollIntoView({block: 'nearest'})`);
+  await assertState(`(() => {const r=document.querySelector('#native-menu form button').getBoundingClientRect();
+    return r.top >= 0 && r.bottom <= innerHeight;})()`, 'Sign out reachability');
+  if (!exerciseInteractions) {
+    await pressKey(cdp, 'Escape', 'Escape', 27);
+    await assertState(`!document.querySelector('#native-menu').open &&
+      document.activeElement.id === 'native-menu-toggle'`, 'Escape/focus restoration');
+    return;
+  }
   for (let index = 0; index < 14; index++) {
     await pressKey(cdp, 'Tab', 'Tab', 9);
     await assertState(`document.querySelector('#native-menu').contains(document.activeElement)`, 'modal Tab containment');
@@ -3597,8 +4679,22 @@ async function auditDisplayNavigation(cdp) {
   await cdp.send('Input.dispatchKeyEvent', {type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13});
   await frames(cdp);
   await assertState(`document.querySelector('#native-menu').open`, 'keyboard opening');
-  await cdp.send('Input.dispatchMouseEvent', {type: 'mousePressed', x: 780, y: 200, button: 'left', clickCount: 1});
-  await cdp.send('Input.dispatchMouseEvent', {type: 'mouseReleased', x: 780, y: 200, button: 'left', clickCount: 1});
+  const backdrop = await evaluate(cdp, `(() => {
+    const menu = document.querySelector('#native-menu').getBoundingClientRect();
+    const inside = {x: Math.min(menu.right - 8, menu.left + 24), y: Math.min(menu.bottom - 8, menu.top + 24)};
+    const candidates = [{x: innerWidth - 2, y: 2}, {x: innerWidth - 2, y: innerHeight - 2}, {x: 2, y: innerHeight - 2}];
+    const outside = candidates.find(p => p.x < menu.left || p.x > menu.right || p.y < menu.top || p.y > menu.bottom);
+    if (!outside) throw new Error('Native drawer has no backdrop point');
+    return {inside, outside};
+  })()`);
+  await cdp.send('Input.dispatchMouseEvent', {type: 'mouseMoved', ...backdrop.inside});
+  await cdp.send('Input.dispatchMouseEvent', {type: 'mousePressed', ...backdrop.inside, button: 'left', clickCount: 1});
+  await cdp.send('Input.dispatchMouseEvent', {type: 'mouseMoved', ...backdrop.outside, button: 'left'});
+  await cdp.send('Input.dispatchMouseEvent', {type: 'mouseReleased', ...backdrop.outside, button: 'left', clickCount: 1});
+  await frames(cdp);
+  await assertState(`document.querySelector('#native-menu').open`, 'inside-to-outside drag must not dismiss');
+  await cdp.send('Input.dispatchMouseEvent', {type: 'mousePressed', ...backdrop.outside, button: 'left', clickCount: 1});
+  await cdp.send('Input.dispatchMouseEvent', {type: 'mouseReleased', ...backdrop.outside, button: 'left', clickCount: 1});
   await frames(cdp);
   await assertState(`!document.querySelector('#native-menu').open`, 'outside dismissal');
   const touch = await evaluate(cdp, `(() => {const r=document.querySelector('#native-menu-toggle').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
@@ -3606,7 +4702,111 @@ async function auditDisplayNavigation(cdp) {
   await cdp.send('Input.dispatchTouchEvent', {type: 'touchEnd', touchPoints: []});
   await frames(cdp);
   await assertState(`document.querySelector('#native-menu').open`, 'touch opening');
+  const originalTheme = await evaluate(cdp, `document.querySelector('#theme-select').value`);
+  const appearanceScenarios = [
+    {theme: 'system', controls: [
+      {id: 'system-palette-select', dataset: 'systemPalette'},
+    ]},
+    {theme: 'lcars', controls: [
+      {id: 'lcars-v2-palette-select', dataset: 'lcarsV2Palette'},
+      {id: 'lcars-v2-type-select', dataset: 'lcarsV2Type'},
+    ]},
+    {theme: 'matrix', controls: [
+      {id: 'theme-font-select', dataset: 'themeFont'},
+      {id: 'theme-typography-select', dataset: 'themeTypography'},
+    ]},
+  ];
+  for (const scenario of appearanceScenarios) {
+    const selections = await evaluate(cdp, `(async () => {
+      const menu = document.querySelector('#native-menu');
+      const theme = document.querySelector('#theme-select');
+      theme.value = ${JSON.stringify(scenario.theme)};
+      theme.dispatchEvent(new Event('change', {bubbles: true}));
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      await document.fonts.ready;
+      return ${JSON.stringify(scenario.controls)}.map(({id, dataset}) => {
+        const matches = document.querySelectorAll('#' + id);
+        const control = matches[0];
+        if (matches.length !== 1 || !menu.contains(control) || control.getClientRects().length === 0) {
+          throw new Error(${JSON.stringify(role)} + ' appearance control unavailable: ' + id);
+        }
+        const original = control.value;
+        const selected = [...control.options].map(option => option.value)
+          .find(value => value !== original);
+        if (!selected) throw new Error('Appearance control has no alternate value: ' + id);
+        control.value = selected;
+        control.dispatchEvent(new Event('change', {bubbles: true}));
+        return {id, dataset, original, selected};
+      });
+    })()`);
+    await frames(cdp);
+    await clickElement(cdp, '.native-menu-header button');
+    await clickElement(cdp, '#native-menu-toggle');
+    await assertState(`(() => {
+      const menu = document.querySelector('#native-menu');
+      return document.documentElement.dataset.theme === ${JSON.stringify(scenario.theme)} &&
+        document.querySelector('#theme-select').value === ${JSON.stringify(scenario.theme)} &&
+        ${JSON.stringify(selections)}.every(({id, dataset, selected}) => {
+          const matches = document.querySelectorAll('#' + id);
+          return matches.length === 1 && menu.contains(matches[0]) &&
+            matches[0].value === selected && document.documentElement.dataset[dataset] === selected;
+        });
+    })()`, `${scenario.theme} appearance persistence across close/reopen`);
+    await clickElement(cdp, '.native-menu-header button');
+    await setViewport(cdp, {width: 1366, height: 768, dpr: 1});
+    await clickElement(cdp, '#native-menu-toggle');
+    await assertState(`(() => {
+      const menu = document.querySelector('#native-menu');
+      return document.documentElement.dataset.theme === ${JSON.stringify(scenario.theme)} &&
+        document.querySelector('#theme-select').value === ${JSON.stringify(scenario.theme)} &&
+        ${JSON.stringify(selections)}.every(({id, dataset, selected}) => {
+          const matches = document.querySelectorAll('#' + id);
+          return matches.length === 1 && menu.contains(matches[0]) &&
+            matches[0].value === selected && document.documentElement.dataset[dataset] === selected;
+        });
+    })()`, `${scenario.theme} appearance persistence across viewport resize`);
+    await evaluate(cdp, `(() => {
+      for (const {id, original} of ${JSON.stringify(selections)}) {
+        const control = document.querySelector('#' + id);
+        control.value = original;
+        control.dispatchEvent(new Event('change', {bubbles: true}));
+      }
+    })()`);
+    await frames(cdp);
+    await clickElement(cdp, '.native-menu-header button');
+    await setViewport(cdp, {width: 800, height: 480, dpr: 1});
+    await clickElement(cdp, '#native-menu-toggle');
+  }
+  await cdp.send('Emulation.setEmulatedMedia', {features: [
+    {name: 'prefers-color-scheme', value: 'dark'},
+    {name: 'forced-colors', value: 'active'},
+    {name: 'prefers-reduced-motion', value: 'reduce'},
+  ]});
+  await frames(cdp);
+  const forcedFailures = await evaluate(cdp, `window.__sdsctlBrowserAudit.readabilityFailures(
+    document.querySelector('#native-menu'), ${JSON.stringify(role + ' drawer forced colors')})`);
+  if (forcedFailures.length) throw new Error(`${role} drawer forced colors: ${forcedFailures.join('; ')}`);
+  await cdp.send('Emulation.setEmulatedMedia', {features: [
+    {name: 'prefers-color-scheme', value: 'light'},
+    {name: 'forced-colors', value: 'none'},
+    {name: 'prefers-reduced-motion', value: 'no-preference'},
+  ]});
+  await evaluate(cdp, `(() => {
+    const picker = document.querySelector('#theme-select');
+    picker.value = ${JSON.stringify(originalTheme)};
+    picker.dispatchEvent(new Event('change', {bubbles: true}));
+  })()`);
+  await frames(cdp);
   await clickElement(cdp, '.native-menu-header button');
+}
+
+async function auditDisplayNavigation(cdp) {
+  await auditNativeDrawer(cdp, {role: 'display', exerciseInteractions: true});
+  const assertState = async (expression, label) => {
+    if (!await evaluate(cdp, expression)) {
+      throw new Error(`Display navigation: ${label}`);
+    }
+  };
   for (const theme of THEMES) {
     await clickElement(cdp, '#native-menu-toggle');
     await evaluate(cdp, `(() => {
@@ -3616,6 +4816,22 @@ async function auditDisplayNavigation(cdp) {
     await frames(cdp);
     await assertState(`document.querySelector('#native-menu').open &&
       document.querySelector('#native-menu .theme-picker') !== null`, 'appearance retains menu');
+    for (const appearance of ['light', 'dark', 'forced']) {
+      await cdp.send('Emulation.setEmulatedMedia', {features: [
+        {name: 'prefers-color-scheme', value: appearance === 'dark' ? 'dark' : 'light'},
+        {name: 'forced-colors', value: appearance === 'forced' ? 'active' : 'none'},
+      ]});
+      await frames(cdp);
+      const drawerFailures = await evaluate(cdp, `window.__sdsctlBrowserAudit.readabilityFailures(
+        document.querySelector('#native-menu'), 'Compact Display & session drawer')`);
+      if (drawerFailures.length) {
+        throw new Error(`${theme}/${appearance} drawer: ${drawerFailures.join('; ')}`);
+      }
+    }
+    await cdp.send('Emulation.setEmulatedMedia', {features: [
+      {name: 'prefers-color-scheme', value: 'light'}, {name: 'forced-colors', value: 'none'},
+    ]});
+    await frames(cdp);
     await clickElement(cdp, '[data-kiosk-pane="waterfall"]');
     await assertState(`!document.querySelector('#native-menu').open && activeWorkspacePane === 'waterfall' &&
       document.querySelector('[data-kiosk-pane="waterfall"]').getAttribute('aria-current') === 'page' &&
@@ -3668,10 +4884,10 @@ async function auditDisplayNavigation(cdp) {
   await evaluate(cdp, `document.querySelector('#radio-activity-panel').scrollTop = 0`);
   await setViewport(cdp, {width: 1920, height: 1080, dpr: 1});
   await assertState(`document.documentElement.dataset.kioskCompact === 'false' &&
-    document.querySelector('.site-header .theme-picker') !== null &&
-    document.querySelector('.overview #system-palette-picker') !== null &&
+    document.querySelector('#native-menu .theme-picker') !== null &&
+    document.querySelector('#native-menu #system-palette-picker') !== null &&
     document.querySelector('#waterfall-panel > .waterfall-telemetry') !== null &&
-    document.querySelector('.workspace-tabs').getBoundingClientRect().height > 0`, 'desktop restoration');
+    document.querySelector('.workspace-tabs').getBoundingClientRect().height > 0`, 'desktop drawer and display-detail restoration');
   await setViewport(cdp, {width: 400, height: 240, dpr: 1});
   await clickElement(cdp, '#native-menu-toggle');
   await evaluate(cdp, `document.querySelector('#native-menu form button').scrollIntoView({block: 'nearest'})`);
@@ -3713,6 +4929,7 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
         installAuditLibrary: false, waitForDashboardReady: false,
       });
       if (viewport.width === 800) await auditDisplayNavigation(cdp);
+      else await auditNativeDrawer(cdp, {role: 'display'});
       const state = await evaluate(cdp, `(async () => {
         const refreshWhenIdle = async () => {
           for (let attempt = 0; refreshInProgress && attempt < 500; attempt += 1) {
@@ -3732,30 +4949,22 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
           await document.fonts.ready;
           const typography = document.querySelector('#theme-typography-pickers');
           const fontPicker = document.querySelector('#theme-font-picker');
-          for (const node of [typography, fontPicker]) {
+          const lcarsAppearance = document.querySelector('#lcars-v2-appearance-pickers');
+          for (const node of [typography, fontPicker, lcarsAppearance]) {
             if (node.hidden && getComputedStyle(node).display !== 'none') {
               throw new Error('Hidden typography control is rendered: ' + node.id);
             }
           }
-          if (matchMedia('(max-width: 65rem)').matches) {
-            const menu = document.querySelector('#native-menu');
-            if (!menu.contains(typography)) throw new Error('Narrow display typography is outside menu');
-            document.querySelector('#native-menu-toggle').click();
-            const selectors = [...typography.querySelectorAll('select')]
-              .filter(node => node.getClientRects().length > 0);
-            if (!typography.hidden && (selectors.length === 0 || selectors.some(node => {
-              const rect = node.getBoundingClientRect();
-              const bounds = menu.getBoundingClientRect();
-              return rect.height < 44 || rect.left < bounds.left || rect.right > bounds.right + 1;
-            }))) throw new Error('Narrow typography menu controls are inaccessible or too small');
-            menu.close();
+          const menu = document.querySelector('#native-menu');
+          if (![typography, lcarsAppearance, document.querySelector('.theme-picker'),
+              document.querySelector('#system-palette-picker')].every(node => menu.contains(node))) {
+            throw new Error('Canonical appearance controls left the native drawer');
           }
           const overview = document.querySelector('.overview').getBoundingClientRect();
-          const banner = document.querySelector('#native-session-status').getBoundingClientRect();
           const workspace = document.querySelector('.workspace-shell').getBoundingClientRect();
           const header = document.querySelector('.site-header').getBoundingClientRect();
           geometry.push({theme, overviewHeight: overview.height,
-            gap: workspace.top - overview.bottom, bannerGap: overview.top - banner.bottom,
+            gap: workspace.top - overview.bottom,
             compact: document.documentElement.dataset.kioskCompact === 'true',
             headerGap: workspace.top - header.bottom, workspaceHeight: workspace.height});
         }
@@ -3775,11 +4984,13 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
         await refreshWhenIdle();
         const outageMarkedStale = document.querySelector('#dashboard-message').textContent.includes('stale');
         const outageVisible = document.querySelector('#dashboard-message').getBoundingClientRect().height > 0;
+        const outageState = document.querySelector('#dashboard-message').dataset.state;
         window.__kioskAudit.offline = false;
         await refreshWhenIdle();
         const recovered = !authenticationRequired && document.querySelector('#status-badge').dataset.state !== 'offline';
+        const recoveredState = document.querySelector('#dashboard-message').dataset.state;
         startEventStream();
-        if (document.documentElement.dataset.kioskCompact === 'true') document.querySelector('#native-menu-toggle').click();
+        if (!document.querySelector('#native-menu').open) document.querySelector('#native-menu-toggle').click();
         window.__kioskAudit.expired = true;
         await refreshWhenIdle();
         const requestsAtExpiry = window.__kioskAudit.requests.length;
@@ -3788,13 +4999,19 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
         await refreshRecordings();
         startEventStream();
         reconcileWaterfallDemand();
-        return {geometry, visibleTabs, rejectedPane, liveCanvas, outageMarkedStale, outageVisible, recovered,
+        return {geometry, visibleTabs, rejectedPane, liveCanvas, outageMarkedStale, outageVisible,
+          outageState, recovered, recoveredState,
           loginVisible: document.querySelector('#native-session-status').getBoundingClientRect().height > 0,
           menuClosed: !document.querySelector('#native-menu').open,
+          alertContract: document.querySelector('#native-session-status').getAttribute('role') === 'alert' &&
+            document.querySelector('#native-session-status').getAttribute('aria-live') === 'assertive',
+          staleLogoutDisabled: document.querySelector('#native-menu form').hidden ||
+            document.querySelector('#native-menu form button').disabled,
           boundedReads: window.__kioskAudit.boundedReads,
           message: document.querySelector('#native-session-status').textContent,
           login: document.querySelector('#native-session-status a')?.getAttribute('href'),
           expired: authenticationRequired, eventsClosed: eventSource === null,
+          loginState: document.querySelector('#dashboard-message').dataset.state,
           waterfallClosed: waterfallAbortController === null,
           requestsAtExpiry, requestsAfter: window.__kioskAudit.requests.length,
           paths: window.__kioskAudit.requests,
@@ -3804,12 +5021,14 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
       if (state.visibleTabs.join(',') !== (compact ? '' : 'scanner,waterfall,diagnostics') ||
           state.geometry.some(g => g.compact !== compact || (compact
             ? g.headerGap > 12 || g.headerGap < -1 || g.workspaceHeight < 330
-            : g.overviewHeight > 120 || g.gap > 24 || g.bannerGap > 24 ||
-              g.gap < -1 || g.bannerGap < -1 || g.workspaceHeight < 150)) ||
+            : g.overviewHeight > 120 || g.gap > 24 ||
+              g.gap < -1 || g.workspaceHeight < 150)) ||
           state.rejectedPane !== 'scanner' || !state.liveCanvas || !state.expired ||
-          !state.outageMarkedStale || !state.outageVisible || !state.loginVisible || !state.menuClosed || !state.recovered || !state.boundedReads ||
+          !state.outageMarkedStale || !state.outageVisible || state.outageState !== 'offline' ||
+          !state.loginVisible || !state.menuClosed || !state.alertContract || !state.staleLogoutDisabled ||
+          !state.recovered || state.recoveredState !== 'online' || !state.boundedReads ||
           !state.eventsClosed || !state.waterfallClosed || state.requestsAtExpiry !== state.requestsAfter ||
-          !state.message.includes('stale') || !state.login?.endsWith('/auth/display/login') ||
+          !state.message.includes('stale') || state.loginState !== 'offline' || !state.login?.endsWith('/auth/display/login') ||
           state.paths.some(path => /\/(scanner\/|recording|audio)/.test(path)) || state.horizontalOverflow) {
         throw new Error(`display kiosk ${viewport.name} failed: ${JSON.stringify(state)}`);
       }
@@ -3836,6 +5055,85 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
     console.log('PASS: display-only kiosk geometry, restricted UI, Waterfall, network recovery, expiry and stopped retries');
   } finally {
     await cdp.send("Page.removeScriptToEvaluateOnNewDocument", {identifier: installed.identifier});
+  }
+}
+
+async function auditOperatorDrawer(cdp, baseUrl, timeoutMs, pageFailures) {
+  const baseline = pageFailures.length;
+  const installed = await cdp.send("Page.addScriptToEvaluateOnNewDocument", {source: `
+    (() => {
+      const originalFetch = window.fetch;
+      window.__operatorDrawerAudit = {requests: [], expired: false, boundedReads: true};
+      window.fetch = async (url, options) => {
+        const path = new URL(url, location.href).pathname;
+        window.__operatorDrawerAudit.requests.push(path);
+        if (path === '/auth/session' || path === '/api/v1/status') {
+          window.__operatorDrawerAudit.boundedReads &&= options?.signal instanceof AbortSignal;
+        }
+        if (path === '/auth/session') {
+          return new Response(JSON.stringify({display_only: false, remaining_seconds: 28800}),
+            {headers: {'Content-Type': 'application/json'}});
+        }
+        if (window.__operatorDrawerAudit.expired) return new Response('{}', {status: 401});
+        return originalFetch(url, options);
+      };
+    })();
+  `});
+  try {
+    for (const viewport of OPERATOR_DRAWER_VIEWPORTS) {
+      await setViewport(cdp, viewport);
+      await navigate(cdp, baseUrl + '/?kiosk=operator', timeoutMs, {
+        installAuditLibrary: false, waitForDashboardReady: false,
+      });
+      await auditNativeDrawer(cdp, {
+        role: 'operator', exerciseInteractions: viewport.width === 800,
+      });
+      const state = await evaluate(cdp, `(async () => {
+        const menu = document.querySelector('#native-menu');
+        if (!menu.open) document.querySelector('#native-menu-toggle').click();
+        window.__operatorDrawerAudit.expired = true;
+        await refreshStatus();
+        const requestsAtExpiry = window.__operatorDrawerAudit.requests.length;
+        await refreshStatus();
+        await refreshRecordings();
+        startEventStream();
+        reconcileWaterfallDemand();
+        if (${viewport.width === 800}) await new Promise(resolve => setTimeout(resolve, 2200));
+        const banner = document.querySelector('#native-session-status');
+        const logout = document.querySelector('#native-menu form');
+        return {
+          expired: authenticationRequired,
+          menuClosed: !menu.open,
+          expanded: document.querySelector('#native-menu-toggle').getAttribute('aria-expanded'),
+          loginVisible: banner.getBoundingClientRect().height > 0,
+          alertContract: banner.getAttribute('role') === 'alert' && banner.getAttribute('aria-live') === 'assertive',
+          message: banner.textContent,
+          login: banner.querySelector('a')?.getAttribute('href'),
+          staleLogoutDisabled: logout.hidden || logout.querySelector('button').disabled,
+          eventsClosed: eventSource === null,
+          waterfallClosed: waterfallAbortController === null,
+          boundedReads: window.__operatorDrawerAudit.boundedReads,
+          requestsAtExpiry,
+          requestsAfter: window.__operatorDrawerAudit.requests.length,
+          displayViewsHidden: document.querySelector('.native-menu-views').hidden,
+          displayTitleAbsent: document.querySelector('#native-view-title') === null,
+          controlsVisible: document.querySelector('#pane-tab-controls').getBoundingClientRect().height > 0,
+          horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
+        };
+      })()`);
+      if (!state.expired || !state.menuClosed || state.expanded !== 'false' || !state.loginVisible ||
+          !state.alertContract || !state.message.includes('stale') || !state.login?.endsWith('/auth/login') ||
+          !state.staleLogoutDisabled || !state.eventsClosed || !state.waterfallClosed ||
+          !state.boundedReads || state.requestsAtExpiry !== state.requestsAfter ||
+          !state.displayViewsHidden || !state.displayTitleAbsent ||
+          !state.controlsVisible || state.horizontalOverflow) {
+        throw new Error(`operator drawer ${viewport.name} failed: ${JSON.stringify(state)}`);
+      }
+    }
+    if (pageFailures.length !== baseline) throw new Error('Operator drawer raised browser exceptions.');
+    console.log('PASS: operator Display & session drawer geometry, focus, expiry and stopped retries');
+  } finally {
+    await cdp.send('Page.removeScriptToEvaluateOnNewDocument', {identifier: installed.identifier});
   }
 }
 
@@ -4103,6 +5401,7 @@ export async function captureDashboardScreenshot({
             current: document.querySelector("#dashboard-message")?.textContent?.trim() ?? null,
             initial: message.initialMessage,
             mutations: message.mutations,
+            state: document.querySelector("#dashboard-message")?.dataset?.state ?? null,
           },
         };
       })()`,
@@ -4122,6 +5421,7 @@ export async function captureDashboardScreenshot({
     if (
       captureState.message?.initial !== SCREENSHOT_STATUS_MESSAGE ||
       captureState.message?.current !== SCREENSHOT_STATUS_MESSAGE ||
+      captureState.message?.state !== "online" ||
       captureState.message?.mutations !== 0
     ) {
       throw new Error(
@@ -4221,7 +5521,11 @@ async function run(options) {
     chromeOutput = opened.output;
     let websocketUrl;
     try {
-      websocketUrl = await pageWebSocketUrl(remotePort, options.timeoutMs, chromeProcess);
+      websocketUrl = await pageWebSocketUrl(
+        remotePort,
+        options.startupTimeoutMs,
+        chromeProcess,
+      );
     } catch (error) {
       throw new Error(`${error.message}\nChrome output:\n${chromeOutput()}`);
     }
@@ -4245,7 +5549,7 @@ async function run(options) {
     console.log(`Chrome: ${chrome}`);
     console.log(`Demo server: ${baseUrl}`);
     if (options.waterfallScreenshotDirectory === null) {
-      console.log("Screenshots: disabled (the 26-image gallery is unchanged)");
+      console.log("Screenshots: disabled (the 48-image gallery is unchanged)");
     } else {
       await mkdir(options.waterfallScreenshotDirectory, {recursive: true});
       console.log(`Waterfall card screenshots: ${options.waterfallScreenshotDirectory}`);
@@ -4259,6 +5563,7 @@ async function run(options) {
       return;
     }
     await auditNativeLogin(cdp, baseUrl, options.timeoutMs, pageFailures);
+    await auditOperatorDrawer(cdp, baseUrl, options.timeoutMs, pageFailures);
     await auditDisplayKiosk(cdp, baseUrl, options.timeoutMs, pageFailures);
     const result = await runMatrix(cdp, baseUrl, options.timeoutMs, pageFailures);
     if (result.caseCount !== THEMES.length * VIEWPORTS.length * PANES.length) {
@@ -4267,6 +5572,11 @@ async function run(options) {
     if (result.ingressDiagnosticsCases !== THEMES.length * 3) {
       throw new Error(
         `internal Ingress Diagnostics count mismatch: ${result.ingressDiagnosticsCases}`,
+      );
+    }
+    if (result.hoverContrastCases !== THEMES.length * VIEWPORTS.length * PANES.length) {
+      throw new Error(
+        `internal hover contrast count mismatch: ${result.hoverContrastCases}`,
       );
     }
     if (result.ingressHomeAssistantCases !== THEMES.length * 3) {
@@ -4279,6 +5589,23 @@ async function run(options) {
         `internal LCARS navigation-transition count mismatch: ` +
           `${result.lcarsNavigationTransitionCases}`,
       );
+    }
+    if (result.phoneUnknownHoldCases !== THEMES.length) {
+      throw new Error(
+        `internal phone unknown hold-state count mismatch: ${result.phoneUnknownHoldCases}`,
+      );
+    }
+    if (
+      result.panoramaBoundaryCases !==
+      HERO_PANORAMA_SCENES.length * HERO_PANORAMA_BOUNDARIES.length
+    ) {
+      throw new Error(
+        `internal panoramic-boundary count mismatch: ${result.panoramaBoundaryCases}`,
+      );
+    }
+    if (options.findingsJsonPath !== null) {
+      await writeFindingsReport(options.findingsJsonPath, result);
+      console.log(`Wrote complete browser findings to ${options.findingsJsonPath}`);
     }
     if (result.failures.length > 0) {
       console.error(`\nBrowser acceptance failed with ${result.failures.length} finding(s):`);
@@ -4311,14 +5638,17 @@ async function run(options) {
       console.log(`Wrote ${screenshotPath}`);
     }
     console.log(
-      `PASS: ${result.caseCount} matrix cases plus theme switching, all 35 radio ` +
+      `PASS: ${result.caseCount} matrix cases plus ${result.panoramaBoundaryCases} ` +
+        `hero panoramic-boundary cases, theme switching, all 35 radio ` +
         "fields, Simple/Detail and adaptive screens, trusted Tab/Shift+Tab and " +
-        "pagination focus, WCAG AA normal/forced-color contrast, reduced motion, " +
+        `pagination focus, ${result.hoverContrastCases} explicit workspace-tab hover states, ` +
+        "WCAG AA normal/hover/forced-color contrast, reduced motion, " +
         "enlarged-text scrolling escape, DPR changes, 12 phone recording font " +
-        `variants, ${result.lcarsNavigationTransitionCases} LCARS navigation-breakpoint ` +
-        "cases, prefixed URLs, all 18 " +
+        `variants, ${result.phoneUnknownHoldCases} phone unknown hold-state cases, ` +
+        `${result.lcarsNavigationTransitionCases} LCARS navigation-breakpoint ` +
+        `cases, prefixed URLs, all ${result.ingressHomeAssistantCases} ` +
         `Ingress-only Home Assistant workspaces, ${result.systemPaletteCases} ` +
-        "responsive System-palette cases, all 18 read-only Ingress " +
+        `responsive System-palette cases, all ${result.ingressDiagnosticsCases} read-only Ingress ` +
         "Diagnostics layouts, browser Waterfall duration/pointer controls, and " +
         `${waterfallCard.viewportCases} responsive Home Assistant waterfall-card ` +
         "viewports with elapsed history, display-only pointer input, shared " +

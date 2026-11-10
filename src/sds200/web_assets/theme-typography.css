@@ -128,7 +128,18 @@
   }
   #native-menu #theme-typography-pickers:not([hidden]) {
     flex-direction: column !important; align-items: stretch !important;
+    flex-wrap: nowrap !important; justify-content: stretch !important;
     grid-column: auto !important; grid-row: auto !important;
-    width: 100% !important; margin-inline: 0 !important;
+    width: 100% !important; max-width: none !important; margin-inline: 0 !important;
+  }
+  #native-menu #theme-typography-pickers > div:not([hidden]) {
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-items: stretch !important;
+    gap: 0.25rem !important;
+    width: 100% !important;
+  }
+  #native-menu #theme-typography-pickers :is(label, select) {
+    width: 100% !important;
+    text-align: left !important;
   }
 }

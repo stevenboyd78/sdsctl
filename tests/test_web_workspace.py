@@ -785,7 +785,32 @@ assert.equal(fallbackSelect.value, preservedFallback);
 assert.equal(audioPlaybackActive, true);
 assert.equal(document.activeElement, preservedFocus);
 
-add("dashboard-message");
+const dashboardMessage = add("dashboard-message");
+const statusBadge = add("status-badge");
+setOverallStatus(
+  "online",
+  "Connected",
+  "Daemon and scanner status are available.",
+);
+assert.equal(statusBadge.dataset.state, "online");
+assert.equal(dashboardMessage.dataset.state, "online");
+
+setOverallStatus(
+  "offline",
+  "Disconnected",
+  "The daemon is available, but the scanner is disconnected.",
+);
+assert.equal(statusBadge.dataset.state, "offline");
+assert.equal(dashboardMessage.dataset.state, "offline");
+
+authenticationRequired = true;
+setOverallStatus("online", "Connected", "This must be replaced.");
+assert.equal(statusBadge.dataset.state, "offline");
+assert.equal(statusBadge.textContent, "Login required");
+assert.equal(dashboardMessage.dataset.state, "offline");
+assert.equal(dashboardMessage.textContent, "Sign in again. Displayed data is stale.");
+authenticationRequired = false;
+
 startEventStream();
 assert.equal(eventSources.length, 1);
 const firstEventSource = eventSources[0];
@@ -803,6 +828,11 @@ lastEventSequence = 417;
 firstEventSource.onerror();
 assert.equal(firstEventSource.closed, true);
 assert.equal(firstEventSource.closeCount, 1);
+assert.equal(dashboardMessage.dataset.state, "attention");
+assert.equal(
+  dashboardMessage.textContent,
+  "Live events are reconnecting; status polling remains active.",
+);
 assert.equal(eventSource, null);
 assert.equal(eventStreamConnected, false);
 assert.equal(lastEventSequence, null);

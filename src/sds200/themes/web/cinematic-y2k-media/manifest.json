@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "interface": "web",
+  "id": "cinematic-y2k-media",
+  "label": "Y2K Media Center",
+  "order": 1070,
+  "stylesheet": "theme.css",
+  "color_scheme": "light",
+  "theme_colors": {"light": "#dce9f2", "dark": "#dce9f2"}
+}

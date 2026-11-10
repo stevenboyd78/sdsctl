@@ -131,7 +131,7 @@ mypy src/sds200
 pytest --cov=sds200 --cov-report=term-missing
 python scripts/check_docs.py
 python scripts/generate_web_dashboard_screenshots.py --verify-gallery
-node scripts/audit_web_dashboard_browser.mjs --timeout-ms 30000
+node scripts/audit_web_dashboard_browser.mjs --startup-timeout-ms 90000 --timeout-ms 30000
 python scripts/generate_web_dashboard_screenshots.py --verify-repeatability \
   --only theme-system-1920x1080.png \
   --only theme-system-waterfall-1920x1080.png \

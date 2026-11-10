@@ -44,6 +44,11 @@ from sds200.web_dashboard import (
     WEB_DASHBOARD_HOME_ASSISTANT_INGRESS_CLIENT,
     create_web_dashboard_app,
 )
+from sds200.web_themes import (
+    BUILT_IN_WEB_THEME_IDS,
+    CINEMATIC_WEB_THEME_IDS,
+    CORE_WEB_THEME_IDS,
+)
 
 _THEME_STORAGE_KEY = "sdsctl.web.theme"
 _DEMO_URL_PREFIX = "/__demo/prefix"
@@ -107,14 +112,7 @@ _DEMO_CLOCK_JAVASCRIPT = """\
   });
 })();
 """
-_THEMES = (
-    "system",
-    "lcars",
-    "matrix",
-    "first-responder",
-    "amateur-radio",
-    "pip-boy-inspired",
-)
+_THEMES = BUILT_IN_WEB_THEME_IDS
 _WORKSPACE_PANES = (
     "scanner",
     "controls",
@@ -340,8 +338,11 @@ _REFERENCE_VIEWPORTS = (
 
 CAPTURES = tuple(
     Capture(f"theme-{theme}-{suffix}.png", theme, width, height, dpr)
-    for theme in _THEMES
+    for theme in CORE_WEB_THEME_IDS
     for suffix, width, height, dpr in _REFERENCE_VIEWPORTS
+) + tuple(
+    Capture(f"theme-{theme}-1920x1080.png", theme, 1920, 1080)
+    for theme in CINEMATIC_WEB_THEME_IDS
 ) + (
     Capture(
         "theme-system-waterfall-1920x1080.png",
@@ -840,9 +841,15 @@ class _DemoClockMiddleware:
             body = b"".join(body_parts)
             # Presentation-only kiosk fixture. Auth/permission enforcement is
             # tested against the actual middleware, never this demo's fake API.
-            if scope.get("query_string") == b"kiosk=display":
+            access_mode = {
+                b"kiosk=display": b"display",
+                b"kiosk=operator": b"operator",
+            }.get(scope.get("query_string"))
+            if access_mode is not None:
                 body = body.replace(
-                    b'<html lang="en"', b'<html data-access-mode="display" lang="en"', 1,
+                    b'<html lang="en"',
+                    b'<html data-access-mode="' + access_mode + b'" lang="en"',
+                    1,
                 )
             marker = _THEME_BOOTSTRAP_SCRIPT_TAG.encode("utf-8")
             if body.count(marker) != 1:
@@ -1671,8 +1678,8 @@ def _gallery_contract_errors(root: Path = _REPOSITORY_ROOT) -> tuple[str, ...]:
     errors: list[str] = []
     expected_filenames = tuple(capture.filename for capture in CAPTURES)
     expected_filename_set = set(expected_filenames)
-    if len(CAPTURES) != 26:
-        errors.append(f"CAPTURES contains {len(CAPTURES)} entries instead of 26")
+    if len(CAPTURES) != 48:
+        errors.append(f"CAPTURES contains {len(CAPTURES)} entries instead of 48")
     if len(expected_filename_set) != len(expected_filenames):
         errors.append("CAPTURES contains duplicate filenames")
 

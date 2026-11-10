@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "interface": "web",
+  "id": "cinematic-solarpunk",
+  "label": "Solarpunk Communications",
+  "order": 1180,
+  "stylesheet": "theme.css",
+  "color_scheme": "light",
+  "theme_colors": {"light": "#e9f1df", "dark": "#e9f1df"}
+}

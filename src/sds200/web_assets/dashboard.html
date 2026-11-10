@@ -6,6 +6,7 @@
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#172033">
   <title>sdsctl scanner dashboard</title>
+  <script src="dashboard-file-preview.js"></script>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/dashboard.css">
   <!-- SDSCTL_THEME_STYLES -->
@@ -30,6 +31,551 @@
     <span class="theme-stage-f"></span>
     <span class="theme-stage-g"></span>
     <span class="theme-stage-h"></span>
+
+    <!--
+      Built-in cinematic themes may reveal one original, non-semantic vector
+      environment from this stage.  Real labels and live values remain in the
+      accessible HTML interface; the SVG is decorative, pointer-transparent,
+      and deliberately contains no focusable controls or remote resources.
+    -->
+    <svg
+      class="cinematic-stage-art"
+      viewBox="0 0 1920 1080"
+      preserveAspectRatio="xMidYMid slice"
+      focusable="false"
+      role="presentation"
+    >
+      <defs>
+        <linearGradient id="carrier-sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#010812" />
+          <stop offset="0.52" stop-color="#082a3d" />
+          <stop offset="1" stop-color="#164c62" />
+        </linearGradient>
+        <linearGradient id="carrier-ocean" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#0a3145" />
+          <stop offset="1" stop-color="#01080d" />
+        </linearGradient>
+        <linearGradient id="carrier-deck" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#183847" />
+          <stop offset="0.55" stop-color="#0a1d27" />
+          <stop offset="1" stop-color="#02080c" />
+        </linearGradient>
+        <radialGradient id="carrier-hud-glass">
+          <stop offset="0" stop-color="#8cecff" stop-opacity="0.1" />
+          <stop offset="0.72" stop-color="#2fc8ef" stop-opacity="0.025" />
+          <stop offset="1" stop-color="#001018" stop-opacity="0" />
+        </radialGradient>
+        <pattern id="carrier-deck-grid" width="84" height="84" patternUnits="userSpaceOnUse">
+          <path d="M 84 0 L 0 0 0 84" fill="none" stroke="#83d9ef" stroke-opacity="0.12" stroke-width="1" />
+        </pattern>
+        <linearGradient id="tactical-map" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#26361f" />
+          <stop offset="0.52" stop-color="#111d14" />
+          <stop offset="1" stop-color="#07100b" />
+        </linearGradient>
+        <pattern id="tactical-grid" width="80" height="80" patternUnits="userSpaceOnUse">
+          <path d="M80 0H0V80" fill="none" stroke="#c7d899" stroke-opacity="0.13" stroke-width="1" />
+          <path d="M40 0V80M0 40H80" fill="none" stroke="#c7d899" stroke-opacity="0.05" stroke-width="1" />
+        </pattern>
+        <linearGradient id="archive-desk" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#281a1d" />
+          <stop offset="0.62" stop-color="#120b12" />
+          <stop offset="1" stop-color="#050306" />
+        </linearGradient>
+        <linearGradient id="archive-page-left" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#8d6735" />
+          <stop offset="0.12" stop-color="#d2ad6d" />
+          <stop offset="0.86" stop-color="#efd9a4" />
+          <stop offset="1" stop-color="#8b6337" />
+        </linearGradient>
+        <linearGradient id="archive-page-right" x1="1" y1="0" x2="0" y2="0">
+          <stop offset="0" stop-color="#8d6735" />
+          <stop offset="0.12" stop-color="#d2ad6d" />
+          <stop offset="0.86" stop-color="#efd9a4" />
+          <stop offset="1" stop-color="#8b6337" />
+        </linearGradient>
+        <radialGradient id="galactic-space">
+          <stop offset="0" stop-color="#152f57" />
+          <stop offset="0.42" stop-color="#090d24" />
+          <stop offset="1" stop-color="#020308" />
+        </radialGradient>
+        <radialGradient id="galactic-planet" cx="32%" cy="24%">
+          <stop offset="0" stop-color="#b8e9ff" />
+          <stop offset="0.28" stop-color="#3975a0" />
+          <stop offset="0.68" stop-color="#142742" />
+          <stop offset="0.95" stop-color="#050813" />
+          <stop offset="1" stop-color="#020308" />
+        </radialGradient>
+        <linearGradient id="mission-wall" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#b7aa87" />
+          <stop offset="0.45" stop-color="#716b5c" />
+          <stop offset="1" stop-color="#302f2b" />
+        </linearGradient>
+        <radialGradient id="mission-crt">
+          <stop offset="0" stop-color="#295a39" />
+          <stop offset="0.72" stop-color="#0a2416" />
+          <stop offset="1" stop-color="#020804" />
+        </radialGradient>
+        <linearGradient id="cyber-sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#050016" />
+          <stop offset="0.52" stop-color="#18052e" />
+          <stop offset="1" stop-color="#02020b" />
+        </linearGradient>
+        <linearGradient id="cyber-road" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#291044" />
+          <stop offset="1" stop-color="#020208" />
+        </linearGradient>
+        <pattern id="cyber-window-grid" width="26" height="34" patternUnits="userSpaceOnUse">
+          <rect x="4" y="5" width="8" height="3" fill="#00e8ff" fill-opacity="0.35" />
+          <rect x="16" y="18" width="6" height="3" fill="#ff2bd6" fill-opacity="0.3" />
+        </pattern>
+      </defs>
+
+      <g data-cinematic-scene="carrier-air-wing">
+        <rect width="1920" height="1080" fill="url(#carrier-sky)" />
+        <g class="carrier-clouds carrier-clouds-far" fill="none" stroke="#7fcde0" stroke-opacity="0.16">
+          <path d="M-140 244 C120 174 265 296 520 232 S930 160 1160 234 1540 296 2060 186" stroke-width="58" />
+          <path d="M-180 324 C150 260 340 370 650 302 S1130 242 1450 310 1740 344 2080 286" stroke-width="25" />
+        </g>
+        <g class="carrier-clouds carrier-clouds-near" fill="none" stroke="#d7f7ff" stroke-opacity="0.08">
+          <path d="M-220 155 C180 98 315 224 680 146 S1280 70 1605 166 1850 176 2160 112" stroke-width="92" />
+        </g>
+
+        <rect y="392" width="1920" height="688" fill="url(#carrier-ocean)" />
+        <path d="M0 404 H1920" stroke="#8cecff" stroke-opacity="0.55" stroke-width="2" />
+        <path d="M0 419 C320 405 550 436 865 414 S1430 397 1920 426" fill="none" stroke="#54b5cc" stroke-opacity="0.18" stroke-width="4" />
+
+        <g class="carrier-island" fill="#020a0f" stroke="#65cbe7" stroke-opacity="0.34">
+          <path d="M1510 401 V302 H1556 V230 H1580 V183 H1601 V230 H1627 V284 H1682 V401 Z" />
+          <path d="M1590 184 V125 M1568 151 H1614 M1640 283 L1762 250 M1640 300 L1785 285" fill="none" stroke-width="5" />
+          <path d="M1518 332 H1666 M1532 353 H1704" fill="none" stroke-width="3" />
+        </g>
+
+        <g class="carrier-flight-deck">
+          <path d="M454 1080 L650 398 H1275 L1644 1080 Z" fill="url(#carrier-deck)" stroke="#8ad9ec" stroke-opacity="0.42" stroke-width="3" />
+          <path d="M454 1080 L650 398 H1275 L1644 1080 Z" fill="url(#carrier-deck-grid)" opacity="0.72" />
+          <path d="M949 1080 L950 399 M995 1080 L982 399" stroke="#ffd447" stroke-opacity="0.88" stroke-width="6" />
+          <path d="M956 1080 L958 399 M988 1080 L976 399" stroke="#fff4ad" stroke-opacity="0.54" stroke-width="2" />
+          <path d="M650 398 L454 1080 M1275 398 L1644 1080" stroke="#49d8ff" stroke-opacity="0.68" stroke-width="4" />
+          <path d="M744 440 H1184 M706 520 H1241 M665 635 H1311 M614 785 H1403 M552 970 H1517" stroke="#c5f4ff" stroke-opacity="0.16" stroke-width="2" />
+          <g class="carrier-deck-lights" fill="#5ee8ff">
+            <circle cx="641" cy="432" r="4" /><circle cx="1279" cy="432" r="4" />
+            <circle cx="616" cy="514" r="5" /><circle cx="1318" cy="514" r="5" />
+            <circle cx="585" cy="618" r="6" /><circle cx="1366" cy="618" r="6" />
+            <circle cx="547" cy="750" r="7" /><circle cx="1424" cy="750" r="7" />
+            <circle cx="501" cy="914" r="9" /><circle cx="1497" cy="914" r="9" />
+          </g>
+          <g fill="#ffd447" opacity="0.72">
+            <rect x="944" y="470" width="14" height="36" /><rect x="976" y="470" width="14" height="36" />
+            <rect x="934" y="579" width="17" height="51" /><rect x="983" y="579" width="17" height="51" />
+            <rect x="921" y="737" width="21" height="73" /><rect x="993" y="737" width="21" height="73" />
+          </g>
+        </g>
+
+        <g class="carrier-aircraft carrier-aircraft-left" fill="#02090d" stroke="#72d9ee" stroke-opacity="0.34" stroke-width="2">
+          <path d="M300 700 L376 664 438 670 495 623 513 634 477 686 566 735 553 755 451 728 398 790 378 786 392 720 317 731 Z" />
+          <path d="M176 838 L226 813 273 817 312 786 325 794 302 830 363 864 354 878 284 859 247 901 232 897 242 852 187 860 Z" />
+        </g>
+        <g class="carrier-aircraft carrier-aircraft-right" fill="#02090d" stroke="#72d9ee" stroke-opacity="0.28" stroke-width="2">
+          <path d="M1483 585 L1535 560 1575 565 1614 531 1628 539 1603 577 1667 611 1658 626 1588 607 1552 650 1537 647 1547 602 1492 611 Z" />
+        </g>
+
+        <g class="carrier-hud" fill="none" stroke="#72e7ff" stroke-linecap="round">
+          <circle cx="960" cy="640" r="246" fill="url(#carrier-hud-glass)" stroke-opacity="0.45" stroke-width="2" />
+          <circle class="carrier-hud-ring carrier-hud-ring-outer" cx="960" cy="640" r="218" stroke-dasharray="4 15" stroke-opacity="0.66" stroke-width="3" />
+          <circle class="carrier-hud-ring carrier-hud-ring-inner" cx="960" cy="640" r="164" stroke-dasharray="34 12 3 12" stroke-opacity="0.58" stroke-width="2" />
+          <path d="M680 640 H824 M1096 640 H1240 M960 360 V505 M960 775 V920" stroke-opacity="0.72" stroke-width="3" />
+          <path d="M856 640 H925 L944 620 H976 L995 640 H1064" stroke="#ffd447" stroke-width="4" />
+          <path d="M804 566 H884 M1036 566 H1116 M826 600 H900 M1020 600 H1094 M836 680 H910 M1010 680 H1084 M816 716 H892 M1028 716 H1104" stroke-opacity="0.52" stroke-width="2" />
+          <path d="M909 742 L960 704 1011 742 M926 758 L960 734 994 758" stroke="#ffd447" stroke-opacity="0.84" stroke-width="3" />
+          <path d="M960 462 L936 498 H984 Z" stroke="#ffd447" stroke-width="3" />
+          <g class="carrier-attitude" stroke-opacity="0.58" stroke-width="2">
+            <path d="M870 522 H925 M995 522 H1050 M844 550 H914 M1006 550 H1076 M844 730 H914 M1006 730 H1076 M870 758 H925 M995 758 H1050" />
+          </g>
+        </g>
+
+        <g class="carrier-radar" transform="translate(88 566)" fill="none" stroke="#68e2ff">
+          <circle cx="210" cy="210" r="180" fill="#03141d" fill-opacity="0.35" stroke-opacity="0.45" stroke-width="3" />
+          <circle cx="210" cy="210" r="120" stroke-opacity="0.26" /><circle cx="210" cy="210" r="60" stroke-opacity="0.26" />
+          <path d="M30 210 H390 M210 30 V390 M83 83 L337 337 M337 83 L83 337" stroke-opacity="0.2" />
+          <path class="carrier-radar-sweep" d="M210 210 L210 36 A174 174 0 0 1 333 87 Z" fill="#55dcff" fill-opacity="0.13" stroke="none" />
+          <g fill="#ffd447" stroke="none"><circle cx="279" cy="139" r="6" /><circle cx="143" cy="262" r="5" /><circle cx="318" cy="245" r="4" /></g>
+          <path d="M273 139 h12 M279 133 v12 M137 262 h12 M143 256 v12 M312 245 h12 M318 239 v12" stroke="#ffd447" stroke-width="2" />
+        </g>
+
+        <g class="carrier-instruments" transform="translate(1554 538)" fill="none" stroke="#7de8ff">
+          <rect x="0" y="0" width="280" height="392" rx="12" fill="#020d14" fill-opacity="0.48" stroke-opacity="0.42" stroke-width="3" />
+          <circle cx="140" cy="122" r="82" stroke-opacity="0.36" stroke-width="3" />
+          <circle cx="140" cy="122" r="62" stroke-dasharray="2 8" stroke-opacity="0.72" stroke-width="4" />
+          <path d="M140 122 L184 78" stroke="#ffd447" stroke-width="5" />
+          <circle cx="140" cy="122" r="9" fill="#ffd447" stroke="none" />
+          <path d="M32 238 H248 M32 272 H248 M32 306 H248 M32 340 H248" stroke-opacity="0.22" />
+          <path class="carrier-signal-trace" d="M32 306 L56 306 68 278 84 334 100 292 119 306 141 306 156 258 178 347 198 294 216 306 248 306" stroke="#58e69b" stroke-width="4" />
+          <g fill="#ffd447" stroke="none"><rect x="34" y="360" width="44" height="8" /><rect x="88" y="360" width="82" height="8" opacity="0.46" /><rect x="180" y="360" width="66" height="8" opacity="0.24" /></g>
+        </g>
+
+        <g class="carrier-canopy" fill="none" stroke="#9feeff" stroke-opacity="0.22">
+          <path d="M0 0 L286 222 412 1080 M1920 0 L1634 222 1508 1080" stroke-width="18" />
+          <path d="M0 0 L286 222 M1920 0 L1634 222" stroke="#ffd447" stroke-opacity="0.38" stroke-width="4" />
+          <path d="M0 944 L290 844 M1920 944 L1630 844" stroke-width="8" />
+        </g>
+
+        <g class="carrier-bearing-tape" fill="#a9efff" opacity="0.68">
+          <path d="M610 124 H1310 V128 H610 Z" />
+          <path d="M640 116 V138 M700 120 V134 M760 116 V138 M820 120 V134 M880 116 V138 M940 108 V145 M1000 116 V138 M1060 120 V134 M1120 116 V138 M1180 120 V134 M1240 116 V138 M1300 120 V134" stroke="#a9efff" stroke-width="3" />
+          <path d="M940 148 L960 170 980 148 Z" fill="#ffd447" />
+        </g>
+      </g>
+
+      <g data-cinematic-scene="tactical-field">
+        <rect width="1920" height="1080" fill="url(#tactical-map)" />
+        <path d="M0 0 H1920 V1080 H0 Z" fill="url(#tactical-grid)" />
+
+        <g class="tactical-relief" fill="#7e9360" fill-opacity="0.09" stroke="#c8d99b" stroke-opacity="0.2">
+          <path d="M-80 180 C150 30 330 210 520 118 S830 40 1020 152 1390 296 1660 142 1920 112 2040 216 V-40 H-80 Z" />
+          <path d="M-110 864 C210 716 350 914 594 776 S1010 654 1240 822 1650 954 2030 742 V1120 H-110 Z" />
+          <path d="M132 370 C280 230 470 286 586 398 S784 548 972 442 1264 282 1464 382 1742 572 1940 482" fill="none" stroke-width="34" />
+        </g>
+
+        <g class="tactical-contours" fill="none" stroke="#d4e7a5" stroke-opacity="0.25" stroke-width="2">
+          <path d="M-40 246 C122 116 304 154 438 250 S728 346 848 226 1128 84 1306 210 1584 380 1972 170" />
+          <path d="M-50 284 C128 154 302 188 444 282 S728 388 872 264 1128 126 1322 246 1610 410 1988 210" />
+          <path d="M-42 326 C132 194 320 226 462 318 S750 424 896 302 1150 170 1342 286 1642 448 1990 254" />
+          <path d="M-70 742 C140 618 318 648 474 754 S772 866 928 740 1230 602 1444 724 1710 864 2000 680" />
+          <path d="M-58 790 C150 664 328 700 488 802 S790 914 946 784 1246 648 1460 766 1732 908 2010 724" />
+          <path d="M102 468 C214 374 354 382 438 468 S586 606 718 524 936 390 1074 466 1282 642 1440 546 1662 430 1864 520" />
+          <path d="M146 500 C246 422 358 428 448 512 S600 638 730 562 940 432 1082 504 1288 674 1458 582 1668 472 1852 552" />
+          <path d="M208 542 C292 482 378 480 458 548 S608 680 744 600 944 478 1086 548 1298 718 1470 624 1668 522 1814 590" />
+        </g>
+
+        <g class="tactical-rugged-case" fill="none" stroke="#a8b47b">
+          <rect x="24" y="22" width="1872" height="1036" rx="28" stroke="#222c1c" stroke-width="44" />
+          <rect x="42" y="40" width="1836" height="1000" rx="20" stroke-opacity="0.6" stroke-width="5" />
+          <path d="M24 196 H82 M24 884 H82 M1838 196 H1896 M1838 884 H1896" stroke="#697351" stroke-width="20" />
+          <path d="M90 40 V98 M1830 40 V98 M90 982 V1040 M1830 982 V1040" stroke="#697351" stroke-width="20" />
+          <g fill="#10150e" stroke="#bacb8d" stroke-opacity="0.58" stroke-width="3">
+            <circle cx="62" cy="62" r="13" /><circle cx="1858" cy="62" r="13" />
+            <circle cx="62" cy="1018" r="13" /><circle cx="1858" cy="1018" r="13" />
+          </g>
+        </g>
+
+        <g class="tactical-compass" transform="translate(1518 130)" fill="none" stroke="#d5e69f">
+          <circle cx="150" cy="150" r="118" fill="#0c160e" fill-opacity="0.48" stroke-opacity="0.55" stroke-width="4" />
+          <circle cx="150" cy="150" r="90" stroke-dasharray="2 8" stroke-opacity="0.58" stroke-width="3" />
+          <path d="M150 20 V280 M20 150 H280 M58 58 L242 242 M242 58 L58 242" stroke-opacity="0.32" />
+          <path d="M150 45 L169 132 150 150 131 132 Z" fill="#e6d264" fill-opacity="0.86" stroke="none" />
+          <path d="M150 255 L132 168 150 150 168 168 Z" fill="#8fa36a" fill-opacity="0.65" stroke="none" />
+          <circle cx="150" cy="150" r="10" fill="#e6d264" stroke="none" />
+        </g>
+
+        <g class="tactical-scope" transform="translate(680 305)" fill="none" stroke="#cfe9a0">
+          <circle cx="300" cy="300" r="270" fill="#09140b" fill-opacity="0.28" stroke-opacity="0.38" stroke-width="3" />
+          <circle cx="300" cy="300" r="210" stroke-opacity="0.26" /><circle cx="300" cy="300" r="140" stroke-opacity="0.26" /><circle cx="300" cy="300" r="70" stroke-opacity="0.26" />
+          <path d="M30 300 H570 M300 30 V570 M109 109 L491 491 M491 109 L109 491" stroke-opacity="0.2" />
+          <path class="tactical-sweep" d="M300 300 L300 36 A264 264 0 0 1 528 168 Z" fill="#bce58d" fill-opacity="0.1" stroke="none" />
+        </g>
+
+        <g class="tactical-route" fill="none" stroke="#f2c95d" stroke-width="5">
+          <path class="tactical-route-line" d="M226 812 C420 724 526 846 698 734 S1008 568 1178 644 1438 792 1674 602" stroke-dasharray="20 14" />
+          <g fill="#142014" stroke="#f2c95d" stroke-width="4">
+            <path d="M226 793 L245 812 226 831 207 812 Z" />
+            <circle cx="698" cy="734" r="18" />
+            <path d="M1178 620 L1202 662 H1154 Z" />
+            <rect x="1655" y="583" width="38" height="38" transform="rotate(45 1674 602)" />
+          </g>
+        </g>
+
+        <g class="tactical-contacts" fill="none" stroke="#f0db6a" stroke-width="3">
+          <g class="tactical-contact tactical-contact-a" transform="translate(512 418)">
+            <circle r="29" /><circle r="14" /><path d="M-42 0H42M0-42V42" />
+          </g>
+          <g class="tactical-contact tactical-contact-b" transform="translate(1338 456)">
+            <circle r="34" /><circle r="17" /><path d="M-48 0H48M0-48V48" />
+          </g>
+          <g transform="translate(1448 842)"><circle r="23" /><path d="M-35 0H35M0-35V35" /></g>
+        </g>
+
+        <g class="tactical-rulers" fill="none" stroke="#c4d790" stroke-opacity="0.55">
+          <path d="M110 150 H620 M110 150 V174 M174 150 V164 M238 150 V174 M302 150 V164 M366 150 V174 M430 150 V164 M494 150 V174 M558 150 V164 M620 150 V174" stroke-width="3" />
+          <path d="M1640 396 V914 M1640 396 H1616 M1640 460 H1626 M1640 524 H1616 M1640 588 H1626 M1640 652 H1616 M1640 716 H1626 M1640 780 H1616 M1640 844 H1626 M1640 914 H1616" stroke-width="3" />
+          <path d="M114 938 H590" stroke-width="4" /><path d="M114 928 V948 M210 928 V948 M306 928 V948 M402 928 V948 M498 928 V948 M590 928 V948" stroke-width="3" />
+        </g>
+      </g>
+
+      <g data-cinematic-scene="wizarding-archive">
+        <rect width="1920" height="1080" fill="url(#archive-desk)" />
+        <g class="archive-stars" fill="#ffeab0">
+          <circle cx="126" cy="122" r="2" /><circle cx="246" cy="284" r="3" /><circle cx="372" cy="94" r="2" />
+          <circle cx="562" cy="164" r="2" /><circle cx="724" cy="74" r="3" /><circle cx="884" cy="128" r="2" />
+          <circle cx="1068" cy="80" r="2" /><circle cx="1216" cy="156" r="3" /><circle cx="1394" cy="92" r="2" />
+          <circle cx="1578" cy="174" r="2" /><circle cx="1762" cy="104" r="3" /><circle cx="1836" cy="286" r="2" />
+          <circle cx="142" cy="834" r="3" /><circle cx="306" cy="978" r="2" /><circle cx="1638" cy="952" r="3" /><circle cx="1806" cy="826" r="2" />
+        </g>
+        <g class="archive-constellations" fill="none" stroke="#d9b6ff" stroke-opacity="0.34" stroke-width="2">
+          <path d="M116 122 L246 284 372 94 562 164 724 74" /><path d="M1216 156 L1394 92 1578 174 1762 104 1836 286" />
+          <path d="M142 834 L306 978 448 862" /><path d="M1488 846 L1638 952 1806 826" />
+        </g>
+
+        <g class="archive-book">
+          <path d="M230 204 Q566 124 946 246 V974 Q576 884 214 984 Z" fill="#4d2f22" stroke="#c29452" stroke-width="12" />
+          <path d="M974 246 Q1354 124 1690 204 L1706 984 Q1344 884 974 974 Z" fill="#4d2f22" stroke="#c29452" stroke-width="12" />
+          <path d="M248 220 Q590 154 948 268 V944 Q590 864 246 952 Z" fill="url(#archive-page-left)" stroke="#ecd29a" stroke-opacity="0.68" stroke-width="4" />
+          <path d="M972 268 Q1330 154 1672 220 L1674 952 Q1330 864 972 944 Z" fill="url(#archive-page-right)" stroke="#ecd29a" stroke-opacity="0.68" stroke-width="4" />
+          <path d="M949 258 Q960 302 960 948" fill="none" stroke="#3f271d" stroke-width="22" />
+          <path d="M949 268 Q960 308 960 938" fill="none" stroke="#f2d99d" stroke-opacity="0.24" stroke-width="4" />
+          <g fill="none" stroke="#754f30" stroke-opacity="0.42" stroke-width="2">
+            <path d="M304 344 Q590 294 884 360 M294 392 Q584 342 890 408 M286 440 Q580 394 896 456" />
+            <path d="M1028 360 Q1332 294 1616 344 M1024 408 Q1338 342 1626 392 M1018 456 Q1342 394 1634 440" />
+            <path d="M298 788 Q594 732 894 798 M1022 798 Q1320 732 1622 788" />
+          </g>
+        </g>
+
+        <g class="archive-orrery" transform="translate(270 274)" fill="none" stroke="#e7c26d">
+          <ellipse cx="190" cy="190" rx="176" ry="72" stroke-opacity="0.58" stroke-width="5" />
+          <ellipse class="archive-orrery-ring-a" cx="190" cy="190" rx="176" ry="72" transform="rotate(60 190 190)" stroke-opacity="0.5" stroke-width="4" />
+          <ellipse class="archive-orrery-ring-b" cx="190" cy="190" rx="176" ry="72" transform="rotate(-60 190 190)" stroke-opacity="0.5" stroke-width="4" />
+          <circle cx="190" cy="190" r="38" fill="#e4a957" fill-opacity="0.5" stroke-width="5" />
+          <circle cx="316" cy="190" r="14" fill="#7b6eb7" stroke="none" /><circle cx="92" cy="224" r="10" fill="#bd7d55" stroke="none" />
+        </g>
+
+        <g class="archive-astrolabe" transform="translate(1294 300)" fill="none" stroke="#8a5928">
+          <circle cx="170" cy="170" r="148" fill="#dcb979" fill-opacity="0.2" stroke-width="7" />
+          <circle cx="170" cy="170" r="116" stroke-dasharray="3 9" stroke-width="4" />
+          <circle cx="170" cy="170" r="74" stroke-width="3" />
+          <path d="M170 26 V314 M26 170 H314 M68 68 L272 272 M272 68 L68 272" stroke-opacity="0.6" stroke-width="3" />
+          <path d="M170 62 L194 146 278 170 194 194 170 278 146 194 62 170 146 146 Z" fill="#9b6b35" fill-opacity="0.26" stroke-width="4" />
+          <circle cx="170" cy="170" r="13" fill="#7b421f" stroke="none" />
+        </g>
+
+        <g class="archive-ornaments" fill="none" stroke="#d6a74f" stroke-width="6">
+          <path d="M246 224 H354 Q318 256 344 294 M1674 224 H1566 Q1602 256 1576 294" />
+          <path d="M244 952 H352 Q318 920 344 882 M1676 952 H1568 Q1602 920 1576 882" />
+          <path d="M360 234 C294 278 294 354 360 390 C426 354 426 278 360 234 Z" stroke-opacity="0.6" />
+          <path d="M1560 234 C1494 278 1494 354 1560 390 C1626 354 1626 278 1560 234 Z" stroke-opacity="0.6" />
+        </g>
+
+        <g class="archive-seal" transform="translate(850 790)">
+          <circle cx="110" cy="110" r="86" fill="#742923" stroke="#c98258" stroke-width="7" />
+          <circle cx="110" cy="110" r="62" fill="none" stroke="#e4a565" stroke-opacity="0.62" stroke-width="3" stroke-dasharray="4 10" />
+          <path d="M110 58 L126 90 162 94 136 120 142 156 110 139 78 156 84 120 58 94 94 90 Z" fill="#d08a54" fill-opacity="0.6" />
+          <path d="M71 175 L46 252 107 221 139 262 151 174" fill="#5f1d21" stroke="#b96e4e" stroke-width="4" />
+        </g>
+
+        <g class="archive-candlelight" fill="#ffc66d" fill-opacity="0.1">
+          <circle cx="190" cy="520" r="270" /><circle cx="1730" cy="520" r="270" />
+        </g>
+      </g>
+
+      <g data-cinematic-scene="galactic-operations">
+        <rect width="1920" height="1080" fill="url(#galactic-space)" />
+        <g class="galactic-stars galactic-stars-far" fill="#dff7ff" opacity="0.55">
+          <circle cx="82" cy="122" r="1.5" /><circle cx="176" cy="310" r="2" /><circle cx="296" cy="78" r="1" />
+          <circle cx="402" cy="246" r="1.5" /><circle cx="522" cy="132" r="2" /><circle cx="650" cy="338" r="1" />
+          <circle cx="782" cy="92" r="1.5" /><circle cx="912" cy="252" r="1" /><circle cx="1048" cy="126" r="2" />
+          <circle cx="1182" cy="302" r="1.5" /><circle cx="1320" cy="74" r="1" /><circle cx="1448" cy="222" r="2" />
+          <circle cx="1586" cy="112" r="1.5" /><circle cx="1728" cy="286" r="1" /><circle cx="1840" cy="96" r="2" />
+          <circle cx="112" cy="654" r="1" /><circle cx="272" cy="514" r="1.5" /><circle cx="466" cy="728" r="2" />
+          <circle cx="1378" cy="662" r="2" /><circle cx="1590" cy="522" r="1" /><circle cx="1810" cy="734" r="1.5" />
+        </g>
+        <g class="galactic-stars galactic-stars-near" fill="#9adfff">
+          <circle cx="232" cy="174" r="3" /><circle cx="566" cy="250" r="2.5" /><circle cx="846" cy="144" r="3" />
+          <circle cx="1218" cy="182" r="2.5" /><circle cx="1512" cy="298" r="3" /><circle cx="1778" cy="156" r="2.5" />
+          <circle cx="350" cy="586" r="2.5" /><circle cx="1498" cy="588" r="3" /><circle cx="1694" cy="798" r="2.5" />
+        </g>
+
+        <g class="galactic-planet" transform="translate(1220 64)">
+          <circle cx="390" cy="390" r="348" fill="url(#galactic-planet)" stroke="#7be6ff" stroke-opacity="0.3" stroke-width="4" />
+          <path d="M96 272 C264 348 492 344 694 244 M70 392 C304 480 548 454 724 356 M104 520 C282 574 520 570 684 494" fill="none" stroke="#91cce4" stroke-opacity="0.13" stroke-width="13" />
+          <path d="M168 158 C326 206 446 194 598 134 M120 628 C282 666 484 674 636 616" fill="none" stroke="#b6e7ff" stroke-opacity="0.1" stroke-width="8" />
+          <circle cx="390" cy="390" r="360" fill="none" stroke="#7df0ff" stroke-opacity="0.22" stroke-width="16" />
+        </g>
+
+        <g class="galactic-bridge-window" fill="none" stroke="#91eaff">
+          <path d="M0 0 H1920 V674 L1718 820 H202 L0 674 Z" stroke="#02040b" stroke-width="72" />
+          <path d="M22 26 H1898 V650 L1698 792 H222 L22 650 Z" stroke-opacity="0.38" stroke-width="6" />
+          <path d="M312 0 L418 716 M1608 0 L1502 716 M734 0 L768 706 M1186 0 L1152 706" stroke="#071020" stroke-width="50" />
+          <path d="M322 0 L426 706 M1598 0 L1494 706 M744 0 L778 696 M1176 0 L1142 696" stroke-opacity="0.32" stroke-width="4" />
+          <path d="M222 792 H1698" stroke="#263d5a" stroke-width="40" />
+          <path d="M222 780 H1698" stroke-opacity="0.46" stroke-width="4" />
+        </g>
+
+        <g class="galactic-tactical" transform="translate(590 278)" fill="none" stroke="#69eaff">
+          <ellipse cx="370" cy="300" rx="350" ry="260" fill="#081a31" fill-opacity="0.32" stroke-opacity="0.46" stroke-width="4" />
+          <ellipse class="galactic-ring galactic-ring-a" cx="370" cy="300" rx="282" ry="205" stroke-dasharray="4 14" stroke-opacity="0.62" stroke-width="3" />
+          <ellipse class="galactic-ring galactic-ring-b" cx="370" cy="300" rx="204" ry="148" stroke-dasharray="26 8 3 8" stroke-opacity="0.48" stroke-width="3" />
+          <path d="M20 300 H720 M370 40 V560 M122 116 L618 484 M618 116 L122 484" stroke-opacity="0.18" />
+          <path class="galactic-sweep" d="M370 300 L370 44 A350 260 0 0 1 684 185 Z" fill="#5ceaff" fill-opacity="0.09" stroke="none" />
+          <path d="M126 366 C236 256 310 408 408 274 S568 184 666 242" stroke="#d4a4ff" stroke-width="4" stroke-dasharray="12 9" />
+          <g fill="#ffd46b" stroke="none">
+            <path d="M228 236 L240 248 228 260 216 248 Z" /><path d="M516 190 L531 205 516 220 501 205 Z" />
+            <path d="M576 360 L588 372 576 384 564 372 Z" />
+          </g>
+          <g stroke="#ffd46b" stroke-width="2"><path d="M204 248 H252 M228 224 V272" /><path d="M486 205 H546 M516 175 V235" /></g>
+        </g>
+
+        <g class="galactic-subsystem-tower galactic-tower-left" transform="translate(72 310)">
+          <path d="M0 70 L82 0 H300 L328 38 V650 L294 688 H64 L0 624 Z" fill="#071426" fill-opacity="0.84" stroke="#6be4ff" stroke-opacity="0.46" stroke-width="4" />
+          <g fill="#15375a" stroke="#7cecff" stroke-opacity="0.4" stroke-width="2">
+            <rect x="48" y="88" width="232" height="78" /><rect x="48" y="184" width="232" height="78" />
+            <rect x="48" y="280" width="232" height="78" /><rect x="48" y="376" width="232" height="78" />
+            <rect x="48" y="472" width="232" height="78" /><rect x="48" y="568" width="232" height="70" />
+          </g>
+          <g fill="#65eaff"><circle cx="76" cy="127" r="8" /><circle cx="76" cy="223" r="8" /><circle cx="76" cy="319" r="8" /><circle cx="76" cy="415" r="8" /><circle cx="76" cy="511" r="8" /><circle cx="76" cy="603" r="8" /></g>
+          <g fill="#9ec4dd" opacity="0.42"><rect x="104" y="116" width="138" height="7" /><rect x="104" y="212" width="94" height="7" /><rect x="104" y="308" width="126" height="7" /><rect x="104" y="404" width="152" height="7" /><rect x="104" y="500" width="110" height="7" /><rect x="104" y="592" width="144" height="7" /></g>
+        </g>
+
+        <g class="galactic-subsystem-tower galactic-tower-right" transform="translate(1520 310)">
+          <path d="M328 70 L246 0 H28 L0 38 V650 L34 688 H264 L328 624 Z" fill="#071426" fill-opacity="0.84" stroke="#d29bff" stroke-opacity="0.46" stroke-width="4" />
+          <g fill="#241844" stroke="#d29bff" stroke-opacity="0.4" stroke-width="2">
+            <rect x="48" y="88" width="232" height="78" /><rect x="48" y="184" width="232" height="78" />
+            <rect x="48" y="280" width="232" height="78" /><rect x="48" y="376" width="232" height="78" />
+            <rect x="48" y="472" width="232" height="78" /><rect x="48" y="568" width="232" height="70" />
+          </g>
+          <g fill="#d7a7ff"><path d="M242 117 l10 10 -10 10 -10-10z" /><path d="M242 213 l10 10 -10 10 -10-10z" /><path d="M242 309 l10 10 -10 10 -10-10z" /><path d="M242 405 l10 10 -10 10 -10-10z" /><path d="M242 501 l10 10 -10 10 -10-10z" /><path d="M242 593 l10 10 -10 10 -10-10z" /></g>
+        </g>
+
+        <g class="galactic-console" transform="translate(318 820)">
+          <path d="M0 0 H1284 L1450 260 H-166 Z" fill="#07111f" stroke="#6bdbff" stroke-opacity="0.5" stroke-width="5" />
+          <path d="M26 30 H1258 L1356 214 H-72 Z" fill="#0c2034" stroke="#bfefff" stroke-opacity="0.2" stroke-width="3" />
+          <g fill="#183d5a" stroke="#72e7ff" stroke-opacity="0.42" stroke-width="2">
+            <path d="M12 54 H276 L318 188 H-52 Z" /><path d="M322 54 H586 L606 188 H300 Z" />
+            <path d="M632 54 H896 L918 188 H610 Z" /><path d="M942 54 H1206 L1330 188 H920 Z" />
+          </g>
+          <g fill="#ffd66f"><circle cx="68" cy="102" r="8" /><circle cx="382" cy="102" r="8" /><circle cx="694" cy="102" r="8" /><circle cx="1004" cy="102" r="8" /></g>
+          <g fill="#75edff" opacity="0.7"><rect x="96" y="95" width="126" height="8" /><rect x="410" y="95" width="126" height="8" /><rect x="722" y="95" width="126" height="8" /><rect x="1032" y="95" width="126" height="8" /></g>
+        </g>
+      </g>
+
+      <g data-cinematic-scene="mission-control">
+        <rect width="1920" height="1080" fill="#191915" />
+        <rect x="56" y="44" width="1808" height="992" rx="30" fill="url(#mission-wall)" stroke="#d8caa1" stroke-opacity="0.38" stroke-width="5" />
+        <g class="mission-panel-seams" fill="none" stroke="#292a25" stroke-width="8">
+          <path d="M56 260 H1864 M56 660 H1864 M360 44 V1036 M720 44 V1036 M1200 44 V1036 M1560 44 V1036" />
+        </g>
+        <g class="mission-fasteners" fill="#24251f" stroke="#d7c69a" stroke-opacity="0.42" stroke-width="2">
+          <circle cx="82" cy="70" r="9" /><circle cx="1838" cy="70" r="9" /><circle cx="82" cy="1010" r="9" /><circle cx="1838" cy="1010" r="9" />
+          <circle cx="386" cy="286" r="8" /><circle cx="694" cy="286" r="8" /><circle cx="1226" cy="286" r="8" /><circle cx="1534" cy="286" r="8" />
+        </g>
+
+        <g class="mission-crt-bank" transform="translate(398 84)">
+          <rect width="486" height="330" rx="42" fill="#242720" stroke="#11120f" stroke-width="24" />
+          <rect x="28" y="28" width="430" height="274" rx="34" fill="url(#mission-crt)" stroke="#98bd79" stroke-opacity="0.38" stroke-width="5" />
+          <g stroke="#8acb72" stroke-opacity="0.16"><path d="M52 82 H434 M52 136 H434 M52 190 H434 M52 244 H434" /><path d="M106 50 V280 M160 50 V280 M214 50 V280 M268 50 V280 M322 50 V280 M376 50 V280" /></g>
+          <path class="mission-crt-trace" d="M48 204 C92 202 104 202 124 198 S150 138 172 226 202 192 226 198 256 202 280 200 308 150 334 218 366 188 388 198 416 202 438 198" fill="none" stroke="#8cff86" stroke-width="6" />
+          <circle cx="243" cy="165" r="68" fill="none" stroke="#8cff86" stroke-opacity="0.32" stroke-dasharray="4 8" stroke-width="3" />
+          <path d="M243 86 V244 M164 165 H322" stroke="#8cff86" stroke-opacity="0.24" />
+        </g>
+
+        <g class="mission-plotter" transform="translate(986 84)">
+          <rect width="506" height="330" rx="10" fill="#e2d7b3" stroke="#3b3a32" stroke-width="18" />
+          <g stroke="#716e5a" stroke-opacity="0.24"><path d="M34 64 H472 M34 112 H472 M34 160 H472 M34 208 H472 M34 256 H472" /><path d="M82 34 V296 M130 34 V296 M178 34 V296 M226 34 V296 M274 34 V296 M322 34 V296 M370 34 V296 M418 34 V296" /></g>
+          <path class="mission-trajectory" d="M42 266 C114 252 132 208 184 194 S266 224 302 154 382 74 466 54" fill="none" stroke="#b34f36" stroke-width="6" />
+          <path d="M42 266 L78 256 M184 194 L218 197 M302 154 L334 116 M466 54 L440 68" stroke="#333a3f" stroke-width="3" />
+          <g fill="#b34f36"><circle cx="42" cy="266" r="8" /><circle cx="184" cy="194" r="8" /><circle cx="302" cy="154" r="8" /><circle cx="466" cy="54" r="8" /></g>
+        </g>
+
+        <g class="mission-meters" transform="translate(96 318)">
+          <g transform="translate(0)">
+            <path d="M20 190 A170 170 0 0 1 360 190" fill="#ded3ae" stroke="#292a25" stroke-width="16" />
+            <path d="M70 178 A120 120 0 0 1 310 178" fill="none" stroke="#55594b" stroke-width="4" stroke-dasharray="3 9" />
+            <path class="mission-needle mission-needle-a" d="M190 178 L278 94" stroke="#bd422e" stroke-width="7" /><circle cx="190" cy="178" r="17" fill="#30312a" />
+          </g>
+          <g transform="translate(1450)">
+            <path d="M20 190 A170 170 0 0 1 360 190" fill="#ded3ae" stroke="#292a25" stroke-width="16" />
+            <path d="M70 178 A120 120 0 0 1 310 178" fill="none" stroke="#55594b" stroke-width="4" stroke-dasharray="3 9" />
+            <path class="mission-needle mission-needle-b" d="M190 178 L116 92" stroke="#bd422e" stroke-width="7" /><circle cx="190" cy="178" r="17" fill="#30312a" />
+          </g>
+        </g>
+
+        <g class="mission-annunciators" transform="translate(116 506)">
+          <rect width="1688" height="142" rx="10" fill="#252620" stroke="#10110e" stroke-width="14" />
+          <g stroke="#0d0e0b" stroke-width="6">
+            <rect x="26" y="24" width="176" height="94" fill="#ba4c32" /><rect x="230" y="24" width="176" height="94" fill="#d49739" />
+            <rect x="434" y="24" width="176" height="94" fill="#668a45" /><rect x="638" y="24" width="176" height="94" fill="#d5b44b" />
+            <rect x="842" y="24" width="176" height="94" fill="#668a45" /><rect x="1046" y="24" width="176" height="94" fill="#d49739" />
+            <rect x="1250" y="24" width="176" height="94" fill="#668a45" /><rect x="1454" y="24" width="208" height="94" fill="#ba4c32" />
+          </g>
+          <g fill="#f5edcf" opacity="0.24"><rect x="48" y="48" width="132" height="12" /><rect x="252" y="48" width="132" height="12" /><rect x="456" y="48" width="132" height="12" /><rect x="660" y="48" width="132" height="12" /><rect x="864" y="48" width="132" height="12" /><rect x="1068" y="48" width="132" height="12" /><rect x="1272" y="48" width="132" height="12" /><rect x="1476" y="48" width="164" height="12" /></g>
+        </g>
+
+        <g class="mission-switch-bank" transform="translate(86 720)">
+          <path d="M0 0 H1748 L1800 316 H-52 Z" fill="#383832" stroke="#d2c59c" stroke-opacity="0.35" stroke-width="6" />
+          <g fill="#1c1d19" stroke="#d3c89f" stroke-opacity="0.36" stroke-width="3">
+            <rect x="32" y="38" width="252" height="214" /><rect x="320" y="38" width="252" height="214" /><rect x="608" y="38" width="252" height="214" />
+            <rect x="896" y="38" width="252" height="214" /><rect x="1184" y="38" width="252" height="214" /><rect x="1472" y="38" width="244" height="214" />
+          </g>
+          <g stroke="#11120f" stroke-width="8" fill="#d5cba6">
+            <path d="M158 84 V190" /><circle cx="158" cy="82" r="23" /><path d="M446 84 V190" /><circle cx="446" cy="82" r="23" />
+            <path d="M734 84 V190" /><circle cx="734" cy="82" r="23" /><path d="M1022 84 V190" /><circle cx="1022" cy="82" r="23" />
+            <path d="M1310 84 V190" /><circle cx="1310" cy="82" r="23" /><path d="M1594 84 V190" /><circle cx="1594" cy="82" r="23" />
+          </g>
+          <g fill="#d79d3b"><circle cx="158" cy="224" r="12" /><circle cx="446" cy="224" r="12" /><circle cx="734" cy="224" r="12" /><circle cx="1022" cy="224" r="12" /><circle cx="1310" cy="224" r="12" /><circle cx="1594" cy="224" r="12" /></g>
+        </g>
+      </g>
+
+      <g data-cinematic-scene="cyberpunk-night">
+        <rect width="1920" height="1080" fill="url(#cyber-sky)" />
+        <circle cx="1420" cy="238" r="190" fill="#ff2bd6" fill-opacity="0.1" stroke="#ff56dc" stroke-opacity="0.32" stroke-width="7" />
+        <circle cx="1420" cy="238" r="142" fill="none" stroke="#57efff" stroke-opacity="0.2" stroke-dasharray="6 12" stroke-width="4" />
+
+        <g class="cyber-city cyber-city-far" fill="#0a0920" stroke="#6c2c9f" stroke-opacity="0.42" stroke-width="2">
+          <path d="M0 652 V344 H132 V260 H238 V652 Z M208 652 V408 H342 V314 H424 V652 Z M394 652 V230 H542 V652 Z M518 652 V374 H662 V296 H742 V652 Z" />
+          <path d="M1178 652 V366 H1294 V214 H1410 V652 Z M1382 652 V300 H1512 V388 H1600 V652 Z M1576 652 V202 H1716 V652 Z M1688 652 V342 H1818 V272 H1920 V652 Z" />
+        </g>
+        <g class="cyber-window-lights" opacity="0.74">
+          <path d="M0 652 V344 H238 V652 Z M208 652 V408 H424 V652 Z M394 652 V230 H542 V652 Z M518 652 V296 H742 V652 Z" fill="url(#cyber-window-grid)" />
+          <path d="M1178 652 V214 H1410 V652 Z M1382 652 V300 H1600 V652 Z M1576 652 V202 H1716 V652 Z M1688 652 V272 H1920 V652 Z" fill="url(#cyber-window-grid)" />
+        </g>
+
+        <g class="cyber-city cyber-city-near" fill="#02020a" stroke="#00e8ff" stroke-opacity="0.32" stroke-width="3">
+          <path d="M0 742 V520 H178 V444 H306 V742 Z M278 742 V566 H474 V742 Z M1446 742 V494 H1630 V412 H1788 V742 Z M1744 742 V538 H1920 V742 Z" />
+          <path d="M114 444 V330 M92 350 H136 M1548 412 V264 M1512 302 H1584 M1828 538 V390" fill="none" stroke="#ff3ad7" stroke-width="5" />
+        </g>
+
+        <g class="cyber-transit" fill="none" stroke="#27efff">
+          <path d="M-60 484 C332 388 540 524 866 438 S1504 316 1980 430" stroke="#1a1736" stroke-width="46" />
+          <path d="M-60 474 C332 378 540 514 866 428 S1504 306 1980 420" stroke-opacity="0.58" stroke-width="5" />
+          <g class="cyber-train" transform="translate(856 410)">
+            <path d="M0 0 H288 L328 24 286 50 H0 L-24 25 Z" fill="#ff2bd6" fill-opacity="0.52" stroke="#5df3ff" stroke-width="3" />
+            <g fill="#ccfbff"><rect x="34" y="12" width="46" height="18" /><rect x="96" y="12" width="46" height="18" /><rect x="158" y="12" width="46" height="18" /><rect x="220" y="12" width="46" height="18" /></g>
+          </g>
+        </g>
+
+        <g class="cyber-perspective-grid" fill="url(#cyber-road)" stroke="#a928d6" stroke-opacity="0.3">
+          <path d="M0 640 H1920 V1080 H0 Z" fill="url(#cyber-road)" />
+          <path d="M960 640 L90 1080 M960 640 L340 1080 M960 640 L590 1080 M960 640 L840 1080 M960 640 L1080 1080 M960 640 L1330 1080 M960 640 L1580 1080 M960 640 L1830 1080" fill="none" />
+          <path d="M0 700 H1920 M0 780 H1920 M0 880 H1920 M0 1000 H1920" fill="none" />
+        </g>
+
+        <g class="cyber-hologram" transform="translate(558 278)" fill="none" stroke="#55f1ff">
+          <ellipse cx="400" cy="330" rx="364" ry="276" fill="#08243c" fill-opacity="0.2" stroke-opacity="0.54" stroke-width="4" />
+          <ellipse class="cyber-holo-ring cyber-holo-ring-a" cx="400" cy="330" rx="296" ry="224" stroke-dasharray="6 15" stroke-width="5" />
+          <ellipse class="cyber-holo-ring cyber-holo-ring-b" cx="400" cy="330" rx="218" ry="164" transform="rotate(28 400 330)" stroke="#ff45d7" stroke-dasharray="28 12 3 12" stroke-width="4" />
+          <path d="M88 330 H712 M400 68 V592 M180 144 L620 516 M620 144 L180 516" stroke-opacity="0.2" />
+          <path d="M400 146 L438 260 558 260 460 330 498 446 400 376 302 446 340 330 242 260 362 260 Z" stroke="#ff42d6" stroke-opacity="0.64" stroke-width="5" />
+          <circle cx="400" cy="330" r="38" fill="#4cefff" fill-opacity="0.22" stroke-width="5" />
+          <path class="cyber-scan-beam" d="M100 520 L700 140" stroke="#fff17a" stroke-opacity="0.62" stroke-width="8" />
+        </g>
+
+        <g class="cyber-neon-signs">
+          <path d="M126 176 H420 V308 H126 Z" fill="#120623" stroke="#ff3bd7" stroke-width="8" />
+          <path d="M158 214 H376 M158 248 H336 M158 282 H396" stroke="#5ef4ff" stroke-width="8" />
+          <path d="M1514 164 H1798 V312 H1514 Z" fill="#071529" stroke="#55f1ff" stroke-width="8" />
+          <circle cx="1586" cy="238" r="34" fill="none" stroke="#ff3bd7" stroke-width="8" /><path d="M1642 206 H1762 M1642 238 H1728 M1642 270 H1762" stroke="#fff170" stroke-width="7" />
+        </g>
+
+        <g class="cyber-rain cyber-rain-far" stroke="#77dcff" stroke-opacity="0.22" stroke-width="2">
+          <path d="M72 10 L24 194 M210 34 L156 250 M360 0 L306 220 M518 46 L470 242 M690 10 L634 218 M850 58 L804 246 M1012 0 L964 210 M1190 38 L1138 242 M1360 8 L1308 214 M1534 54 L1480 252 M1710 0 L1658 216 M1880 46 L1828 246" />
+        </g>
+        <g class="cyber-rain cyber-rain-near" stroke="#e34dff" stroke-opacity="0.26" stroke-width="4">
+          <path d="M120 560 L46 872 M382 502 L296 862 M676 540 L594 892 M1008 496 L920 872 M1312 548 L1224 910 M1628 510 L1546 874 M1888 556 L1806 906" />
+        </g>
+
+        <g class="cyber-cables" fill="none" stroke="#090711" stroke-width="13">
+          <path d="M0 128 C440 250 648 12 1010 156 S1608 278 1920 92" /><path d="M0 238 C390 344 690 146 1024 270 S1588 340 1920 206" />
+        </g>
+      </g>
+    </svg>
   </div>
 
   <header class="site-header">
@@ -112,7 +658,13 @@
         </div>
       </div>
 
-      <p id="dashboard-message" class="dashboard-message" role="status">
+      <p
+        id="dashboard-message"
+        class="dashboard-message"
+        data-state="loading"
+        role="status"
+        aria-atomic="true"
+      >
         Contacting the scanner daemon.
       </p>
     </section>
@@ -331,17 +883,21 @@
         </div>
 
         <dl class="scanner-display-hierarchy">
-          <div>
+          <div data-hold-scope="system" data-hold-state="unknown">
             <dt>System</dt>
             <dd id="radio-system" class="primary-value">No active system</dd>
           </div>
-          <div>
+          <div data-hold-scope="department" data-hold-state="unknown">
             <dt>Department</dt>
             <dd id="radio-department" class="secondary-value">Unavailable</dd>
           </div>
-          <div>
+          <div data-hold-scope="channel" data-hold-state="unknown">
             <dt>Channel</dt>
             <dd id="radio-channel" class="secondary-value">No active channel</dd>
+          </div>
+          <div data-hold-scope="site" data-hold-state="unknown">
+            <dt>Site</dt>
+            <dd id="radio-site" class="secondary-value">Unavailable</dd>
           </div>
         </dl>
 
@@ -372,7 +928,6 @@
           <section id="radio-group-hierarchy" class="radio-field-group" aria-labelledby="radio-hierarchy-title" data-radio-group="hierarchy">
             <h3 id="radio-hierarchy-title">Hierarchy</h3>
             <dl class="radio-field-list">
-              <div><dt>Site</dt><dd id="radio-site">Unavailable</dd></div>
               <div><dt>System index</dt><dd id="radio-system-index">Unavailable</dd></div>
               <div><dt>System hold</dt><dd id="radio-system-hold">Unavailable</dd></div>
               <div><dt>Department index</dt><dd id="radio-department-index">Unavailable</dd></div>
@@ -582,7 +1137,7 @@
                 class="scanner-hold-state"
                 data-state="unknown"
               >
-                Unavailable
+                Unknown
               </span>
               <button
                 id="scanner-previous-system"
@@ -626,7 +1181,7 @@
                 class="scanner-hold-state"
                 data-state="unknown"
               >
-                Unavailable
+                Unknown
               </span>
               <button
                 id="scanner-previous-department"
@@ -670,7 +1225,7 @@
                 class="scanner-hold-state"
                 data-state="unknown"
               >
-                Unavailable
+                Unknown
               </span>
               <button
                 id="scanner-previous-site"
@@ -714,7 +1269,7 @@
                 class="scanner-hold-state"
                 data-state="unknown"
               >
-                Unavailable
+                Unknown
               </span>
               <button
                 id="scanner-previous"

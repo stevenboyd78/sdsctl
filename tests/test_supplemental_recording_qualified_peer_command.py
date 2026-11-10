@@ -49,6 +49,7 @@ layout, image_umask, supervised = (
 )
 image, configured = qualification.image, qualification.configured
 STAGED_SOURCE_GUARD = None  # Explicit staged-process fixture only; never production.
+FIXTURE_PROCESS_STARTUP_TIMEOUT_SECONDS = 30
 OUTER_NAME = "supplemental_recording_passive_outer"
 OUTER_SPEC = importlib.util.spec_from_file_location(
     OUTER_NAME, Path(p.__file__).with_name(OUTER_NAME + ".py")
@@ -73,6 +74,36 @@ def source_guard_prefix(role):
 
 def emit(value):
     print(json.dumps(value), flush=True)
+
+
+def fixture_child_startup_line(process):
+    """Give only the cold isolated interpreter a wider scheduling ceiling."""
+    assert select.select(
+        [process.stdout], [], [], FIXTURE_PROCESS_STARTUP_TIMEOUT_SECONDS
+    )[0], "fixture child startup timed out"
+    return transport.line(process)
+
+
+def test_fixture_child_startup_ceiling_does_not_change_protocol_ceiling(monkeypatch):
+    calls = []
+
+    class Output:
+        @staticmethod
+        def readline():
+            return b'{"ready":true}\n'
+
+    process = SimpleNamespace(stdout=Output())
+
+    def ready(readers, writers, problems, timeout):
+        calls.append((readers, writers, problems, timeout))
+        return readers, [], []
+
+    monkeypatch.setattr(select, "select", ready)
+    assert fixture_child_startup_line(process) == '{"ready":true}'
+    assert calls == [
+        ([process.stdout], [], [], FIXTURE_PROCESS_STARTUP_TIMEOUT_SECONDS),
+        ([process.stdout], [], [], 4),
+    ]
 
 
 def fixture_raw_clock_samples(action, monkeypatch):
@@ -500,6 +531,7 @@ def helper(supervised, image, configured, monkeypatch, tmp_path, request):
     )
     generator = h = diagnostic_fd = result_fd = None
     diagnostic_fds = []
+    setup_failed = False
     try:
         # Nested qualification owns/closes the original stream at teardown.
         # Retain our own noninheritable read handle BEFORE handing it that peer;
@@ -508,7 +540,7 @@ def helper(supervised, image, configured, monkeypatch, tmp_path, request):
         diagnostic_fds.append(diagnostic_fd)
         result_fd = os.dup(process.stdout.fileno())
         diagnostic_fds.append(result_fd)
-        initial = json.loads(transport.line(process))
+        initial = json.loads(fixture_child_startup_line(process))
         supplied = dict(plan=initial["base"], baseline=initial["baseline"], child=process)
         mode = selection.get("mode") if type(selection) is dict else selection
         profile = "peer-retained" if mode == "release-command-pair" else "peer-preparation"
@@ -525,6 +557,9 @@ def helper(supervised, image, configured, monkeypatch, tmp_path, request):
         assert h.paths["template"] == h.template.sha256
         h.baseline = initial["baseline"]
         yield h
+    except BaseException:
+        setup_failed = True
+        raise
     finally:
         # Original disposable fixture only; never discover or signal a live PID.
         try:
@@ -533,7 +568,15 @@ def helper(supervised, image, configured, monkeypatch, tmp_path, request):
                     next(generator)
             else:
                 process.stdin.close()
-                process.wait(timeout=3)
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    # Preserve an earlier startup/protocol cause. The outer
+                    # fixture cleanup below still kills and reaps this exact
+                    # disposable child; an otherwise clean teardown retains
+                    # its existing strict three-second assertion.
+                    if not setup_failed:
+                        raise
             # A refusal may leave this fixture alive until normal stdin EOF.
             # Its result is then unread when an earlier outer assertion fails.
             # Retain the original pipe and recover only sanitized locations,

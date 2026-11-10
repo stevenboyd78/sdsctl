@@ -21,6 +21,14 @@
   --radio-soft: rgb(217 154 62 / 0.08);
   --radio-cyan: #8ed9e6;
   --radio-bezel: #090a08;
+  --hold-field-background: color-mix(
+    in srgb,
+    var(--warning) 18%,
+    var(--radio-bezel)
+  );
+  --hold-field-border: var(--warning);
+  --hold-field-label: var(--warning);
+  --hold-field-value: #fff6dc;
   font-family:
     ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;

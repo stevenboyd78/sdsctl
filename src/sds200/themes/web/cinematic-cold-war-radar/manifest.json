@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "interface": "web",
+  "id": "cinematic-cold-war-radar",
+  "label": "Cold War Radar",
+  "order": 1030,
+  "stylesheet": "theme.css",
+  "color_scheme": "dark",
+  "theme_colors": {"light": "#06100b", "dark": "#06100b"}
+}

@@ -43,14 +43,16 @@ available for that same System, Department, Site, or Channel.
 ## Choose a theme
 
 Theme choice is browser-local presentation state. It does not change daemon or
-scanner state. The six built-in choices share the same panes, controls, fields,
+scanner state. All 28 built-in choices share the same panes, controls, fields,
 keyboard behavior, and security boundary.
 
-Every theme is captured in the same review order: 1920x1080 Full HD, 1366x768
-desktop, 800x480 compact landscape/Raspberry Pi display, and 390x844 portrait
-phone at DPR2. At normal zoom the workspace fits these reference sizes. Compact
-LCARS panes can scroll internally to keep fields and controls reachable without
-shrinking them. When text enlargement or browser zoom needs more room, content
+Every theme is audited at 1920x1080 Full HD, 1366x768 desktop, 800x480 compact
+landscape/Raspberry Pi display, and 390x844 portrait phone at DPR2. The visual
+gallery retains all four references for the established themes and one
+authoritative Full-HD Scanner reference for each Cinematic theme. At normal
+zoom the workspace fits every audited reference size. Compact LCARS panes can
+scroll internally to keep fields and controls reachable without shrinking
+them. When text enlargement or browser zoom needs more room, content
 reachability takes priority and conventional scrolling returns.
 
 The captures show theme-default typography, using locally bundled fonts where
@@ -133,6 +135,118 @@ The stable theme choice remains **LCARS**; see
 Pip-Boy-inspired is an original project-owned field-terminal treatment. It uses
 local declarative CSS and contains no game artwork, logos, screenshots, sounds,
 proprietary fonts, copied hardware geometry, or remote resources.
+
+## Cinematic collection
+
+These 22 original project-owned themes evoke broad genres and operational
+settings without using franchise names, logos, characters, screenshots,
+proprietary typefaces, copied interface geometry, or remote resources. Each
+Full HD reference uses the same fictional held-channel scanner fixture. Six are
+independent panoramic environments; the other 16 are distinct colorway
+treatments intended for compact and general-purpose displays.
+
+Carrier Air Wing, Tactical Field, Wizarding Archive, Galactic Operations,
+Mission Control, and Cyberpunk Night are the headline panoramic environments,
+not re-themed instances of one template. They use distinct flight-deck,
+map-console, illuminated archive, bridge-command, annunciator-switchbank, and
+asymmetric neon architectures, with their own materials, instruments, motion,
+and held-state reactions. A panorama activates only at a CSS viewport of at
+least 1280x720 and an aspect ratio of at least 3:2. If any condition is false,
+the theme returns to its compact colorway and the shared horizontal navigation.
+Reduced-motion mode keeps the full static scene and all state indications.
+
+Across every theme, the Scanner hierarchy remains one stable two-by-two live
+matrix: System and Department on the first row, then Channel and Site on the
+second. Decorative panoramic reactions supplement those semantic fields; they
+never replace the visible held-field state.
+
+### Mission Control
+
+![Mission Control theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-cinematic-mission-control-1920x1080.png)
+
+### Cyberpunk Night
+
+![Cyberpunk Night theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-cinematic-cyberpunk-night-1920x1080.png)
+
+### Synthwave Outrun
+
+![Synthwave Outrun theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-cinematic-synthwave-1920x1080.png)
+
+### Cold War Radar
+
+![Cold War Radar theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-cinematic-cold-war-radar-1920x1080.png)
+
+### Dieselpunk Command
+
+![Dieselpunk Command theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-cinematic-dieselpunk-command-1920x1080.png)
+
+### Steampunk Telegraph
+
+![Steampunk Telegraph theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-cinematic-steampunk-telegraph-1920x1080.png)
+
+### Retro Arcade
+
+![Retro Arcade theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-cinematic-retro-arcade-1920x1080.png)
+
+### Y2K Media Center
+
+![Y2K Media Center theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-cinematic-y2k-media-1920x1080.png)
+
+### Mecha Operations
+
+![Mecha Operations theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-cinematic-mecha-operations-1920x1080.png)
+
+### Comic Book
+
+![Comic Book theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-cinematic-comic-book-1920x1080.png)
+
+### Wizarding Archive
+
+![Wizarding Archive theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-cinematic-wizarding-archive-1920x1080.png)
+
+### Gothic Cathedral
+
+![Gothic Cathedral theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-cinematic-gothic-cathedral-1920x1080.png)
+
+### Fantasy Cartographer
+
+![Fantasy Cartographer theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-cinematic-fantasy-cartographer-1920x1080.png)
+
+### Desert Empire
+
+![Desert Empire theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-cinematic-desert-empire-1920x1080.png)
+
+### Carrier Air Wing
+
+![Carrier Air Wing theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-cinematic-carrier-air-wing-1920x1080.png)
+
+### Motorsport Pit Wall
+
+![Motorsport Pit Wall theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-cinematic-motorsport-pit-wall-1920x1080.png)
+
+### Noir Detective
+
+![Noir Detective theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-cinematic-noir-detective-1920x1080.png)
+
+### Art Deco Radio
+
+![Art Deco Radio theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-cinematic-art-deco-radio-1920x1080.png)
+
+### Solarpunk Communications
+
+![Solarpunk Communications theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-cinematic-solarpunk-1920x1080.png)
+
+### National Parks Ranger
+
+![National Parks Ranger theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-cinematic-national-parks-1920x1080.png)
+
+### Galactic Operations
+
+![Galactic Operations theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-cinematic-galactic-operations-1920x1080.png)
+
+### Tactical Field
+
+![Tactical Field theme at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-cinematic-tactical-field-1920x1080.png)
 
 ## Waterfall references
 

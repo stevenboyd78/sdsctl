@@ -1,0 +1,35 @@
+/* Original neon sunset and night-drive presentation. */
+:root[data-theme="cinematic-synthwave"] {
+  color-scheme: dark;
+  --background: #100522; --surface: #1a0c32; --surface-emphasis: #281247;
+  --text: #fff1ff; --muted: #caaee7; --border: #7547a1;
+  --accent: #31e8ff; --accent-strong: #8af4ff; --success: #5df5b5;
+  --warning: #ffd25e; --danger: #ff4fb8; --focus: #ffffff;
+  --shadow: 0 0.9rem 2.4rem rgb(0 0 0 / 0.56); --radius-small: 0.2rem; --radius-large: 0.3rem;
+  --hold-field-background: #443313; --hold-field-border: #ffd25e; --hold-field-label: #ffe18e; --hold-field-value: #ffffff;
+}
+:root[data-theme="cinematic-synthwave"] body {
+  background:
+    radial-gradient(circle at 50% 5%, #ff7a76 0 7%, #df3dac 8% 15%, transparent 16%),
+    linear-gradient(180deg, transparent 42%, rgb(49 232 255 / 0.08) 43% 44%, transparent 45%),
+    repeating-linear-gradient(90deg, rgb(49 232 255 / 0.05) 0 1px, transparent 1px 4rem),
+    linear-gradient(#17072c, #080313);
+}
+:root[data-theme="cinematic-synthwave"] .site-header { position: relative; border: 1px solid #9b58c6; border-bottom: 0.25rem solid var(--danger); background: linear-gradient(105deg, #30125a, #120622 72%); box-shadow: 0 0 1.4rem rgb(255 79 184 / 0.2), var(--shadow); }
+:root[data-theme="cinematic-synthwave"] .site-header::after { position: absolute; right: 1rem; bottom: 0.5rem; width: min(28rem, 36vw); height: 0.2rem; background: linear-gradient(90deg, var(--danger), var(--accent)); content: ""; box-shadow: 0 0 0.8rem var(--accent); }
+:root[data-theme="cinematic-synthwave"] :is(.brand h1, .panel h2, .panel h3, .workspace-tabs [role="tab"]) { font-family: "Audiowide", sans-serif; letter-spacing: 0.055em; text-transform: uppercase; }
+:root[data-theme="cinematic-synthwave"] .workspace-shell { border: 1px solid #9b58c6; background: #10061f; box-shadow: 0 0 0 1px rgb(49 232 255 / 0.08) inset, var(--shadow); }
+:root[data-theme="cinematic-synthwave"] .workspace-tabs { border-bottom: 1px solid #9b58c6; background: #1b0b30; }
+:root[data-theme="cinematic-synthwave"] .workspace-tabs [role="tab"] { border-color: #7547a1; background: linear-gradient(#351454, #180927); color: var(--muted); }
+:root[data-theme="cinematic-synthwave"] .workspace-tabs [role="tab"][aria-selected="true"] { border-color: var(--accent); background: linear-gradient(100deg, #ff4fb8 0 0.3rem, #273e67 0.3rem); color: #fff; box-shadow: 0 0 0.9rem rgb(49 232 255 / 0.18); }
+:root[data-theme="cinematic-synthwave"] .workspace-deck { background: linear-gradient(145deg, rgb(71 25 101 / 0.48), rgb(8 3 19 / 0.78)); }
+:root[data-theme="cinematic-synthwave"] [data-workspace-pane] { border-color: #5f347f; background: rgb(16 5 34 / 0.78); }
+:root[data-theme="cinematic-synthwave"] .panel { border: 1px solid #7547a1; border-top: 0.22rem solid var(--accent); background: linear-gradient(135deg, rgb(255 79 184 / 0.07), transparent 30%), #1a0b2e; box-shadow: 0 0.6rem 1.4rem rgb(0 0 0 / 0.45); }
+:root[data-theme="cinematic-synthwave"] #radio-activity-panel { border-color: #ae77cf; border-top-color: var(--danger); background: linear-gradient(90deg, rgb(49 232 255 / 0.11), transparent 50%), #11051f; }
+:root[data-theme="cinematic-synthwave"] .radio-view-controls { border: 1px solid #7547a1; border-left: 0.3rem solid var(--danger); background: #201039; }
+:root[data-theme="cinematic-synthwave"] .radio-field-groups { border-color: #5f347f; background: rgb(49 232 255 / 0.035); }
+:root[data-theme="cinematic-synthwave"] :is(button, .recording-action, select, input, textarea) { border-color: #9b58c6; background: linear-gradient(#421a62, #1a0a2a); color: var(--text); }
+:root[data-theme="cinematic-synthwave"] :is(button, .recording-action):hover:not(:disabled) { border-color: var(--accent); background: #4a286d; box-shadow: 0 0 0.7rem rgb(49 232 255 / 0.18); }
+:root[data-theme="cinematic-synthwave"] .status-badge { letter-spacing: 0.07em; text-transform: uppercase; }
+@media (prefers-reduced-motion: reduce) { :root[data-theme="cinematic-synthwave"] *, :root[data-theme="cinematic-synthwave"] *::before, :root[data-theme="cinematic-synthwave"] *::after { animation: none !important; transition: none !important; } }
+@media (forced-colors: active) { :root[data-theme="cinematic-synthwave"] { --background: Canvas; --surface: Canvas; --surface-emphasis: Canvas; --text: CanvasText; --muted: CanvasText; --border: CanvasText; --accent: Highlight; --accent-strong: Highlight; --focus: Highlight; } :root[data-theme="cinematic-synthwave"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups) { background: Canvas; box-shadow: none; } :root[data-theme="cinematic-synthwave"] .site-header::after { display: none; } }

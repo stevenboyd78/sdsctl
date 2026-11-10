@@ -19,6 +19,14 @@
   --radius-large: 0.25rem;
   --term-accent: #72f58f;
   --term-dim: #245e32;
+  --hold-field-background: color-mix(
+    in srgb,
+    var(--warning) 16%,
+    var(--surface-emphasis)
+  );
+  --hold-field-border: var(--warning);
+  --hold-field-label: var(--warning);
+  --hold-field-value: var(--text);
   font-family:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", monospace;

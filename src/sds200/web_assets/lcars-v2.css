@@ -424,6 +424,19 @@
   }
 }
 
+/* The LCARS phone frame is taller than the shared frame. Recover card-row
+ * space without changing recording text, actions, or touch-target sizes. */
+@layer sdsctl-viewport-contract {
+  @media (max-width: 43.99rem) and (min-height: 28rem) {
+    :root[data-theme="lcars"][data-lcars-v2-layout="v2"] .recording-list {
+      gap: 0 !important;
+    }
+    :root[data-theme="lcars"][data-lcars-v2-layout="v2"] .recording-item {
+      padding-block: 0 !important;
+    }
+  }
+}
+
 /* A secondary Site line, scoped to the LCARS v2 layout. */
 :root[data-theme="lcars"][data-lcars-v2-site="system"] .lcars-v2-site-context,
 :root[data-theme="lcars"][data-lcars-v2-site="system"] .lcars-v2-site-list {
@@ -659,6 +672,9 @@
     grid-column: auto !important;
     grid-row: auto !important;
     width: 100% !important;
+  }
+  :root[data-theme="lcars"][data-lcars-v2-type] #native-menu #lcars-v2-appearance-pickers select {
+    min-height: 44px !important;
   }
   :root[data-theme="lcars"][data-lcars-v2-type="antonio"] :is(.radio-summary dt, .radio-field-list dt, .radio-field-list dd, .scanner-display-hierarchy dt) {
     font-size: 0.9rem !important;

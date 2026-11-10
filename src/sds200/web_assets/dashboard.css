@@ -34,6 +34,21 @@ select:focus-visible,
   outline: 0.2rem solid var(--focus);
   outline-offset: 0.2rem;
 }
+
+/*
+ * Chromium and several desktop widget toolkits paint an expanded native
+ * select menu on a light system surface even when the closed control belongs
+ * to a dark theme.  Keep the closed control theme-native, but give popup rows
+ * their own deterministic high-contrast palette instead of inheriting the
+ * theme's pale foreground onto that white surface.
+ */
+select option,
+select optgroup {
+  color-scheme: light;
+  color: #111827;
+  background: #fff;
+  -webkit-text-fill-color: #111827;
+}
 .skip-link {
   position: fixed;
   z-index: 10;
@@ -75,6 +90,7 @@ select:focus-visible,
   text-align: right;
 }
 .native-menu {
+  isolation: isolate;
   border: 1px solid var(--border);
   border-radius: var(--radius-small);
   color: var(--text);
@@ -85,7 +101,8 @@ select:focus-visible,
 .native-menu h2 { margin: 0; }
 .native-menu :is(nav, section) { margin-top: 0.8rem; }
 .native-menu h3 { margin: 0 0 0.5rem; }
-.native-menu :is(button, select), #native-menu-toggle {
+.native-menu :is(button, select, input, textarea, a[href], summary),
+#native-menu-toggle {
   border: 1px solid var(--border);
   border-radius: var(--radius-small);
   color: var(--text);
@@ -93,12 +110,22 @@ select:focus-visible,
   font: inherit;
   cursor: pointer;
 }
+.native-menu a[href] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
 .native-menu [aria-current="page"] {
   border-color: var(--accent);
   background: var(--accent-soft, var(--surface));
   font-weight: 800;
 }
-.native-menu-session { border-top: 1px solid var(--border); padding-top: 0.75rem; }
+.native-menu-session {
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+.native-menu-session :is(p, form) { margin-block: 0; }
 .native-access-label { color: var(--muted); }
 .native-view-title {
   color: var(--text);
@@ -159,7 +186,8 @@ select:focus-visible,
   font-weight: 800;
   text-align: center;
 }
-.status-badge[data-state="loading"] {
+.status-badge[data-state="loading"],
+.status-badge[data-state="preview"] {
   color: var(--warning);
 }
 .status-badge[data-state="online"] {
@@ -182,11 +210,65 @@ select:focus-visible,
   font-size: clamp(1.4rem, 3vw, 2rem);
 }
 .dashboard-message {
+  --status-tone: var(--warning);
+  --status-halo: color-mix(in srgb, var(--status-tone) 24%, transparent);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.58rem;
   justify-self: end;
   max-width: 38rem;
   margin: 0;
-  color: var(--muted);
+  padding: 0.46rem 0.72rem 0.46rem 0.58rem;
+  border: 1px solid color-mix(in srgb, var(--status-tone) 60%, var(--border));
+  border-left: 0.3rem solid var(--status-tone);
+  border-radius: var(--radius-small);
+  color: var(--text);
+  background: color-mix(in srgb, var(--status-tone) 10%, var(--surface));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--status-tone) 10%, transparent),
+    0 0 1.15rem var(--status-halo);
+  font-weight: 700;
+  line-height: 1.25;
   text-align: right;
+}
+.dashboard-message::before {
+  width: 0.72rem;
+  height: 0.72rem;
+  flex: 0 0 auto;
+  border: 0.14rem solid color-mix(in srgb, var(--status-tone) 78%, white);
+  border-radius: 50%;
+  background: var(--status-tone);
+  box-shadow:
+    0 0 0 0.2rem color-mix(in srgb, var(--status-tone) 18%, transparent),
+    0 0 0.8rem color-mix(in srgb, var(--status-tone) 62%, transparent);
+  content: "";
+}
+.dashboard-message[data-state="online"] {
+  --status-tone: var(--success);
+}
+.dashboard-message[data-state="loading"],
+.dashboard-message[data-state="attention"],
+.dashboard-message[data-state="preview"] {
+  --status-tone: var(--warning);
+}
+.dashboard-message[data-state="offline"] {
+  --status-tone: var(--danger);
+  border-width: 0.14rem;
+  border-left-width: 0.42rem;
+  font-weight: 850;
+}
+.dashboard-message[data-state="offline"]::before {
+  animation: dashboard-status-beacon 1.3s ease-in-out infinite;
+}
+@keyframes dashboard-status-beacon {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.42;
+    transform: scale(0.74);
+  }
 }
 :root[data-theme]:not([data-theme="system"]) .overview {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -786,6 +868,21 @@ select:focus-visible,
   display: block;
   pointer-events: none;
 }
+.cinematic-stage-art {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.cinematic-stage-art [data-cinematic-scene] {
+  display: none;
+}
+.cinematic-stage-art :is(path, line, polyline, polygon, circle, ellipse, rect) {
+  vector-effect: non-scaling-stroke;
+}
 .site-header {
   position: relative;
   z-index: 3;
@@ -931,6 +1028,26 @@ body {
   background: var(--surface);
   font: inherit;
   cursor: pointer;
+}
+
+#native-session-status a[href] {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+#native-session-status a[href]:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
 }
 
 .site-header,
@@ -1431,7 +1548,7 @@ body {
 
 .scanner-display-hierarchy {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   min-width: 0;
   margin: 0;
   overflow: hidden;
@@ -1448,11 +1565,15 @@ body {
   gap: 0.1rem;
   padding: clamp(0.3rem, 0.85vmin, 0.65rem);
   border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 
-.scanner-display-row:last-child,
-.scanner-display-hierarchy > div:last-child {
+.scanner-display-hierarchy > div:nth-child(2n) {
   border-right: 0;
+}
+
+.scanner-display-hierarchy > div:nth-last-child(-n + 2) {
+  border-bottom: 0;
 }
 
 .scanner-display-label,
@@ -1483,6 +1604,23 @@ body {
 
 .scanner-display-hierarchy .secondary-value {
   min-height: 0;
+}
+
+#radio-activity-panel [data-hold-scope][data-hold-state="held"] {
+  background: var(
+    --hold-field-background,
+    color-mix(in srgb, var(--warning) 18%, var(--surface-emphasis))
+  );
+  box-shadow: inset 0 0 0 0.16rem
+    var(--hold-field-border, var(--warning));
+}
+
+#radio-activity-panel [data-hold-scope][data-hold-state="held"] dt {
+  color: var(--hold-field-label, var(--warning));
+}
+
+#radio-activity-panel [data-hold-scope][data-hold-state="held"] dd {
+  color: var(--hold-field-value, var(--text));
 }
 
 .radio-summary {
@@ -2115,7 +2253,10 @@ body {
     border-bottom: 1px solid var(--border);
   }
 
-  .scanner-display-row:last-child,
+  .scanner-display-hierarchy > div:nth-last-child(-n + 2) {
+    border-bottom: 1px solid var(--border);
+  }
+
   .scanner-display-hierarchy > div:last-child {
     border-bottom: 0;
   }
@@ -2658,6 +2799,13 @@ body {
 }
 
 @media (forced-colors: active) {
+  select option,
+  select optgroup {
+    color: FieldText !important;
+    background: Field !important;
+    -webkit-text-fill-color: FieldText !important;
+  }
+
   .panel,
   .workspace-tabs [role="tab"],
   .radio-view-controls button,
@@ -2678,11 +2826,39 @@ body {
     background: Highlight;
   }
 
+  #radio-activity-panel [data-hold-scope][data-hold-state="held"] {
+    forced-color-adjust: none;
+    color: CanvasText !important;
+    background: Canvas !important;
+    box-shadow: inset 0 0 0 0.16rem Highlight;
+  }
+
+  #radio-activity-panel [data-hold-scope][data-hold-state="held"] :is(dt, dd) {
+    color: CanvasText !important;
+  }
+
   .status-badge {
     color: CanvasText !important;
   }
 
+  .dashboard-message {
+    border: 2px solid CanvasText;
+    color: CanvasText;
+    background: Canvas;
+    box-shadow: none;
+  }
+
+  .dashboard-message::before {
+    border-color: CanvasText;
+    background: CanvasText;
+    box-shadow: none;
+  }
+
   .theme-stage {
+    display: none !important;
+  }
+
+  .cinematic-stage-art {
     display: none !important;
   }
 }
