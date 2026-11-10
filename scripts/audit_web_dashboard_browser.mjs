@@ -1029,6 +1029,10 @@ const TRUSTED_CLICK_MAX_ATTEMPTS = 3;
 const TRUSTED_CLICK_MAX_POINTER_MOVES = 3;
 const TRUSTED_CLICK_MAX_PHYSICAL_ATTEMPTS = 2;
 const TRUSTED_CLICK_SAFE_RELEASE_POINT = Object.freeze({x: -1, y: -1});
+// Headless Chrome can acknowledge two trusted pointer moves under load before
+// exposing the corresponding :hover chain. Keep one bounded final acquisition
+// while retaining owned hit-testing and the strict computed-hover assertion.
+const TRUSTED_HOVER_MAX_ATTEMPTS = 3;
 
 function sameClickGeometry(left, right) {
   return left !== null && right !== null &&
@@ -1516,7 +1520,8 @@ async function movePointerAway(cdp) {
 
 async function hoverElement(cdp, selector) {
   let lastObservation = null;
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
+  const observationHistory = [];
+  for (let attempt = 1; attempt <= TRUSTED_HOVER_MAX_ATTEMPTS; attempt += 1) {
     const available = await evaluate(
       cdp,
       `(() => {
@@ -1607,11 +1612,13 @@ async function hoverElement(cdp, selector) {
       })()`,
     );
     if (lastObservation?.hovered) return {failures: []};
-    if (attempt < 2) await movePointerAway(cdp);
+    observationHistory.push({attempt, dispatch: point, observation: lastObservation});
+    if (attempt < TRUSTED_HOVER_MAX_ATTEMPTS) await movePointerAway(cdp);
   }
   return {failures: [
-    `${selector} did not enter its trusted hover state after 2 settled attempts: ` +
-      JSON.stringify(lastObservation),
+    `${selector} did not enter its trusted hover state after ` +
+      `${TRUSTED_HOVER_MAX_ATTEMPTS} settled attempts: ` +
+      JSON.stringify(observationHistory),
   ]};
 }
 
@@ -5345,7 +5352,16 @@ export async function captureDashboardScreenshot({
     if (pane === "waterfall") {
       await evaluate(
         cdp,
-        'document.querySelector("#waterfall-frame-rate").textContent = "20.0 fps"',
+        `(() => {
+          document.querySelector("#waterfall-frame-rate").textContent = "20.0 fps";
+          // Fresh headless profiles can alternate LCD and grayscale
+          // antialiasing for a native select's closed label despite identical
+          // DOM, font, viewport, and canvas fingerprints. Freeze only this
+          // capture control to deterministic grayscale text; production
+          // rendering and browser acceptance remain untouched.
+          document.querySelector("#waterfall-history-policy")
+            .style.setProperty("-webkit-font-smoothing", "antialiased");
+        })()`,
       );
       waterfallCanvas = await waitForWaterfallCanvasStability(cdp, timeoutMs);
     }
