@@ -196,3 +196,13 @@ The packaged launcher does not create a graphical session or configure
 auto-login. Interactive testing passed on 1080p HDMI and 800×480 Pi displays,
 including manual re-login after an App restart; that does not authorize a
 target deployment or replace the production TUI installation described above.
+
+Version v0.33.0 retains the same role-bound profiles and manual authentication
+while moving theme, palette, typography, session status, logout, and
+display-only navigation into a responsive Display & session drawer. It also
+packages the wider Full-HD shell and Cinematic themes. Before upgrading a
+browser kiosk, preserve its profile and trust material; after the exact public
+package is installed, verify drawer focus/close behavior, selector readability,
+the 2×2 hierarchy, held fields, windowed/full-screen Mission Control, and
+manual re-login after expiry. The update does not add host-key login, theme
+rotation, automatic audio, or an automatic role/profile migration.

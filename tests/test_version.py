@@ -30,6 +30,11 @@ def test_changelog_comparison_links_start_at_current_release() -> None:
         in changelog
     )
     assert (
+        "[0.33.0]: https://github.com/stevenboyd78/sdsctl/compare/"
+        "v0.32.0...v0.33.0"
+        in changelog
+    )
+    assert (
         "[0.32.0]: https://github.com/stevenboyd78/sdsctl/compare/"
         "v0.31.0...v0.32.0"
         in changelog

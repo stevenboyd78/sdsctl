@@ -21,23 +21,37 @@ Treat implementation, physical acceptance and publication as separate facts.
 When only a slice ships, name that slice instead of marking the parent milestone
 complete. Existing historical milestone IDs remain unchanged.
 
-## Targeted next release — v0.32.0
+## Targeted next release — v0.33.0
 
-**Targeted for v0.32.0; not yet released.** The reviewed [release scope and
-acceptance plan](release-0.32.0.md) includes the explicit privileged manual
-operator browser-kiosk role, configurable read-only Mimic-SDS TUI startup, the
-verified additive-only Favorites FTP write executor, and the listed
-presentation/reliability corrections.
+**Targeted for v0.33.0; not yet released.** The reviewed [release scope and
+acceptance plan](release-0.33.0.md) includes the Full-HD dashboard correction,
+held-field presentation, 22 Cinematic choices with six independently
+constructed panoramas, the 2×2 scanner hierarchy, stateful health instrument,
+and responsive Display & session drawer.
 
 The Home Assistant App advances in lockstep with the package while retaining
-the exact v0.31.0 nine-field options/schema contract. Display remains the
-default kiosk role. Operator mode requires manual native login and a separate
-private role-bound browser profile. Shipping the Favorites executor does not
-authorize a physical scanner write or add a public write action. Keep v0.31.0
-as Latest until every tagged artifact and required installed-release gate is
+the exact nine-field options/schema contract. Drawer actions retain the
+current server-enforced display/operator role; the release does not add
+host-key or unattended login, theme rotation, automatic display-kiosk audio, a
+web Favorites editor, or Python 3.15. Keep v0.32.0 as Latest until every tagged
+artifact, required installed-release gate, and target-specific visual check is
 verified and the normal GitHub Release is created.
 
-## Latest release — v0.31.0
+## Latest release — v0.32.0
+
+**Released in [v0.32.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.32.0)**
+on November 3, 2026. The reviewed [release scope and acceptance
+record](release-0.32.0.md) includes the privileged manual operator kiosk,
+configurable Mimic-SDS TUI startup, verified additive-only Favorites FTP
+executor, and bounded presentation/lifecycle corrections.
+
+The immutable tag, PyPI distributions, generic multi-platform images, Home
+Assistant App images, clean public installation, and repository-managed App
+upgrade were independently verified before the normal GitHub Release became
+Latest. Publication did not authorize a physical Favorites write, unattended
+browser authentication, or automatic target activation.
+
+## Previous release — v0.31.0
 
 **Released in [v0.31.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.31.0)**
 on October 7, 2026. The reviewed [release scope and acceptance
@@ -54,7 +68,7 @@ and private-candidate acceptance did not establish publication: immutable-tag,
 public-artifact, repository-managed App, managed-Pi, system-installation and
 physical-display evidence passed separately before the normal GitHub Release.
 
-## Previous release — v0.30.0
+## Earlier release — v0.30.0
 
 **Released in [v0.30.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.30.0)**
 on September 14, 2026. The [release scope and acceptance record](release-0.30.0.md)
@@ -101,7 +115,8 @@ milestone number.
 | [Managed-TUI outage waiting screen](../ROADMAP.md#v0295-maintenance-release) | [v0.29.5](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.29.5) | Released from the maintenance line; newer browser enrollment on main is excluded |
 | [Display improvements, recording continuity and experimental browser foundations](release-0.30.0.md) | [v0.30.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.30.0) | Released; published Pi/App upgrades and audio/recording acceptance passed; unattended browser qualification remains separate |
 | [Mimic-SDS displays and installed profiles](release-0.31.0.md) | [v0.31.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.31.0) | Released; public artifacts, repository App, managed Pi displays and approved system installations accepted; unattended browser enrollment remains excluded |
-| [Operator kiosk and controlled Favorites writes](release-0.32.0.md) | Targeted for v0.32.0 | Preparation authorized; public artifacts, installed upgrade and target activation remain pending; Favorites physical writes are not authorized by publication |
+| [Operator kiosk and controlled Favorites writes](release-0.32.0.md) | [v0.32.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.32.0) | Released; public artifacts and repository App upgrade passed; Favorites physical writes and automatic kiosk activation remain excluded |
+| [Cinematic dashboards and responsive session controls](release-0.33.0.md) | Targeted for v0.33.0 | Preparation authorized; public artifacts, target visual acceptance, and installed upgrade remain pending |
 
 ## Keeping the mapping current
 

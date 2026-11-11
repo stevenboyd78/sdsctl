@@ -43,6 +43,12 @@ a separate native-dashboard client role with manual login and its own private,
 role-bound browser profile. The release also does not expose the additive
 Favorites write executor as an App action or authorize a physical scanner write.
 
+v0.33.0 also retains the exact nine-field contract. Its Full-HD dashboard,
+Cinematic collection, 2×2 hierarchy, held-field styling, scanner-health
+instrument, and responsive Display & session drawer are packaged presentation
+changes. They do not add automatic login, theme rotation, display-kiosk audio,
+a Favorites editor, another listener, or another scanner owner.
+
 The App requires a LAN-connected SDS200 and publishes UDP port `50000` for the
 scanner's inbound RTP audio. It does not enable host networking or expose the
 daemon's private Unix-domain client sockets.

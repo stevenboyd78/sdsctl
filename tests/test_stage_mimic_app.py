@@ -367,7 +367,7 @@ def test_candidate_is_paired_manual_and_disabled_by_default(snapshot):
     manifest = output["config.yaml"].decode()
     assert snapshot == before
     assert 'slug: "sds200_mimic_acceptance"' in manifest
-    assert 'version: "0.32.0-mimic-aaaaaaaaaaaa"' in manifest
+    assert 'version: "0.33.0-mimic-aaaaaaaaaaaa"' in manifest
     assert "image:" not in manifest
     assert "boot: manual\n" in manifest and "boot: auto\n" not in manifest
     for port in ("50000/udp", "50443/tcp", "8443/tcp"):
@@ -451,7 +451,7 @@ def test_custom_candidate_identity_is_source_bound_separate_and_attested(snapsho
     assert 'panel_title: "sds200 accepted-main smoke aaaaaaaa"' in manifest
     assert 'mqtt_topic_prefix: "sdsctl-main-aaaaaaaaaaaa"' in manifest
     assert 'recording_directory: "sdsctl-main-aaaaaaaaaaaa/recordings"' in manifest
-    assert 'version: "0.32.0-mimic-aaaaaaaaaaaa"' in manifest
+    assert 'version: "0.33.0-mimic-aaaaaaaaaaaa"' in manifest
     assert "image:" not in manifest
     assert "boot: manual\n" in manifest and "boot: auto\n" not in manifest
     for port in ("50000/udp", "50443/tcp", "8443/tcp"):
@@ -568,7 +568,7 @@ def test_changed_source_contract_requires_review(snapshot, change):
         replacements = {
             "schema": (b"schema:\n", b"schema:\n  unexpected_option: bool\n"),
             "image": (b"ghcr.io/stevenboyd78/sds200-home-assistant", b"other/image"),
-            "version": (b'version: "0.32.0"', b'version: "0.32.1"'),
+            "version": (b'version: "0.33.0"', b'version: "0.33.1"'),
             "boot": (b"boot: auto", b"boot: manual"),
         }
         old, new = replacements[change]

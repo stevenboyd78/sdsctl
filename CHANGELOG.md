@@ -6,13 +6,65 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-11-11
+
+Cinematic dashboard environments, responsive display/session controls, and
+full-HD presentation refinements. See the [release scope and acceptance
+record](docs/release-0.33.0.md). Publication and installed-release acceptance
+remain pending until the immutable tag, public artifacts, repository App, and
+required display checks are independently verified.
+
+### Added
+
+- Add a 22-choice Cinematic WebUI collection. Six independently constructed
+  Full-HD panoramas—Carrier Air Wing, Tactical Field, Wizarding Archive,
+  Galactic Operations, Mission Control, and Cyberpunk Night—use their own
+  local artwork, material systems, layouts, motion grammars, instruments, and
+  held-state responses. The other 16 choices remain compact/general-purpose
+  cinematic colorways for smaller and mobile displays.
+- Add one responsive **Display & session** drawer for authenticated operator
+  and display-only kiosk sessions. It owns the existing theme, System palette,
+  LCARS palette, and typography controls without cloning their IDs or
+  handlers; exposes role-aware session state, logout, and display-only
+  navigation; contains keyboard focus; and collapses cleanly on narrow
+  viewports. Expiry, HTTP 401, and managed sign-out immediately invalidate the
+  drawer and stop stale activity.
+
+### Changed
+
+- Expand the dashboard shell to use the available width at Full HD while
+  retaining bounded readable geometry at smaller viewports.
+- Replace the primary System/Department/Channel strip with a stable 2×2
+  hierarchy: System and Department on row one, Channel and Site on row two.
+  Present daemon/scanner health as an operational instrument with distinct
+  healthy, attention/static-preview, offline, login-required, and stale states.
+- Activate the six bespoke cinematic panoramas only at viewports of at least
+  1280×720 and aspect ratio 3:2; preserve compact/mobile fallback, complete
+  reduced-motion compositions, forced-colors semantics, and a truthful
+  allowlisted network-inert local source preview.
+- Update the reviewed immutable GitHub Actions pins while retaining Python
+  3.11 through 3.14 as the supported and qualified runtime matrix. Python 3.15
+  container migration remains a separate deferred qualification.
+
+### Fixed
+
+- Give held System, Department, Site, and Channel fields a theme-native
+  background/boundary response across every built-in dashboard theme while
+  retaining explicit text, focus, reduced-motion, and forced-colors meaning.
+- Correct the v0.32.0 Home Assistant card resource documentation digests
+  without changing the immutable v0.32.0 tag or republishing its artifacts.
+- Harden Real-Chrome readiness, click, hover, native-select, screenshot, and
+  clock-card validation together with timing-sensitive supplemental fixtures.
+  These test-only corrections preserve product authorization, ownership, and
+  runtime behavior.
+
 ## [0.32.0] - 2026-11-02
 
 Privileged manual operator kiosk, configurable Mimic-SDS TUI startup, and
 verified additive Favorites FTP writes. See the [release scope and acceptance
-record](docs/release-0.32.0.md). Publication and installed-release acceptance
-remain pending until the immutable tag, public artifacts and required upgrade
-checks are independently verified.
+record](docs/release-0.32.0.md). The immutable tag, public Python/container/App
+artifacts, clean public installation, and repository-managed App upgrade were
+independently verified before the normal GitHub Release became Latest.
 
 ### Added
 
@@ -2332,7 +2384,8 @@ First planned GitHub prerelease.
 - Added serial discovery, transport, packet framing, core responses, CLI tools,
   examples, tests, and CI.
 
-[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.32.0...HEAD
+[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.33.0...HEAD
+[0.33.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.32.0...v0.33.0
 [0.32.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.5...v0.30.0

@@ -21,9 +21,9 @@ fixes do not require a new milestone number. See the
 [milestone-to-release index](docs/release-tracking.md) for published history,
 partial publications and merged-but-unreleased work, and the
 [release policy](docs/releasing.md#0-choose-release-scope-and-version) for version
-selection. The [v0.32.0 release plan](docs/release-0.32.0.md) records the
+selection. The [v0.33.0 release plan](docs/release-0.33.0.md) records the
 reviewed next-release boundary and remaining publication/installed-upgrade
-gates. The [v0.31.0 release record](docs/release-0.31.0.md) remains the latest
+gates. The [v0.32.0 release record](docs/release-0.32.0.md) remains the latest
 completed public release and retains its explicit support limits.
 
 Keep `Released in vX.Y.Z` links on the applicable completed items. A closed
@@ -68,24 +68,36 @@ in the versioned release notes; these TUI checks do not qualify browser enrollme
 
 ## Current release
 
-### v0.32.0 release preparation
+### v0.33.0 release preparation
 
-**Targeted for v0.32.0; not yet released.** The reviewed [release
-plan](docs/release-0.32.0.md) includes three bounded feature slices: the
-explicit privileged manual operator role for an existing graphical browser
-kiosk, configurable read-only Mimic-SDS TUI startup, and the verified
-additive-only Favorites FTP write executor. It also versions the accepted
-Mimic/LCARS presentation and audio/Waterfall/PSI/managed-display reliability
-corrections listed in the changelog.
+**Targeted for v0.33.0; not yet released.** The reviewed [release
+plan](docs/release-0.33.0.md) includes the Full-HD shell correction, held-field
+styling across every built-in theme, 22 Cinematic choices with six bespoke
+panoramic environments, the 2×2 scanner hierarchy, stateful health
+instrument, and one responsive Display & session drawer.
 
-Display remains the default kiosk role. Operator mode requires the ordinary
-manual native login and a separate role-bound private profile; it adds no
-automatic authentication, browser-security bypass, listener or graphical
-session. The Favorites executor remains a library-only explicit operation and
-publication does not authorize a physical write, replacement or deletion. The
-Home Assistant App retains the exact v0.31.0 nine-field option contract. Public
-artifacts, repository App upgrade, clean public-package verification and
-target-specific operator activation remain separate gates.
+The drawer reorganizes existing browser-local presentation controls and
+role-aware session actions; it does not expand a role or replace manual
+authentication. Panoramas retain compact/mobile fallbacks, reduced-motion and
+forced-colors behavior, and local-only artwork. The Home Assistant App keeps
+the exact nine-field option contract. Host-key/unattended kiosk
+authentication, theme rotation, automatic display-kiosk audio, a web
+Favorites editor, Python 3.15 migration, and automatic target deployment remain
+outside this release.
+
+### v0.32.0 release closure
+
+**Released in [v0.32.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.32.0).**
+The reviewed [release record](docs/release-0.32.0.md) includes the explicit
+privileged manual browser-kiosk operator role, configurable read-only
+Mimic-SDS TUI startup, the verified additive-only Favorites FTP write
+executor, and the listed presentation/lifecycle corrections.
+
+The immutable tag, PyPI distributions, generic multi-platform images, Home
+Assistant App images, clean public installation, and repository-managed App
+upgrade were independently verified before the normal GitHub Release became
+Latest. Publication did not authorize a physical Favorites write, add
+automatic browser sign-in, or activate an operator kiosk automatically.
 
 ### v0.31.0 release closure
 
