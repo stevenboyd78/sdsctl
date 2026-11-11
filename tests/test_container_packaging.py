@@ -590,13 +590,13 @@ def test_generic_docker_hub_workflow_pins_docker_actions() -> None:
             "docker/setup-qemu-action@"
             "99012661954931238ded8c8b007157a8430204e1"
         ),
-        "docker/setup-buildx-action v4.3.0": (
+        "docker/setup-buildx-action v4.4.1": (
             "docker/setup-buildx-action@"
-            "37fe631027851001ddb9b187196cc803df7f5f0e"
+            "f87e5991a6d7451dcb8d9637bfbc97413f497069"
         ),
-        "docker/login-action v4.6.0": (
+        "docker/login-action v4.7.0": (
             "docker/login-action@"
-            "dbcb813823bdd20940b903addbd779551569679f"
+            "81c6f93d4bc991e510b342a00b419b3bb4efc5c6"
         ),
         "docker/build-push-action v7.4.0": (
             "docker/build-push-action@"

@@ -729,7 +729,7 @@ def test_browser_audit_is_a_ci_and_release_gate() -> None:
     command = (
         "node scripts/audit_web_dashboard_browser.mjs --startup-timeout-ms 90000 --timeout-ms 30000"
     )
-    setup_node = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
+    setup_node = "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1"
 
     ci = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     release = Path(".github/workflows/release.yml").read_text(encoding="utf-8")

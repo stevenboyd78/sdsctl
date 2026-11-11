@@ -15,24 +15,24 @@ APPROVED_ACTIONS = {
         "actions/checkout v7.0.1",
     ),
     "actions/setup-python": (
-        "5fda3b95a4ea91299a34e894583c3862153e4b97",
-        "actions/setup-python v7.0.0",
+        "6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+        "actions/setup-python v7.1.0",
     ),
     "actions/setup-node": (
-        "820762786026740c76f36085b0efc47a31fe5020",
-        "actions/setup-node v7.0.0",
+        "949feb2413d6458794dcd2491c4babbbce0c15c1",
+        "actions/setup-node v7.1.0",
     ),
     "actions/upload-artifact": (
-        "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-        "actions/upload-artifact v7.0.1",
+        "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+        "actions/upload-artifact v7.0.2",
     ),
     "actions/download-artifact": (
-        "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
-        "actions/download-artifact v8.0.1",
+        "9000827ccba6bdab643e8b6fd33ac0654aef8333",
+        "actions/download-artifact v8.0.2",
     ),
     "pypa/gh-action-pypi-publish": (
-        "dc37677b2e1c63e2034f94d8a5b11f265b73ba33",
-        "pypa/gh-action-pypi-publish v1.14.2",
+        "7245906fb61fa33a13554f9d5fb856fe61758086",
+        "pypa/gh-action-pypi-publish v1.14.3",
     ),
     "home-assistant/builder/actions/prepare-multi-arch-matrix": (
         "7412f0023ea9b6e58e8bb5059f1660f51376f49a",
@@ -51,12 +51,12 @@ APPROVED_ACTIONS = {
         "docker/setup-qemu-action v4.4.0",
     ),
     "docker/setup-buildx-action": (
-        "37fe631027851001ddb9b187196cc803df7f5f0e",
-        "docker/setup-buildx-action v4.3.0",
+        "f87e5991a6d7451dcb8d9637bfbc97413f497069",
+        "docker/setup-buildx-action v4.4.1",
     ),
     "docker/login-action": (
-        "dbcb813823bdd20940b903addbd779551569679f",
-        "docker/login-action v4.6.0",
+        "81c6f93d4bc991e510b342a00b419b3bb4efc5c6",
+        "docker/login-action v4.7.0",
     ),
     "docker/build-push-action": (
         "c3c9e263c25d99ce0380d002d59b67737d91b0dc",
@@ -242,7 +242,7 @@ def test_ci_and_release_workflows_share_the_measured_coverage_floor() -> None:
         assert ordered_indices == tuple(sorted(ordered_indices)), (workflow, ordered_indices)
 
     release_executables = _workflow_executables(_read(".github/workflows/release.yml"))
-    upload_action = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+    upload_action = "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9"
     assert _single_executable_index(release_executables, twine_command) < (
         _single_executable_index(release_executables, upload_action)
     )
@@ -275,7 +275,7 @@ def test_ci_uploads_only_retained_same_chrome_mismatch_evidence() -> None:
         "steps.same_chrome_repeatability.outcome == 'failure'",
         "steps.same_chrome_evidence.outcome == 'success'",
         "steps.same_chrome_evidence.outputs.available == 'true'",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+        "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
         "path: ${{ runner.temp }}/same-chrome-repeatability/",
         "if-no-files-found: error",
         "retention-days: 30",
