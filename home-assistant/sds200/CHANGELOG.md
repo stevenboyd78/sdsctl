@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.33.0
+
+- Package the expanded Full-HD dashboard shell, 22 Cinematic choices, six
+  bespoke panoramas, 2×2 scanner hierarchy, held-field treatments, and
+  stateful scanner-health instrument in the matching Ingress dashboard.
+- Add the responsive Display & session drawer over the existing theme,
+  palette, typography, session-status, logout, and display-only navigation
+  controls. It reorganizes existing browser behavior and does not grant a role
+  or replace manual login.
+- Preserve compact/mobile fallbacks, reduced-motion and forced-colors behavior,
+  repository-local scene assets, and the safe network-inert source preview.
+- Preserve the exact v0.31.0/v0.32.0 nine-field option/schema contract, App
+  slug/image identity, MQTT identities, credentials, ports, recordings,
+  ordinary Ingress, disabled advanced services, and independently versioned
+  Core integration artifacts.
+
 ## 0.32.0
 
 - Package the corrected Mimic-SDS alert rails, inactive treatment and

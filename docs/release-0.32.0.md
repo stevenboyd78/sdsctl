@@ -1,12 +1,10 @@
 # v0.32.0 release scope — operator kiosk and controlled Favorites writes
 
-Status: **Targeted for v0.32.0; not yet released**
+Status: **Released in v0.32.0 on November 3, 2026**
 
-This record defines the reviewed release boundary before an immutable tag is
-created. Passing source, pull-request, image or private-candidate checks does
-not prove publication or an installed public upgrade. Update this record with
-the exact final commit, tag object, public artifact identities and installed
-acceptance only after those gates complete.
+This record defines the reviewed release boundary and completed publication.
+Source, pull-request, image, and private-candidate checks were kept separate
+from public artifact and installed-upgrade acceptance.
 
 ## Identity and title
 
@@ -15,10 +13,14 @@ acceptance only after those gates complete.
   writes**.
 - Accepted source base before release preparation:
   `a1dc36dbceadfb319f2d974e03c8b145dcfdfcff`.
-- Release-preparation commit: pending review and commit.
-- Final release commit and annotated tag object: pending.
-- Latest completed public release remains `v0.31.0` until all publication and
-  installed-release gates below pass.
+- Release-preparation commit:
+  `d240adfb0c8ea1006a41cbdd610695594a15bce0`.
+- Final release commit:
+  `91032d96d5c89c3e99d0ec3d1f543290616a2f68`.
+- Annotated tag object:
+  `3a6ba3bf73a12d91298bf4851f3b5356ef82c1d1`.
+- The non-draft, non-prerelease GitHub Release was published on November 3,
+  2026 after public artifacts and the repository-managed App upgrade passed.
 
 ## Included user-visible scope
 
@@ -117,13 +119,13 @@ acceptance only after those gates complete.
 - Physical Favorites writes without a separately approved exact plan; replacing
   or deleting an existing HPD; background synchronization; storage-mode
   switching; or adding a public write action.
-- Python 3.15 container-base changes proposed by open Dependabot PRs #323 and
-  #324, and the unaccepted workflow update in PR #325.
+- Python 3.15 container-base changes later tracked by Dependabot PRs #323 and
+  #324, plus the workflow update later reviewed through PR #325. None were
+  included in the immutable v0.32.0 source or publication.
 - General front-panel control, additional keys, firmware or starting contexts,
   held gestures, sequences, retries or inferred post-acknowledgement state.
-- Automatic target deployment. The two reviewed Raspberry Pi stations remain
-  unchanged until the public release is verified and a target-specific phase is
-  separately authorized.
+- Automatic target deployment. Publication did not itself authorize a Raspberry
+  Pi change; target-specific activation required a separate accepted phase.
 
 ## Evidence accepted before release preparation
 
@@ -218,3 +220,19 @@ interactive verification, and restart only after acceptance. For a managed TUI,
 preserve the client profile/configuration and use its existing service boundary.
 Do not delete credentials, recordings, App data, profiles or unrelated
 installations merely to make rollback succeed.
+
+## Published release and installed acceptance
+
+The immutable annotated `v0.32.0` tag peels to the final release commit above.
+The PyPI wheel and source distribution, Docker Hub amd64/arm64 version and
+latest images, and GHCR Home Assistant App amd64/aarch64 images and aggregate
+manifest were independently verified. A clean public Python installation
+confirmed the CLI version and packaged operator-kiosk contract.
+
+The public Home Assistant repository App was upgraded normally from 0.31.0 to
+0.32.0 with its nine options, mappings, credentials, App data, recordings,
+Lovelace resources, and Core identity preserved. The packaged runtime and card
+assets, Ingress, passive daemon/scanner/PSI health, and the pre-existing
+observe-only client passed the installed gate before the normal GitHub Release
+became Latest. Publishing v0.32.0 did not authorize a physical Favorites write
+or automatically activate an operator kiosk.
