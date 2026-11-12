@@ -23,6 +23,18 @@
     min-height: 36px !important; max-width: 100% !important;
     font: 14px system-ui !important; padding: 4px 8px !important;
   }
+  #native-menu .mimic-toolbar {
+    flex: none !important;
+  }
+  #native-menu .mimic-toolbar label {
+    font: 12px system-ui !important;
+  }
+  #native-menu .mimic-toolbar select {
+    min-height: 44px !important;
+    max-width: 100% !important;
+    font: 14px system-ui !important;
+    padding: 4px 8px !important;
+  }
   #pane-scanner .mimic-display {
     flex: 1 1 0 !important; min-height: 0 !important; min-width: 0 !important;
     overflow: auto !important; display: grid !important;

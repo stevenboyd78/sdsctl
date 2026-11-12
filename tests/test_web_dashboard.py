@@ -2249,7 +2249,7 @@ def test_dashboard_layout_uses_dedicated_recording_library_panel() -> None:
     assert 'id="recordings-next-page"' in recordings_pane
 
 
-def test_authenticated_display_and_session_drawer_contract() -> None:
+def test_universal_display_and_session_drawer_contract() -> None:
     asset_root = (
         Path(__file__).resolve().parents[1]
         / "src"
@@ -2262,21 +2262,35 @@ def test_authenticated_display_and_session_drawer_contract() -> None:
     assert "let nativeMenuController = null" in script
     assert "function initializeNativeMenu(logout, logoutButton)" in script
     assert "nativeMenuController = initializeNativeMenu(logout, button)" in script
+    menu_initialization = script.index(
+        "nativeMenuController = initializeNativeMenu(logout, button)"
+    )
+    assert menu_initialization < script.index("if (!nativeAccessMode) return;", menu_initialization)
     assert "if (displayOnly) initializeDisplayNavigation(nativeMenuController)" in script
     assert 'trigger.id = "native-menu-toggle"' in script
-    assert 'const trigger = make("button", "Display & session")' in script
+    assert 'const trigger = make("button")' in script
+    assert 'make("span", "Display & session", "native-menu-label")' in script
+    assert 'make("span", "☰", "native-menu-icon")' in script
+    assert 'triggerIcon.setAttribute("aria-hidden", "true")' in script
     assert 'title.id = "native-menu-title"' in script
     assert 'sessionSummary.id = "native-session-summary"' in script
     assert 'dialog.id = "native-menu"' in script
     assert 'document.createComment("native drawer control position")' in script
     assert "appearance.append(node)" in script
+    assert 'const presentation = make("section", null, "native-menu-presentation")' in script
+    assert 'document.createComment("native drawer presentation position")' in script
+    assert "presentation.append(mimicToolbar)" in script
+    assert 'element("dashboard-page-identity")' in script
+    assert 'element("dashboard-status-details")' in script
+    assert 'document.querySelector(".header-actions").append(dashboardMessage)' in script
+    assert 'document.querySelector(".overview").hidden = true' in script
     assert 'banner.setAttribute("role", "alert")' in script
     assert 'banner.setAttribute("aria-live", "assertive")' in script
     assert "banner.hidden = true" in script
     assert 'displayOnly ? "auth/display/login" : "auth/login"' in script
     assert "nativeMenuController?.invalidate()" in script
-    assert "logoutButton.disabled = true" in script
-    assert "logout.hidden = true" in script
+    assert "if (logoutButton !== null) logoutButton.disabled = true" in script
+    assert "if (logout !== null) logout.hidden = true" in script
     assert 'close({restoreFocus: false})' in script
     close_source = script.split("const close = ({restoreFocus = true} = {}) => {", 1)[1].split(
         "const open = () => {", 1
@@ -2304,6 +2318,14 @@ def test_authenticated_display_and_session_drawer_contract() -> None:
     assert "overflow-y: auto !important" in viewport
     assert "overscroll-behavior: contain !important" in viewport
     assert "scrollbar-gutter: stable !important" in viewport
+    assert ".native-menu-presentation" in viewport
+    assert ".native-menu-page" in viewport
+    assert ".native-menu-status-details" in viewport
+    assert "#native-menu .mimic-toolbar:not([hidden])" in viewport
+    assert "#native-menu-toggle .native-menu-label { display: none !important; }" in viewport
+    assert "#native-menu-toggle .native-menu-icon" in viewport
+    assert "grid-template-columns: 44px minmax(0, 1fr) !important" in viewport
+    assert "font-size: min(1.2rem, 5vw) !important" in viewport
     assert "[tabindex]:not([tabindex=\"-1\"])" in viewport
     assert "min-height: 44px !important" in viewport
     assert 'html[data-access-mode][data-session-state="login-required"] .dashboard' in viewport

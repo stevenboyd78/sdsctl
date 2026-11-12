@@ -105,7 +105,8 @@ def test_browser_audit_help_documents_scope_and_dependencies() -> None:
         "trusted Tab/Shift+Tab",
         "WCAG AA",
         "adaptive-presentation",
-        "operator and display-only Display & session drawer",
+        "universal Display & session drawer",
+        "operator and display-only authenticated variants",
         "LCARS navigation breakpoint",
         "alternative system-font metrics",
         "DPR-transition",
@@ -228,6 +229,33 @@ def test_browser_audit_covers_both_authenticated_native_drawer_roles() -> None:
     assert source.index("await auditOperatorDrawer") < source.index("await auditDisplayKiosk")
     assert 'b"kiosk=operator": b"operator"' in demo
     assert 'b"kiosk=display": b"display"' in demo
+
+
+def test_browser_audit_covers_universal_non_native_drawer_contexts() -> None:
+    source = _SCRIPT.read_text(encoding="utf-8")
+    universal = source.split("async function auditUniversalDrawer", 1)[1].split(
+        "export async function runMatrix", 1
+    )[0]
+    matrix = source.split("export async function runMatrix", 1)[1].split(
+        "export async function openChrome", 1
+    )[0]
+
+    assert 'auditUniversalDrawer(cdp, "standalone dashboard")' in matrix
+    assert 'auditUniversalDrawer(cdp, "Home Assistant Ingress dashboard")' in matrix
+    assert "document.querySelector('#native-session-summary') !== null" in universal
+    assert "document.querySelector('#native-menu form[action$=\"auth/logout\"]')" in universal
+    assert "document.querySelector('.native-menu-session') !== null" in universal
+    assert "appearance controls must have one canonical drawer owner" in universal
+    assert "scanner presentation visibility or ownership is inconsistent" in universal
+    assert "page identity and status details must be drawer-owned" in universal
+    assert "live status must remain visible outside the drawer" in universal
+    assert "non-kiosk drawer must not expose display-only view navigation" in universal
+    assert "detailsReachable" in universal
+    assert "touchSized" in universal
+    assert "Accessibility.getFullAXTree" in universal
+    assert "accessible('dialog', 'display & session')" in universal
+    assert "accessible('combobox', 'theme')" in universal
+    assert "did not restore focus after Escape" in universal
 
 
 def test_browser_audit_persists_each_applicable_appearance_control() -> None:
@@ -519,9 +547,10 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         "Home Assistant integration panel does not fill its workspace",
         "Advanced Home Assistant panel does not fill its workspace",
         "subpanelButtonGeometry",
-        "const expectedColumns = centered ? 3 : 2",
-        "(contentLeft + contentRight)",
-        "desktop typography controls are not centered in their own non-overlapping column",
+        "headerStatusLayout",
+        "obsolete overview row is visible",
+        "live daemon status is not owned by the header action region",
+        "live daemon status overlaps the connection badge",
         "Hidden typography control is rendered",
         "Canonical appearance controls left the native drawer",
         "viewport containment, internal scrolling and 44px controls",
@@ -529,10 +558,9 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         "Advanced Home Assistant guidance is unreachable at the end of the workspace",
         "System palette controller, document, and selector disagree",
         "System palette selector is exposed for ${expectedTheme}",
-        "non-System live daemon status has no readable geometry",
-        "non-System live daemon status is outside the overview content box",
-        "non-System live daemon status text is clipped by its own box",
-        "non-System live daemon status overlaps the appearance controls",
+        "live daemon status has no readable header geometry",
+        "live daemon status is outside the header box",
+        "live daemon status text is clipped by its header box",
         "switchSystemPalette",
         "systemPaletteChoices.slice(1)",
         "responsive System-palette cases",

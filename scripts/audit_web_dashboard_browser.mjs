@@ -142,8 +142,9 @@ palette responsive cases, plus media-preference, enlarged-text,
 pagination-focus, trusted Tab/Shift+Tab traversal, WCAG AA contrast, complete
 adaptive-presentation, DPR-transition, and prefixed-URL probes. It also covers
 the LCARS navigation breakpoint immediately below, at, and above 44rem,
-the operator and display-only Display & session drawer at every reference
-viewport plus 400x240 reachability, focus, backdrop, expiry, and stopped-retry probes,
+the universal Display & session drawer in standalone and Home Assistant Ingress
+contexts plus the operator and display-only authenticated variants at every reference
+viewport, including 400x240 reachability, focus, backdrop, expiry, and stopped-retry probes,
 phone recording controls with alternative system-font metrics, and
 the Home Assistant Ingress Diagnostics layout across all themes at desktop and
 phone widths, plus the authenticated waterfall card at desktop, 800x480, and
@@ -2375,67 +2376,31 @@ export function browserAuditLibrary() {
     return failures;
   }
 
-  function overviewStatusLayout(expectedTheme) {
-    if (expectedTheme === "system") return [];
+  function headerStatusLayout() {
     const failures = [];
+    const header = document.querySelector(".site-header");
+    const actions = document.querySelector(".header-actions");
     const overview = document.querySelector(".overview");
     const message = document.querySelector("#dashboard-message");
-    if (!(overview instanceof HTMLElement) || !(message instanceof HTMLElement)) {
-      return ["overview or live daemon status message is unavailable"];
+    const status = document.querySelector("#status-badge");
+    if (!(header instanceof HTMLElement) || !(actions instanceof HTMLElement) ||
+        !(overview instanceof HTMLElement) || !(message instanceof HTMLElement) ||
+        !(status instanceof HTMLElement)) {
+      return ["universal header status contract is unavailable"];
     }
-    const overviewStyle = getComputedStyle(overview);
-    const messageStyle = getComputedStyle(message);
-    const tracks = overviewStyle.gridTemplateColumns.trim().split(/\s+/);
-    const overviewRect = overview.getBoundingClientRect();
-    // Grid tracks occupy the content box, excluding theme decoration (for
-    // example Pip-Boy's asymmetric left border). Do not count paint as a track.
-    const contentLeft = overviewRect.left + Number.parseFloat(overviewStyle.borderLeftWidth) +
-      Number.parseFloat(overviewStyle.paddingLeft);
-    const contentRight = overviewRect.right - Number.parseFloat(overviewStyle.borderRightWidth) -
-      Number.parseFloat(overviewStyle.paddingRight);
-    const contentTop = overviewRect.top + Number.parseFloat(overviewStyle.borderTopWidth) +
-      Number.parseFloat(overviewStyle.paddingTop);
-    const contentBottom = overviewRect.bottom - Number.parseFloat(overviewStyle.borderBottomWidth) -
-      Number.parseFloat(overviewStyle.paddingBottom);
+    if (rendered(overview) || !overview.hidden) {
+      failures.push("obsolete overview row is visible");
+    }
+    if (!actions.contains(message)) {
+      failures.push("live daemon status is not owned by the header action region");
+    }
+    if (!rendered(message)) {
+      failures.push("live daemon status is not rendered in the header");
+      return failures;
+    }
+    const headerRect = header.getBoundingClientRect();
     const messageRect = message.getBoundingClientRect();
     const messageTextRect = textRect(message);
-    // The independently added typography layout intentionally centers controls
-    // in a third desktop column. Small layouts still require two columns.
-    const appearance = [
-      overview.querySelector('#theme-typography-pickers'),
-      overview.querySelector('#lcars-v2-appearance-pickers'),
-    ].find(rendered);
-    const centered = appearance !== undefined && !matchMedia('(max-width: 65rem)').matches;
-    const expectedColumns = centered ? 3 : 2;
-    if (overviewStyle.display !== "grid") {
-      failures.push(
-        `non-System overview display is ${overviewStyle.display}, expected grid`,
-      );
-    }
-    if (tracks.length !== expectedColumns) {
-      failures.push(
-        `non-System overview exposes ${tracks.length} columns instead of ${expectedColumns}: ` +
-          overviewStyle.gridTemplateColumns,
-      );
-    }
-    if (messageStyle.gridColumnStart !== String(expectedColumns)) {
-      failures.push(
-        `non-System live daemon status starts in grid column ` +
-          `${messageStyle.gridColumnStart}, expected ${expectedColumns}`,
-      );
-    }
-    if (centered) {
-      const rect = appearance.getBoundingClientRect();
-      const style = getComputedStyle(appearance);
-      if (style.gridColumnStart !== '2' || style.gridRowStart !== '1' ||
-          Math.abs((rect.left + rect.right) - (contentLeft + contentRight)) > 2 * tolerance ||
-          rect.right > messageRect.left + tolerance) {
-        failures.push('desktop typography controls are not centered in their own non-overlapping column');
-      }
-    }
-    if (Math.abs(messageRect.right - contentRight) > tolerance) {
-      failures.push("non-System live daemon status is not right-aligned");
-    }
     if (
       (message.textContent ?? "").trim() === "" ||
       messageRect.width <= tolerance ||
@@ -2443,30 +2408,23 @@ export function browserAuditLibrary() {
       messageTextRect.width <= tolerance ||
       messageTextRect.height <= tolerance
     ) {
-      failures.push("non-System live daemon status has no readable geometry");
+      failures.push("live daemon status has no readable header geometry");
     }
-    if (
-      messageRect.left < contentLeft - tolerance ||
-      messageRect.top < contentTop - tolerance ||
-      messageRect.right > contentRight + tolerance ||
-      messageRect.bottom > contentBottom + tolerance
-    ) {
-      failures.push("non-System live daemon status is outside the overview content box");
+    if (outside(messageRect, headerRect)) {
+      failures.push("live daemon status is outside the header box");
     }
     if (outside(messageTextRect, messageRect)) {
-      failures.push("non-System live daemon status text is clipped by its own box");
+      failures.push("live daemon status text is clipped by its header box");
     }
-    if (appearance !== undefined) {
-      const appearanceRect = appearance.getBoundingClientRect();
-      const overlaps = !(
-        messageRect.right <= appearanceRect.left + tolerance ||
-        messageRect.left >= appearanceRect.right - tolerance ||
-        messageRect.bottom <= appearanceRect.top + tolerance ||
-        messageRect.top >= appearanceRect.bottom - tolerance
-      );
-      if (overlaps) {
-        failures.push("non-System live daemon status overlaps the appearance controls");
-      }
+    const statusRect = status.getBoundingClientRect();
+    const overlaps = !(
+      messageRect.right <= statusRect.left + tolerance ||
+      messageRect.left >= statusRect.right - tolerance ||
+      messageRect.bottom <= statusRect.top + tolerance ||
+      messageRect.top >= statusRect.bottom - tolerance
+    );
+    if (overlaps) {
+      failures.push("live daemon status overlaps the connection badge");
     }
     return failures;
   }
@@ -2605,7 +2563,7 @@ export function browserAuditLibrary() {
       innerWidth - responsiveGutter,
       120 * rootFontSize,
     );
-    const regions = [".site-header", ".dashboard", ".site-footer"];
+    const regions = [".site-header", ".dashboard"];
     for (const selector of regions) {
       const region = document.querySelector(selector);
       if (!(region instanceof HTMLElement) || !rendered(region)) {
@@ -2631,7 +2589,7 @@ export function browserAuditLibrary() {
     failures.push(...decorativeClearanceFailures(expectedTheme));
     failures.push(...shellGeometryFailures());
     failures.push(...subpanelButtonGeometry(expectedPane));
-    failures.push(...overviewStatusLayout(expectedTheme));
+    failures.push(...headerStatusLayout());
     const html = document.documentElement;
     const body = document.body;
     const activePane = document.querySelector(
@@ -3420,8 +3378,15 @@ async function auditAccessibility(cdp, collector, context, expectedPane) {
   const themeSelect = exposed.find(
     (node) => role(node) === "combobox" && normalizedName(node) === "theme",
   );
-  if (themeSelect === undefined) {
-    failures.push("accessibility tree does not expose the named Theme selector");
+  if (themeSelect !== undefined) {
+    failures.push("closed Display & session drawer exposes the Theme selector");
+  }
+  const menuButton = exposed.find(
+    (node) => role(node) === "button" &&
+      normalizedName(node) === "open display and session settings",
+  );
+  if (menuButton === undefined) {
+    failures.push("accessibility tree does not expose the Display & session trigger");
   }
   const unnamedButtons = exposed.filter(
     (node) => role(node) === "button" && name(node).trim() === "",
@@ -3801,10 +3766,115 @@ async function auditHeroPanoramaBoundaries(cdp, collector) {
   return caseCount;
 }
 
+async function auditUniversalDrawer(cdp, context) {
+  await frames(cdp);
+  const contract = await evaluate(cdp, `(() => {
+    const failures = [];
+    const menu = document.querySelector('#native-menu');
+    const trigger = document.querySelector('#native-menu-toggle');
+    const appearance = document.querySelector('.native-menu-appearance');
+    const presentation = document.querySelector('.native-menu-presentation');
+    const page = document.querySelector('.native-menu-page');
+    const details = document.querySelector('.native-menu-status-details');
+    const toolbar = document.querySelector('.mimic-toolbar');
+    const identity = document.querySelector('#dashboard-page-identity');
+    const footer = document.querySelector('#dashboard-status-details');
+    const message = document.querySelector('#dashboard-message');
+    const overview = document.querySelector('.overview');
+    const controls = [
+      '.theme-picker',
+      '#system-palette-picker',
+      '#lcars-v2-appearance-pickers',
+      '#theme-typography-pickers',
+    ];
+    if (!(menu instanceof HTMLDialogElement) || !(trigger instanceof HTMLButtonElement)) {
+      failures.push('drawer and trigger must exist');
+    }
+    if (!appearance || controls.some(selector => !appearance.contains(document.querySelector(selector)))) {
+      failures.push('appearance controls must have one canonical drawer owner');
+    }
+    if (!presentation || (toolbar !== null && !presentation.contains(toolbar)) ||
+        presentation?.hidden !== (toolbar === null || toolbar.hidden)) {
+      failures.push('scanner presentation visibility or ownership is inconsistent');
+    }
+    if (!page?.contains(identity) || !details?.contains(footer) ||
+        !footer?.contains(document.querySelector('#last-update')) ||
+        !footer?.querySelector('.technical-value')) {
+      failures.push('page identity and status details must be drawer-owned');
+    }
+    if (!document.querySelector('.header-actions')?.contains(message) || menu?.contains(message)) {
+      failures.push('live status must remain visible outside the drawer');
+    }
+    if (!overview?.hidden) failures.push('obsolete overview row must be hidden');
+    if (!document.querySelector('.native-menu-views')?.hidden) {
+      failures.push('non-kiosk drawer must not expose display-only view navigation');
+    }
+    if (document.querySelector('#native-session-summary') !== null ||
+        document.querySelector('#native-menu form[action$="auth/logout"]') !== null ||
+        document.querySelector('.native-menu-session') !== null) {
+      failures.push('non-native drawer must not expose authenticated session actions');
+    }
+    const unique = ['native-menu', 'native-menu-toggle', 'dashboard-page-identity',
+      'dashboard-status-details', 'theme-select', 'system-palette-select',
+      'theme-font-select', 'theme-typography-select'];
+    if (!unique.every(id => document.querySelectorAll('#' + id).length === 1)) {
+      failures.push('drawer controls and moved metadata must remain unique');
+    }
+    return {failures};
+  })()`);
+  if (contract.failures.length) {
+    throw new Error(`${context} universal drawer contract: ${contract.failures.join('; ')}`);
+  }
+
+  await clickElement(cdp, '#native-menu-toggle');
+  const opened = await evaluate(cdp, `(() => {
+    const menu = document.querySelector('#native-menu');
+    const bounds = menu.getBoundingClientRect();
+    const visibleControls = [...menu.querySelectorAll('button, select, input, textarea, a[href], [tabindex]')]
+      .filter(node => !node.disabled && node.getClientRects().length > 0 &&
+        node.closest('[hidden], [inert], [aria-hidden="true"]') === null);
+    document.querySelector('#dashboard-status-details').scrollIntoView({block: 'nearest'});
+    const details = document.querySelector('#dashboard-status-details').getBoundingClientRect();
+    return {
+      open: menu.open,
+      expanded: document.querySelector('#native-menu-toggle').getAttribute('aria-expanded'),
+      ownsFocus: menu.contains(document.activeElement),
+      contained: bounds.left >= -1 && bounds.top >= -1 && bounds.right <= innerWidth + 1 &&
+        bounds.bottom <= innerHeight + 1 && menu.scrollWidth <= menu.clientWidth + 1,
+      touchSized: visibleControls.length > 0 && visibleControls.every(node => {
+        const rect = node.getBoundingClientRect();
+        return rect.width >= 44 && rect.height >= 44;
+      }),
+      detailsReachable: details.top >= -1 && details.bottom <= innerHeight + 1,
+    };
+  })()`);
+  if (!opened.open || opened.expanded !== 'true' || !opened.ownsFocus ||
+      !opened.contained || !opened.touchSized || !opened.detailsReachable) {
+    throw new Error(`${context} universal drawer interaction: ${JSON.stringify(opened)}`);
+  }
+  const {nodes = []} = await cdp.send('Accessibility.getFullAXTree');
+  const exposed = nodes.filter(node => node.ignored !== true);
+  const accessible = (role, name) => exposed.some(node =>
+    node.role?.value === role &&
+      (node.name?.value ?? '').trim().toLocaleLowerCase('en-US') === name);
+  if (!accessible('dialog', 'display & session') ||
+      !accessible('combobox', 'theme') ||
+      exposed.some(node => node.role?.value === 'button' &&
+        (node.name?.value ?? '').trim() === '')) {
+    throw new Error(`${context} open drawer accessibility contract failed`);
+  }
+  await pressKey(cdp, 'Escape', 'Escape', 27);
+  if (!await evaluate(cdp, `!document.querySelector('#native-menu').open &&
+      document.activeElement.id === 'native-menu-toggle'`)) {
+    throw new Error(`${context} universal drawer did not restore focus after Escape`);
+  }
+}
+
 export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
   const collector = new FailureCollector();
   await setViewport(cdp, VIEWPORTS[0]);
   await navigate(cdp, `${baseUrl}/`, timeoutMs);
+  await auditUniversalDrawer(cdp, "standalone dashboard");
 
   let caseCount = 0;
   let hoverContrastCases = 0;
@@ -3986,6 +4056,7 @@ export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
     `${baseUrl}/api/hassio_ingress/demo_ingress_token/`,
     timeoutMs,
   );
+  await auditUniversalDrawer(cdp, "Home Assistant Ingress dashboard");
   for (const theme of THEMES) {
     collector.add(
       `${theme}/ingress-diagnostics/theme-switch`,
