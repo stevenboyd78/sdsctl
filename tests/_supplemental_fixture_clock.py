@@ -15,10 +15,21 @@ from contextlib import contextmanager
 from typing import Any
 
 
+class _CompressedTime:
+    """Delegate every clock except one fixture-local monotonic view."""
+
+    def __init__(self, monotonic: Any) -> None:
+        self.monotonic = monotonic
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(time, name)
+
+
 @contextmanager
 def compressed_scheduler_time(
     monkeypatch: Any,
     *,
+    time_modules: tuple[Any, ...] = (),
     clock_module: Any | None = None,
     witness: Any | None = None,
 ) -> Iterator[None]:
@@ -29,7 +40,9 @@ def compressed_scheduler_time(
     When a composition also uses the retained host clock, both its direct read
     and the witness read return the already-qualified last window.  No clock
     state survives the bracket, so later explicit expiry tests still advance
-    and exercise the real guards.
+    and exercise the real guards.  ``time_modules`` limits the synthetic
+    monotonic view to named policy modules when another fixture thread or
+    child must retain the real process clock.
     """
 
     current = time.monotonic()
@@ -40,7 +53,11 @@ def compressed_scheduler_time(
         return current
 
     with monkeypatch.context() as patch:
-        patch.setattr(time, "monotonic", monotonic)
+        if time_modules:
+            for module in time_modules:
+                patch.setattr(module, "time", _CompressedTime(monotonic))
+        else:
+            patch.setattr(time, "monotonic", monotonic)
         if (clock_module is None) != (witness is None):
             raise AssertionError("clock module and witness must be supplied together")
         if clock_module is not None:

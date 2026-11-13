@@ -15,6 +15,7 @@ from types import SimpleNamespace
 import pytest
 
 from . import test_supplemental_recording_app_actual_dispatch as dispatch
+from ._supplemental_fixture_clock import compressed_scheduler_time
 
 service, recovery = dispatch.service, dispatch.recovery
 actual, driver, m, launch = service.actual, service.driver, service.m, service.launch
@@ -81,6 +82,31 @@ def run_closed(
                 return
             attempts.append(True)
             s.witness = s.session.processes.witnesses[m.base.CANDIDATE]
+            publish_launch = m.inputs.publish_launch
+            sample = m.execution.AppLaunch._sample
+            first_sample_at = None
+
+            def stable_publish(*args, **kwargs):
+                with compressed_scheduler_time(
+                    monkeypatch,
+                    time_modules=(m.inputs, launch),
+                ):
+                    return publish_launch(*args, **kwargs)
+
+            def stable_sample(owner, phase):
+                nonlocal first_sample_at
+                evidence, observation, machine, observed_at = sample(owner, phase)
+                if first_sample_at is None:
+                    first_sample_at = observed_at
+                return evidence, observation, machine, first_sample_at
+
+            monkeypatch.setattr(m.inputs, "publish_launch", stable_publish)
+            monkeypatch.setattr(m.execution.AppLaunch, "_sample", stable_sample)
+            # This broad composition verifies actual publication, Ready,
+            # recording and owned exits rather than scheduler latency across
+            # the production two-second source/host brackets.  Direct clock
+            # suites retain those exact deadlines; exclude only a shared-runner
+            # pause while this fixture crosses the synthetic phase boundary.
             service.start_native(s, mapped, io, audit)
             # Original failure readers require the caller-prepared private
             # progress directory even when no active sample was requested.
@@ -108,7 +134,17 @@ def run_closed(
 
                 monkeypatch.setattr(s.driver.recording, "_preserved_reader", observed_preserved)
             else:
-                assert s.driver.cancel_native()
+                # This broad composition verifies actual cancellation, owned
+                # exits and pristine recovery rather than the production
+                # clock-read cutoff. Exclude an unrelated shared-runner pause
+                # from the retained service-custody read; direct clock suites
+                # keep the exact production deadline.
+                with compressed_scheduler_time(
+                    monkeypatch,
+                    clock_module=launch.plans.clock,
+                    witness=s.startup.clock,
+                ):
+                    assert s.driver.cancel_native()
                 if observer_factory is not None:
                     assert s.observer.exchanges == ["dispatch"] * 4 + ["candidate", "native"]
             # Real owned transport EOF, not substituted worker-exit methods.
