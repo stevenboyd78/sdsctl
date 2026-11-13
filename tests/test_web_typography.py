@@ -87,20 +87,14 @@ def test_typography_controller_is_presentation_only_and_handles_preferences() ->
     assert "checks passed" in result.stdout
 
 
-def test_typography_layout_centers_controls_and_keeps_responsive_fallbacks() -> None:
+def test_typography_controls_use_one_universal_drawer_layout() -> None:
     css = files("sds200.web_assets").joinpath("theme-typography.css").read_text()
-    # These rules must beat the legacy two-column theme overview without
-    # replacing its display mode (compact kiosk and zoom own that behavior).
-    wide, narrow = css.split("@media (max-width: 65rem)", 1)
-    assert ":root[data-theme-typography] #main-content > .overview" in wide
-    assert "grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important" in wide
-    assert "grid-column: 3 !important; grid-row: 1 !important" in wide
-    assert "justify-content: center !important" in wide
-    assert "grid-column: 2 !important; grid-row: 1 !important" in wide
-    assert "grid-column: 1 / -1 !important; grid-row: 2 !important" in narrow
-    assert "grid-template-columns: repeat(2, minmax(0, 1fr)) !important" in narrow
-    assert "#native-menu #theme-typography-pickers:not([hidden])" in narrow
-    assert "flex-direction: column !important; align-items: stretch !important" in narrow
+    assert "#native-menu #theme-typography-pickers:not([hidden])" in css
+    assert "grid-template-columns: minmax(0, 1fr) !important" in css
+    assert "width: 100% !important" in css
+    assert "text-align: left !important" in css
+    assert "#main-content > .overview" not in css
+    assert ".overview #theme-typography-pickers" not in css
 
 
 def test_hidden_typography_rule_shares_important_display_layer() -> None:
@@ -108,7 +102,9 @@ def test_hidden_typography_rule_shares_important_display_layer() -> None:
     layer = css.split("@layer sdsctl-viewport-contract {", 1)[1]
     assert "#theme-font-picker[hidden] { display: none !important; }" in layer
     assert "#theme-typography-pickers[hidden]" in layer
-    assert "#theme-typography-pickers > div {\n    display: grid !important" in layer
+    assert (
+        "#native-menu #theme-typography-pickers > div:not([hidden]) {\n    display: grid !important"
+    ) in layer
     # The real-Chrome audit additionally checks computed visibility, drawer
     # reachability/touch sizing, and the unchanged phone geometry limits.
     script = files("sds200.web_assets").joinpath("dashboard.js").read_text()
@@ -126,16 +122,13 @@ def test_hidden_typography_rule_shares_important_display_layer() -> None:
     assert "min-height: 44px !important" in menu_select
 
 
-def test_compact_landscape_labels_share_selector_row_without_shrinking_controls() -> None:
+def test_typography_drawer_geometry_has_no_viewport_specific_relocation() -> None:
     css = files("sds200.web_assets").joinpath("theme-typography.css").read_text()
-    compact = css.split(
-        "@media (min-width: 44.01rem) and (max-width: 65rem) and (max-height: 38rem)", 1
-    )[1].split("#native-menu", 1)[0]
-    assert ".overview #theme-typography-pickers > div:not([hidden])" in compact
-    assert "grid-template-columns: auto minmax(0, 1fr) !important" in compact
-    assert "align-items: center !important" in compact
-    assert "font-size" not in compact and "min-height" not in compact
-    assert "display:" not in compact  # Hidden controls retain their original rule.
+    assert "@media (max-width: 65rem)" not in css
+    assert "@media (min-width: 44.01rem)" not in css
+    assert "#native-menu #theme-typography-pickers > div:not([hidden])" in css
+    assert "grid-template-columns: minmax(0, 1fr) !important" in css
+    assert "#theme-font-picker[hidden] { display: none !important; }" in css
 
 
 def test_compact_panes_leave_room_for_taller_bundled_fonts() -> None:

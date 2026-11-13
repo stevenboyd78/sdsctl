@@ -82,6 +82,7 @@ select optgroup {
   justify-content: flex-end;
   justify-self: end;
   gap: var(--space-4);
+  min-width: 0;
 }
 .theme-picker {
   display: grid;
@@ -126,6 +127,25 @@ select optgroup {
   padding-top: 0.75rem;
 }
 .native-menu-session :is(p, form) { margin-block: 0; }
+.native-menu-page #dashboard-page-identity :is(p, h2),
+.native-menu-status-details .site-footer p {
+  margin-block: 0;
+}
+.native-menu-page #dashboard-page-identity h2 {
+  font-size: 1rem;
+}
+.native-menu-status-details .site-footer {
+  display: grid;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  gap: 0.35rem;
+}
+.native-menu-status-details .site-footer p {
+  overflow-wrap: anywhere;
+  text-align: left;
+}
 .native-access-label { color: var(--muted); }
 .native-view-title {
   color: var(--text);
@@ -205,6 +225,9 @@ select optgroup {
   align-items: end;
   gap: var(--space-5);
   margin-bottom: var(--space-4);
+}
+.overview[hidden] {
+  display: none !important;
 }
 .overview h2 {
   font-size: clamp(1.4rem, 3vw, 2rem);

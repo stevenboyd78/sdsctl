@@ -240,24 +240,28 @@ function connectManagedSignOut(logout) {
 }
 
 async function initializeNativeSession() {
-  if (!nativeAccessMode) return;
-  const banner = document.createElement("div");
-  banner.id = "native-session-status";
-  banner.className = "notice notice-error";
-  banner.setAttribute("role", "alert");
-  banner.setAttribute("aria-live", "assertive");
-  banner.setAttribute("aria-atomic", "true");
-  banner.hidden = true;
-  const logout = document.createElement("form");
-  logout.method = "post";
-  logout.action = webUrl("auth/logout");
-  const button = document.createElement("button");
-  button.type = "submit";
-  button.textContent = "Sign out";
-  logout.append(button);
-  element("main-content").prepend(banner);
+  let logout = null;
+  let button = null;
+  if (nativeAccessMode) {
+    const banner = document.createElement("div");
+    banner.id = "native-session-status";
+    banner.className = "notice notice-error";
+    banner.setAttribute("role", "alert");
+    banner.setAttribute("aria-live", "assertive");
+    banner.setAttribute("aria-atomic", "true");
+    banner.hidden = true;
+    logout = document.createElement("form");
+    logout.method = "post";
+    logout.action = webUrl("auth/logout");
+    button = document.createElement("button");
+    button.type = "submit";
+    button.textContent = "Sign out";
+    logout.append(button);
+    element("main-content").prepend(banner);
+  }
   nativeMenuController = initializeNativeMenu(logout, button);
   if (displayOnly) initializeDisplayNavigation(nativeMenuController);
+  if (!nativeAccessMode) return;
   connectManagedSignOut(logout);
   try {
     const response = await dashboardFetch(webUrl("auth/session"), {
@@ -292,13 +296,17 @@ function initializeNativeMenu(logout, logoutButton) {
   const heading = document.querySelector(".brand h1");
   const headingRow = make("div", null, "native-menu-heading");
   heading.before(headingRow);
-  const trigger = make("button", "Display & session");
+  const trigger = make("button");
   trigger.id = "native-menu-toggle";
   trigger.type = "button";
   trigger.setAttribute("aria-label", "Open display and session settings");
   trigger.setAttribute("aria-haspopup", "dialog");
   trigger.setAttribute("aria-controls", "native-menu");
   trigger.setAttribute("aria-expanded", "false");
+  const triggerLabel = make("span", "Display & session", "native-menu-label");
+  const triggerIcon = make("span", "☰", "native-menu-icon");
+  triggerIcon.setAttribute("aria-hidden", "true");
+  trigger.append(triggerLabel, triggerIcon);
   headingRow.append(trigger, heading);
   if (displayOnly) header.append(make("span", "Display-only", "native-access-label"));
 
@@ -319,17 +327,31 @@ function initializeNativeMenu(logout, logoutButton) {
   const appearance = make("section", null, "native-menu-appearance");
   appearance.setAttribute("aria-label", "Appearance");
   appearance.append(make("h3", "Appearance"));
+  const presentation = make("section", null, "native-menu-presentation");
+  presentation.setAttribute("aria-label", "Scanner presentation");
+  presentation.append(make("h3", "Scanner presentation"));
+  presentation.hidden = true;
+  const page = make("section", null, "native-menu-page");
+  page.setAttribute("aria-label", "Page information");
+  page.append(make("h3", "Page"));
+  const details = make("section", null, "native-menu-status-details");
+  details.setAttribute("aria-label", "Status details");
+  details.append(make("h3", "Status details"));
   const session = make("section", null, "native-menu-session");
-  const sessionSummary = make(
-    "p",
-    displayOnly
-      ? "Display-only session — scanner controls, audio and recordings are disabled."
-      : "Operator session — scanner controls, audio and recordings are enabled.",
-  );
-  sessionSummary.id = "native-session-summary";
-  sessionSummary.setAttribute("role", "status");
-  session.append(make("h3", "Session"), sessionSummary, logout);
-  dialog.append(menuHeader, views, appearance, session);
+  let sessionSummary = null;
+  if (logout !== null) {
+    sessionSummary = make(
+      "p",
+      displayOnly
+        ? "Display-only session — scanner controls, audio and recordings are disabled."
+        : "Operator session — scanner controls, audio and recordings are enabled.",
+    );
+    sessionSummary.id = "native-session-summary";
+    sessionSummary.setAttribute("role", "status");
+    session.append(make("h3", "Session"), sessionSummary, logout);
+  }
+  dialog.append(menuHeader, views, appearance, presentation, page, details);
+  if (logout !== null) dialog.append(session);
   document.body.append(dialog);
 
   for (const node of [
@@ -342,6 +364,31 @@ function initializeNativeMenu(logout, logoutButton) {
     node.before(document.createComment("native drawer control position"));
     appearance.append(node);
   }
+
+  const mimicToolbar = document.querySelector(".mimic-toolbar");
+  if (mimicToolbar instanceof HTMLElement) {
+    mimicToolbar.before(document.createComment("native drawer presentation position"));
+    presentation.append(mimicToolbar);
+    const syncPresentationVisibility = () => {
+      presentation.hidden = mimicToolbar.hidden;
+    };
+    new MutationObserver(syncPresentationVisibility).observe(mimicToolbar, {
+      attributes: true,
+      attributeFilter: ["hidden"],
+    });
+    syncPresentationVisibility();
+  }
+
+  const pageIdentity = element("dashboard-page-identity");
+  pageIdentity.before(document.createComment("native drawer page identity position"));
+  page.append(pageIdentity);
+  const statusDetails = element("dashboard-status-details");
+  statusDetails.before(document.createComment("native drawer status details position"));
+  details.append(statusDetails);
+
+  const dashboardMessage = element("dashboard-message");
+  document.querySelector(".header-actions").append(dashboardMessage);
+  document.querySelector(".overview").hidden = true;
 
   let invalidated = false;
   let restoreFocusOnClose = false;
@@ -379,9 +426,11 @@ function initializeNativeMenu(logout, logoutButton) {
     const focusDisplaced = active === trigger || (active instanceof Node && dialog.contains(active));
     invalidated = true;
     trigger.disabled = true;
-    logoutButton.disabled = true;
-    logout.hidden = true;
-    sessionSummary.textContent = "Session ended — sign in again to resume updates.";
+    if (logoutButton !== null) logoutButton.disabled = true;
+    if (logout !== null) logout.hidden = true;
+    if (sessionSummary !== null) {
+      sessionSummary.textContent = "Session ended — sign in again to resume updates.";
+    }
     close({restoreFocus: false});
     return focusDisplaced;
   };
@@ -429,7 +478,19 @@ function initializeNativeMenu(logout, logoutButton) {
     if (dismiss) close();
   });
 
-  return {dialog, trigger, views, appearance, sessionSummary, open, close, invalidate};
+  return {
+    dialog,
+    trigger,
+    views,
+    appearance,
+    presentation,
+    page,
+    details,
+    sessionSummary,
+    open,
+    close,
+    invalidate,
+  };
 }
 
 function syncDisplayNavigation() {
