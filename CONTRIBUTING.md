@@ -47,6 +47,37 @@ python -m twine check dist/*
 
 The automated test suite must run without scanner hardware.
 
+### Conservative selective CI
+
+The ordinary CI workflow uses a repository-owned, fail-closed classifier before
+starting its expensive Python and browser-namespace matrices. A pull request or
+push may omit those two matrices only when every changed path is confined to
+`docs/`, `wiki/`, or a Markdown/reStructuredText file. The Documentation and
+package job still runs in that bounded case, including link checks, real-Chrome
+acceptance, screenshot verification, distribution builds, and sdist inspection.
+The named Python and browser matrix checks still start and report success after a
+short no-op step, preserving stable required-check names without installing the
+project or executing their expensive test suites.
+
+Any source, test, workflow, dependency, packaging, script, configuration, or
+mixed change runs the complete Python 3.11–3.14 and namespace matrices. Empty or
+unresolvable comparisons, new-branch pushes without a usable previous commit,
+and manual workflow dispatches also run the complete suite. Renames are examined
+as both a deletion and an addition so moving runtime code into a documentation
+path cannot be mistaken for a documentation-only change. Classifier failure is
+a blocking CI failure; it never grants a reduced validation scope.
+
+The selective policy applies only to the ordinary CI workflow. Release and image
+validation/publication workflows retain their existing independent gates. Test
+the classifier directly with:
+
+```bash
+python scripts/classify_ci_changes.py \
+  --event pull_request \
+  --base <base-commit> \
+  --head <head-commit>
+```
+
 ### Linux browser process-isolation checks
 
 The browser recovery-launch, paused-guard-release, continuation-intent and retained-history
