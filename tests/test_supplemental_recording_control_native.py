@@ -179,6 +179,14 @@ def test_exact_child_runs_only_after_one_authenticated_begin(prepared, context, 
                         control.binding(context), intent_at=time.monotonic(), intent_sha256="1" * 64
                     )
                 )
+                # Deliberately close the unconfirmed raw report channel, then
+                # observe the child's durable cleanup before fixture teardown.
+                # Otherwise the generic five-second reaper becomes the only
+                # synchronization and can SIGKILL healthy work on a loaded host.
+                guardian.channel.close()
+                assert m.select.select([guardian.fd], [], [], 10)[0], (
+                    "Child cleanup did not complete"
+                )
             elif fault in (None, "delayed_attachment"):
                 reader = guardian.begin(
                     control.binding(context), intent_at=time.monotonic(), intent_sha256="1" * 64
