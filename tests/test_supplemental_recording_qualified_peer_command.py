@@ -49,7 +49,7 @@ layout, image_umask, supervised = (
 )
 image, configured = qualification.image, qualification.configured
 STAGED_SOURCE_GUARD = None  # Explicit staged-process fixture only; never production.
-FIXTURE_PROCESS_STARTUP_TIMEOUT_SECONDS = 30
+FIXTURE_PROCESS_RESPONSE_TIMEOUT_SECONDS = 30
 OUTER_NAME = "supplemental_recording_passive_outer"
 OUTER_SPEC = importlib.util.spec_from_file_location(
     OUTER_NAME, Path(p.__file__).with_name(OUTER_NAME + ".py")
@@ -76,15 +76,15 @@ def emit(value):
     print(json.dumps(value), flush=True)
 
 
-def fixture_child_startup_line(process):
-    """Give only the cold isolated interpreter a wider scheduling ceiling."""
-    assert select.select(
-        [process.stdout], [], [], FIXTURE_PROCESS_STARTUP_TIMEOUT_SECONDS
-    )[0], "fixture child startup timed out"
+def fixture_child_response_line(process, *, phase):
+    """Give only the isolated fixture process a wider scheduling ceiling."""
+    assert select.select([process.stdout], [], [], FIXTURE_PROCESS_RESPONSE_TIMEOUT_SECONDS)[0], (
+        f"fixture child {phase} timed out"
+    )
     return transport.line(process)
 
 
-def test_fixture_child_startup_ceiling_does_not_change_protocol_ceiling(monkeypatch):
+def test_fixture_child_response_ceiling_does_not_change_protocol_ceiling(monkeypatch):
     calls = []
 
     class Output:
@@ -99,9 +99,9 @@ def test_fixture_child_startup_ceiling_does_not_change_protocol_ceiling(monkeypa
         return readers, [], []
 
     monkeypatch.setattr(select, "select", ready)
-    assert fixture_child_startup_line(process) == '{"ready":true}'
+    assert fixture_child_response_line(process, phase="startup") == '{"ready":true}'
     assert calls == [
-        ([process.stdout], [], [], FIXTURE_PROCESS_STARTUP_TIMEOUT_SECONDS),
+        ([process.stdout], [], [], FIXTURE_PROCESS_RESPONSE_TIMEOUT_SECONDS),
         ([process.stdout], [], [], 4),
     ]
 
@@ -540,7 +540,7 @@ def helper(supervised, image, configured, monkeypatch, tmp_path, request):
         diagnostic_fds.append(diagnostic_fd)
         result_fd = os.dup(process.stdout.fileno())
         diagnostic_fds.append(result_fd)
-        initial = json.loads(fixture_child_startup_line(process))
+        initial = json.loads(fixture_child_response_line(process, phase="startup"))
         supplied = dict(plan=initial["base"], baseline=initial["baseline"], child=process)
         mode = selection.get("mode") if type(selection) is dict else selection
         profile = "peer-retained" if mode == "release-command-pair" else "peer-preparation"
@@ -1517,7 +1517,7 @@ def qualify_final(s, plan, *, collect=True):
 
 def finish(s, monkeypatch, after_qualification=None):
     """Explicitly synthetic final acceptance, real file and descriptor transport."""
-    announced = json.loads(transport.line(s.h.child))
+    announced = json.loads(fixture_child_response_line(s.h.child, phase="final plan"))
     plan = p.startups.plans.load_bytes(announced["plan"].encode(), announced["sha256"])
     s.inputs.template.check_plan(plan, plan.original_clock)
     assert plan.original_clock.before_ns > s.timer.original.after_ns
