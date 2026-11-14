@@ -657,11 +657,16 @@ def test_internal_capture_bridge_documents_and_enforces_exact_cdp_viewports() ->
         "screenshotAttempts: screenshot.attempts",
         "waterfallCanvas",
         'style.transform = "translateZ(0)"',
+        '[".site-header", ".workspace-shell"]',
+        "capture paint surface is unavailable",
     ):
         assert contract in audit_source
     assert audit_source.index(
         'cdp.send("Page.addScriptToEvaluateOnNewDocument"'
     ) < audit_source.index("await navigate(cdp, captureUrl")
+    assert audit_source.index('[".site-header", ".workspace-shell"]') < audit_source.index(
+        'const outerHTML = await evaluate(cdp, "document.documentElement.outerHTML")'
+    )
 
 
 def test_internal_capture_bridge_hashes_post_capture_computed_font_state() -> None:
