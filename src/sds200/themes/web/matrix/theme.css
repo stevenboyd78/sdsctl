@@ -52,6 +52,17 @@
     var(--background);
 }
 
+:root[data-theme="matrix"] .theme-stage {
+  display: block;
+  opacity: 1;
+}
+
+:root[data-theme="matrix"] .matrix-rain-canvas {
+  display: block;
+  opacity: 0.46;
+  filter: saturate(1.08) contrast(1.04);
+}
+
 :root[data-theme="matrix"] .site-header {
   position: relative;
   border: 1px solid var(--term-dim);
@@ -59,7 +70,7 @@
   border-radius: 0;
   background:
     linear-gradient(90deg, rgb(67 217 104 / 0.07), transparent 18rem),
-    var(--surface);
+    rgb(6 17 11 / 0.92);
   box-shadow:
     inset 0 0 1.4rem rgb(67 217 104 / 0.025),
     var(--shadow);
@@ -110,7 +121,7 @@
   border-radius: 0;
   background:
     linear-gradient(135deg, rgb(67 217 104 / 0.045), transparent 16rem),
-    #020a05;
+    rgb(2 10 5 / 0.86);
   box-shadow:
     inset 0 0 2rem rgb(67 217 104 / 0.03),
     0 0 1.4rem rgb(0 0 0 / 0.55);
@@ -125,7 +136,7 @@
       rgb(67 217 104 / 0.035) 0 1px,
       transparent 1px 1.5rem
     ),
-    #041008;
+    rgb(4 16 8 / 0.9);
 }
 
 :root[data-theme="matrix"] .workspace-tabs button {
@@ -184,7 +195,7 @@
   border-color: var(--term-dim);
   background:
     linear-gradient(180deg, rgb(67 217 104 / 0.02), transparent 12rem),
-    var(--surface);
+    rgb(6 17 11 / 0.9);
 }
 
 :root[data-theme="matrix"] .panel {
@@ -193,7 +204,7 @@
   border-radius: 0;
   background:
     linear-gradient(180deg, rgb(67 217 104 / 0.025), transparent 10rem),
-    #020a05;
+    rgb(2 10 5 / 0.88);
   box-shadow:
     inset 0 0 1.5rem rgb(67 217 104 / 0.025),
     0 0 1.2rem rgb(0 0 0 / 0.45);
@@ -247,7 +258,7 @@
       rgb(67 217 104 / 0.035) 4px 5px
     ),
     radial-gradient(circle at 50% 0, rgb(67 217 104 / 0.11), transparent 24rem),
-    #020a05;
+    rgb(2 10 5 / 0.9);
   box-shadow:
     inset 0 0 2.2rem rgb(67 217 104 / 0.045),
     0 0 1rem rgb(67 217 104 / 0.16);
@@ -320,6 +331,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  :root[data-theme="matrix"] .matrix-rain-canvas {
+    opacity: 0.32;
+  }
+
   :root[data-theme="matrix"] *,
   :root[data-theme="matrix"] *::before,
   :root[data-theme="matrix"] *::after {
@@ -341,6 +356,10 @@
     --focus: Highlight;
     --term-accent: CanvasText;
     --term-dim: CanvasText;
+  }
+
+  :root[data-theme="matrix"] .matrix-rain-canvas {
+    display: none;
   }
 
   :root[data-theme="matrix"] .site-header,

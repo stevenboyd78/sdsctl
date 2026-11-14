@@ -822,6 +822,17 @@ def create_web_dashboard_app(
         )
 
     @app.get(
+        "/assets/matrix-rain.js",
+        include_in_schema=False,
+        response_class=Response,
+    )
+    def matrix_rain_script() -> Response:
+        return _asset_response(
+            "matrix-rain.js",
+            media_type="application/javascript",
+        )
+
+    @app.get(
         "/assets/dashboard.js",
         include_in_schema=False,
         response_class=Response,

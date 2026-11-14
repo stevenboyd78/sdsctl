@@ -389,7 +389,12 @@ message rather than compressing either one.
   or font preferences. See [LCARS design and migration](lcars-v2.md).
 - **Matrix-inspired** turns the shared dashboard into a cinematic terminal
   workstation with varied terminal panes, technical grids, scan illumination,
-  data-field staging, and perspective depth.
+  data-field staging, perspective depth, and a procedural glyph-rain backdrop.
+  The rain periodically incorporates sanitized characters from the current
+  System, Department, Channel, Site, Signal, and RSSI values without exposing
+  them to assistive technology. It is frame-rate and density bounded, pauses
+  when the page or theme is inactive, becomes one deterministic still frame
+  under reduced-motion, and is suppressed in forced-colors mode.
 - **First Responder** presents the same controls as a dispatch/CAD workstation
   with application chrome, tactical/radar instrumentation, restrained emergency
   light washes, and operations-center monitor depth.
@@ -682,6 +687,10 @@ not install fonts, change production font preferences, or replace the gallery.
 ![LCARS theme at a 390x844 CSS viewport and DPR2](assets/web-dashboard/theme-lcars-390x844-dpr2.png)
 
 ### Matrix-inspired
+
+The gallery captures the deterministic reduced-motion form of the rain so the
+checked-in references remain byte-repeatable. In an ordinary browser session,
+the same canvas animates at a bounded rate behind the readable terminal panes.
 
 ![Matrix-inspired theme at 1920x1080](assets/web-dashboard/theme-matrix-1920x1080.png)
 
