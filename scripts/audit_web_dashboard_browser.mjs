@@ -5516,16 +5516,25 @@ export async function captureDashboardScreenshot({
       );
     }
 
-    if (pane === "waterfall") {
-      // Give the rounded waterfall workspace one stable local paint origin.
-      // Without this visually inert capture-only layer, Chrome may tile the
-      // same fractional edges from different origins across fresh profiles.
-      await evaluate(
-        cdp,
-        'document.querySelector(".workspace-shell").style.transform = "translateZ(0)"',
-      );
-      await frames(cdp);
-    }
+    // Give the two rounded top-level capture surfaces stable local paint
+    // origins. Without these visually inert, capture-only compositor layers,
+    // Chrome can tile the same antialiased corner from different origins
+    // across fresh profiles even when the DOM and computed fonts are equal.
+    // Keep this out of production CSS: it exists solely to make the visual
+    // evidence deterministic and must not alter the dashboard's layout.
+    await evaluate(
+      cdp,
+      `(() => {
+        for (const selector of [".site-header", ".workspace-shell"]) {
+          const surface = document.querySelector(selector);
+          if (!(surface instanceof HTMLElement)) {
+            throw new Error(\`capture paint surface is unavailable: \${selector}\`);
+          }
+          surface.style.transform = "translateZ(0)";
+        }
+      })()`,
+    );
+    await frames(cdp);
 
     const outerHTML = await evaluate(cdp, "document.documentElement.outerHTML");
     const screenshot = await captureStableScreenshot(cdp);

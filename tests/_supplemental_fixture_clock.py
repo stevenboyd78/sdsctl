@@ -25,6 +25,22 @@ class _CompressedTime:
         return getattr(time, name)
 
 
+def _compressed_monotonic():
+    current = time.monotonic()
+
+    def monotonic() -> float:
+        nonlocal current
+        current = math.nextafter(current, math.inf)
+        return current
+
+    return monotonic
+
+
+def install_compressed_scheduler_time() -> None:
+    """Install the test clock in a disposable fixture child process."""
+    time.monotonic = _compressed_monotonic()
+
+
 @contextmanager
 def compressed_scheduler_time(
     monkeypatch: Any,
@@ -45,19 +61,13 @@ def compressed_scheduler_time(
     child must retain the real process clock.
     """
 
-    current = time.monotonic()
-
-    def monotonic() -> float:
-        nonlocal current
-        current = math.nextafter(current, math.inf)
-        return current
-
     with monkeypatch.context() as patch:
         if time_modules:
+            monotonic = _compressed_monotonic()
             for module in time_modules:
                 patch.setattr(module, "time", _CompressedTime(monotonic))
         else:
-            patch.setattr(time, "monotonic", monotonic)
+            patch.setattr(time, "monotonic", _compressed_monotonic())
         if (clock_module is None) != (witness is None):
             raise AssertionError("clock module and witness must be supplied together")
         if clock_module is not None:

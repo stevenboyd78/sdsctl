@@ -38,7 +38,10 @@ from ._supplemental_failure_diagnostics import (
     child_result_failure_locations,
     failure_locations,
 )
-from ._supplemental_fixture_clock import compressed_scheduler_time
+from ._supplemental_fixture_clock import (
+    compressed_scheduler_time,
+    install_compressed_scheduler_time,
+)
 
 writer, p, m = command_tests.writer, command_tests.m, qualification.m
 transport, grants = writer.transport, qualification.grants
@@ -428,6 +431,14 @@ def child(root):
                 )
             if config["fixed_release"]:
                 patches.setattr(writer.m, "prepare_idle_from_inputs", forbidden)
+            if config["compress_handoff_scheduler_time"]:
+                accepted_writer = p._accepted_writer
+
+                def compressed_handoff(*args, **kwargs):
+                    install_compressed_scheduler_time()
+                    return accepted_writer(*args, **kwargs)
+
+                patches.setattr(p, "_accepted_writer", compressed_handoff)
             poll = p.startups.Startup.poll
             announced = []
 
@@ -795,6 +806,8 @@ def observer_child(path, *, retained=False):
             def observed_inputs(*args, **kwargs):
                 with receives(*args, **kwargs) as value:
                     emit(dict(inputs_retained=True))
+                    if config["compress_handoff_scheduler_time"]:
+                        install_compressed_scheduler_time()
                     yield value
 
             @contextmanager
@@ -1314,6 +1327,7 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
                 authenticated_release=authenticated_release,
                 fixed_release=fixed_release,
                 exit_after_result=options.get("exit_after_result", False),
+                compress_handoff_scheduler_time=compressed_handoff_time,
                 **{key: str(value) for key, value in roots.items()},
             ),
         )
@@ -1383,10 +1397,11 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
             observer_handoff.mkdir(mode=0o700)
             if automatic:
                 if compressed_handoff_time:
-                    # This one broad composition performs several real process
-                    # and filesystem checks after creating its single shared
-                    # cutoff. Keep runner scheduling out of that non-timing
-                    # fixture without renewing or widening the cutoff itself.
+                    # This broad composition performs several real process and
+                    # filesystem checks after creating one shared cutoff. Keep
+                    # every participating Python process on the same synthetic
+                    # non-timing contract; parent-only compression lets a child
+                    # expire while the parent still sees the cutoff as current.
                     stack.enter_context(compressed_scheduler_time(monkeypatch))
                 pipeline_end = time.monotonic() + 2
                 staged_plan = stack.enter_context(
@@ -1424,6 +1439,7 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
                     observer_join=options.get("observer_join", False),
                     observer_join_fault=options.get("observer_join_fault"),
                     automatic_observer=automatic,
+                    compress_handoff_scheduler_time=compressed_handoff_time,
                 ),
             )
             observer_inputs.accept()
