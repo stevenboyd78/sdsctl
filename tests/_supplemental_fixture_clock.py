@@ -15,6 +15,22 @@ from contextlib import contextmanager
 from typing import Any
 
 
+def _compressed_monotonic():
+    current = time.monotonic()
+
+    def monotonic() -> float:
+        nonlocal current
+        current = math.nextafter(current, math.inf)
+        return current
+
+    return monotonic
+
+
+def install_compressed_scheduler_time() -> None:
+    """Install the test clock in a disposable fixture child process."""
+    time.monotonic = _compressed_monotonic()
+
+
 @contextmanager
 def compressed_scheduler_time(
     monkeypatch: Any,
@@ -32,15 +48,8 @@ def compressed_scheduler_time(
     and exercise the real guards.
     """
 
-    current = time.monotonic()
-
-    def monotonic() -> float:
-        nonlocal current
-        current = math.nextafter(current, math.inf)
-        return current
-
     with monkeypatch.context() as patch:
-        patch.setattr(time, "monotonic", monotonic)
+        patch.setattr(time, "monotonic", _compressed_monotonic())
         if (clock_module is None) != (witness is None):
             raise AssertionError("clock module and witness must be supplied together")
         if clock_module is not None:

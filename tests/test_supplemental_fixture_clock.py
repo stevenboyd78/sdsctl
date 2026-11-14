@@ -1,11 +1,32 @@
 """Regression tests for scheduler-independent supplemental fixture time."""
 
+import subprocess
+import sys
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from ._supplemental_fixture_clock import compressed_scheduler_time
+from ._supplemental_fixture_clock import (
+    compressed_scheduler_time,
+    install_compressed_scheduler_time,
+)
+
+
+def test_disposable_child_can_install_compressed_scheduler_time():
+    code = (
+        "import sys; sys.path.insert(0, sys.argv[1]); import time; "
+        "from tests._supplemental_fixture_clock import install_compressed_scheduler_time; "
+        "install_compressed_scheduler_time(); began = time.monotonic(); "
+        "time.sleep(0.01); ended = time.monotonic(); "
+        "assert began < ended < began + 0.001"
+    )
+    subprocess.run(
+        [sys.executable, "-I", "-B", "-c", code, str(Path(__file__).resolve().parents[1])],
+        check=True,
+    )
+    assert install_compressed_scheduler_time.__module__ == "tests._supplemental_fixture_clock"
 
 
 def test_compressed_time_hides_external_pause_and_restores_sources(monkeypatch):
