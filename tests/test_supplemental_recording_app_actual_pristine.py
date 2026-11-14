@@ -39,7 +39,15 @@ def test_original_service_recovers_pristine_files_after_actual_cancel_and_owned_
 
 
 def run_closed(
-    s, mapped, staged, monkeypatch, *, fault=None, preserved=False, observer_factory=None
+    s,
+    mapped,
+    staged,
+    monkeypatch,
+    *,
+    fault=None,
+    preserved=False,
+    observer_factory=None,
+    observer_time_modules=(),
 ):
     from . import test_supplemental_recording_app_driver_dispatch as initial
 
@@ -89,9 +97,13 @@ def run_closed(
 
             def stable_observe_candidate(owner):
                 # The independent observer process retains its real clock.
-                # Compress only the App policy's two-second callback bracket;
-                # direct deadline suites keep the unchanged production limit.
-                with compressed_scheduler_time(monkeypatch, time_modules=(m,)):
+                # Compress only the parent App and Link policy callback
+                # brackets; direct deadline suites keep the unchanged
+                # production limits.
+                with compressed_scheduler_time(
+                    monkeypatch,
+                    time_modules=(m, *observer_time_modules),
+                ):
                     return observe_candidate(owner)
 
             def stable_publish(*args, **kwargs):
