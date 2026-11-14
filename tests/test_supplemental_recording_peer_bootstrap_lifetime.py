@@ -23,6 +23,7 @@ import pytest
 
 from . import test_supplemental_recording_peer_bootstrap as transport
 from . import test_supplemental_recording_peer_termination as termination
+from ._supplemental_fixture_clock import compressed_scheduler_time
 
 m, stop = transport.m, termination.m
 layout, image_umask, supervised = (
@@ -31,8 +32,9 @@ layout, image_umask, supervised = (
     termination.supervised,
 )
 image, configured, pair = termination.image, termination.configured, termination.pair
-inputs, custody, short_budget = termination.inputs, termination.custody, termination.short_budget
+inputs, short_budget = termination.inputs, termination.short_budget
 pytestmark = termination.pytestmark
+COLLECTION_TIME_MODULES = (stop, stop.peers.launch, stop.peers.launch.runtime)
 
 
 @pytest.fixture
@@ -94,6 +96,23 @@ def helper(peer_processes, supervised, image, configured, monkeypatch, request, 
 
 
 @pytest.fixture
+def custody(inputs, monkeypatch):
+    # This broad composition verifies retained identities, descriptor custody,
+    # delivery, and termination. Direct termination suites keep the real
+    # production capture windows; exclude only shared-runner scheduling delay
+    # while its repeated full runtime comparison is assembled.
+    with compressed_scheduler_time(
+        monkeypatch,
+        time_modules=COLLECTION_TIME_MODULES,
+    ):
+        value = stop.Custody(*inputs)
+    try:
+        yield value
+    finally:
+        value.close()
+
+
+@pytest.fixture
 def joined(custody, pair, inputs, peer_processes, monkeypatch):
     assert m.links.processes is stop.peers.launch.engine.dispatch.process
     monkeypatch.setattr(m, "ROOT_UID", os.geteuid())
@@ -117,7 +136,11 @@ def joined(custody, pair, inputs, peer_processes, monkeypatch):
         return original_identity(pid, cid)
 
     monkeypatch.setattr(m.links.processes, "read_identity", identity)
-    watch = stop.arm(custody, scope=stop.SCOPE)
+    with compressed_scheduler_time(
+        monkeypatch,
+        time_modules=COLLECTION_TIME_MODULES,
+    ):
+        watch = stop.arm(custody, scope=stop.SCOPE)
     bundles = dict(zip(("writer", "observer"), m.links.pair(), strict=True))
     connections = dict(zip(("writer", "observer"), peer_processes, strict=True))
     endpoints = []

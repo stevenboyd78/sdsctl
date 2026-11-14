@@ -398,6 +398,7 @@ def test_separate_observer_retains_original_abandoned_recording_lifetime(
         fault=fault,
         preserved=True,
         observer_factory=separate_observer,
+        observer_time_modules=(m,),
     )
 
 
@@ -414,6 +415,7 @@ def test_separate_observer_retains_original_pristine_cancellation_lifetime(
         monkeypatch,
         fault=fault,
         observer_factory=separate_observer,
+        observer_time_modules=(m,),
     )
 
 
@@ -467,4 +469,5 @@ def test_observer_exit_after_native_work_prevents_every_restoration_route(
             fault="observer_exit",
             preserved=route == "abandoned",
             observer_factory=retiring_observer,
+            observer_time_modules=(m,),
         )
