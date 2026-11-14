@@ -82,9 +82,17 @@ def run_closed(
                 return
             attempts.append(True)
             s.witness = s.session.processes.witnesses[m.base.CANDIDATE]
+            observe_candidate = m.AppService._observe_candidate
             publish_launch = m.inputs.publish_launch
             sample = m.execution.AppLaunch._sample
             first_sample_at = None
+
+            def stable_observe_candidate(owner):
+                # The independent observer process retains its real clock.
+                # Compress only the App policy's two-second callback bracket;
+                # direct deadline suites keep the unchanged production limit.
+                with compressed_scheduler_time(monkeypatch, time_modules=(m,)):
+                    return observe_candidate(owner)
 
             def stable_publish(*args, **kwargs):
                 with compressed_scheduler_time(
@@ -100,6 +108,7 @@ def run_closed(
                     first_sample_at = observed_at
                 return evidence, observation, machine, first_sample_at
 
+            monkeypatch.setattr(m.AppService, "_observe_candidate", stable_observe_candidate)
             monkeypatch.setattr(m.inputs, "publish_launch", stable_publish)
             monkeypatch.setattr(m.execution.AppLaunch, "_sample", stable_sample)
             # This broad composition verifies actual publication, Ready,
