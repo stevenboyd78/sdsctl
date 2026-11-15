@@ -398,6 +398,10 @@ message rather than compressing either one.
   current System, Department, Channel, Site, Signal, and RSSI values, such as
   `> CHAN:Fire Paging`. Values are sanitized and length-bounded before drawing,
   and the decorative canvas remains hidden from assistive technology.
+  Each telemetry packet makes one complete top-to-bottom pass and is then
+  discarded rather than wrapping. Routine dashboard redraws do not reset or
+  duplicate it; when a field changes, its previous packet keeps falling while a
+  new packet containing the updated value begins above the viewport.
   Matrix-only controls in **Display & session** adjust fall speed, density, rain
   visibility, and trail length with an immediate preview. Those preferences are
   stored locally by that browser/display, can be reset to the balanced defaults,

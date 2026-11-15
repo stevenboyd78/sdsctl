@@ -66,6 +66,7 @@
   ));
   const FRAME_INTERVAL_MS = 1000 / 24;
   const MAX_COLUMNS = 192;
+  const MAX_TELEMETRY_PACKETS = 32;
   const MAX_DEVICE_PIXEL_RATIO = 2;
   const STATIC_CELL_BUDGET = 4200;
 
@@ -80,8 +81,10 @@
   let cssHeight = 0;
   let fontSize = 18;
   let columns = [];
-  let liveSequences = [];
+  let liveSequences = Array.from({length: LIVE_FIELD_IDS.length}, () => "");
   let telemetryPackets = [];
+  let pendingTelemetrySequences = [];
+  let telemetrySerial = 0;
   let rainSettings = readRainSettings();
   let animationFrame = 0;
   let lastFrameAt = 0;
@@ -164,17 +167,28 @@
   }
 
   function readLiveSequences() {
-    return LIVE_FIELD_IDS.flatMap((identifier, index) => {
+    return LIVE_FIELD_IDS.map((identifier, index) => {
       const value = sanitizeLiveValue(document.getElementById(identifier)?.textContent);
-      return value ? [`${LIVE_FIELD_LABELS[index]}:${value}`] : [];
+      return value ? `${LIVE_FIELD_LABELS[index]}:${value}` : "";
     });
   }
 
   function refreshLiveSequences() {
-    liveSequences = readLiveSequences();
-    canvas.dataset.matrixRainSources = String(liveSequences.length);
-    if (cssWidth > 0 && cssHeight > 0) {
-      telemetryPackets = createTelemetryPackets();
+    const nextSequences = readLiveSequences();
+    const changedSequences = nextSequences.filter(
+      (sequence, index) => sequence && sequence !== liveSequences[index],
+    );
+    liveSequences = nextSequences;
+    canvas.dataset.matrixRainSources = String(liveSequences.filter(Boolean).length);
+    if (changedSequences.length > 0) {
+      if (cssWidth > 0 && cssHeight > 0) {
+        enqueueTelemetryPackets(changedSequences, {
+          stagger: telemetryPackets.length === 0,
+        });
+      } else {
+        pendingTelemetrySequences.push(...changedSequences);
+        pendingTelemetrySequences = pendingTelemetrySequences.slice(-MAX_TELEMETRY_PACKETS);
+      }
     }
     if (isMatrixActive() && reducedMotion.matches && !forcedColors.matches) {
       configureSurface();
@@ -210,16 +224,7 @@
     }));
   }
 
-  function createTelemetryPackets() {
-    if (liveSequences.length === 0) {
-      return [];
-    }
-    const densityScale = rainSettings.density / 100;
-    const count = Math.min(
-      liveSequences.length,
-      Math.max(1, Math.round(cssWidth / 320 * densityScale)),
-    );
-    const random = seededRandom(surfaceSeed() ^ 0x51d5c7a1);
+  function telemetryPacketMetrics() {
     const packetFontSize = Math.max(10, Math.round(fontSize * 0.64));
     const margin = Math.max(8, fontSize);
     const maxWidth = Math.max(
@@ -227,17 +232,62 @@
       Math.min(cssWidth - margin * 2, Math.max(fontSize * 10, cssWidth * 0.38)),
     );
     const availableX = Math.max(0, cssWidth - margin * 2 - maxWidth);
-    return Array.from({length: count}, (_, index) => ({
-      sequenceIndex: index % liveSequences.length,
+    return {availableX, margin, maxWidth, packetFontSize};
+  }
+
+  function updateTelemetryPacketDataset() {
+    canvas.dataset.matrixRainPacketCount = String(telemetryPackets.length);
+  }
+
+  function createTelemetryPacket(sequence, queueIndex = 0, {stagger = false} = {}) {
+    const {availableX, margin, maxWidth, packetFontSize} = telemetryPacketMetrics();
+    telemetrySerial += 1;
+    const random = seededRandom(
+      surfaceSeed() ^ hashString(`${sequence}|${telemetrySerial}|matrix-telemetry`),
+    );
+    const trailCopies = Math.max(1, Math.round(rainSettings.trail / 18));
+    return {
+      sequence,
+      serial: telemetrySerial,
       x: margin + random() * availableX,
-      y: random() * cssHeight,
-      speed: fontSize * (0.48 + random() * 0.38),
+      y: -packetFontSize * (
+        trailCopies + 2 + (stagger ? queueIndex * 2.4 : 0)
+      ),
+      speed: Math.max(24, cssHeight / 32) * (0.85 + random() * 0.3),
       fontSize: packetFontSize,
       maxWidth,
-    }));
+    };
+  }
+
+  function enqueueTelemetryPackets(sequences, {stagger = false} = {}) {
+    sequences.filter(Boolean).forEach((sequence, index) => {
+      telemetryPackets.push(createTelemetryPacket(sequence, index, {stagger}));
+    });
+    if (telemetryPackets.length > MAX_TELEMETRY_PACKETS) {
+      telemetryPackets.splice(0, telemetryPackets.length - MAX_TELEMETRY_PACKETS);
+    }
+    updateTelemetryPacketDataset();
+  }
+
+  function resizeTelemetryPackets(previousWidth, previousHeight) {
+    if (previousWidth <= 0 || previousHeight <= 0 || telemetryPackets.length === 0) {
+      return;
+    }
+    const {availableX, margin, maxWidth, packetFontSize} = telemetryPacketMetrics();
+    const widthScale = cssWidth / previousWidth;
+    const heightScale = cssHeight / previousHeight;
+    telemetryPackets.forEach((packet) => {
+      packet.x = Math.min(margin + availableX, Math.max(margin, packet.x * widthScale));
+      packet.y *= heightScale;
+      packet.speed *= heightScale;
+      packet.fontSize = packetFontSize;
+      packet.maxWidth = maxWidth;
+    });
   }
 
   function configureSurface() {
+    const previousWidth = cssWidth;
+    const previousHeight = cssHeight;
     const bounds = stage.getBoundingClientRect();
     const nextWidth = Math.max(1, Math.round(bounds.width || globalThis.innerWidth || 1));
     const nextHeight = Math.max(1, Math.round(bounds.height || globalThis.innerHeight || 1));
@@ -267,7 +317,15 @@
     context.textAlign = "center";
     context.textBaseline = "middle";
     columns = createColumns();
-    telemetryPackets = createTelemetryPackets();
+    resizeTelemetryPackets(previousWidth, previousHeight);
+    if (pendingTelemetrySequences.length > 0) {
+      const queuedSequences = pendingTelemetrySequences;
+      pendingTelemetrySequences = [];
+      enqueueTelemetryPackets(queuedSequences, {
+        stagger: telemetryPackets.length === 0,
+      });
+    }
+    updateTelemetryPacketDataset();
     return true;
   }
 
@@ -285,7 +343,7 @@
   }
 
   function drawTelemetryPacket(packet, y, {staticFrame = false} = {}) {
-    const sequence = liveSequences[packet.sequenceIndex];
+    const sequence = packet.sequence;
     if (!sequence) {
       return;
     }
@@ -313,8 +371,17 @@
   }
 
   function drawStaticTelemetryPackets() {
-    telemetryPackets.forEach((packet, index) => {
-      const y = cssHeight * (index + 1) / (telemetryPackets.length + 1);
+    const sequences = liveSequences.filter(Boolean);
+    const {availableX, margin, maxWidth, packetFontSize} = telemetryPacketMetrics();
+    sequences.forEach((sequence, index) => {
+      const random = seededRandom(surfaceSeed() ^ hashString(`${sequence}|${index}|static`));
+      const packet = {
+        sequence,
+        x: margin + random() * availableX,
+        fontSize: packetFontSize,
+        maxWidth,
+      };
+      const y = cssHeight * (index + 1) / (sequences.length + 1);
       drawTelemetryPacket(packet, y, {staticFrame: true});
     });
   }
@@ -322,16 +389,17 @@
   function drawAnimatedTelemetryPackets(elapsedMs) {
     const speedScale = rainSettings.speed / 100;
     const trailCopies = Math.max(1, Math.round(rainSettings.trail / 18));
+    const survivors = [];
     telemetryPackets.forEach((packet) => {
       packet.y += packet.speed * speedScale * elapsedMs / 1000;
-      if (packet.y > cssHeight + packet.fontSize) {
-        packet.y = -packet.fontSize * (trailCopies + 1);
-        packet.sequenceIndex = (
-          packet.sequenceIndex + telemetryPackets.length
-        ) % liveSequences.length;
+      const completeY = cssHeight + packet.fontSize * (trailCopies + 2);
+      if (packet.y <= completeY) {
+        drawTelemetryPacket(packet, packet.y);
+        survivors.push(packet);
       }
-      drawTelemetryPacket(packet, packet.y);
     });
+    telemetryPackets = survivors;
+    updateTelemetryPacketDataset();
   }
 
   function drawStaticFrame() {
@@ -419,7 +487,6 @@
 
     if (rebuild && cssWidth > 0 && cssHeight > 0) {
       columns = createColumns();
-      telemetryPackets = createTelemetryPackets();
     }
     if (isMatrixActive() && reducedMotion.matches && !forcedColors.matches) {
       configureSurface();

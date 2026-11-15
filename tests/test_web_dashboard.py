@@ -1003,6 +1003,7 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
         'dataset.matrixRain = "ready"',
         "FRAME_INTERVAL_MS = 1000 / 24",
         "MAX_COLUMNS = 192",
+        "MAX_TELEMETRY_PACKETS = 32",
         "MAX_DEVICE_PIXEL_RATIO = 2",
         "STATIC_CELL_BUDGET = 4200",
         ".slice(0, 48)",
@@ -1013,9 +1014,14 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
         'dataset.matrixRainDensity = String(rainSettings.density)',
         'dataset.matrixRainTransparency = String(rainSettings.transparency)',
         'dataset.matrixRainTrail = String(rainSettings.trail)',
+        'dataset.matrixRainPacketCount = String(telemetryPackets.length)',
+        "sequence !== liveSequences[index]",
+        "telemetryPackets = survivors",
         'root.style.setProperty("--matrix-rain-opacity"',
     ):
         assert contract in matrix_rain.text
+    assert "packet.sequenceIndex" not in matrix_rain.text
+    assert "% liveSequences.length" not in matrix_rain.text
     for identifier in (
         "radio-system",
         "radio-department",

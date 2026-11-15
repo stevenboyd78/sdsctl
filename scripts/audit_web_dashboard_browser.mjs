@@ -3931,6 +3931,36 @@ async function auditMatrixRainControls(cdp, baseUrl, timeoutMs) {
     throw new Error(`Matrix rain controls did not apply and persist: ${JSON.stringify(configured)}`);
   }
 
+  const baselinePackets = await evaluate(cdp, `(() => {
+    const canvas = document.querySelector('.matrix-rain-canvas');
+    const field = document.querySelector('#radio-channel');
+    const baseline = Number(canvas.dataset.matrixRainPacketCount);
+    field.textContent = 'Audit telemetry update';
+    return baseline;
+  })()`);
+  await frames(cdp);
+  const changedPackets = await evaluate(cdp,
+    `Number(document.querySelector('.matrix-rain-canvas').dataset.matrixRainPacketCount)`);
+  if (!Number.isFinite(baselinePackets) || changedPackets !== baselinePackets + 1) {
+    throw new Error(
+      `Matrix telemetry update did not preserve the old packet and add one new packet: `
+      + `${baselinePackets} -> ${changedPackets}`,
+    );
+  }
+  await evaluate(cdp, `(() => {
+    const field = document.querySelector('#radio-channel');
+    field.textContent = field.textContent;
+  })()`);
+  await frames(cdp);
+  const repeatedPackets = await evaluate(cdp,
+    `Number(document.querySelector('.matrix-rain-canvas').dataset.matrixRainPacketCount)`);
+  if (repeatedPackets !== changedPackets) {
+    throw new Error(
+      `Identical Matrix telemetry redraw spawned a duplicate packet: `
+      + `${changedPackets} -> ${repeatedPackets}`,
+    );
+  }
+
   await navigate(cdp, `${baseUrl}/`, timeoutMs);
   const restored = await evaluate(cdp, `(() => {
     const canvas = document.querySelector('.matrix-rain-canvas');
