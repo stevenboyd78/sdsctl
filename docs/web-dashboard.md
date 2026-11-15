@@ -394,11 +394,16 @@ message rather than compressing either one.
   that rain visible through the working dashboard instead of restricting it to
   the page margins, while controls, live values, and warning states remain
   solid and readable.
-  The rain periodically incorporates sanitized characters from the current
-  System, Department, Channel, Site, Signal, and RSSI values without exposing
-  them to assistive technology. It is frame-rate and density bounded, pauses
-  when the page or theme is inactive, becomes one deterministic still frame
-  under reduced-motion, and is suppressed in forced-colors mode.
+  The rain periodically adds brighter, intact telemetry packets built from the
+  current System, Department, Channel, Site, Signal, and RSSI values, such as
+  `> CHAN:Fire Paging`. Values are sanitized and length-bounded before drawing,
+  and the decorative canvas remains hidden from assistive technology.
+  Matrix-only controls in **Display & session** adjust fall speed, density, rain
+  visibility, and trail length with an immediate preview. Those preferences are
+  stored locally by that browser/display, can be reset to the balanced defaults,
+  and never alter daemon or scanner state. The effect is frame-rate and density
+  bounded, pauses when the page or theme is inactive, becomes one deterministic
+  still frame under reduced-motion, and is suppressed in forced-colors mode.
 - **First Responder** presents the same controls as a dispatch/CAD workstation
   with application chrome, tactical/radar instrumentation, restrained emergency
   light washes, and operations-center monitor depth.
@@ -695,7 +700,21 @@ not install fonts, change production font preferences, or replace the gallery.
 The gallery captures the deterministic reduced-motion form of the rain so the
 checked-in references remain byte-repeatable. In an ordinary browser session,
 the same canvas animates at a bounded rate through the transparent workspace
-structure and behind the darker, readable terminal-glass panes.
+structure and behind the darker, readable terminal-glass panes. The brighter,
+full-string telemetry packets in the backdrop are fictional gallery data; a
+live dashboard draws the corresponding sanitized local scanner values.
+
+Open **Display & session** while Matrix-inspired is active to tune the effect
+for the display and room:
+
+- **Fall speed:** 25–200%, default 100%.
+- **Density:** 25–200%, default 100%.
+- **Rain visibility:** 20–100%, default 72%.
+- **Trail length:** 10–100%, default 60%.
+
+These are per-browser presentation preferences rather than daemon configuration.
+That keeps a wall display, mobile browser, and Home Assistant client independently
+readable without coupling presentation tuning to the scanner service.
 
 ![Matrix-inspired theme at 1920x1080](assets/web-dashboard/theme-matrix-1920x1080.png)
 

@@ -30,11 +30,42 @@
     "SIG",
     "RSSI",
   ]);
+  const RAIN_SETTING_STORAGE_PREFIX = "sdsctl.web.matrix-rain.";
+  const RAIN_SETTING_DEFINITIONS = Object.freeze({
+    speed: Object.freeze({
+      controlId: "matrix-rain-speed",
+      outputId: "matrix-rain-speed-value",
+      minimum: 25,
+      maximum: 200,
+      defaultValue: 100,
+    }),
+    density: Object.freeze({
+      controlId: "matrix-rain-density",
+      outputId: "matrix-rain-density-value",
+      minimum: 25,
+      maximum: 200,
+      defaultValue: 100,
+    }),
+    transparency: Object.freeze({
+      controlId: "matrix-rain-transparency",
+      outputId: "matrix-rain-transparency-value",
+      minimum: 20,
+      maximum: 100,
+      defaultValue: 72,
+    }),
+    trail: Object.freeze({
+      controlId: "matrix-rain-trail",
+      outputId: "matrix-rain-trail-value",
+      minimum: 10,
+      maximum: 100,
+      defaultValue: 60,
+    }),
+  });
   const MATRIX_GLYPHS = Object.freeze(Array.from(
     "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",
   ));
   const FRAME_INTERVAL_MS = 1000 / 24;
-  const MAX_COLUMNS = 144;
+  const MAX_COLUMNS = 192;
   const MAX_DEVICE_PIXEL_RATIO = 2;
   const STATIC_CELL_BUDGET = 4200;
 
@@ -50,7 +81,8 @@
   let fontSize = 18;
   let columns = [];
   let liveSequences = [];
-  let liveGlyphs = [];
+  let telemetryPackets = [];
+  let rainSettings = readRainSettings();
   let animationFrame = 0;
   let lastFrameAt = 0;
 
@@ -74,6 +106,53 @@
     };
   }
 
+  function normalizedRainSetting(value, definition) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      return definition.defaultValue;
+    }
+    return Math.min(definition.maximum, Math.max(definition.minimum, Math.round(numeric)));
+  }
+
+  function readStoredRainSetting(name, definition) {
+    try {
+      const stored = globalThis.localStorage?.getItem(
+        `${RAIN_SETTING_STORAGE_PREFIX}${name}`,
+      );
+      if (stored === null || stored === undefined || stored === "") {
+        return definition.defaultValue;
+      }
+      return normalizedRainSetting(
+        stored,
+        definition,
+      );
+    } catch {
+      return definition.defaultValue;
+    }
+  }
+
+  function writeStoredRainSetting(name, value) {
+    try {
+      globalThis.localStorage?.setItem(`${RAIN_SETTING_STORAGE_PREFIX}${name}`, String(value));
+    } catch {
+      // Storage may be unavailable in privacy modes or embedded WebViews.
+    }
+  }
+
+  function removeStoredRainSetting(name) {
+    try {
+      globalThis.localStorage?.removeItem(`${RAIN_SETTING_STORAGE_PREFIX}${name}`);
+    } catch {
+      // Storage may be unavailable in privacy modes or embedded WebViews.
+    }
+  }
+
+  function readRainSettings() {
+    return Object.fromEntries(Object.entries(RAIN_SETTING_DEFINITIONS).map(
+      ([name, definition]) => [name, readStoredRainSetting(name, definition)],
+    ));
+  }
+
   function sanitizeLiveValue(value) {
     return String(value ?? "")
       .normalize("NFKD")
@@ -91,10 +170,12 @@
     });
   }
 
-  function refreshLiveGlyphs() {
+  function refreshLiveSequences() {
     liveSequences = readLiveSequences();
-    liveGlyphs = Array.from(liveSequences.join("/"));
     canvas.dataset.matrixRainSources = String(liveSequences.length);
+    if (cssWidth > 0 && cssHeight > 0) {
+      telemetryPackets = createTelemetryPackets();
+    }
     if (isMatrixActive() && reducedMotion.matches && !forcedColors.matches) {
       configureSurface();
       drawStaticFrame();
@@ -102,14 +183,21 @@
   }
 
   function surfaceSeed() {
-    return hashString(`${cssWidth}x${cssHeight}|${liveSequences.join("|")}|sdsctl-matrix-rain-v1`);
+    return hashString(
+      `${cssWidth}x${cssHeight}|${liveSequences.join("|")}|`
+      + `${rainSettings.density}|${rainSettings.trail}|sdsctl-matrix-rain-v2`,
+    );
   }
 
   function createColumns() {
     const random = seededRandom(surfaceSeed());
+    const densityScale = rainSettings.density / 100;
     const count = Math.min(
       MAX_COLUMNS,
-      Math.max(12, Math.ceil(cssWidth / Math.max(12, fontSize * 0.88))),
+      Math.max(
+        8,
+        Math.ceil(cssWidth / Math.max(12, fontSize * 0.88) * densityScale),
+      ),
     );
     const spacing = cssWidth / count;
     return Array.from({length: count}, (_, index) => ({
@@ -118,8 +206,34 @@
       y: -random() * cssHeight,
       speed: fontSize * (1.4 + random() * 2.8),
       glyphOffset: Math.floor(random() * MATRIX_GLYPHS.length),
-      liveOffset: liveGlyphs.length > 0 ? Math.floor(random() * liveGlyphs.length) : 0,
       step: Math.floor(random() * 31),
+    }));
+  }
+
+  function createTelemetryPackets() {
+    if (liveSequences.length === 0) {
+      return [];
+    }
+    const densityScale = rainSettings.density / 100;
+    const count = Math.min(
+      liveSequences.length,
+      Math.max(1, Math.round(cssWidth / 320 * densityScale)),
+    );
+    const random = seededRandom(surfaceSeed() ^ 0x51d5c7a1);
+    const packetFontSize = Math.max(10, Math.round(fontSize * 0.64));
+    const margin = Math.max(8, fontSize);
+    const maxWidth = Math.max(
+      1,
+      Math.min(cssWidth - margin * 2, Math.max(fontSize * 10, cssWidth * 0.38)),
+    );
+    const availableX = Math.max(0, cssWidth - margin * 2 - maxWidth);
+    return Array.from({length: count}, (_, index) => ({
+      sequenceIndex: index % liveSequences.length,
+      x: margin + random() * availableX,
+      y: random() * cssHeight,
+      speed: fontSize * (0.48 + random() * 0.38),
+      fontSize: packetFontSize,
+      maxWidth,
     }));
   }
 
@@ -153,13 +267,11 @@
     context.textAlign = "center";
     context.textBaseline = "middle";
     columns = createColumns();
+    telemetryPackets = createTelemetryPackets();
     return true;
   }
 
   function matrixGlyph(column, step) {
-    if (liveGlyphs.length > 0 && (column.index * 3 + step) % 11 === 0) {
-      return liveGlyphs[(column.liveOffset + step) % liveGlyphs.length];
-    }
     return MATRIX_GLYPHS[(column.glyphOffset + step * 7) % MATRIX_GLYPHS.length];
   }
 
@@ -172,24 +284,54 @@
     context.shadowBlur = bright ? 9 : 4;
   }
 
-  function drawTelemetryGhosts() {
-    if (liveSequences.length === 0) {
+  function drawTelemetryPacket(packet, y, {staticFrame = false} = {}) {
+    const sequence = liveSequences[packet.sequenceIndex];
+    if (!sequence) {
       return;
     }
-    const smallFont = Math.max(9, Math.round(fontSize * 0.55));
-    context.font = `600 ${smallFont}px ui-monospace, monospace`;
-    context.shadowBlur = 4;
-    context.shadowColor = "rgba(114, 245, 143, 0.4)";
-    context.fillStyle = "rgba(114, 245, 143, 0.2)";
+    const text = `> ${sequence}`;
+    const trailCopies = Math.max(1, Math.round(rainSettings.trail / 18));
+    const trailSpacing = packet.fontSize * 1.15;
+    context.save();
+    context.font = `700 ${packet.fontSize}px ui-monospace, monospace`;
     context.textAlign = "left";
-    context.textBaseline = "alphabetic";
-    liveSequences.slice(0, 6).forEach((sequence, index) => {
-      const x = index % 2 === 0 ? fontSize : Math.max(fontSize, cssWidth * 0.57);
-      const y = fontSize * (2.2 + index * 2.6);
-      context.fillText(sequence, x, y, Math.max(fontSize * 8, cssWidth * 0.38));
-    });
-    context.textAlign = "center";
     context.textBaseline = "middle";
+    context.shadowColor = "rgba(114, 245, 143, 0.65)";
+    context.shadowBlur = staticFrame ? 4 : 7;
+    for (let copy = trailCopies; copy >= 1; copy -= 1) {
+      const closeness = (trailCopies - copy + 1) / trailCopies;
+      const alpha = 0.015 + closeness * (staticFrame ? 0.07 : 0.1);
+      context.fillStyle = `rgba(67, 217, 104, ${alpha})`;
+      context.fillText(text, packet.x, y - copy * trailSpacing, packet.maxWidth);
+    }
+    context.fillStyle = staticFrame
+      ? "rgba(180, 255, 196, 0.58)"
+      : "rgba(214, 255, 222, 0.9)";
+    context.shadowBlur = staticFrame ? 6 : 10;
+    context.fillText(text, packet.x, y, packet.maxWidth);
+    context.restore();
+  }
+
+  function drawStaticTelemetryPackets() {
+    telemetryPackets.forEach((packet, index) => {
+      const y = cssHeight * (index + 1) / (telemetryPackets.length + 1);
+      drawTelemetryPacket(packet, y, {staticFrame: true});
+    });
+  }
+
+  function drawAnimatedTelemetryPackets(elapsedMs) {
+    const speedScale = rainSettings.speed / 100;
+    const trailCopies = Math.max(1, Math.round(rainSettings.trail / 18));
+    telemetryPackets.forEach((packet) => {
+      packet.y += packet.speed * speedScale * elapsedMs / 1000;
+      if (packet.y > cssHeight + packet.fontSize) {
+        packet.y = -packet.fontSize * (trailCopies + 1);
+        packet.sequenceIndex = (
+          packet.sequenceIndex + telemetryPackets.length
+        ) % liveSequences.length;
+      }
+      drawTelemetryPacket(packet, packet.y);
+    });
   }
 
   function drawStaticFrame() {
@@ -212,17 +354,18 @@
         );
       }
     });
-    drawTelemetryGhosts();
+    drawStaticTelemetryPackets();
     context.shadowBlur = 0;
   }
 
   function drawAnimatedFrame(elapsedMs) {
     context.shadowBlur = 0;
-    context.fillStyle = "rgba(2, 7, 5, 0.12)";
+    const fadeAlpha = Math.max(0.035, 0.222 - rainSettings.trail * 0.00185);
+    context.fillStyle = `rgba(2, 7, 5, ${fadeAlpha})`;
     context.fillRect(0, 0, cssWidth, cssHeight);
 
     columns.forEach((column) => {
-      column.y += column.speed * elapsedMs / 1000;
+      column.y += column.speed * (rainSettings.speed / 100) * elapsedMs / 1000;
       if (column.y > cssHeight + fontSize) {
         column.y = -fontSize * (1 + (column.index % 9));
         column.step += 1;
@@ -231,11 +374,97 @@
       prepareText(0.82, (column.index + step) % 9 === 0);
       context.fillText(matrixGlyph(column, step), column.x, column.y);
     });
+    drawAnimatedTelemetryPackets(elapsedMs);
     context.shadowBlur = 0;
   }
 
   function isMatrixActive() {
     return root.dataset.theme === "matrix";
+  }
+
+  function synchronizeRainControlVisibility() {
+    const controls = document.getElementById("matrix-rain-controls");
+    if (controls instanceof HTMLElement) {
+      controls.hidden = !isMatrixActive();
+    }
+  }
+
+  function synchronizeRainControls() {
+    Object.entries(RAIN_SETTING_DEFINITIONS).forEach(([name, definition]) => {
+      const control = document.getElementById(definition.controlId);
+      const output = document.getElementById(definition.outputId);
+      if (control instanceof HTMLInputElement) {
+        control.value = String(rainSettings[name]);
+        control.setAttribute("aria-valuetext", `${rainSettings[name]}%`);
+      }
+      if (output instanceof HTMLOutputElement) {
+        output.value = `${rainSettings[name]}%`;
+      }
+    });
+    synchronizeRainControlVisibility();
+  }
+
+  function applyRainSettings({rebuild = false} = {}) {
+    const opacity = rainSettings.transparency / 100;
+    root.style.setProperty("--matrix-rain-opacity", opacity.toFixed(2));
+    root.style.setProperty(
+      "--matrix-rain-reduced-opacity",
+      Math.max(0.12, opacity * 2 / 3).toFixed(2),
+    );
+    canvas.dataset.matrixRainSpeed = String(rainSettings.speed);
+    canvas.dataset.matrixRainDensity = String(rainSettings.density);
+    canvas.dataset.matrixRainTransparency = String(rainSettings.transparency);
+    canvas.dataset.matrixRainTrail = String(rainSettings.trail);
+    synchronizeRainControls();
+
+    if (rebuild && cssWidth > 0 && cssHeight > 0) {
+      columns = createColumns();
+      telemetryPackets = createTelemetryPackets();
+    }
+    if (isMatrixActive() && reducedMotion.matches && !forcedColors.matches) {
+      configureSurface();
+      drawStaticFrame();
+    }
+  }
+
+  function selectRainSetting(name, value, {persist = true} = {}) {
+    const definition = RAIN_SETTING_DEFINITIONS[name];
+    if (!definition) {
+      return;
+    }
+    rainSettings = {
+      ...rainSettings,
+      [name]: normalizedRainSetting(value, definition),
+    };
+    if (persist) {
+      writeStoredRainSetting(name, rainSettings[name]);
+    }
+    applyRainSettings({rebuild: name === "density"});
+  }
+
+  function resetRainSettings() {
+    Object.keys(RAIN_SETTING_DEFINITIONS).forEach(removeStoredRainSetting);
+    rainSettings = Object.fromEntries(Object.entries(RAIN_SETTING_DEFINITIONS).map(
+      ([name, definition]) => [name, definition.defaultValue],
+    ));
+    applyRainSettings({rebuild: true});
+  }
+
+  function bindRainControls() {
+    Object.entries(RAIN_SETTING_DEFINITIONS).forEach(([name, definition]) => {
+      const control = document.getElementById(definition.controlId);
+      if (!(control instanceof HTMLInputElement)) {
+        return;
+      }
+      control.addEventListener("input", () => {
+        selectRainSetting(name, control.value);
+      });
+    });
+    document.getElementById("matrix-rain-reset")?.addEventListener(
+      "click",
+      resetRainSettings,
+    );
+    applyRainSettings();
   }
 
   function stopAnimation() {
@@ -278,6 +507,7 @@
 
   function syncMode() {
     stopAnimation();
+    synchronizeRainControlVisibility();
 
     if (!isMatrixActive() || forcedColors.matches) {
       canvas.dataset.matrixRainMode = "off";
@@ -320,13 +550,14 @@
   }
 
   canvas.dataset.matrixRain = "ready";
-  refreshLiveGlyphs();
+  bindRainControls();
+  refreshLiveSequences();
 
   if (typeof MutationObserver === "function") {
     const themeObserver = new MutationObserver(syncMode);
     themeObserver.observe(root, {attributes: true, attributeFilter: ["data-theme"]});
 
-    const liveObserver = new MutationObserver(refreshLiveGlyphs);
+    const liveObserver = new MutationObserver(refreshLiveSequences);
     LIVE_FIELD_IDS.forEach((identifier) => {
       const field = document.getElementById(identifier);
       if (field) {

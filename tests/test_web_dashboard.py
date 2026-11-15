@@ -725,6 +725,15 @@ def test_raw_dashboard_source_has_truthful_static_file_preview() -> None:
 
     assert 'src="dashboard-file-preview.js"' in dashboard
     assert 'class="matrix-rain-canvas" aria-hidden="true"' in dashboard
+    for control in (
+        "matrix-rain-speed",
+        "matrix-rain-density",
+        "matrix-rain-transparency",
+        "matrix-rain-trail",
+        "matrix-rain-reset",
+    ):
+        assert f'id="{control}"' in dashboard
+    assert "Live scanner values descend as brighter" in dashboard
     assert 'data-state="loading"' in dashboard
     assert 'aria-atomic="true"' in dashboard
     assert 'globalThis.location?.protocol !== "file:"' in preview
@@ -937,7 +946,8 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
         "--matrix-glass-panel: rgb(2 10 5 / 0.42);",
         "--matrix-glass-control: rgb(6 17 11 / 0.76);",
         "--matrix-glass-emphasis: rgb(10 26 16 / 0.82);",
-        "opacity: 0.72;",
+        "opacity: var(--matrix-rain-opacity, 0.72);",
+        "opacity: var(--matrix-rain-reduced-opacity, 0.48);",
     ):
         assert matrix_glass_contract in theme_text["matrix"]
     assert (
@@ -992,10 +1002,18 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
         'normalize("NFKD")',
         'dataset.matrixRain = "ready"',
         "FRAME_INTERVAL_MS = 1000 / 24",
-        "MAX_COLUMNS = 144",
+        "MAX_COLUMNS = 192",
         "MAX_DEVICE_PIXEL_RATIO = 2",
         "STATIC_CELL_BUDGET = 4200",
         ".slice(0, 48)",
+        'RAIN_SETTING_STORAGE_PREFIX = "sdsctl.web.matrix-rain."',
+        "function drawTelemetryPacket(packet, y",
+        'const text = `> ${sequence}`',
+        'dataset.matrixRainSpeed = String(rainSettings.speed)',
+        'dataset.matrixRainDensity = String(rainSettings.density)',
+        'dataset.matrixRainTransparency = String(rainSettings.transparency)',
+        'dataset.matrixRainTrail = String(rainSettings.trail)',
+        'root.style.setProperty("--matrix-rain-opacity"',
     ):
         assert contract in matrix_rain.text
     for identifier in (
@@ -2332,6 +2350,7 @@ def test_universal_display_and_session_drawer_contract() -> None:
     assert 'dialog.id = "native-menu"' in script
     assert 'document.createComment("native drawer control position")' in script
     assert "appearance.append(node)" in script
+    assert 'element("matrix-rain-controls")' in script
     assert 'const presentation = make("section", null, "native-menu-presentation")' in script
     assert 'document.createComment("native drawer presentation position")' in script
     assert "presentation.append(mimicToolbar)" in script

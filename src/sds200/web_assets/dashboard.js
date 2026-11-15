@@ -359,6 +359,7 @@ function initializeNativeMenu(logout, logoutButton) {
     element("system-palette-picker"),
     element("lcars-v2-appearance-pickers"),
     element("theme-typography-pickers"),
+    element("matrix-rain-controls"),
   ]) {
     if (!(node instanceof HTMLElement)) throw new Error("Native appearance control is unavailable.");
     node.before(document.createComment("native drawer control position"));

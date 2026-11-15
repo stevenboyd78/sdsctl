@@ -93,6 +93,20 @@
     width: 100% !important;
     min-width: 0 !important;
   }
+  #native-menu .matrix-rain-controls:not([hidden]),
+  #native-menu .matrix-rain-settings,
+  #native-menu .matrix-rain-setting {
+    display: grid !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  #native-menu .matrix-rain-controls:not([hidden]) { gap: 0.65rem !important; }
+  #native-menu .matrix-rain-setting {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+  }
+  #native-menu .matrix-rain-setting input[type="range"] {
+    grid-column: 1 / -1 !important;
+  }
   #native-menu .mimic-toolbar:not([hidden]) {
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) !important;

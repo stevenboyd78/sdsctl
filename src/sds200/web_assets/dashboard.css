@@ -146,6 +146,44 @@ select optgroup {
   overflow-wrap: anywhere;
   text-align: left;
 }
+.matrix-rain-controls {
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+.matrix-rain-controls[hidden] { display: none !important; }
+.matrix-rain-controls h4,
+.matrix-rain-controls p { margin: 0; }
+.matrix-rain-controls h4 {
+  color: var(--text);
+  font-size: 0.95rem;
+}
+.matrix-rain-description {
+  color: var(--muted);
+  line-height: 1.4;
+}
+.matrix-rain-settings,
+.matrix-rain-setting {
+  display: grid;
+  gap: 0.35rem;
+}
+.matrix-rain-settings { gap: 0.65rem; }
+.matrix-rain-setting {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.matrix-rain-setting label { color: var(--text); }
+.matrix-rain-setting output {
+  min-width: 3.5rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.matrix-rain-setting input[type="range"] {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin: 0;
+  accent-color: var(--accent);
+}
 .native-access-label { color: var(--muted); }
 .native-view-title {
   color: var(--text);

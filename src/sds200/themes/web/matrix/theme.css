@@ -63,7 +63,7 @@
 
 :root[data-theme="matrix"] .matrix-rain-canvas {
   display: block;
-  opacity: 0.72;
+  opacity: var(--matrix-rain-opacity, 0.72);
   filter: saturate(1.16) contrast(1.1);
 }
 
@@ -338,7 +338,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   :root[data-theme="matrix"] .matrix-rain-canvas {
-    opacity: 0.48;
+    opacity: var(--matrix-rain-reduced-opacity, 0.48);
   }
 
   :root[data-theme="matrix"] *,
