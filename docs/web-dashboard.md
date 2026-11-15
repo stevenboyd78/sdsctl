@@ -390,6 +390,10 @@ message rather than compressing either one.
 - **Matrix-inspired** turns the shared dashboard into a cinematic terminal
   workstation with varied terminal panes, technical grids, scan illumination,
   data-field staging, perspective depth, and a procedural glyph-rain backdrop.
+  Transparent structural layers and dark terminal-glass content panels keep
+  that rain visible through the working dashboard instead of restricting it to
+  the page margins, while controls, live values, and warning states remain
+  solid and readable.
   The rain periodically incorporates sanitized characters from the current
   System, Department, Channel, Site, Signal, and RSSI values without exposing
   them to assistive technology. It is frame-rate and density bounded, pauses
@@ -690,7 +694,8 @@ not install fonts, change production font preferences, or replace the gallery.
 
 The gallery captures the deterministic reduced-motion form of the rain so the
 checked-in references remain byte-repeatable. In an ordinary browser session,
-the same canvas animates at a bounded rate behind the readable terminal panes.
+the same canvas animates at a bounded rate through the transparent workspace
+structure and behind the darker, readable terminal-glass panes.
 
 ![Matrix-inspired theme at 1920x1080](assets/web-dashboard/theme-matrix-1920x1080.png)
 

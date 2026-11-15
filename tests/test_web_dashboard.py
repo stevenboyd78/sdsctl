@@ -932,6 +932,19 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert "color: var(--background);" in theme_text["system"]
     assert "--lcars-v2-rail:" in theme_text["lcars"]
     assert "--term-accent:" in theme_text["matrix"]
+    for matrix_glass_contract in (
+        "--matrix-glass-underlay: rgb(2 10 5 / 0.26);",
+        "--matrix-glass-panel: rgb(2 10 5 / 0.42);",
+        "--matrix-glass-control: rgb(6 17 11 / 0.76);",
+        "--matrix-glass-emphasis: rgb(10 26 16 / 0.82);",
+        "opacity: 0.72;",
+    ):
+        assert matrix_glass_contract in theme_text["matrix"]
+    assert (
+        ':root[data-theme="matrix"] .workspace-deck {'
+        in theme_text["matrix"]
+    )
+    assert "background: transparent;" in theme_text["matrix"]
     assert "--dispatch-accent:" in theme_text["first-responder"]
     assert "--radio-accent:" in theme_text["amateur-radio"]
     assert "--terminal-green:" in theme_text["pip-boy-inspired"]
