@@ -16,6 +16,7 @@
   <script src="assets/theme-bootstrap.js"></script>
   <script src="assets/lcars-v2.js"></script>
   <script src="assets/theme-typography.js"></script>
+  <script src="assets/matrix-rain.js" defer></script>
   <script src="assets/mimic-sds.js" defer></script>
   <script src="assets/dashboard.js" defer></script>
 </head>
@@ -23,6 +24,7 @@
   <a class="skip-link" href="#main-content">Skip to scanner status</a>
 
   <div class="theme-stage" aria-hidden="true">
+    <canvas class="matrix-rain-canvas" aria-hidden="true"></canvas>
     <span class="theme-stage-a"></span>
     <span class="theme-stage-b"></span>
     <span class="theme-stage-c"></span>
@@ -656,6 +658,72 @@
             <option value="system">System fonts</option>
           </select>
         </div>
+      </div>
+
+      <div id="matrix-rain-controls" class="matrix-rain-controls" hidden>
+        <h4>Matrix rain</h4>
+        <p id="matrix-rain-description" class="matrix-rain-description">
+          Saved on this display. Live scanner values descend as brighter,
+          intact telemetry packets.
+        </p>
+        <div class="matrix-rain-settings">
+          <div class="matrix-rain-setting">
+            <label for="matrix-rain-speed">Fall speed</label>
+            <output id="matrix-rain-speed-value" for="matrix-rain-speed">100%</output>
+            <input
+              id="matrix-rain-speed"
+              type="range"
+              min="25"
+              max="200"
+              step="5"
+              value="100"
+              aria-describedby="matrix-rain-description"
+            >
+          </div>
+          <div class="matrix-rain-setting">
+            <label for="matrix-rain-density">Density</label>
+            <output id="matrix-rain-density-value" for="matrix-rain-density">100%</output>
+            <input
+              id="matrix-rain-density"
+              type="range"
+              min="25"
+              max="200"
+              step="5"
+              value="100"
+              aria-describedby="matrix-rain-description"
+            >
+          </div>
+          <div class="matrix-rain-setting">
+            <label for="matrix-rain-transparency">Rain visibility</label>
+            <output
+              id="matrix-rain-transparency-value"
+              for="matrix-rain-transparency"
+            >72%</output>
+            <input
+              id="matrix-rain-transparency"
+              type="range"
+              min="20"
+              max="100"
+              step="1"
+              value="72"
+              aria-describedby="matrix-rain-description"
+            >
+          </div>
+          <div class="matrix-rain-setting">
+            <label for="matrix-rain-trail">Trail length</label>
+            <output id="matrix-rain-trail-value" for="matrix-rain-trail">60%</output>
+            <input
+              id="matrix-rain-trail"
+              type="range"
+              min="10"
+              max="100"
+              step="5"
+              value="60"
+              aria-describedby="matrix-rain-description"
+            >
+          </div>
+        </div>
+        <button id="matrix-rain-reset" type="button">Reset Matrix rain</button>
       </div>
 
       <p

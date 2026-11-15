@@ -3786,6 +3786,7 @@ async function auditUniversalDrawer(cdp, context) {
       '#system-palette-picker',
       '#lcars-v2-appearance-pickers',
       '#theme-typography-pickers',
+      '#matrix-rain-controls',
     ];
     if (!(menu instanceof HTMLDialogElement) || !(trigger instanceof HTMLButtonElement)) {
       failures.push('drawer and trigger must exist');
@@ -3816,7 +3817,9 @@ async function auditUniversalDrawer(cdp, context) {
     }
     const unique = ['native-menu', 'native-menu-toggle', 'dashboard-page-identity',
       'dashboard-status-details', 'theme-select', 'system-palette-select',
-      'theme-font-select', 'theme-typography-select'];
+      'theme-font-select', 'theme-typography-select', 'matrix-rain-speed',
+      'matrix-rain-density', 'matrix-rain-transparency', 'matrix-rain-trail',
+      'matrix-rain-reset'];
     if (!unique.every(id => document.querySelectorAll('#' + id).length === 1)) {
       failures.push('drawer controls and moved metadata must remain unique');
     }
@@ -3870,11 +3873,134 @@ async function auditUniversalDrawer(cdp, context) {
   }
 }
 
+async function auditMatrixRainControls(cdp, baseUrl, timeoutMs) {
+  await clickElement(cdp, '#native-menu-toggle');
+  const configured = await evaluate(cdp, `(() => {
+    const theme = document.querySelector('#theme-select');
+    theme.value = 'matrix';
+    theme.dispatchEvent(new Event('change', {bubbles: true}));
+    const values = {
+      'matrix-rain-speed': 135,
+      'matrix-rain-density': 75,
+      'matrix-rain-transparency': 84,
+      'matrix-rain-trail': 40,
+    };
+    for (const [id, value] of Object.entries(values)) {
+      const input = document.getElementById(id);
+      input.value = String(value);
+      input.dispatchEvent(new Event('input', {bubbles: true}));
+      input.dispatchEvent(new Event('change', {bubbles: true}));
+    }
+    const canvas = document.querySelector('.matrix-rain-canvas');
+    const controls = document.querySelector('#matrix-rain-controls');
+    return {
+      visible: controls.hidden === false && controls.getClientRects().length === 1,
+      values: Object.fromEntries(Object.keys(values).map(id => [id, document.getElementById(id).value])),
+      outputs: Object.fromEntries(Object.keys(values).map(id => [
+        id, document.querySelector('output[for="' + id + '"]')?.value,
+      ])),
+      datasets: {
+        speed: canvas.dataset.matrixRainSpeed,
+        density: canvas.dataset.matrixRainDensity,
+        transparency: canvas.dataset.matrixRainTransparency,
+        trail: canvas.dataset.matrixRainTrail,
+      },
+      stored: Object.fromEntries(['speed', 'density', 'transparency', 'trail'].map(name => [
+        name, localStorage.getItem('sdsctl.web.matrix-rain.' + name),
+      ])),
+    };
+  })()`);
+  const expected = {
+    visible: true,
+    values: {
+      'matrix-rain-speed': '135',
+      'matrix-rain-density': '75',
+      'matrix-rain-transparency': '84',
+      'matrix-rain-trail': '40',
+    },
+    outputs: {
+      'matrix-rain-speed': '135%',
+      'matrix-rain-density': '75%',
+      'matrix-rain-transparency': '84%',
+      'matrix-rain-trail': '40%',
+    },
+    datasets: {speed: '135', density: '75', transparency: '84', trail: '40'},
+    stored: {speed: '135', density: '75', transparency: '84', trail: '40'},
+  };
+  if (JSON.stringify(configured) !== JSON.stringify(expected)) {
+    throw new Error(`Matrix rain controls did not apply and persist: ${JSON.stringify(configured)}`);
+  }
+
+  const baselinePackets = await evaluate(cdp, `(() => {
+    const canvas = document.querySelector('.matrix-rain-canvas');
+    const field = document.querySelector('#radio-channel');
+    const baseline = Number(canvas.dataset.matrixRainPacketCount);
+    field.textContent = 'Audit telemetry update';
+    return baseline;
+  })()`);
+  await frames(cdp);
+  const changedPackets = await evaluate(cdp,
+    `Number(document.querySelector('.matrix-rain-canvas').dataset.matrixRainPacketCount)`);
+  if (!Number.isFinite(baselinePackets) || changedPackets !== baselinePackets + 1) {
+    throw new Error(
+      `Matrix telemetry update did not preserve the old packet and add one new packet: `
+      + `${baselinePackets} -> ${changedPackets}`,
+    );
+  }
+  await evaluate(cdp, `(() => {
+    const field = document.querySelector('#radio-channel');
+    field.textContent = field.textContent;
+  })()`);
+  await frames(cdp);
+  const repeatedPackets = await evaluate(cdp,
+    `Number(document.querySelector('.matrix-rain-canvas').dataset.matrixRainPacketCount)`);
+  if (repeatedPackets !== changedPackets) {
+    throw new Error(
+      `Identical Matrix telemetry redraw spawned a duplicate packet: `
+      + `${changedPackets} -> ${repeatedPackets}`,
+    );
+  }
+
+  await navigate(cdp, `${baseUrl}/`, timeoutMs);
+  const restored = await evaluate(cdp, `(() => {
+    const canvas = document.querySelector('.matrix-rain-canvas');
+    return {
+      theme: document.documentElement.dataset.theme,
+      values: ['speed', 'density', 'transparency', 'trail'].map(name =>
+        document.getElementById('matrix-rain-' + name).value),
+      datasets: ['Speed', 'Density', 'Transparency', 'Trail'].map(name =>
+        canvas.dataset['matrixRain' + name]),
+      opacity: getComputedStyle(document.documentElement).getPropertyValue('--matrix-rain-opacity').trim(),
+    };
+  })()`);
+  if (restored.theme !== 'matrix' ||
+      JSON.stringify(restored.values) !== JSON.stringify(['135', '75', '84', '40']) ||
+      JSON.stringify(restored.datasets) !== JSON.stringify(['135', '75', '84', '40']) ||
+      restored.opacity !== '0.84') {
+    throw new Error(`Matrix rain settings did not restore: ${JSON.stringify(restored)}`);
+  }
+
+  await clickElement(cdp, '#native-menu-toggle');
+  await clickElement(cdp, '#matrix-rain-reset');
+  const reset = await evaluate(cdp, `(() => ({
+    values: ['speed', 'density', 'transparency', 'trail'].map(name =>
+      document.getElementById('matrix-rain-' + name).value),
+    stored: ['speed', 'density', 'transparency', 'trail'].map(name =>
+      localStorage.getItem('sdsctl.web.matrix-rain.' + name)),
+  }))()`);
+  if (JSON.stringify(reset.values) !== JSON.stringify(['100', '100', '72', '60']) ||
+      reset.stored.some(value => value !== null)) {
+    throw new Error(`Matrix rain settings did not reset: ${JSON.stringify(reset)}`);
+  }
+  await pressKey(cdp, 'Escape', 'Escape', 27);
+}
+
 export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
   const collector = new FailureCollector();
   await setViewport(cdp, VIEWPORTS[0]);
   await navigate(cdp, `${baseUrl}/`, timeoutMs);
   await auditUniversalDrawer(cdp, "standalone dashboard");
+  await auditMatrixRainControls(cdp, baseUrl, timeoutMs);
 
   let caseCount = 0;
   let hoverContrastCases = 0;

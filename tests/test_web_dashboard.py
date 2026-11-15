@@ -705,6 +705,10 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
     assert response.text.index('href="assets/dashboard-viewport.css"') < (
         response.text.index('src="assets/theme-bootstrap.js"')
     )
+    assert 'src="assets/matrix-rain.js"' in response.text
+    assert response.text.index('src="assets/theme-bootstrap.js"') < (
+        response.text.index('src="assets/matrix-rain.js"')
+    ) < response.text.index('src="assets/dashboard.js"')
     assert 'src="assets/dashboard.js"' in response.text
     assert 'src="dashboard-file-preview.js"' not in response.text
     assert "<style" not in response.text
@@ -720,6 +724,16 @@ def test_raw_dashboard_source_has_truthful_static_file_preview() -> None:
     )
 
     assert 'src="dashboard-file-preview.js"' in dashboard
+    assert 'class="matrix-rain-canvas" aria-hidden="true"' in dashboard
+    for control in (
+        "matrix-rain-speed",
+        "matrix-rain-density",
+        "matrix-rain-transparency",
+        "matrix-rain-trail",
+        "matrix-rain-reset",
+    ):
+        assert f'id="{control}"' in dashboard
+    assert "Live scanner values descend as brighter" in dashboard
     assert 'data-state="loading"' in dashboard
     assert 'aria-atomic="true"' in dashboard
     assert 'globalThis.location?.protocol !== "file:"' in preview
@@ -747,6 +761,7 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
             for theme in BUILT_IN_WEB_THEME_IDS
         }
         theme_bootstrap = client.get("/assets/theme-bootstrap.js")
+        matrix_rain = client.get("/assets/matrix-rain.js")
         script = client.get("/assets/dashboard.js")
         audio_worklet = client.get("/assets/audio-worklet.js")
         favicon = client.get("/assets/favicon.svg")
@@ -926,6 +941,20 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert "color: var(--background);" in theme_text["system"]
     assert "--lcars-v2-rail:" in theme_text["lcars"]
     assert "--term-accent:" in theme_text["matrix"]
+    for matrix_glass_contract in (
+        "--matrix-glass-underlay: rgb(2 10 5 / 0.26);",
+        "--matrix-glass-panel: rgb(2 10 5 / 0.42);",
+        "--matrix-glass-control: rgb(6 17 11 / 0.76);",
+        "--matrix-glass-emphasis: rgb(10 26 16 / 0.82);",
+        "opacity: var(--matrix-rain-opacity, 0.72);",
+        "opacity: var(--matrix-rain-reduced-opacity, 0.48);",
+    ):
+        assert matrix_glass_contract in theme_text["matrix"]
+    assert (
+        ':root[data-theme="matrix"] .workspace-deck {'
+        in theme_text["matrix"]
+    )
+    assert "background: transparent;" in theme_text["matrix"]
     assert "--dispatch-accent:" in theme_text["first-responder"]
     assert "--radio-accent:" in theme_text["amateur-radio"]
     assert "--terminal-green:" in theme_text["pip-boy-inspired"]
@@ -956,6 +985,56 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert "document.documentElement.dataset.theme" in theme_bootstrap.text
     assert "innerHTML" not in theme_bootstrap.text
     assert "__SDSCTL_WEB_THEME_MANIFESTS__" not in theme_bootstrap.text
+
+    assert matrix_rain.status_code == 200
+    assert matrix_rain.headers["content-type"].startswith(
+        "application/javascript"
+    )
+    assert matrix_rain.headers["cache-control"] == "no-store"
+    for contract in (
+        "requestAnimationFrame",
+        "cancelAnimationFrame",
+        "(prefers-reduced-motion: reduce)",
+        "(forced-colors: active)",
+        "document.hidden",
+        "MutationObserver",
+        "ResizeObserver",
+        'normalize("NFKD")',
+        'dataset.matrixRain = "ready"',
+        "FRAME_INTERVAL_MS = 1000 / 24",
+        "MAX_COLUMNS = 192",
+        "MAX_TELEMETRY_PACKETS = 32",
+        "MAX_DEVICE_PIXEL_RATIO = 2",
+        "STATIC_CELL_BUDGET = 4200",
+        ".slice(0, 48)",
+        'RAIN_SETTING_STORAGE_PREFIX = "sdsctl.web.matrix-rain."',
+        "function drawTelemetryPacket(packet, y",
+        'const text = `> ${sequence}`',
+        'dataset.matrixRainSpeed = String(rainSettings.speed)',
+        'dataset.matrixRainDensity = String(rainSettings.density)',
+        'dataset.matrixRainTransparency = String(rainSettings.transparency)',
+        'dataset.matrixRainTrail = String(rainSettings.trail)',
+        'dataset.matrixRainPacketCount = String(telemetryPackets.length)',
+        "sequence !== liveSequences[index]",
+        "telemetryPackets = survivors",
+        'root.style.setProperty("--matrix-rain-opacity"',
+    ):
+        assert contract in matrix_rain.text
+    assert "packet.sequenceIndex" not in matrix_rain.text
+    assert "% liveSequences.length" not in matrix_rain.text
+    for identifier in (
+        "radio-system",
+        "radio-department",
+        "radio-channel",
+        "radio-site",
+        "radio-signal",
+        "radio-rssi",
+    ):
+        assert identifier in matrix_rain.text
+    assert "innerHTML" not in matrix_rain.text
+    assert ".matrix-rain-canvas" in stylesheet_source.text
+    assert '.theme-stage' in theme_text["matrix"]
+    assert '.matrix-rain-canvas' in theme_text["matrix"]
 
     assert script.status_code == 200
     assert script.headers["content-type"].startswith("application/javascript")
@@ -2277,6 +2356,7 @@ def test_universal_display_and_session_drawer_contract() -> None:
     assert 'dialog.id = "native-menu"' in script
     assert 'document.createComment("native drawer control position")' in script
     assert "appearance.append(node)" in script
+    assert 'element("matrix-rain-controls")' in script
     assert 'const presentation = make("section", null, "native-menu-presentation")' in script
     assert 'document.createComment("native drawer presentation position")' in script
     assert "presentation.append(mimicToolbar)" in script

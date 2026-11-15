@@ -82,6 +82,10 @@ def synthetic_guardian_claim(s, ready):
 @pytest.fixture
 def ready_case(launch_case, monkeypatch):
     s = launch_case
+    # This suite qualifies the phase after publication; the publisher's exact
+    # two-second refusal boundary has dedicated deterministic tests.  Keep this
+    # real-I/O setup bounded while tolerating a briefly descheduled CI runner.
+    monkeypatch.setattr(launches.m, "MAX_SECONDS", 10.0)
     s.prelaunch = s.publish()
     # A second passive reader must not provide another ready-acquisition slot.
     s.prelaunch_copy = m.inputs.NativeLaunchQualification(
