@@ -115,6 +115,33 @@ class FiniteRecordingSchedule:
             require(not final or status.ended)
             self.acquisition_status = status
 
+    def _arm_acquisition(self, cancel: Event) -> None:
+        acquisition = self.acquisition
+        require(acquisition is not None)
+        # The acquisition owner deliberately preserves an explicitly retryable
+        # state when its nonblocking runtime-identity read encounters transient
+        # lock contention. Keep retries inside the original start/window budget;
+        # terminal preflight failures remain consumed and are never retried.
+        deadline = min(
+            self._plan.start_by,
+            self._plan.stop_at - acquisition._policy.window_seconds,
+        )
+        while True:
+            now = self.owner._now()
+            require(not cancel.is_set() and now < deadline)
+            if acquisition.arm():
+                return
+            status = acquisition.status()
+            require(
+                not status.armed
+                and not status.ended
+                and status.reason is None
+                and status.read_attempts == 0
+            )
+            now = self.owner._now()
+            require(not cancel.is_set() and now < deadline)
+            cancel.wait(min(POLL_SECONDS, deadline - now))
+
     def run(self, cancel: Event) -> Result:
         require(self._lock.acquire(blocking=False))
         consumed = False
@@ -142,7 +169,7 @@ class FiniteRecordingSchedule:
                 require(
                     self._plan.stop_at - self.owner._now() > self.acquisition._policy.window_seconds
                 )
-                require(self.acquisition.arm())
+                self._arm_acquisition(cancel)
             previous = None
             count = 0
             next_sample = self.owner._now()

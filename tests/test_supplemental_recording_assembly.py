@@ -326,6 +326,65 @@ def test_real_native_process_recording_and_explicit_demand(rig, demand):
     refusal(trial.request_start)
 
 
+def test_transient_identity_lock_contention_retries_within_original_deadline(
+    rig, monkeypatch
+):
+    trial = rig.build()
+    original_arm = rig.acquisition.arm
+    calls = 0
+    injected = False
+
+    def transient_arm():
+        nonlocal calls, injected
+        calls += 1
+        if current_thread().name == "finite-native-recording" and not injected:
+            injected = True
+            return False
+        return original_arm()
+
+    monkeypatch.setattr(rig.acquisition, "arm", transient_arm)
+
+    def operator(finished):
+        wait_for(lambda: trial.ready)
+        trial.request_start()
+        wait_for_armed(rig, trial)
+        while not finished.wait(0.02):
+            if rig.manager.snapshot().active:
+                rig.runtime.audio.stream.transport.feed(AudioChunk(b"\x80" * 160))
+
+    result = run_observed(rig, trial, operator)
+    assert injected and calls >= 2
+    assert result.artifact.samples > 0
+    assert trial.cleanup_complete and not trial.worker_error
+    assert trial.schedule.acquisition_status.reason == "window_expired"
+    assert not rig.runtime.running and not rig.manager.snapshot().active
+
+
+def test_transient_arm_retry_remains_cancellable(rig, monkeypatch):
+    trial = rig.build()
+    attempted = Event()
+
+    def contended():
+        attempted.set()
+        return False
+
+    monkeypatch.setattr(rig.acquisition, "arm", contended)
+
+    def operator(_finished):
+        wait_for(lambda: trial.ready)
+        trial.request_start()
+        assert attempted.wait(2)
+        trial.cancel()
+
+    run_observed(rig, trial, operator, success=False)
+    assert trial.worker_error and trial.cleanup_complete
+    assert trial.schedule.phase == "unconfirmed"
+    status = rig.acquisition.status()
+    assert not status.armed and status.ended
+    assert status.reason == "recording_schedule_ended"
+    assert not rig.runtime.running and not rig.manager.snapshot().active
+
+
 @pytest.mark.parametrize("field", n.UNSUPPORTED)
 def test_other_in_process_mutators_refused_before_native_startup(rig, field):
     setattr(rig.process, field, object())
