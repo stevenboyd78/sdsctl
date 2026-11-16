@@ -97,7 +97,7 @@ def test_browser_audit_help_documents_scope_and_dependencies() -> None:
     assert completed.returncode == 0
     assert completed.stderr == ""
     for contract in (
-        "all 840 built-in",
+        "all 700 built-in",
         "30 exact panoramic-boundary",
         "writes no PNGs",
         "enlarged-text",
@@ -105,7 +105,7 @@ def test_browser_audit_help_documents_scope_and_dependencies() -> None:
         "trusted Tab/Shift+Tab",
         "WCAG AA",
         "adaptive-presentation",
-        "universal Display & session drawer",
+        "universal Menu drawer",
         "operator and display-only authenticated variants",
         "LCARS navigation breakpoint",
         "alternative system-font metrics",
@@ -139,8 +139,8 @@ def test_browser_audit_list_is_the_complete_cartesian_matrix() -> None:
     assert completed.stderr == ""
     lines = completed.stdout.splitlines()
     cases = lines[:-1]
-    assert len(cases) == 840
-    assert lines[-1] == "Matrix cases: 840; screenshots written: 0"
+    assert len(cases) == 700
+    assert lines[-1] == "Matrix cases: 700; screenshots written: 0"
 
     themes = {
         "system",
@@ -183,7 +183,6 @@ def test_browser_audit_list_is_the_complete_cartesian_matrix() -> None:
         "pane=scanner",
         "pane=controls",
         "pane=waterfall",
-        "pane=audio",
         "pane=recordings",
         "pane=diagnostics",
     }
@@ -197,7 +196,7 @@ def test_browser_audit_list_is_the_complete_cartesian_matrix() -> None:
         token for line in cases for token in line.split() if token.startswith("viewport=")
     } == viewports
     assert {token for line in cases for token in line.split() if token.startswith("pane=")} == panes
-    assert len(set(cases)) == 840
+    assert len(set(cases)) == 700
 
 
 def test_browser_audit_covers_both_authenticated_native_drawer_roles() -> None:
@@ -253,7 +252,7 @@ def test_browser_audit_covers_universal_non_native_drawer_contexts() -> None:
     assert "detailsReachable" in universal
     assert "touchSized" in universal
     assert "Accessibility.getFullAXTree" in universal
-    assert "accessible('dialog', 'display & session')" in universal
+    assert "accessible('dialog', 'menu')" in universal
     assert "accessible('combobox', 'theme')" in universal
     assert "did not restore focus after Escape" in universal
 
@@ -289,7 +288,7 @@ def test_browser_audit_persists_each_applicable_appearance_control() -> None:
     assert "document.querySelectorAll('#' + id)" in drawer_source
     assert "for (const appearance of ['light', 'dark', 'forced'])" in open_theme_drawer
     assert "document.querySelector('#native-menu')" in open_theme_drawer
-    assert "Compact Display & session drawer" in open_theme_drawer
+    assert "Compact Menu drawer" in open_theme_drawer
     assert "drawerFailures.length" in open_theme_drawer
 
 

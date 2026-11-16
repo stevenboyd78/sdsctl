@@ -74,7 +74,7 @@ in the versioned release notes; these TUI checks do not qualify browser enrollme
 plan](docs/release-0.33.0.md) includes the Full-HD shell correction, held-field
 styling across every built-in theme, 22 Cinematic choices with six bespoke
 panoramic environments, the 2×2 scanner hierarchy, stateful health
-instrument, and one responsive Display & session drawer.
+instrument, and one responsive Menu drawer.
 
 The drawer reorganizes existing browser-local presentation controls and
 role-aware session actions; it does not expand a role or replace manual

@@ -183,21 +183,24 @@ header identifies an operator session before using audio or controls. A login
 page, session cookie or saved-password prompt does not reduce the requirement
 to protect the dedicated account and physical display.
 
-### Display and session drawer
+### Menu drawer
 
 Every authenticated operator and display-only native dashboard has one
-**Display & session** button beside **Scanner dashboard**. It opens an overlay
-drawer containing the current role/session summary, Theme, the theme-specific
-palette and typography choices, and **Sign out**. The existing appearance
-controls are moved into this drawer rather than copied, so selections and
-browser-local preferences remain stable across resizing and repeated opens.
+**Menu** button beside **Scanner dashboard**. It opens an overlay drawer
+containing the current role/session summary, Theme, the theme-specific palette
+and typography choices, and **Sign out**. Operator sessions also receive the
+existing browser live-audio status and Play/Stop controls there. The existing
+controls are moved into this drawer rather than copied, so selections,
+listeners, stream ownership, and browser-local preferences remain stable
+across resizing and repeated opens. Display-only sessions do not receive
+actionable audio controls.
 
 On compact displays such as an 800×480 Pi screen, the display-only drawer also
 offers Scanner, Waterfall and Diagnostics. Changing a view closes the drawer
 and moves focus to the selected view; changing appearance leaves it open.
 Scroll inside the drawer to reach every selector and **Sign out**. Use
 **Close**, Escape or a click on the backdrop to dismiss it. Keyboard focus
-stays inside while it is open and returns to **Display & session** when the
+stays inside while it is open and returns to **Menu** when the
 drawer closes. The drawer overlays the dashboard without resizing its plots.
 
 Connected/connection-error status and the Display-only label stay in the header.
@@ -207,9 +210,12 @@ Open **Details** for presentation choices, scanner indexes, Waterfall telemetry,
 raw samples and the relative-data disclaimer. Expanded details can scroll within
 the panel. Waterfall values remain relative, not calibrated RF measurements.
 
-On a large display, the ordinary view tabs remain visible while appearance and
-session actions stay in the same drawer. Resizing keeps the same controls and
-selections without duplicating them or adding another data connection. Browser
+On a large display, the ordinary view tabs remain visible while appearance,
+live-audio playback and session actions stay in the same drawer. Live-audio
+source, packet and loss counters are available under Diagnostics; the daemon's
+Audio state remains a separate service-health field. Resizing keeps the same
+controls and selections without duplicating them or adding another data
+connection. Browser
 zoom can make internal drawer scrolling necessary; it should never make controls
 or sign-out unreachable.
 

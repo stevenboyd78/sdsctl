@@ -991,8 +991,8 @@ select optgroup {
 .scanner-controls-panel {
   grid-area: controls;
 }
-.browser-audio-panel {
-  grid-area: audio;
+.browser-audio-diagnostics {
+  grid-area: auto;
 }
 .recording-capture-panel {
   grid-area: capture;
@@ -1861,7 +1861,7 @@ body {
   font-size: clamp(0.68rem, 1.45vmin, 0.86rem);
 }
 
-.browser-audio-panel {
+.browser-audio-diagnostics {
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr);
   align-content: start;
@@ -1869,7 +1869,7 @@ body {
   margin-inline: auto;
 }
 
-.browser-audio-panel .status-list {
+.browser-audio-diagnostics .status-list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0 var(--workspace-gap);
 }
@@ -1982,9 +1982,9 @@ body {
 
 .diagnostics-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--workspace-gap);
-  overflow: hidden;
+  overflow: auto;
 }
 
 .diagnostics-layout:has(.connected-clients-panel) {
@@ -2008,6 +2008,7 @@ body {
 }
 
 @media (max-width: 1100px) {
+  .diagnostics-layout,
   .diagnostics-layout:has(.connected-clients-panel) {
     grid-template-columns: minmax(0, 1fr);
     grid-auto-rows: max-content;

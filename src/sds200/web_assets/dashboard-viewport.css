@@ -75,6 +75,7 @@
     .native-menu-views,
     .native-menu-appearance,
     .native-menu-presentation,
+    .native-menu-audio,
     .native-menu-page,
     .native-menu-status-details,
     .native-menu-session
@@ -129,6 +130,20 @@
   #native-menu .mimic-toolbar select {
     width: 100% !important;
     min-width: 0 !important;
+  }
+  #native-menu .browser-audio-controls:not([hidden]) {
+    display: grid !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  #native-menu .browser-audio-controls .audio-playback-status {
+    margin: 0 !important;
+  }
+  #native-menu .browser-audio-controls .audio-controls {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    width: 100% !important;
   }
   #native-menu #dashboard-page-identity {
     display: grid !important;
@@ -373,8 +388,8 @@
   }
 
   html[data-access-mode="display"] :is(
-    #pane-tab-controls, #pane-tab-audio, #pane-tab-recordings,
-    #pane-controls, #pane-audio, #pane-recordings
+    #pane-tab-controls, #pane-tab-recordings,
+    #pane-controls, #pane-recordings, #audio-playback-controls
   ) {
     display: none !important;
   }
@@ -867,7 +882,7 @@
     min-width: 0 !important;
   }
 
-  .browser-audio-panel {
+  .browser-audio-diagnostics {
     display: grid !important;
     grid-template-rows: auto auto auto minmax(0, 1fr) !important;
     align-content: start !important;
@@ -875,7 +890,7 @@
     margin-inline: auto !important;
   }
 
-  .browser-audio-panel .status-list {
+  .browser-audio-diagnostics .status-list {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 0 clamp(0.35rem, 1.2vmin, 0.9rem) !important;
   }

@@ -15,7 +15,6 @@ WORKSPACE_PANES = (
     "scanner",
     "controls",
     "waterfall",
-    "audio",
     "recordings",
     "diagnostics",
 )
@@ -149,7 +148,6 @@ def test_workspace_groups_existing_controls_without_changing_live_ids() -> None:
             "scanner-current-channel",
             "scanner-next",
         ),
-        "pane-audio": ("audio-play", "audio-stop", "audio-source"),
         "pane-waterfall": (
             "waterfall-spectrum",
             "waterfall-history",
@@ -172,6 +170,13 @@ def test_workspace_groups_existing_controls_without_changing_live_ids() -> None:
             "scanner-endpoint",
             "daemon-state",
             "transition-sequence",
+            "audio-playback-controls",
+            "audio-play",
+            "audio-stop",
+            "audio-source",
+            "audio-packets",
+            "audio-queue-loss",
+            "audio-rtp-loss",
         ),
     }
 
@@ -424,7 +429,7 @@ function add(id, dataset = {}) {
   return node;
 }
 
-const paneNames = ["scanner", "controls", "waterfall", "audio", "recordings", "diagnostics"];
+const paneNames = ["scanner", "controls", "waterfall", "recordings", "diagnostics"];
 const workspaceTabs = paneNames.map((pane) => add(`pane-tab-${pane}`, {
   workspaceTab: pane,
 }));
@@ -528,23 +533,24 @@ globalThis.EventSource = FakeEventSource;
 
     assertions = r"""
 initializeWorkspace();
-assert.equal(activeWorkspacePane, "audio");
-assert.equal(workspaceTabs[3].attributes["aria-selected"], "true");
-assert.equal(workspacePanels[3].hidden, false);
-assert.equal(workspacePanels[0].hidden, true);
-assert.equal(document.documentElement.hidden, false);
-
-const endEvent = workspaceTabs[3].dispatch("keydown", {key: "End"});
-assert.equal(endEvent.defaultPrevented, true);
 assert.equal(activeWorkspacePane, "diagnostics");
-assert.equal(document.activeElement, workspaceTabs[5]);
+assert.equal(workspaceTabs[4].attributes["aria-selected"], "true");
+assert.equal(workspacePanels[4].hidden, false);
+assert.equal(workspacePanels[0].hidden, true);
 assert.equal(storageValues.get("sdsctl.web.pane"), "diagnostics");
 assert.equal(document.documentElement.hidden, false);
-workspaceTabs[5].dispatch("keydown", {key: "ArrowRight"});
+
+const endEvent = workspaceTabs[4].dispatch("keydown", {key: "End"});
+assert.equal(endEvent.defaultPrevented, true);
+assert.equal(activeWorkspacePane, "diagnostics");
+assert.equal(document.activeElement, workspaceTabs[4]);
+assert.equal(storageValues.get("sdsctl.web.pane"), "diagnostics");
+assert.equal(document.documentElement.hidden, false);
+workspaceTabs[4].dispatch("keydown", {key: "ArrowRight"});
 assert.equal(activeWorkspacePane, "scanner");
 workspaceTabs[0].dispatch("keydown", {key: "ArrowLeft"});
 assert.equal(activeWorkspacePane, "diagnostics");
-workspaceTabs[5].dispatch("keydown", {key: "Home"});
+workspaceTabs[4].dispatch("keydown", {key: "Home"});
 assert.equal(activeWorkspacePane, "scanner");
 activateWorkspacePane("not-a-pane");
 assert.equal(activeWorkspacePane, "scanner");
@@ -779,7 +785,7 @@ themeSelect.value = "pip-boy-inspired";
 themeSelect.dispatch("change");
 assert.equal(selectedTheme, "pip-boy-inspired");
 assert.equal(systemPalettePicker.hidden, true);
-assert.equal(activeWorkspacePane, "audio");
+assert.equal(activeWorkspacePane, "diagnostics");
 assert.equal(radioInspectionView, "auto");
 assert.equal(fallbackSelect.value, preservedFallback);
 assert.equal(audioPlaybackActive, true);

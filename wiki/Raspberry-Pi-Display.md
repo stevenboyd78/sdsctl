@@ -199,7 +199,7 @@ target deployment or replace the production TUI installation described above.
 
 Version v0.33.0 retains the same role-bound profiles and manual authentication
 while moving theme, palette, typography, session status, logout, and
-display-only navigation into a responsive Display & session drawer. It also
+display-only navigation into a responsive Menu drawer. It also
 packages the wider Full-HD shell and Cinematic themes. Before upgrading a
 browser kiosk, preserve its profile and trust material; after the exact public
 package is installed, verify drawer focus/close behavior, selector readability,

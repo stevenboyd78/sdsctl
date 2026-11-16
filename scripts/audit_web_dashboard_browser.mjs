@@ -83,7 +83,6 @@ export const PANES = Object.freeze([
   "scanner",
   "controls",
   "waterfall",
-  "audio",
   "recordings",
   "diagnostics",
 ]);
@@ -135,14 +134,14 @@ const HELP = `\
 Usage: node scripts/audit_web_dashboard_browser.mjs [options]
 
 Run the deterministic dashboard and Home Assistant waterfall-card browser audit in one local
-Chrome/Chromium session. The audit writes no PNGs. It covers all 840 built-in
+Chrome/Chromium session. The audit writes no PNGs. It covers all 700 built-in
 theme × reference CSS viewport × workspace pane cases, 30 exact panoramic-boundary
 cases for the six hero environments, all 210 explicit System
 palette responsive cases, plus media-preference, enlarged-text,
 pagination-focus, trusted Tab/Shift+Tab traversal, WCAG AA contrast, complete
 adaptive-presentation, DPR-transition, and prefixed-URL probes. It also covers
 the LCARS navigation breakpoint immediately below, at, and above 44rem,
-the universal Display & session drawer in standalone and Home Assistant Ingress
+the universal Menu drawer in standalone and Home Assistant Ingress
 contexts plus the operator and display-only authenticated variants at every reference
 viewport, including 400x240 reachability, focus, backdrop, expiry, and stopped-retry probes,
 phone recording controls with alternative system-font metrics, and
@@ -164,7 +163,7 @@ Options:
   --waterfall-only    Run only the Home Assistant waterfall-card regression/lifecycle audit
   --waterfall-screenshot-dir PATH
                       Write three sanitized waterfall-card reference PNGs
-  --list              List the 840 matrix cases without opening Chrome
+  --list              List the 700 matrix cases without opening Chrome
   -h, --help          Show this help and exit
 
 The default command requires Node.js 24 or newer, starts the existing fictional-data server from
@@ -2140,7 +2139,7 @@ export function browserAuditLibrary() {
     );
     const selected = tabs.filter((tab) => tab.getAttribute("aria-selected") === "true");
     const visible = panes.filter((pane) => !pane.hidden && rendered(pane));
-    const expectedCount = document.querySelector("#pane-tab-home-assistant") ? 7 : 6;
+    const expectedCount = document.querySelector("#pane-tab-home-assistant") ? 6 : 5;
     if (tabs.length !== expectedCount || panes.length !== expectedCount) {
       failures.push(
         `expected ${expectedCount} tabs and panes; found ${tabs.length} and ${panes.length}`,
@@ -2804,9 +2803,9 @@ export function browserAuditLibrary() {
 
   function switchTheme(theme) {
     const failures = [];
-    const audioTab = document.querySelector("#pane-tab-audio");
-    audioTab?.click();
-    const sentinel = document.querySelector("#audio-play");
+    const diagnosticsTab = document.querySelector("#pane-tab-diagnostics");
+    diagnosticsTab?.click();
+    const sentinel = diagnosticsTab;
     sentinel?.focus({preventScroll: true});
     const select = document.querySelector("#theme-select");
     if (!(select instanceof HTMLSelectElement)) {
@@ -2820,7 +2819,7 @@ export function browserAuditLibrary() {
     if (window.sdsctlTheme?.current() !== theme || select.value !== theme) {
       failures.push(`theme controller and selector disagree for ${theme}`);
     }
-    if (document.documentElement.dataset.workspacePane !== "audio") {
+    if (document.documentElement.dataset.workspacePane !== "diagnostics") {
       failures.push(`theme switch changed the active workspace pane`);
     }
     if (document.activeElement !== sentinel) {
@@ -2838,11 +2837,9 @@ export function browserAuditLibrary() {
   function switchSystemPalette(palette) {
     const failures = [];
     const currentPane = document.documentElement.dataset.workspacePane;
-    const sentinel = Array.from(document.querySelectorAll(
-      `.workspace-pane[data-workspace-pane="${currentPane}"] button:not(:disabled)`,
-    )).find(element => rendered(element) && !disabledOrInert(element) && element.tabIndex >= 0);
+    const sentinel = document.querySelector(`#pane-tab-${currentPane}`);
     if (!(sentinel instanceof HTMLElement)) {
-      return {failures: ["System palette focus probe has no visible enabled pane button"]};
+      return {failures: ["System palette focus probe has no active pane tab"]};
     }
     sentinel.focus({preventScroll: true});
     if (document.activeElement !== sentinel) {
@@ -3351,9 +3348,9 @@ async function auditAccessibility(cdp, collector, context, expectedPane) {
     node.properties?.find((candidate) => candidate.name === propertyName)?.value?.value;
   const failures = [];
   const tabs = exposed.filter((node) => role(node) === "tab");
-  const expectedTabNames = ["scanner", "controls", "waterfall", "audio", "recordings", "diagnostics"];
-  if (tabs.length !== 6) {
-    failures.push(`accessibility tree exposes ${tabs.length} tabs instead of six`);
+  const expectedTabNames = ["scanner", "controls", "waterfall", "recordings", "diagnostics"];
+  if (tabs.length !== 5) {
+    failures.push(`accessibility tree exposes ${tabs.length} tabs instead of five`);
   }
   if (
     JSON.stringify(tabs.map(normalizedName).sort()) !==
@@ -3379,14 +3376,14 @@ async function auditAccessibility(cdp, collector, context, expectedPane) {
     (node) => role(node) === "combobox" && normalizedName(node) === "theme",
   );
   if (themeSelect !== undefined) {
-    failures.push("closed Display & session drawer exposes the Theme selector");
+    failures.push("closed Menu drawer exposes the Theme selector");
   }
   const menuButton = exposed.find(
     (node) => role(node) === "button" &&
-      normalizedName(node) === "open display and session settings",
+      normalizedName(node) === "open dashboard menu",
   );
   if (menuButton === undefined) {
-    failures.push("accessibility tree does not expose the Display & session trigger");
+    failures.push("accessibility tree does not expose the Menu trigger");
   }
   const unnamedButtons = exposed.filter(
     (node) => role(node) === "button" && name(node).trim() === "",
@@ -3774,6 +3771,7 @@ async function auditUniversalDrawer(cdp, context) {
     const trigger = document.querySelector('#native-menu-toggle');
     const appearance = document.querySelector('.native-menu-appearance');
     const presentation = document.querySelector('.native-menu-presentation');
+    const audio = document.querySelector('.native-menu-audio');
     const page = document.querySelector('.native-menu-page');
     const details = document.querySelector('.native-menu-status-details');
     const toolbar = document.querySelector('.mimic-toolbar');
@@ -3797,6 +3795,11 @@ async function auditUniversalDrawer(cdp, context) {
     if (!presentation || (toolbar !== null && !presentation.contains(toolbar)) ||
         presentation?.hidden !== (toolbar === null || toolbar.hidden)) {
       failures.push('scanner presentation visibility or ownership is inconsistent');
+    }
+    if (!audio?.contains(document.querySelector('#audio-playback-controls')) ||
+        !document.querySelector('.browser-audio-diagnostics')?.contains(
+          document.querySelector('#audio-source'))) {
+      failures.push('audio playback and diagnostics ownership is inconsistent');
     }
     if (!page?.contains(identity) || !details?.contains(footer) ||
         !footer?.contains(document.querySelector('#last-update')) ||
@@ -3860,7 +3863,7 @@ async function auditUniversalDrawer(cdp, context) {
   const accessible = (role, name) => exposed.some(node =>
     node.role?.value === role &&
       (node.name?.value ?? '').trim().toLocaleLowerCase('en-US') === name);
-  if (!accessible('dialog', 'display & session') ||
+  if (!accessible('dialog', 'menu') ||
       !accessible('combobox', 'theme') ||
       exposed.some(node => node.role?.value === 'button' &&
         (node.name?.value ?? '').trim() === '')) {
@@ -4835,6 +4838,12 @@ async function auditNativeDrawer(cdp, {role, exerciseInteractions = false}) {
       document.querySelector('#native-menu #system-palette-picker') !== null &&
       document.querySelector('#native-menu #lcars-v2-appearance-pickers') !== null &&
       document.querySelector('#native-menu #theme-typography-pickers') !== null &&
+      (${role === 'display'} ?
+        document.querySelector('#audio-playback-controls').hidden &&
+          document.querySelector('#audio-play').disabled &&
+          document.querySelector('#audio-stop').disabled :
+        document.querySelector('#native-menu .native-menu-audio')?.contains(
+          document.querySelector('#audio-playback-controls'))) &&
       document.querySelector('#native-session-summary').textContent.includes(
         ${JSON.stringify(role === 'display' ? 'Display-only session' : 'Operator session')}) &&
       (${role === 'display'} || document.querySelector('.native-menu-views').hidden);
@@ -5027,7 +5036,7 @@ async function auditDisplayNavigation(cdp) {
       ]});
       await frames(cdp);
       const drawerFailures = await evaluate(cdp, `window.__sdsctlBrowserAudit.readabilityFailures(
-        document.querySelector('#native-menu'), 'Compact Display & session drawer')`);
+        document.querySelector('#native-menu'), 'Compact Menu drawer')`);
       if (drawerFailures.length) {
         throw new Error(`${theme}/${appearance} drawer: ${drawerFailures.join('; ')}`);
       }
@@ -5335,7 +5344,7 @@ async function auditOperatorDrawer(cdp, baseUrl, timeoutMs, pageFailures) {
       }
     }
     if (pageFailures.length !== baseline) throw new Error('Operator drawer raised browser exceptions.');
-    console.log('PASS: operator Display & session drawer geometry, focus, expiry and stopped retries');
+    console.log('PASS: operator Menu drawer geometry, focus, expiry and stopped retries');
   } finally {
     await cdp.send('Page.removeScriptToEvaluateOnNewDocument', {identifier: installed.identifier});
   }

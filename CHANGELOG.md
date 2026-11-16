@@ -6,6 +6,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Changed
+
+- Rename the universal dashboard drawer to **Menu**, move operator live-audio
+  Play/Stop and status into it, and move source/packet/loss telemetry into a
+  distinct **Live audio** Diagnostics section. Remove the redundant Audio
+  workspace tab, migrate legacy saved Audio-pane preferences to Diagnostics,
+  and keep display-only sessions unable to acquire audio.
+
 ## [0.33.0] - 2026-11-11
 
 Cinematic dashboard environments, responsive display/session controls, and
