@@ -293,8 +293,8 @@ def test_lifecycle_routes_and_panel_exist_only_in_ingress(
     assert 'id="pane-tab-home-assistant"' not in normal_shell.text
     assert 'id="pane-home-assistant"' not in normal_shell.text
     assert "workspace-tabs-with-home-assistant" not in normal_shell.text
-    assert normal_shell.text.count('role="tab"') == 6
-    assert normal_shell.text.count('role="tabpanel"') == 6
+    assert normal_shell.text.count('role="tab"') == 5
+    assert normal_shell.text.count('role="tabpanel"') == 5
 
     ingress = web_dashboard.create_web_dashboard_app(
         forbidden_factory,
@@ -316,8 +316,8 @@ def test_lifecycle_routes_and_panel_exist_only_in_ingress(
     assert 'class="workspace-tabs workspace-tabs-with-home-assistant"' in ingress_shell.text
     assert 'class="diagnostics-layout"' in ingress_shell.text
     assert "diagnostics-layout-with-integration" not in ingress_shell.text
-    assert ingress_shell.text.count('role="tab"') == 7
-    assert ingress_shell.text.count('role="tabpanel"') == 7
+    assert ingress_shell.text.count('role="tab"') == 6
+    assert ingress_shell.text.count('role="tabpanel"') == 6
     home_assistant_pane = ingress_shell.text[
         ingress_shell.text.index('id="pane-home-assistant"') :
     ]
