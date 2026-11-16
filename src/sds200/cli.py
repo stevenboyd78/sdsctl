@@ -1924,6 +1924,14 @@ def build_parser(
         help="Optional separate mode-0600 password file enabling display-only browser login",
     )
     web.add_argument(
+        "--lan-display-audio",
+        action="store_true",
+        help=(
+            "Allow user-initiated live browser audio playback in authenticated "
+            "display-only sessions; playback never starts automatically"
+        ),
+    )
+    web.add_argument(
         "--lan-tls-certfile",
         type=Path,
         metavar="PATH",
@@ -5337,7 +5345,9 @@ def _run_web(
         args.lan_tls_certfile,
         args.lan_tls_keyfile,
     )
-    if not args.authenticated_lan and any(value is not None for value in lan_values):
+    if not args.authenticated_lan and (
+        any(value is not None for value in lan_values) or args.lan_display_audio
+    ):
         raise ValueError("--lan-* options require --authenticated-lan.")
 
     if args.authenticated_lan:
@@ -5368,6 +5378,15 @@ def _run_web(
             raise ValueError(
                 "--authenticated-lan requires one of --lan-password-env or "
                 "--lan-password-file."
+            )
+        if (
+            args.lan_display_audio
+            and args.lan_display_password_file is None
+            and not args.experimental_browser_devices
+        ):
+            raise ValueError(
+                "--lan-display-audio requires --lan-display-password-file or "
+                "--experimental-browser-devices."
             )
 
     if (
@@ -5603,6 +5622,9 @@ def _run_web(
                 BrowserDeviceAdmin(browser_store), browser_configuration.ingress_origin,
                 browser_configuration.admin_user_ids,
             )
+
+    if args.lan_display_audio:
+        browser_options["display_audio"] = True
 
     app = create_web_dashboard_app(
         api_client_factory,

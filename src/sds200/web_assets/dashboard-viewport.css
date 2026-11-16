@@ -389,8 +389,10 @@
 
   html[data-access-mode="display"] :is(
     #pane-tab-controls, #pane-tab-recordings,
-    #pane-controls, #pane-recordings, #audio-playback-controls
-  ) {
+    #pane-controls, #pane-recordings
+  ),
+  html[data-access-mode="display"]:not([data-display-audio="enabled"])
+    #audio-playback-controls {
     display: none !important;
   }
 

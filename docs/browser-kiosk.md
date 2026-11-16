@@ -102,6 +102,20 @@ remove this optional argument and restart. For an App, remove only its exact
 `/data/advanced-access/display-password` file through the approved private App
 maintenance workflow, then restart; do not delete other access material.
 
+Display-only live audio is denied by default. If a standalone authenticated-LAN
+server has no audio output attached to its display host and you deliberately
+want browser playback there, also add:
+
+```text
+--lan-display-audio
+```
+
+This option is accepted only with a configured display identity. It exposes
+Play/Stop in the Menu and permits only the display session's read-only live-audio
+stream. Playback still requires a local user gesture and never starts
+automatically; controls, recordings, downloads, and other operator authority
+remain unavailable. Remove the option and restart to restore the default denial.
+
 Verify the server certificate identity and fingerprint through a trusted route.
 Configure trust in the dedicated browser account and test the exact HTTPS URL
 interactively. The preflight CA file and the browser's trust store are separate;

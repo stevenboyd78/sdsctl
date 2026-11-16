@@ -517,13 +517,18 @@ class WebDashboardAuthenticationMiddleware:
         *,
         authentication: WebDashboardAuthentication,
         display_theme_paths: frozenset[str] = frozenset(),
+        display_audio: bool = False,
         supplemental_demand: bool = False,
     ) -> None:
         if not isinstance(authentication, WebDashboardAuthentication):
             raise TypeError("Web dashboard authentication middleware requires a valid policy.")
+        if type(display_audio) is not bool:
+            raise TypeError("Display-only audio setting must be boolean.")
         self._app = app
         self._authentication = authentication
         self._display_paths = _DISPLAY_READ_PATHS | display_theme_paths
+        if display_audio:
+            self._display_paths |= {"/api/v1/audio"}
         if type(supplemental_demand) is not bool:
             raise TypeError("Supplemental demand opt-in must be boolean.")
         self._supplemental_demand = supplemental_demand

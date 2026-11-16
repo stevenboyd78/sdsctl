@@ -195,17 +195,23 @@ class BrowserDeviceHTTP:
     def __init__(
         self, app: ASGIApp, *, authentication: WebDashboardAuthentication,
         devices: BrowserDeviceSessions, display_theme_paths: frozenset[str] = frozenset(),
+        display_audio: bool = False,
         supplemental_demand: bool = False,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
+        if type(display_audio) is not bool:
+            raise TypeError("Display-only audio setting must be boolean.")
         self._app = app
         self._manual = WebDashboardAuthenticationMiddleware(
             app, authentication=authentication, display_theme_paths=display_theme_paths,
+            display_audio=display_audio,
             supplemental_demand=supplemental_demand,
         )
         self._origin = authentication.origin
         self._devices = devices
         self._paths = _DISPLAY_READ_PATHS | display_theme_paths
+        if display_audio:
+            self._paths |= {"/api/v1/audio"}
         self._supplemental_demand = supplemental_demand
         self._workers = _Workers()
         # Cold dashboards fetch many protected assets concurrently. Do not make

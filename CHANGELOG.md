@@ -12,7 +12,10 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   Play/Stop and status into it, and move source/packet/loss telemetry into a
   distinct **Live audio** Diagnostics section. Remove the redundant Audio
   workspace tab, migrate legacy saved Audio-pane preferences to Diagnostics,
-  and keep display-only sessions unable to acquire audio.
+  and keep display-only audio denied by default. Authenticated native-LAN
+  servers may opt a configured display identity into user-initiated live
+  playback with `--lan-display-audio`; it never enables autoplay, controls, or
+  recordings.
 
 ## [0.33.0] - 2026-11-11
 

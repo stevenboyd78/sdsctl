@@ -128,6 +128,8 @@ if (!dashboardScriptUrl) {
 const webRootUrl = new URL("../", dashboardScriptUrl);
 const nativeAccessMode = document.documentElement.dataset.accessMode;
 const displayOnly = nativeAccessMode === "display";
+const displayAudioAllowed = !displayOnly ||
+  document.documentElement.dataset.displayAudio === "enabled";
 const managedDeviceEntry = displayOnly &&
   window.location.href === new URL("device-display", webRootUrl).href;
 let authenticationRequired = false;
@@ -335,7 +337,7 @@ function initializeNativeMenu(logout, logoutButton) {
   audio.append(make("h3", "Live audio playback"));
   const audioPlayback = element("audio-playback-controls");
   audioPlayback.before(document.createComment("native drawer audio playback position"));
-  if (displayOnly) {
+  if (!displayAudioAllowed) {
     audio.hidden = true;
     audioPlayback.hidden = true;
     element("audio-play").disabled = true;
@@ -354,9 +356,11 @@ function initializeNativeMenu(logout, logoutButton) {
   if (logout !== null) {
     sessionSummary = make(
       "p",
-      displayOnly
+      displayOnly && !displayAudioAllowed
         ? "Display-only session — scanner controls, audio and recordings are disabled."
-        : "Operator session — scanner controls, audio and recordings are enabled.",
+        : displayOnly
+          ? "Display-only session — browser audio playback is enabled; scanner controls and recordings are disabled."
+          : "Operator session — scanner controls, audio and recordings are enabled.",
     );
     sessionSummary.id = "native-session-summary";
     sessionSummary.setAttribute("role", "status");
@@ -3657,7 +3661,7 @@ async function startAudioPlayback() {
 function initializeAudioPlayback() {
   resetAudioTelemetry();
 
-  if (displayOnly) {
+  if (!displayAudioAllowed) {
     setAudioControls("Unavailable in a display-only session.", false);
     element("audio-play").disabled = true;
     element("audio-stop").disabled = true;

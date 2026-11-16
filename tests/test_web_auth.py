@@ -197,6 +197,62 @@ def test_display_allowlist_denies_every_other_route_before_daemon_work() -> None
         assert client.get("/auth/session").status_code == 401
 
 
+def test_display_audio_is_an_explicit_read_only_allowlist_extension() -> None:
+    async def app(scope: Scope, receive: Receive, send: Send) -> None:
+        del receive
+        assert scope["path"] == "/api/v1/audio"
+        await send({"type": "http.response.start", "status": 204, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+    authentication = _authentication(display_password=DISPLAY_PASSWORD)
+    protected = WebDashboardAuthenticationMiddleware(
+        app,
+        authentication=authentication,
+        display_audio=True,
+    )
+    client = TestClient(protected, base_url=ORIGIN)
+    try:
+        login = client.post(
+            web_auth.WEB_DASHBOARD_DISPLAY_LOGIN_PATH,
+            data={"password": DISPLAY_PASSWORD},
+            headers={"Origin": ORIGIN},
+            follow_redirects=False,
+        )
+        assert login.status_code == 303
+        assert client.get("/api/v1/audio").status_code == 204
+    finally:
+        client.close()
+
+
+def test_display_audio_marks_only_the_opted_in_display_shell() -> None:
+    authentication = _authentication(display_password=DISPLAY_PASSWORD)
+    app = create_web_dashboard_app(
+        FakeDaemonApiClient,
+        lan_authentication=authentication,
+        display_audio=True,
+    )
+    with TestClient(app, base_url=ORIGIN) as client:
+        operator = _login(client)
+        assert operator.status_code == 303  # type: ignore[attr-defined]
+        assert 'data-access-mode="operator"' in client.get("/").text
+        assert "data-display-audio" not in client.get("/").text
+        client.post(
+            "/auth/logout",
+            headers={"Origin": ORIGIN},
+            follow_redirects=False,
+        )
+        display = client.post(
+            web_auth.WEB_DASHBOARD_DISPLAY_LOGIN_PATH,
+            data={"password": DISPLAY_PASSWORD},
+            headers={"Origin": ORIGIN},
+            follow_redirects=False,
+        )
+        assert display.status_code == 303
+        shell = client.get("/").text
+        assert 'data-access-mode="display"' in shell
+        assert 'data-display-audio="enabled"' in shell
+
+
 def test_display_session_expires_and_cannot_select_operator_role() -> None:
     clock = FakeClock()
     authentication = _authentication(clock=clock, display_password=DISPLAY_PASSWORD)

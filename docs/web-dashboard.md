@@ -252,7 +252,12 @@ The unreleased [display-only browser kiosk](browser-kiosk.md) optionally enables
 stored on the server session, never trusted from request parameters. Display
 requests use an explicit allowlist; scanner controls, audio, recording files,
 management, API documentation and unknown routes are denied before a daemon
-client is created. Both login forms share the same bounded password worker and
+client is created by default. A native authenticated-LAN server with a
+configured display identity may add only `GET /api/v1/audio` to that allowlist
+with `--lan-display-audio`. The Menu then exposes Play/Stop, but playback still
+requires a user gesture and never starts automatically; scanner controls,
+recordings and every other denied route remain denied. Both login forms share
+the same bounded password worker and
 failure budget. Existing operator login remains unchanged when no display
 password is configured. `/auth/session` exposes only the authenticated session's
 role and remaining absolute lifetime, without daemon access or credentials.
@@ -261,8 +266,9 @@ Authenticated operator and display-only dashboards share one modal **Menu**
 drawer. It contains the healthy role/session summary, canonical
 Theme/palette/typography controls and the single logout form. Operator and
 ordinary authenticated dashboards also place the existing live-audio status
-and Play/Stop controls there; display-only sessions keep them hidden and
-disabled.
+and Play/Stop controls there. Display-only sessions keep them hidden and
+disabled unless the server has explicitly enabled `--lan-display-audio` for
+its configured display identity.
 Compact display-only sessions additionally expose their permitted Scanner,
 Waterfall and Diagnostics views there; their API and pane restrictions do not
 change. Authentication expiry or an HTTP 401 closes and invalidates the drawer,
@@ -1115,6 +1121,14 @@ AudioWorklet, closes the `AudioContext`, and releases the daemon PCMU client.
 Hiding the dashboard intentionally suspends SSE but does not stop audio. Returning
 to the page reopens SSE while preserving the same audio stream. Closing or
 navigating away from the page stops both event and audio streams.
+
+Authenticated native-LAN display-only sessions remain unable to acquire this
+route by default. `--lan-display-audio` is an explicit server-wide opt-in for
+configured display identities (a separate display password or enrolled browser
+device). It adds only the read-only live-audio route and Menu Play/Stop controls;
+it does not enable autoplay, scanner controls, recordings, downloads, or write
+authority. The option is rejected outside authenticated-LAN mode and when no
+display identity is configured.
 
 ## Browser recording workflows
 

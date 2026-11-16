@@ -31,6 +31,7 @@ from sds200.front_panel_keys import FrontPanelKey, front_panel_inventory_snapsho
 from sds200.pcmu import PcmuPacket
 from sds200.pcmu_protocol import encode_pcmu_delivery
 from sds200.pcmu_subscriptions import PcmuPacketDelivery, PcmuPublication
+from sds200.web_auth import WebDashboardAuthentication
 from sds200.web_dashboard import (
     WEB_DASHBOARD_API_PROTOCOL,
     WEB_DASHBOARD_API_VERSION,
@@ -485,6 +486,32 @@ def test_web_dashboard_rejects_non_boolean_home_assistant_ingress() -> None:
         create_web_dashboard_app(
             FakeDaemonApiClient,
             home_assistant_ingress=1,  # type: ignore[arg-type]
+        )
+
+
+def test_web_dashboard_rejects_invalid_display_audio_configuration() -> None:
+    with pytest.raises(TypeError, match="Display-only audio setting must be boolean"):
+        create_web_dashboard_app(
+            FakeDaemonApiClient,
+            display_audio=1,  # type: ignore[arg-type]
+        )
+    with pytest.raises(
+        ValueError,
+        match="Display-only audio requires authenticated LAN admission",
+    ):
+        create_web_dashboard_app(FakeDaemonApiClient, display_audio=True)
+    authentication = WebDashboardAuthentication(
+        "another fictional operator password",
+        "https://scanner.example:8443",
+    )
+    with pytest.raises(
+        ValueError,
+        match="Display-only audio requires a display password or browser-device identity",
+    ):
+        create_web_dashboard_app(
+            FakeDaemonApiClient,
+            lan_authentication=authentication,
+            display_audio=True,
         )
 
 
@@ -2364,6 +2391,9 @@ def test_universal_dashboard_menu_contract() -> None:
     assert 'document.createComment("native drawer presentation position")' in script
     assert "presentation.append(mimicToolbar)" in script
     assert 'const audio = make("section", null, "native-menu-audio")' in script
+    assert "const displayAudioAllowed = !displayOnly ||" in script
+    assert 'document.documentElement.dataset.displayAudio === "enabled"' in script
+    assert "if (!displayAudioAllowed)" in script
     assert 'element("audio-playback-controls")' in script
     assert 'document.createComment("native drawer audio playback position")' in script
     assert "audio.append(audioPlayback)" in script
@@ -2408,6 +2438,7 @@ def test_universal_dashboard_menu_contract() -> None:
     assert "scrollbar-gutter: stable !important" in viewport
     assert ".native-menu-presentation" in viewport
     assert ".native-menu-audio" in viewport
+    assert 'html[data-access-mode="display"]:not([data-display-audio="enabled"])' in viewport
     assert ".native-menu-page" in viewport
     assert ".native-menu-status-details" in viewport
     assert "#native-menu .mimic-toolbar:not([hidden])" in viewport
