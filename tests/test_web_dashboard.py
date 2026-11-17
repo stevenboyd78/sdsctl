@@ -2338,6 +2338,7 @@ def test_dashboard_layout_uses_dedicated_recording_library_panel() -> None:
 
     assert 'id="runtime-title"' in diagnostics_pane
     assert 'id="daemon-state"' in diagnostics_pane
+    assert 'class="panel daemon-runtime-section"' in diagnostics_pane
     assert 'class="panel browser-audio-diagnostics"' in diagnostics_pane
     assert 'id="audio-playback-controls"' in diagnostics_pane
     assert 'id="audio-source"' in diagnostics_pane

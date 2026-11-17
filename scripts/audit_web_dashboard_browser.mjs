@@ -2665,11 +2665,19 @@ export function browserAuditLibrary() {
     const failures = paneState("diagnostics");
     const layout = document.querySelector(".diagnostics-layout");
     const scanner = layout?.querySelector(":scope > .scanner-panel");
+    const runtime = layout?.querySelector(":scope > .daemon-runtime-section");
+    const audio = layout?.querySelector(":scope > .browser-audio-diagnostics");
     if (!(layout instanceof HTMLElement)) {
       return {failures: [...failures, "Diagnostics layout is unavailable"]};
     }
     if (!(scanner instanceof HTMLElement)) {
       failures.push("Diagnostics scanner panel is unavailable");
+    }
+    if (!(runtime instanceof HTMLElement)) {
+      failures.push("Diagnostics daemon runtime panel is unavailable");
+    }
+    if (!(audio instanceof HTMLElement)) {
+      failures.push("Diagnostics live audio panel is unavailable");
     }
     if (layout.querySelector(":scope > .home-assistant-integration-panel") !== null) {
       failures.push("Diagnostics still contains the Home Assistant integration panel");
@@ -2686,7 +2694,7 @@ export function browserAuditLibrary() {
     const clients = layout.querySelector("#connected-clients-panel");
     const connectionList = scanner.querySelector(":scope > .status-list");
     const connectionRow = connectionList?.firstElementChild;
-    const serviceRow = scanner.querySelector(".daemon-runtime-section .status-list > div");
+    const serviceRow = runtime?.querySelector(".status-list > div");
     if (!(connectionList instanceof HTMLElement) ||
         getComputedStyle(connectionList).alignSelf !== "start" ||
         getComputedStyle(connectionList).alignContent !== "start") {
@@ -2700,7 +2708,7 @@ export function browserAuditLibrary() {
     if (layoutStyle.display !== "grid") {
       failures.push(`Diagnostics layout display is ${layoutStyle.display}, expected grid`);
     }
-    const expectedColumns = window.innerWidth > 1100 ? 2 : 1;
+    const expectedColumns = window.innerWidth >= 704 ? 3 : 1;
     if (tracks.length !== expectedColumns) {
       failures.push(
         `Diagnostics layout exposes ${tracks.length} columns instead of ${expectedColumns}: ` +
@@ -2712,6 +2720,19 @@ export function browserAuditLibrary() {
     }
     if (scannerStyle.gridArea !== "auto") {
       failures.push(`scanner panel retains named grid placement ${scannerStyle.gridArea}`);
+    }
+    const peerModules = [scanner, runtime, audio].filter(
+      candidate => candidate instanceof HTMLElement,
+    );
+    if (peerModules.some(candidate => candidate.parentElement !== layout)) {
+      failures.push("Diagnostics modules are not direct layout peers");
+    }
+    if (peerModules.some(candidate => {
+      const style = getComputedStyle(candidate);
+      return style.borderTopStyle === "none" ||
+        Number.parseFloat(style.borderTopWidth) <= 0;
+    })) {
+      failures.push("Diagnostics module boundary is missing");
     }
     if (expectedColumns === 1 && scannerRect.width < layoutRect.width - tolerance * 2) {
       failures.push("Scanner panel does not fill the Diagnostics workspace");

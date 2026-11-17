@@ -663,6 +663,7 @@
 
   .diagnostics-layout > .panel {
     grid-area: auto !important;
+    border: 1px solid var(--border) !important;
   }
 
   .panel {
@@ -888,13 +889,13 @@
     display: grid !important;
     grid-template-rows: auto auto auto minmax(0, 1fr) !important;
     align-content: start !important;
-    max-width: 62rem !important;
-    margin-inline: auto !important;
+    max-width: none !important;
+    margin-inline: 0 !important;
   }
 
   .browser-audio-diagnostics .status-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    gap: 0 clamp(0.35rem, 1.2vmin, 0.9rem) !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0 !important;
   }
 
   .recordings-layout {
@@ -953,19 +954,27 @@
     justify-content: space-between !important;
   }
 
-  .diagnostics-layout,
-  #pane-diagnostics > .scanner-panel {
+  .diagnostics-layout {
     width: 100% !important;
     height: 100% !important;
     min-width: 0 !important;
     min-height: 0 !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  @media (max-width: 703px) {
+    .diagnostics-layout,
+    .diagnostics-layout:has(.connected-clients-panel) {
+      grid-template-columns: minmax(0, 1fr) !important;
+      grid-auto-rows: max-content !important;
+    }
   }
 
   .scanner-panel {
     display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-columns: minmax(0, 1fr) !important;
     grid-template-rows: auto minmax(0, 1fr) !important;
-    gap: 0 clamp(0.35rem, 1.2vmin, 0.9rem) !important;
+    gap: 0 !important;
   }
 
   .scanner-panel > .panel-header {
@@ -976,11 +985,6 @@
   .scanner-panel > .status-list {
     grid-column: 1 !important;
     grid-row: 2 !important;
-  }
-
-  .scanner-panel > .panel-subsection {
-    grid-column: 2 !important;
-    grid-row: 1 / span 2 !important;
   }
 
   .site-footer {
@@ -1333,12 +1337,11 @@
 
     .scanner-panel {
       grid-template-columns: 1fr !important;
-      grid-template-rows: auto auto auto !important;
+      grid-template-rows: auto minmax(0, 1fr) !important;
     }
 
     .scanner-panel > .panel-header,
-    .scanner-panel > .status-list,
-    .scanner-panel > .panel-subsection {
+    .scanner-panel > .status-list {
       grid-column: 1 !important;
     }
 
@@ -1348,10 +1351,6 @@
 
     .scanner-panel > .status-list {
       grid-row: 2 !important;
-    }
-
-    .scanner-panel > .panel-subsection {
-      grid-row: 3 !important;
     }
 
     .workspace-pane button {
@@ -1904,12 +1903,11 @@
 
     .scanner-panel {
       grid-template-columns: 1fr !important;
-      grid-template-rows: auto auto auto !important;
+      grid-template-rows: auto minmax(0, 1fr) !important;
     }
 
     .scanner-panel > .panel-header,
-    .scanner-panel > .status-list,
-    .scanner-panel > .panel-subsection {
+    .scanner-panel > .status-list {
       grid-column: 1 !important;
     }
 
@@ -1920,13 +1918,6 @@
 
     .scanner-panel > .status-list {
       grid-row: 2 !important;
-    }
-
-    .scanner-panel > .panel-subsection {
-      grid-row: 3 !important;
-      margin-top: 0.25rem !important;
-      padding: 0.25rem 0 0 !important;
-      border-left: 0 !important;
     }
 
     .recording-library-panel .recording-library,
