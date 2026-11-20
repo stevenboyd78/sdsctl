@@ -30,6 +30,7 @@ from .browser_device_sessions import (
 )
 from .browser_device_store import BrowserDeviceStore
 from .web_auth import (
+    _DISPLAY_AUDIO_READ_PATHS,
     _DISPLAY_READ_PATHS,
     WEB_DASHBOARD_AUTH_COOKIE,
     WEB_DASHBOARD_LOGOUT_PATH,
@@ -211,7 +212,7 @@ class BrowserDeviceHTTP:
         self._devices = devices
         self._paths = _DISPLAY_READ_PATHS | display_theme_paths
         if display_audio:
-            self._paths |= {"/api/v1/audio"}
+            self._paths |= _DISPLAY_AUDIO_READ_PATHS
         self._supplemental_demand = supplemental_demand
         self._workers = _Workers()
         # Cold dashboards fetch many protected assets concurrently. Do not make

@@ -372,6 +372,10 @@ def test_browser_device_display_audio_is_an_explicit_read_only_extension(
     async def audio(request: Request):
         return {"display_only": request.state.sdsctl_display_only}
 
+    @raw.get("/assets/audio-worklet.js")
+    async def audio_worklet(request: Request):
+        return {"display_only": request.state.sdsctl_display_only}
+
     wrapper = BrowserDeviceHTTP(
         raw,
         authentication=authentication,
@@ -384,6 +388,9 @@ def test_browser_device_display_audio_is_an_explicit_read_only_extension(
         response = client.get("/api/v1/audio")
         assert response.status_code == 200
         assert response.json() == {"display_only": True}
+        worklet = client.get("/assets/audio-worklet.js")
+        assert worklet.status_code == 200
+        assert worklet.json() == {"display_only": True}
 
 
 def test_browser_device_rejects_non_boolean_display_audio(setup) -> None:

@@ -200,7 +200,10 @@ def test_display_allowlist_denies_every_other_route_before_daemon_work() -> None
 def test_display_audio_is_an_explicit_read_only_allowlist_extension() -> None:
     async def app(scope: Scope, receive: Receive, send: Send) -> None:
         del receive
-        assert scope["path"] == "/api/v1/audio"
+        assert scope["path"] in {
+            "/api/v1/audio",
+            "/assets/audio-worklet.js",
+        }
         await send({"type": "http.response.start", "status": 204, "headers": []})
         await send({"type": "http.response.body", "body": b""})
 
@@ -220,6 +223,7 @@ def test_display_audio_is_an_explicit_read_only_allowlist_extension() -> None:
         )
         assert login.status_code == 303
         assert client.get("/api/v1/audio").status_code == 204
+        assert client.get("/assets/audio-worklet.js").status_code == 204
     finally:
         client.close()
 
