@@ -217,6 +217,17 @@ Scroll inside the drawer to reach every selector and **Sign out**. Use
 stays inside while it is open and returns to **Menu** when the
 drawer closes. The drawer overlays the dashboard without resizing its plots.
 
+The drawer also offers **Follow scanner Waterfall mode**. It defaults on for a
+display-only kiosk and off for an operator browser, and the browser remembers
+an explicit local choice. When live PSI/GSI state reports a Waterfall mode for
+at least 750 ms while Scanner is visible, the kiosk opens Waterfall and starts
+the existing persistent same-origin SSE/NDJSON stream. After the scanner leaves
+that mode for at least 1.25 seconds, an automatically opened view returns to
+Scanner. Choosing any view manually suppresses further automatic movement until
+the scanner leaves Waterfall mode. The setting never sends a mode command to the
+scanner and does not auto-switch away from Diagnostics or another manually
+selected view.
+
 Connected/connection-error status and the Display-only label stay in the header.
 Sign-in-required and stale-data warnings remain visible without opening a menu.
 The Scanner and Waterfall views prioritize live values and full-width graphics.

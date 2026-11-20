@@ -230,6 +230,7 @@ def test_dashboard_adaptive_profiles_offer_explicit_field_inspection() -> None:
         ("close_call", "Close Call"),
         ("weather", "Weather"),
         ("tone_out", "Tone-Out"),
+        ("waterfall", "Waterfall"),
         ("unknown", "Scanner activity"),
     ):
         assert f'{kind}: "{title}"' in script
@@ -247,6 +248,13 @@ def test_dashboard_adaptive_profiles_offer_explicit_field_inspection() -> None:
     ):
         assert contract in script
     assert 'const RADIO_SCAN_FALLBACK_STORAGE_KEY = "sdsctl.web.scan-fallback";' in script
+    assert (
+        'const WATERFALL_AUTO_SWITCH_STORAGE_KEY = "sdsctl.web.waterfall-auto-switch";'
+        in script
+    )
+    assert 'waterfallFollow.id = "waterfall-auto-switch";' in script
+    assert 'reason: "waterfall-auto"' in script
+    assert 'currentScreenKind === "waterfall"' in script
     assert 'radioScanFallback === "detail" ? "hierarchy" : null' in script
     assert "element(`radio-group-${fieldGroup}`).hidden = fieldGroup !== group;" in script
     assert "value = toneOutDisplayValue(value);" in script

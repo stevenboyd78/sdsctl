@@ -8,6 +8,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Changed
 
+- Let display-only kiosks follow scanner-reported Waterfall mode with a
+  debounced, locally configurable view switch, automatic return to Scanner,
+  and a manual-view override. Reuse the existing persistent SSE/NDJSON
+  waterfall response rather than adding browser polling or another scanner
+  transport.
 - Rename the universal dashboard drawer to **Menu**, move operator live-audio
   Play/Stop and status into it, and move source/packet/loss telemetry into a
   distinct **Live audio** Diagnostics section. Remove the redundant Audio

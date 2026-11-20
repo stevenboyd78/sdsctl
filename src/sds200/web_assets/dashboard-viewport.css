@@ -75,6 +75,7 @@
     .native-menu-views,
     .native-menu-appearance,
     .native-menu-presentation,
+    .native-menu-waterfall,
     .native-menu-audio,
     .native-menu-page,
     .native-menu-status-details,
@@ -190,6 +191,10 @@
   #native-menu .native-menu-session form > :is(button, input) {
     width: 100% !important;
     min-width: 0 !important;
+  }
+  #native-menu .native-menu-checkbox input[type="checkbox"] {
+    width: auto !important;
+    min-width: 1.1rem !important;
   }
   #native-menu :is(button, a[href], summary) { touch-action: manipulation !important; }
   #native-menu :is(button, select, input, textarea, a[href], summary):focus-visible,

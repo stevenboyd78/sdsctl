@@ -475,6 +475,7 @@ const document = {
 const themeSelect = add("theme-select");
 const systemPalettePicker = add("system-palette-picker");
 const systemPaletteSelect = add("system-palette-select");
+const waterfallAutoSwitch = add("waterfall-auto-switch");
 let selectedTheme = "system";
 let selectedSystemPalette = "auto";
 const eventSources = [];
@@ -566,6 +567,10 @@ assert.doesNotThrow(() => writeStoredValue("key", "value"));
 assert.doesNotThrow(() => activateWorkspacePane("controls"));
 window.localStorage = workingStorage;
 
+storageValues.set(WATERFALL_AUTO_SWITCH_STORAGE_KEY, "enabled");
+initializeAutomaticWaterfallSwitch();
+assert.equal(waterfallAutoSwitch.checked, true);
+
 storageValues.set("sdsctl.web.scan-fallback", "simple");
 add("radio-activity-panel");
 add("activity-title");
@@ -609,6 +614,61 @@ for (const inheritedName of ["constructor", "toString", "__proto__"]) {
   assert.equal(activityPanel.dataset.displayLayout, "detail");
   assert.equal(activityPanel.dataset.activeRadioGroup, "hierarchy");
 }
+
+// A stable scanner-reported Waterfall mode opens the existing pane without
+// overwriting the operator's persisted workspace choice. Leaving the mode
+// returns only an automatically opened pane to Scanner.
+activateWorkspacePane("scanner");
+assert.equal(storageValues.get(WORKSPACE_PANE_STORAGE_KEY), "scanner");
+renderRadioProfile("waterfall");
+assert.equal(timeouts.size, 1);
+let waterfallTimerId = [...timeouts.keys()][0];
+assert.equal(timeouts.get(waterfallTimerId).delay, WATERFALL_AUTO_SWITCH_DELAY_MS);
+let waterfallTimer = timeouts.get(waterfallTimerId).callback;
+timeouts.delete(waterfallTimerId);
+waterfallTimer();
+assert.equal(activeWorkspacePane, "waterfall");
+assert.equal(waterfallAutoActive, true);
+assert.equal(storageValues.get(WORKSPACE_PANE_STORAGE_KEY), "scanner");
+
+renderRadioProfile("scanning");
+assert.equal(timeouts.size, 1);
+waterfallTimerId = [...timeouts.keys()][0];
+assert.equal(timeouts.get(waterfallTimerId).delay, WATERFALL_AUTO_RETURN_DELAY_MS);
+renderRadioProfile("scanning");
+assert.equal(timeouts.size, 1);
+assert.equal(waterfallAutoActive, true);
+waterfallTimer = timeouts.get(waterfallTimerId).callback;
+timeouts.delete(waterfallTimerId);
+waterfallTimer();
+assert.equal(activeWorkspacePane, "scanner");
+assert.equal(waterfallAutoActive, false);
+
+// A manual view change wins until the scanner leaves Waterfall mode, avoiding
+// a view that fights the operator while the mode remains active.
+renderRadioProfile("waterfall");
+waterfallTimerId = [...timeouts.keys()][0];
+waterfallTimer = timeouts.get(waterfallTimerId).callback;
+timeouts.delete(waterfallTimerId);
+waterfallTimer();
+activateWorkspacePane("scanner");
+assert.equal(waterfallAutoSuppressed, true);
+renderRadioProfile("waterfall");
+assert.equal(timeouts.size, 0);
+renderRadioProfile("scanning");
+assert.equal(waterfallAutoSuppressed, false);
+renderRadioProfile("waterfall");
+assert.equal(timeouts.size, 1);
+clearAutomaticWaterfallTimer("switch");
+
+waterfallAutoSwitch.checked = false;
+waterfallAutoSwitch.dispatch("change");
+assert.equal(
+  storageValues.get(WATERFALL_AUTO_SWITCH_STORAGE_KEY),
+  "disabled",
+);
+renderRadioProfile("waterfall");
+assert.equal(timeouts.size, 0);
 
 assert.equal(toneOutDisplayValue(0), "Detect");
 assert.equal(toneOutDisplayValue(-0), "Detect");
