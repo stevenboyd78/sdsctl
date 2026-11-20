@@ -76,7 +76,7 @@ def test_built_in_home_assistant_theme_registry_is_ordered_and_immutable() -> No
         "/local/sds200/sds200-card.js?v="
         "263439642bea86b5f006d68e90ae3e938d4e2ddff9d49fb2be73168d9732a62d",
         "/local/sds200/sds200-display-card.js?v="
-        "31e62f3d67b4d3a8577fbf69f3a5552a2880fb90984d1d15642a81ec58b15d1d",
+        "0a39d159082c5aa52719c8797fc63137181b8dc00ef6eee5c190fd6fc50cae7f",
         "/local/sds200/sds200-waterfall-card.js?v="
         + hashlib.sha256(
             read_built_in_home_assistant_theme_module(registry.require("waterfall"))
@@ -103,7 +103,7 @@ def test_mqtt_modules_preserve_pre_extraction_bytes() -> None:
 
     assert hashes == {
         "compact": "263439642bea86b5f006d68e90ae3e938d4e2ddff9d49fb2be73168d9732a62d",
-        "sds200-display": "31e62f3d67b4d3a8577fbf69f3a5552a2880fb90984d1d15642a81ec58b15d1d",
+        "sds200-display": "0a39d159082c5aa52719c8797fc63137181b8dc00ef6eee5c190fd6fc50cae7f",
     }
 
 

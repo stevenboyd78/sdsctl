@@ -1951,6 +1951,35 @@ function toneOutDisplayValue(value) {
   return value;
 }
 
+function specialRadioChannelDisplayValue(radio) {
+  const text = (value) => {
+    if (value === null || value === undefined || value === "") {
+      return "";
+    }
+    return String(value);
+  };
+  const channel = text(radio.channel);
+  const channelNumber = text(radio.channel_number);
+  const frequency = text(radio.frequency);
+
+  if (radio.screen_kind === "weather") {
+    const prefix = channelNumber === "" ? "" : `WX ${channelNumber}`;
+    return prefix === ""
+      ? channel || frequency
+      : channel === "" ? prefix : `${prefix}: ${channel}`;
+  }
+  if (radio.screen_kind === "tone_out") {
+    const prefix = channelNumber === "" ? "" : `FTO ${channelNumber}`;
+    return prefix === ""
+      ? channel || frequency
+      : channel === "" ? prefix : `${prefix}: ${channel}`;
+  }
+  if (radio.screen_kind === "search" || radio.screen_kind === "close_call") {
+    return channel || frequency;
+  }
+  return channel;
+}
+
 function renderRadioProfile(value) {
   const screenKind = normalizedScreenKind(value);
   currentScreenKind = screenKind;
@@ -1967,6 +1996,7 @@ function renderRadioState(radio) {
     if (field === "system") {
       fallback = "No active system";
     } else if (field === "channel") {
+      value = specialRadioChannelDisplayValue(radio);
       fallback = "No active channel";
     } else if (field === "signal") {
       value = signalLabel(value);

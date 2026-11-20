@@ -17,6 +17,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   playback with `--lan-display-audio`; it never enables autoplay, controls, or
   recordings.
 
+### Fixed
+
+- Show meaningful special-mode channel identity when Weather, Search, or Close
+  Call protocol records omit a channel name. Weather and Tone-Out retain their
+  numbered `WX`/`FTO` identities, while unnamed Search and Close Call activity
+  falls back to the active frequency in the web dashboard and Home Assistant
+  Display card.
+
 ## [0.33.0] - 2026-11-11
 
 Cinematic dashboard environments, responsive display/session controls, and
