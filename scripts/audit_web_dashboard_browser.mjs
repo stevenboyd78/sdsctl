@@ -5292,6 +5292,121 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
   }
 }
 
+async function auditDisplayAudioOptIn(cdp, baseUrl, timeoutMs, pageFailures) {
+  const baseline = pageFailures.length;
+  const installed = await cdp.send("Page.addScriptToEvaluateOnNewDocument", {source: `
+    (() => {
+      window.__displayAudioAudit = {requests: [], streamCancelled: false};
+      class AuditAudioContext {
+        constructor() {
+          this.audioWorklet = {addModule: async () => {}};
+          this.destination = {};
+        }
+        async resume() {}
+        async close() {}
+      }
+      class AuditAudioWorkletNode {
+        constructor() {
+          this.port = {postMessage() {}};
+        }
+        connect() {}
+        disconnect() {}
+      }
+      Object.defineProperty(window, 'AudioContext', {
+        configurable: true,
+        value: AuditAudioContext,
+      });
+      Object.defineProperty(window, 'AudioWorkletNode', {
+        configurable: true,
+        value: AuditAudioWorkletNode,
+      });
+      const originalFetch = window.fetch;
+      window.fetch = async (url, options) => {
+        const path = new URL(url, location.href).pathname;
+        window.__displayAudioAudit.requests.push(path);
+        if (path === '/auth/session') {
+          return new Response(JSON.stringify({display_only: true, remaining_seconds: 28800}),
+            {headers: {'Content-Type': 'application/json'}});
+        }
+        if (path === '/api/v1/audio') {
+          return new Response(new ReadableStream({
+            cancel() {
+              window.__displayAudioAudit.streamCancelled = true;
+            },
+          }), {headers: {'Content-Type': 'application/octet-stream'}});
+        }
+        return originalFetch(url, options);
+      };
+    })();
+  `});
+  try {
+    await setViewport(cdp, {width: 800, height: 480, dpr: 1});
+    await navigate(cdp, baseUrl + "/?kiosk=display-audio", timeoutMs, {
+      installAuditLibrary: false, waitForDashboardReady: false,
+    });
+    await evaluate(cdp, `(async () => {
+      for (let attempt = 0; attempt < 500 &&
+          document.querySelector('#status-badge').dataset.state !== 'online'; attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      stopEventStream();
+    })()`);
+    await clickElement(cdp, '#native-menu-toggle');
+    const initial = await evaluate(cdp, `({
+      optedIn: document.documentElement.dataset.displayAudio === 'enabled',
+      controlsVisible: !document.querySelector('#audio-playback-controls').hidden,
+      playEnabled: !document.querySelector('#audio-play').disabled,
+      stopDisabled: document.querySelector('#audio-stop').disabled,
+      status: document.querySelector('#audio-playback-status').textContent,
+      summary: document.querySelector('#native-session-summary').textContent,
+    })`);
+    if (!initial.optedIn || !initial.controlsVisible || !initial.playEnabled ||
+        !initial.stopDisabled || initial.status !== 'Stopped' ||
+        !initial.summary.includes('browser audio playback is enabled')) {
+      throw new Error(`display audio opt-in initial state failed: ${JSON.stringify(initial)}`);
+    }
+    await clickElement(cdp, '#audio-play');
+    const started = await evaluate(cdp, `(async () => {
+      for (let attempt = 0; attempt < 100 &&
+          !window.__displayAudioAudit.requests.includes('/api/v1/audio'); attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      return {
+        requested: window.__displayAudioAudit.requests.filter(
+          path => path === '/api/v1/audio').length,
+        active: audioPlaybackActive,
+        playDisabled: document.querySelector('#audio-play').disabled,
+        stopEnabled: !document.querySelector('#audio-stop').disabled,
+        status: document.querySelector('#audio-playback-status').textContent,
+      };
+    })()`);
+    if (started.requested !== 1 || !started.active || !started.playDisabled ||
+        !started.stopEnabled || started.status !== 'Buffering…') {
+      throw new Error(`display audio Play request failed: ${JSON.stringify(started)}`);
+    }
+    await clickElement(cdp, '#audio-stop');
+    const stopped = await evaluate(cdp, `({
+      active: audioPlaybackActive,
+      cancelled: window.__displayAudioAudit.streamCancelled,
+      playEnabled: !document.querySelector('#audio-play').disabled,
+      stopDisabled: document.querySelector('#audio-stop').disabled,
+      status: document.querySelector('#audio-playback-status').textContent,
+      requests: window.__displayAudioAudit.requests.filter(
+        path => path === '/api/v1/audio').length,
+    })`);
+    if (stopped.active || !stopped.cancelled || !stopped.playEnabled ||
+        !stopped.stopDisabled || stopped.status !== 'Stopped' || stopped.requests !== 1) {
+      throw new Error(`display audio Stop lifecycle failed: ${JSON.stringify(stopped)}`);
+    }
+    if (pageFailures.length !== baseline) {
+      throw new Error('Display audio opt-in raised browser exceptions.');
+    }
+    console.log('PASS: display-only audio opt-in Play request and Stop lifecycle');
+  } finally {
+    await cdp.send("Page.removeScriptToEvaluateOnNewDocument", {identifier: installed.identifier});
+  }
+}
+
 async function auditOperatorDrawer(cdp, baseUrl, timeoutMs, pageFailures) {
   const baseline = pageFailures.length;
   const installed = await cdp.send("Page.addScriptToEvaluateOnNewDocument", {source: `
@@ -5817,6 +5932,7 @@ async function run(options) {
     await auditNativeLogin(cdp, baseUrl, options.timeoutMs, pageFailures);
     await auditOperatorDrawer(cdp, baseUrl, options.timeoutMs, pageFailures);
     await auditDisplayKiosk(cdp, baseUrl, options.timeoutMs, pageFailures);
+    await auditDisplayAudioOptIn(cdp, baseUrl, options.timeoutMs, pageFailures);
     const result = await runMatrix(cdp, baseUrl, options.timeoutMs, pageFailures);
     if (result.caseCount !== THEMES.length * VIEWPORTS.length * PANES.length) {
       throw new Error(`internal matrix count mismatch: ${result.caseCount}`);

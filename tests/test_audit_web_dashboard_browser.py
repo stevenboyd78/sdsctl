@@ -211,10 +211,14 @@ def test_browser_audit_covers_both_authenticated_native_drawer_roles() -> None:
     assert "async function auditNativeDrawer" in source
     assert "async function auditOperatorDrawer" in source
     assert "async function auditDisplayKiosk" in source
+    assert "async function auditDisplayAudioOptIn" in source
     assert "role: 'operator'" in source
     assert "role: 'display'" in source
     assert "baseUrl + '/?kiosk=operator'" in source
     assert 'baseUrl + "/?kiosk=display"' in source
+    assert 'baseUrl + "/?kiosk=display-audio"' in source
+    assert "await clickElement(cdp, '#audio-play')" in source
+    assert "path === '/api/v1/audio'" in source
     assert "const OPERATOR_DRAWER_VIEWPORTS = Object.freeze([" in source
     assert 'Object.freeze({name: "zoomed", width: 400, height: 240, dpr: 1})' in source
     assert "for (const viewport of OPERATOR_DRAWER_VIEWPORTS)" in operator_source
@@ -226,8 +230,11 @@ def test_browser_audit_covers_both_authenticated_native_drawer_roles() -> None:
     assert "staleLogoutDisabled" in source
     assert "requestsAtExpiry !== state.requestsAfter" in source
     assert source.index("await auditOperatorDrawer") < source.index("await auditDisplayKiosk")
+    assert source.index("await auditDisplayKiosk") < source.index("await auditDisplayAudioOptIn")
     assert 'b"kiosk=operator": b"operator"' in demo
     assert 'b"kiosk=display": b"display"' in demo
+    assert 'b"kiosk=display-audio": b"display"' in demo
+    assert 'query_string == b"kiosk=display-audio"' in demo
 
 
 def test_browser_audit_covers_universal_non_native_drawer_contexts() -> None:

@@ -2395,6 +2395,11 @@ def test_universal_dashboard_menu_contract() -> None:
     assert "const displayAudioAllowed = !displayOnly ||" in script
     assert 'document.documentElement.dataset.displayAudio === "enabled"' in script
     assert "if (!displayAudioAllowed)" in script
+    start_audio = script.split("async function startAudioPlayback()", 1)[1].split(
+        "function initializeAudioPlayback()", 1
+    )[0]
+    assert "if (!displayAudioAllowed || authenticationRequired) return;" in start_audio
+    assert "if (displayOnly || authenticationRequired) return;" not in start_audio
     assert 'element("audio-playback-controls")' in script
     assert 'document.createComment("native drawer audio playback position")' in script
     assert "audio.append(audioPlayback)" in script

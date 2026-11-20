@@ -3544,7 +3544,7 @@ function stopAudioPlayback() {
 }
 
 async function startAudioPlayback() {
-  if (displayOnly || authenticationRequired) return;
+  if (!displayAudioAllowed || authenticationRequired) return;
   if (audioPlaybackActive) {
     return;
   }
