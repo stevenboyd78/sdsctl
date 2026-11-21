@@ -193,8 +193,9 @@
     min-width: 0 !important;
   }
   #native-menu .native-menu-checkbox input[type="checkbox"] {
-    width: auto !important;
-    min-width: 1.1rem !important;
+    width: 44px !important;
+    min-width: 44px !important;
+    padding: 0 !important;
   }
   #native-menu :is(button, a[href], summary) { touch-action: manipulation !important; }
   #native-menu :is(button, select, input, textarea, a[href], summary):focus-visible,
