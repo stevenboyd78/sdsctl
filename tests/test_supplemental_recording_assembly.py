@@ -26,7 +26,7 @@ from sds200.daemon_process import DaemonProcess
 from sds200.daemon_recording import DaemonRecordingManager
 from sds200.daemon_recording_file_server import DaemonRecordingFileServer
 from sds200.daemon_runtime import DaemonRuntime
-from sds200.daemon_server import DaemonApiServer
+from sds200.daemon_server import DAEMON_API_DEFAULT_MAX_RESPONSE_BYTES, DaemonApiServer
 from sds200.daemon_supplemental_acquisition import (
     DaemonSupplementalAcquisition,
     SupplementalAcquisitionPolicy,
@@ -40,7 +40,7 @@ from .test_audio_sinks import CollectingSink
 from .test_daemon_api_recording import request
 from .test_daemon_display_frames import configured as configured
 from .test_daemon_quick_key_worker import wait_for
-from .test_daemon_server import connect, read_line
+from .test_daemon_server import connect
 from .test_supplemental_acceptance_launcher import native as native
 from .test_supplemental_recording_api import ENTRIES, a, dispatch
 from .test_supplemental_recording_schedule import m, s
@@ -209,7 +209,15 @@ def refusal(action):
 
 def query(peer, op, params=None):
     peer.sendall(json.dumps(request(op, params=params)).encode() + b"\n")
-    return json.loads(read_line(peer))
+    payload = bytearray()
+    while not payload.endswith(b"\n"):
+        chunk = peer.recv(64 * 1024)
+        if not chunk:
+            break
+        payload.extend(chunk)
+        assert len(payload) <= DAEMON_API_DEFAULT_MAX_RESPONSE_BYTES
+    assert payload.endswith(b"\n") and payload.count(b"\n") == 1
+    return json.loads(payload)
 
 
 def wait_for_armed(rig, trial):
@@ -291,7 +299,7 @@ def test_real_native_process_recording_and_explicit_demand(rig, demand):
                     {"context": context, "renewal_id": str(uuid4())},
                 )
                 assert response["ok"], response
-                wait_for(lambda: rig.peer.reads == ["FQK"])
+                assert rig.peer.wait_for_reads(["FQK"]), "Loopback scanner read did not complete"
             # Synthetic audio goes through the real stream/fanout/router/recorder.
             while not finished.wait(0.02):
                 if rig.manager.snapshot().active:

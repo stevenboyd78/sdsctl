@@ -6,7 +6,6 @@ from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import asdict
 from threading import Event
-from time import monotonic
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -90,10 +89,7 @@ def renewal_headers(context, nonce=None):
 
 def wait_for_loopback_read(peer, expected, *, timeout: float = 10.0) -> None:
     """Allow loaded runners to schedule the on-demand loopback read."""
-    deadline = monotonic() + timeout
-    while peer.reads != expected:
-        assert monotonic() < deadline, "Loopback scanner read did not complete"
-        Event().wait(0.005)
+    assert peer.wait_for_reads(expected, timeout=timeout), "Loopback scanner read did not complete"
 
 
 def arm_when_runtime_state_ready(rig, state_lock_contended=None):

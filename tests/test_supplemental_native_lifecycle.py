@@ -11,7 +11,8 @@ import wave
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import replace
-from threading import Event, Lock, Thread
+from threading import Condition, Event, Lock, Thread
+from time import monotonic
 from types import SimpleNamespace
 
 import pytest
@@ -51,6 +52,7 @@ class LoopbackScanner:
         self.socket.settimeout(0.005)
         self.stop = Event()
         self.lock = Lock()
+        self.changed = Condition(self.lock)
         self.commands = []
         self.gates = {}
         self.pending = []
@@ -65,6 +67,17 @@ class LoopbackScanner:
     def reads(self):
         with self.lock:
             return [command for command in self.commands if command in REPLIES]
+
+    def wait_for_reads(self, expected, *, timeout=2.0):
+        """Wait on command receipt instead of contending with the loopback peer."""
+        deadline = monotonic() + timeout
+        with self.changed:
+            while [command for command in self.commands if command in REPLIES] != expected:
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    return False
+                self.changed.wait(remaining)
+        return True
 
     @contextmanager
     def hold(self, command):
@@ -105,9 +118,10 @@ class LoopbackScanner:
                 else:
                     assert target[0] == "127.0.0.1"
                     command = data.decode().rstrip("\r")
-                    with self.lock:
+                    with self.changed:
                         self.commands.append(command)
                         gate = self.gates.pop(command, None)
+                        self.changed.notify_all()
                     if gate is None:
                         self.reply(command, target)
                     else:
