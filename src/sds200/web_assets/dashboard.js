@@ -38,7 +38,6 @@ const WORKSPACE_PANES = Object.freeze([
   "scanner",
   "controls",
   "waterfall",
-  "audio",
   "recordings",
   "home-assistant",
   "diagnostics",
@@ -129,6 +128,8 @@ if (!dashboardScriptUrl) {
 const webRootUrl = new URL("../", dashboardScriptUrl);
 const nativeAccessMode = document.documentElement.dataset.accessMode;
 const displayOnly = nativeAccessMode === "display";
+const displayAudioAllowed = !displayOnly ||
+  document.documentElement.dataset.displayAudio === "enabled";
 const managedDeviceEntry = displayOnly &&
   window.location.href === new URL("device-display", webRootUrl).href;
 let authenticationRequired = false;
@@ -299,11 +300,11 @@ function initializeNativeMenu(logout, logoutButton) {
   const trigger = make("button");
   trigger.id = "native-menu-toggle";
   trigger.type = "button";
-  trigger.setAttribute("aria-label", "Open display and session settings");
+  trigger.setAttribute("aria-label", "Open dashboard menu");
   trigger.setAttribute("aria-haspopup", "dialog");
   trigger.setAttribute("aria-controls", "native-menu");
   trigger.setAttribute("aria-expanded", "false");
-  const triggerLabel = make("span", "Display & session", "native-menu-label");
+  const triggerLabel = make("span", "Menu", "native-menu-label");
   const triggerIcon = make("span", "☰", "native-menu-icon");
   triggerIcon.setAttribute("aria-hidden", "true");
   trigger.append(triggerLabel, triggerIcon);
@@ -315,11 +316,11 @@ function initializeNativeMenu(logout, logoutButton) {
   dialog.tabIndex = -1;
   dialog.setAttribute("aria-labelledby", "native-menu-title");
   const menuHeader = make("div", null, "native-menu-header");
-  const title = make("h2", "Display & session");
+  const title = make("h2", "Menu");
   title.id = "native-menu-title";
   const closeButton = make("button", "Close");
   closeButton.type = "button";
-  closeButton.setAttribute("aria-label", "Close display and session settings");
+  closeButton.setAttribute("aria-label", "Close dashboard menu");
   menuHeader.append(title, closeButton);
   const views = make("nav", null, "native-menu-views");
   views.setAttribute("aria-label", "Dashboard views");
@@ -331,6 +332,19 @@ function initializeNativeMenu(logout, logoutButton) {
   presentation.setAttribute("aria-label", "Scanner presentation");
   presentation.append(make("h3", "Scanner presentation"));
   presentation.hidden = true;
+  const audio = make("section", null, "native-menu-audio");
+  audio.setAttribute("aria-label", "Live audio playback");
+  audio.append(make("h3", "Live audio playback"));
+  const audioPlayback = element("audio-playback-controls");
+  audioPlayback.before(document.createComment("native drawer audio playback position"));
+  if (!displayAudioAllowed) {
+    audio.hidden = true;
+    audioPlayback.hidden = true;
+    element("audio-play").disabled = true;
+    element("audio-stop").disabled = true;
+  } else {
+    audio.append(audioPlayback);
+  }
   const page = make("section", null, "native-menu-page");
   page.setAttribute("aria-label", "Page information");
   page.append(make("h3", "Page"));
@@ -342,15 +356,17 @@ function initializeNativeMenu(logout, logoutButton) {
   if (logout !== null) {
     sessionSummary = make(
       "p",
-      displayOnly
+      displayOnly && !displayAudioAllowed
         ? "Display-only session — scanner controls, audio and recordings are disabled."
-        : "Operator session — scanner controls, audio and recordings are enabled.",
+        : displayOnly
+          ? "Display-only session — browser audio playback is enabled; scanner controls and recordings are disabled."
+          : "Operator session — scanner controls, audio and recordings are enabled.",
     );
     sessionSummary.id = "native-session-summary";
     sessionSummary.setAttribute("role", "status");
     session.append(make("h3", "Session"), sessionSummary, logout);
   }
-  dialog.append(menuHeader, views, appearance, presentation, page, details);
+  dialog.append(menuHeader, views, appearance, presentation, audio, page, details);
   if (logout !== null) dialog.append(session);
   document.body.append(dialog);
 
@@ -485,6 +501,7 @@ function initializeNativeMenu(logout, logoutButton) {
     views,
     appearance,
     presentation,
+    audio,
     page,
     details,
     sessionSummary,
@@ -632,11 +649,12 @@ function writeStoredValue(key, value) {
 }
 
 function normalizedWorkspacePane(value) {
-  return typeof value === "string" &&
-    (!displayOnly || ["scanner", "waterfall", "diagnostics"].includes(value)) &&
-    WORKSPACE_PANES.includes(value) &&
-    document.getElementById(`pane-tab-${value}`) !== null
-    ? value
+  const candidate = value === "audio" ? "diagnostics" : value;
+  return typeof candidate === "string" &&
+    (!displayOnly || ["scanner", "waterfall", "diagnostics"].includes(candidate)) &&
+    WORKSPACE_PANES.includes(candidate) &&
+    document.getElementById(`pane-tab-${candidate}`) !== null
+    ? candidate
     : "scanner";
 }
 
@@ -683,9 +701,13 @@ function initializeWorkspace() {
     document.querySelectorAll("[data-workspace-tab]"),
   ).filter((tab) => !displayOnly ||
     ["scanner", "waterfall", "diagnostics"].includes(tab.dataset.workspaceTab));
-  activateWorkspacePane(readStoredValue(WORKSPACE_PANE_STORAGE_KEY), {
+  const storedPane = readStoredValue(WORKSPACE_PANE_STORAGE_KEY);
+  activateWorkspacePane(storedPane, {
     persist: false,
   });
+  if (storedPane === "audio") {
+    writeStoredValue(WORKSPACE_PANE_STORAGE_KEY, "diagnostics");
+  }
 
   for (const tab of tabs) {
     tab.addEventListener("click", () => {
@@ -3522,7 +3544,7 @@ function stopAudioPlayback() {
 }
 
 async function startAudioPlayback() {
-  if (displayOnly || authenticationRequired) return;
+  if (!displayAudioAllowed || authenticationRequired) return;
   if (audioPlaybackActive) {
     return;
   }
@@ -3638,6 +3660,13 @@ async function startAudioPlayback() {
 
 function initializeAudioPlayback() {
   resetAudioTelemetry();
+
+  if (!displayAudioAllowed) {
+    setAudioControls("Unavailable in a display-only session.", false);
+    element("audio-play").disabled = true;
+    element("audio-stop").disabled = true;
+    return;
+  }
 
   if (
     typeof AudioContext === "undefined" ||

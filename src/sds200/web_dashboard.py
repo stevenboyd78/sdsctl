@@ -494,6 +494,7 @@ def create_web_dashboard_app(
     *,
     home_assistant_ingress: bool = False,
     lan_authentication: WebDashboardAuthentication | None = None,
+    display_audio: bool = False,
     browser_device_sessions: BrowserDeviceSessions | None = None,
     browser_device_admin_ingress: BrowserDeviceIngress | None = None,
     scanner_display_admin_ingress: ScannerDisplayIngress | None = None,
@@ -528,6 +529,10 @@ def create_web_dashboard_app(
         raise TypeError(
             "Home Assistant Ingress setting must be boolean."
         )
+    if type(display_audio) is not bool:
+        raise TypeError("Display-only audio setting must be boolean.")
+    if display_audio and lan_authentication is None:
+        raise ValueError("Display-only audio requires authenticated LAN admission.")
     if type(supplemental_delivery) is not bool:
         raise TypeError("Supplemental delivery opt-in must be boolean.")
     if type(supplemental_demand) is not bool:
@@ -546,6 +551,15 @@ def create_web_dashboard_app(
     ):
         raise TypeError(
             "LAN authentication must be WebDashboardAuthentication or None."
+        )
+    if (
+        display_audio
+        and lan_authentication is not None
+        and not lan_authentication.display_enabled
+        and browser_device_sessions is None
+    ):
+        raise ValueError(
+            "Display-only audio requires a display password or browser-device identity."
         )
 
     web_theme_runtime = build_web_theme_runtime(managed_theme_root)
@@ -601,11 +615,13 @@ def create_web_dashboard_app(
             app.add_middleware(BrowserDeviceHTTP, devices=browser_device_sessions,
                                authentication=lan_authentication,
                                display_theme_paths=display_theme_paths,
+                               display_audio=display_audio,
                                supplemental_demand=supplemental_demand)
         else:
             app.add_middleware(WebDashboardAuthenticationMiddleware,
                                authentication=lan_authentication,
                                display_theme_paths=display_theme_paths,
+                               display_audio=display_audio,
                                supplemental_demand=supplemental_demand)
 
     if supplemental_delivery:
@@ -634,6 +650,10 @@ def create_web_dashboard_app(
             shell = shell.replace(
                 '<html ', f'<html data-access-mode="{mode}" ', 1,
             )
+            if display_only and display_audio:
+                shell = shell.replace(
+                    '<html ', '<html data-display-audio="enabled" ', 1,
+                )
         return HTMLResponse(
             content=shell,
             headers=dict(_WEB_RESPONSE_HEADERS),

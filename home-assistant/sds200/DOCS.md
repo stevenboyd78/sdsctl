@@ -235,7 +235,7 @@ the App.
 
 This update packages the wider Full-HD dashboard, Cinematic theme collection,
 2×2 scanner hierarchy, held-field presentation, operational health instrument,
-and responsive Display & session drawer. Theme, palette, typography, session
+and responsive Menu drawer. Theme, palette, typography, session
 status, logout, and display-only navigation remain browser/session behavior;
 they are not new App options. The update does not add automatic authentication,
 theme rotation, automatic display-kiosk audio, a Favorites editor, or another

@@ -354,6 +354,56 @@ def test_browser_device_feature_is_disabled_by_default() -> None:
         assert client.get("/auth/login").status_code == 200
 
 
+def test_browser_device_display_audio_is_an_explicit_read_only_extension(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "audio-authority"
+    root.mkdir(mode=0o700)
+    store = BrowserDeviceStore.initialize(root / "devices.sqlite")
+    device = store.enroll("display")
+    sessions = BrowserDeviceSessions(store)
+    authentication = WebDashboardAuthentication(
+        "fictional operator password",
+        ORIGIN,
+    )
+    raw = FastAPI()
+
+    @raw.get("/api/v1/audio")
+    async def audio(request: Request):
+        return {"display_only": request.state.sdsctl_display_only}
+
+    @raw.get("/assets/audio-worklet.js")
+    async def audio_worklet(request: Request):
+        return {"display_only": request.state.sdsctl_display_only}
+
+    wrapper = BrowserDeviceHTTP(
+        raw,
+        authentication=authentication,
+        devices=sessions,
+        display_audio=True,
+    )
+    with TestClient(wrapper, base_url=ORIGIN) as client:
+        token = exchange(client, device.credential).json()["token"]
+        client.cookies.set(BROWSER_DEVICE_COOKIE, token)
+        response = client.get("/api/v1/audio")
+        assert response.status_code == 200
+        assert response.json() == {"display_only": True}
+        worklet = client.get("/assets/audio-worklet.js")
+        assert worklet.status_code == 200
+        assert worklet.json() == {"display_only": True}
+
+
+def test_browser_device_rejects_non_boolean_display_audio(setup) -> None:
+    _, _, _, sessions, authentication, wrapper = setup
+    with pytest.raises(TypeError, match="Display-only audio setting must be boolean"):
+        BrowserDeviceHTTP(
+            wrapper._app,
+            authentication=authentication,
+            devices=sessions,
+            display_audio=1,  # type: ignore[arg-type]
+        )
+
+
 @pytest.mark.parametrize("change", ["none", "revoke", "pause", "close"])
 def test_dashboard_asset_burst_waits_for_session_admission(setup, monkeypatch, change) -> None:
     """A cold dashboard fetches many protected assets while both readers are busy."""

@@ -180,7 +180,7 @@ published App does not require `pip`, a source checkout, or a Local App under
 Version 0.33.0 publishes the expanded Full-HD WebUI shell, 22 Cinematic theme
 choices with six bespoke panoramic environments, the 2×2 scanner hierarchy,
 held-field presentation, operational health instrument, and responsive
-Display & session drawer. Panoramas activate only on suitable HD geometry;
+Menu drawer. Panoramas activate only on suitable HD geometry;
 narrow and mobile displays retain the compact presentation.
 
 The drawer reorganizes existing theme, palette, typography, session status,

@@ -31,6 +31,7 @@ from sds200.front_panel_keys import FrontPanelKey, front_panel_inventory_snapsho
 from sds200.pcmu import PcmuPacket
 from sds200.pcmu_protocol import encode_pcmu_delivery
 from sds200.pcmu_subscriptions import PcmuPacketDelivery, PcmuPublication
+from sds200.web_auth import WebDashboardAuthentication
 from sds200.web_dashboard import (
     WEB_DASHBOARD_API_PROTOCOL,
     WEB_DASHBOARD_API_VERSION,
@@ -488,6 +489,32 @@ def test_web_dashboard_rejects_non_boolean_home_assistant_ingress() -> None:
         )
 
 
+def test_web_dashboard_rejects_invalid_display_audio_configuration() -> None:
+    with pytest.raises(TypeError, match="Display-only audio setting must be boolean"):
+        create_web_dashboard_app(
+            FakeDaemonApiClient,
+            display_audio=1,  # type: ignore[arg-type]
+        )
+    with pytest.raises(
+        ValueError,
+        match="Display-only audio requires authenticated LAN admission",
+    ):
+        create_web_dashboard_app(FakeDaemonApiClient, display_audio=True)
+    authentication = WebDashboardAuthentication(
+        "another fictional operator password",
+        "https://scanner.example:8443",
+    )
+    with pytest.raises(
+        ValueError,
+        match="Display-only audio requires a display password or browser-device identity",
+    ):
+        create_web_dashboard_app(
+            FakeDaemonApiClient,
+            lan_authentication=authentication,
+            display_audio=True,
+        )
+
+
 def test_web_dashboard_home_assistant_ingress_rejects_other_clients() -> None:
     def forbidden_factory() -> FakeDaemonApiClient:
         raise AssertionError("rejected ingress request must not reach daemon")
@@ -630,14 +657,13 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
         "scanner",
         "waterfall",
         "controls",
-        "audio",
         "recordings",
         "diagnostics",
     ):
         assert f'data-workspace-tab="{pane}"' in response.text
         assert f'data-workspace-pane="{pane}"' in response.text
-    assert response.text.count('role="tab"') == 6
-    assert response.text.count('role="tabpanel"') == 6
+    assert response.text.count('role="tab"') == 5
+    assert response.text.count('role="tabpanel"') == 5
     assert 'id="waterfall-spectrum"' in response.text
     assert 'id="waterfall-history"' in response.text
     assert response.text.count('role="img" tabindex="-1"') == 2
@@ -2302,18 +2328,23 @@ def test_dashboard_layout_uses_dedicated_recording_library_panel() -> None:
     diagnostics_start = dashboard.index('id="pane-diagnostics"')
     scanner_start = dashboard.index('id="pane-scanner"', diagnostics_start)
     controls_start = dashboard.index('id="pane-controls"', scanner_start)
-    audio_start = dashboard.index('id="pane-audio"', controls_start)
-    recordings_start = dashboard.index('id="pane-recordings"', audio_start)
+    recordings_start = dashboard.index('id="pane-recordings"', controls_start)
     deck_end = dashboard.index("</div>\n    </div>\n  </main>", recordings_start)
 
     diagnostics_pane = dashboard[diagnostics_start:scanner_start]
     scanner_pane = dashboard[scanner_start:controls_start]
-    controls_pane = dashboard[controls_start:audio_start]
+    controls_pane = dashboard[controls_start:recordings_start]
     recordings_pane = dashboard[recordings_start:deck_end]
 
     assert 'id="runtime-title"' in diagnostics_pane
     assert 'id="daemon-state"' in diagnostics_pane
+    assert 'class="panel daemon-runtime-section"' in diagnostics_pane
+    assert 'class="panel browser-audio-diagnostics"' in diagnostics_pane
+    assert 'id="audio-playback-controls"' in diagnostics_pane
+    assert 'id="audio-source"' in diagnostics_pane
     assert 'id="scanner-reconnect"' not in diagnostics_pane
+    assert 'id="pane-audio"' not in dashboard
+    assert 'id="pane-tab-audio"' not in dashboard
     assert 'id="radio-activity-panel"' in scanner_pane
     assert 'id="scanner-reconnect"' in controls_pane
     assert 'id="front-panel-title"' in controls_pane
@@ -2328,7 +2359,7 @@ def test_dashboard_layout_uses_dedicated_recording_library_panel() -> None:
     assert 'id="recordings-next-page"' in recordings_pane
 
 
-def test_universal_display_and_session_drawer_contract() -> None:
+def test_universal_dashboard_menu_contract() -> None:
     asset_root = (
         Path(__file__).resolve().parents[1]
         / "src"
@@ -2348,7 +2379,7 @@ def test_universal_display_and_session_drawer_contract() -> None:
     assert "if (displayOnly) initializeDisplayNavigation(nativeMenuController)" in script
     assert 'trigger.id = "native-menu-toggle"' in script
     assert 'const trigger = make("button")' in script
-    assert 'make("span", "Display & session", "native-menu-label")' in script
+    assert 'make("span", "Menu", "native-menu-label")' in script
     assert 'make("span", "☰", "native-menu-icon")' in script
     assert 'triggerIcon.setAttribute("aria-hidden", "true")' in script
     assert 'title.id = "native-menu-title"' in script
@@ -2360,6 +2391,19 @@ def test_universal_display_and_session_drawer_contract() -> None:
     assert 'const presentation = make("section", null, "native-menu-presentation")' in script
     assert 'document.createComment("native drawer presentation position")' in script
     assert "presentation.append(mimicToolbar)" in script
+    assert 'const audio = make("section", null, "native-menu-audio")' in script
+    assert "const displayAudioAllowed = !displayOnly ||" in script
+    assert 'document.documentElement.dataset.displayAudio === "enabled"' in script
+    assert "if (!displayAudioAllowed)" in script
+    start_audio = script.split("async function startAudioPlayback()", 1)[1].split(
+        "function initializeAudioPlayback()", 1
+    )[0]
+    assert "if (!displayAudioAllowed || authenticationRequired) return;" in start_audio
+    assert "if (displayOnly || authenticationRequired) return;" not in start_audio
+    assert 'element("audio-playback-controls")' in script
+    assert 'document.createComment("native drawer audio playback position")' in script
+    assert "audio.append(audioPlayback)" in script
+    assert 'audioPlayback.hidden = true' in script
     assert 'element("dashboard-page-identity")' in script
     assert 'element("dashboard-status-details")' in script
     assert 'document.querySelector(".header-actions").append(dashboardMessage)' in script
@@ -2399,6 +2443,8 @@ def test_universal_display_and_session_drawer_contract() -> None:
     assert "overscroll-behavior: contain !important" in viewport
     assert "scrollbar-gutter: stable !important" in viewport
     assert ".native-menu-presentation" in viewport
+    assert ".native-menu-audio" in viewport
+    assert 'html[data-access-mode="display"]:not([data-display-audio="enabled"])' in viewport
     assert ".native-menu-page" in viewport
     assert ".native-menu-status-details" in viewport
     assert "#native-menu .mimic-toolbar:not([hidden])" in viewport

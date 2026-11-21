@@ -73,6 +73,10 @@ _DISPLAY_READ_PATHS = frozenset({
     "/assets/system-palettes.css", "/assets/theme-bootstrap.js",
     "/assets/dashboard.js", "/assets/favicon.svg",
 })
+_DISPLAY_AUDIO_READ_PATHS = frozenset({
+    "/api/v1/audio",
+    "/assets/audio-worklet.js",
+})
 
 
 def _display_demand_allowed(method: str, path: str, enabled: bool) -> bool:
@@ -517,13 +521,18 @@ class WebDashboardAuthenticationMiddleware:
         *,
         authentication: WebDashboardAuthentication,
         display_theme_paths: frozenset[str] = frozenset(),
+        display_audio: bool = False,
         supplemental_demand: bool = False,
     ) -> None:
         if not isinstance(authentication, WebDashboardAuthentication):
             raise TypeError("Web dashboard authentication middleware requires a valid policy.")
+        if type(display_audio) is not bool:
+            raise TypeError("Display-only audio setting must be boolean.")
         self._app = app
         self._authentication = authentication
         self._display_paths = _DISPLAY_READ_PATHS | display_theme_paths
+        if display_audio:
+            self._display_paths |= _DISPLAY_AUDIO_READ_PATHS
         if type(supplemental_demand) is not bool:
             raise TypeError("Supplemental demand opt-in must be boolean.")
         self._supplemental_demand = supplemental_demand

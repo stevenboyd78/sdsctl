@@ -45,7 +45,7 @@ Favorites write executor as an App action or authorize a physical scanner write.
 
 v0.33.0 also retains the exact nine-field contract. Its Full-HD dashboard,
 Cinematic collection, 2×2 hierarchy, held-field styling, scanner-health
-instrument, and responsive Display & session drawer are packaged presentation
+instrument, and responsive Menu drawer are packaged presentation
 changes. They do not add automatic login, theme rotation, display-kiosk audio,
 a Favorites editor, another listener, or another scanner owner.
 

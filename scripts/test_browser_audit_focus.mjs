@@ -18,19 +18,13 @@ function fixture({missing = false, blockedFocus = false, displaced = false} = {}
       if (displaced) document.activeElement = null;
     }
   }
-  const hidden = new Element({parentElement: new Element({hidden: true})});
-  const invisible = new Element({visibility: 'hidden'});
-  const disabled = new Element({disabled: true});
-  const inert = new Element({inert: true});
-  const excluded = new Element({tabIndex: -1});
   const active = new Element();
   const selector = new Select();
-  const candidates = [hidden, invisible, disabled, inert, excluded, ...missing ? [] : [active]];
-  document.querySelectorAll = query => {
-    assert.equal(query, '.workspace-pane[data-workspace-pane="scanner"] button:not(:disabled)');
-    return candidates;
+  document.querySelector = query => {
+    if (query === '#pane-tab-scanner') return missing ? null : active;
+    assert.equal(query, '#system-palette-select');
+    return selector;
   };
-  document.querySelector = query => { assert.equal(query, '#system-palette-select'); return selector; };
   const audit = vm.runInNewContext(`(${browserAuditLibrary.toString()})()`, {
     Element, HTMLElement: Element, HTMLSelectElement: Select, document,
     Event: class {}, window: {sdsctlTheme: {currentSystemPalette: () => selector.value}},
@@ -39,15 +33,15 @@ function fixture({missing = false, blockedFocus = false, displaced = false} = {}
   return {audit, document, active};
 }
 
-test('palette focus probe skips hidden Mimic, invisible, disabled, inert and untabbable controls', () => {
+test('palette focus probe preserves the active pane tab', () => {
   const {audit, document, active} = fixture();
   assert.equal(audit.switchSystemPalette('ansi-light').failures.length, 0);
   assert.equal(document.activeElement, active);
 });
 
-test('palette focus probe refuses missing visible targets rather than silently passing', () => {
+test('palette focus probe refuses a missing active pane tab rather than silently passing', () => {
   const {audit} = fixture({missing: true});
-  assert.match(audit.switchSystemPalette('ansi-light').failures[0], /no visible enabled pane button/);
+  assert.match(audit.switchSystemPalette('ansi-light').failures[0], /no active pane tab/);
 });
 
 test('palette focus probe verifies its setup before blaming a palette change', () => {

@@ -52,7 +52,7 @@ test('complete findings JSON is deterministic and retains every failure', () => 
   assert.equal(report.result.failures.length, 2);
   assert.equal(report.matrix.themes.length, 28);
   assert.equal(report.matrix.viewports.length, 5);
-  assert.equal(report.matrix.panes.length, 6);
+  assert.equal(report.matrix.panes.length, 5);
   assert.equal(serializeFindingsReport(result), serialized);
 });
 

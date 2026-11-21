@@ -127,6 +127,8 @@ def test_web_parser_uses_loopback_defaults() -> None:
     assert args.lan_public_port is None
     assert args.lan_password_env is None
     assert args.lan_password_file is None
+    assert args.lan_display_password_file is None
+    assert args.lan_display_audio is False
     assert args.lan_tls_certfile is None
     assert args.lan_tls_keyfile is None
     assert args.daemon_socket_path is None
@@ -174,6 +176,9 @@ def test_web_parser_accepts_authenticated_lan_options() -> None:
             "https://scanner.example:8443",
             "--lan-password-env",
             "SDSCTL_WEB_PASSWORD",
+            "--lan-display-password-file",
+            "/run/secrets/display-password.secret",
+            "--lan-display-audio",
             "--lan-tls-certfile",
             "/run/secrets/dashboard.crt",
             "--lan-tls-keyfile",
@@ -189,6 +194,10 @@ def test_web_parser_accepts_authenticated_lan_options() -> None:
     assert args.lan_public_port is None
     assert args.lan_password_env == "SDSCTL_WEB_PASSWORD"
     assert args.lan_password_file is None
+    assert args.lan_display_password_file == Path(
+        "/run/secrets/display-password.secret"
+    )
+    assert args.lan_display_audio is True
     assert args.lan_tls_certfile == Path("/run/secrets/dashboard.crt")
     assert args.lan_tls_keyfile == Path("/run/secrets/dashboard.key")
     assert args.listen_port == 8443
@@ -813,11 +822,13 @@ def test_web_cli_authenticated_lan_reads_private_file_and_public_port(
         *args: object,
         home_assistant_ingress: bool = False,
         lan_authentication: WebDashboardAuthentication | None = None,
+        display_audio: bool = False,
         managed_theme_root: Path | None = None,
     ) -> object:
         del args
         assert home_assistant_ingress is False
         assert lan_authentication is not None
+        assert display_audio is True
         assert managed_theme_root is not None
         authentications.append(lan_authentication)
         return app
@@ -870,6 +881,7 @@ def test_web_cli_authenticated_lan_reads_private_file_and_public_port(
             str(password_file),
             "--lan-display-password-file",
             str(display_file),
+            "--lan-display-audio",
             "--lan-tls-certfile",
             str(certificate),
             "--lan-tls-keyfile",
@@ -1026,6 +1038,10 @@ def test_web_cli_validates_tls_before_constructing_app_or_server(
             "--lan-* options require --authenticated-lan",
         ),
         (
+            ["--lan-display-audio"],
+            "--lan-* options require --authenticated-lan",
+        ),
+        (
             ["--authenticated-lan"],
             "--authenticated-lan requires:",
         ),
@@ -1050,6 +1066,38 @@ def test_web_cli_rejects_incomplete_or_conflicting_authenticated_lan_options(
 ) -> None:
     assert cli.main(["web", *arguments], environ={}) == 2
     assert message in capsys.readouterr().err
+
+
+def test_web_cli_display_audio_requires_a_display_identity(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    result = cli.main(
+        [
+            "web",
+            "--authenticated-lan",
+            "--lan-listen-address",
+            "192.168.0.25",
+            "--lan-origin",
+            "https://scanner.example:8443",
+            "--lan-password-env",
+            "SDSCTL_WEB_PASSWORD",
+            "--lan-tls-certfile",
+            str(tmp_path / "dashboard.crt"),
+            "--lan-tls-keyfile",
+            str(tmp_path / "dashboard.key"),
+            "--lan-display-audio",
+            "--listen-port",
+            "8443",
+        ],
+        environ={"SDSCTL_WEB_PASSWORD": "correct horse battery staple"},
+    )
+
+    assert result == 2
+    assert (
+        "--lan-display-audio requires --lan-display-password-file or "
+        "--experimental-browser-devices"
+    ) in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(

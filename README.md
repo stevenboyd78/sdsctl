@@ -206,7 +206,7 @@ workflow. Hardware-independent tests must not require a physical scanner.
 ## Project status
 
 Version `0.33.0` adds 22 Cinematic dashboard choices, including six bespoke
-Full-HD panoramic environments; a responsive Display & session drawer; the
+Full-HD panoramic environments; a responsive Menu drawer; the
 2×2 System/Department/Channel/Site hierarchy; theme-native held fields; and a
 stateful scanner-health instrument. It also expands the Full-HD shell and
 hardens browser and release validation. See the

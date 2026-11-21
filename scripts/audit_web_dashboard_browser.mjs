@@ -83,7 +83,6 @@ export const PANES = Object.freeze([
   "scanner",
   "controls",
   "waterfall",
-  "audio",
   "recordings",
   "diagnostics",
 ]);
@@ -135,14 +134,14 @@ const HELP = `\
 Usage: node scripts/audit_web_dashboard_browser.mjs [options]
 
 Run the deterministic dashboard and Home Assistant waterfall-card browser audit in one local
-Chrome/Chromium session. The audit writes no PNGs. It covers all 840 built-in
+Chrome/Chromium session. The audit writes no PNGs. It covers all 700 built-in
 theme × reference CSS viewport × workspace pane cases, 30 exact panoramic-boundary
 cases for the six hero environments, all 210 explicit System
 palette responsive cases, plus media-preference, enlarged-text,
 pagination-focus, trusted Tab/Shift+Tab traversal, WCAG AA contrast, complete
 adaptive-presentation, DPR-transition, and prefixed-URL probes. It also covers
 the LCARS navigation breakpoint immediately below, at, and above 44rem,
-the universal Display & session drawer in standalone and Home Assistant Ingress
+the universal Menu drawer in standalone and Home Assistant Ingress
 contexts plus the operator and display-only authenticated variants at every reference
 viewport, including 400x240 reachability, focus, backdrop, expiry, and stopped-retry probes,
 phone recording controls with alternative system-font metrics, and
@@ -164,7 +163,7 @@ Options:
   --waterfall-only    Run only the Home Assistant waterfall-card regression/lifecycle audit
   --waterfall-screenshot-dir PATH
                       Write three sanitized waterfall-card reference PNGs
-  --list              List the 840 matrix cases without opening Chrome
+  --list              List the 700 matrix cases without opening Chrome
   -h, --help          Show this help and exit
 
 The default command requires Node.js 24 or newer, starts the existing fictional-data server from
@@ -2140,7 +2139,7 @@ export function browserAuditLibrary() {
     );
     const selected = tabs.filter((tab) => tab.getAttribute("aria-selected") === "true");
     const visible = panes.filter((pane) => !pane.hidden && rendered(pane));
-    const expectedCount = document.querySelector("#pane-tab-home-assistant") ? 7 : 6;
+    const expectedCount = document.querySelector("#pane-tab-home-assistant") ? 6 : 5;
     if (tabs.length !== expectedCount || panes.length !== expectedCount) {
       failures.push(
         `expected ${expectedCount} tabs and panes; found ${tabs.length} and ${panes.length}`,
@@ -2666,11 +2665,19 @@ export function browserAuditLibrary() {
     const failures = paneState("diagnostics");
     const layout = document.querySelector(".diagnostics-layout");
     const scanner = layout?.querySelector(":scope > .scanner-panel");
+    const runtime = layout?.querySelector(":scope > .daemon-runtime-section");
+    const audio = layout?.querySelector(":scope > .browser-audio-diagnostics");
     if (!(layout instanceof HTMLElement)) {
       return {failures: [...failures, "Diagnostics layout is unavailable"]};
     }
     if (!(scanner instanceof HTMLElement)) {
       failures.push("Diagnostics scanner panel is unavailable");
+    }
+    if (!(runtime instanceof HTMLElement)) {
+      failures.push("Diagnostics daemon runtime panel is unavailable");
+    }
+    if (!(audio instanceof HTMLElement)) {
+      failures.push("Diagnostics live audio panel is unavailable");
     }
     if (layout.querySelector(":scope > .home-assistant-integration-panel") !== null) {
       failures.push("Diagnostics still contains the Home Assistant integration panel");
@@ -2687,7 +2694,7 @@ export function browserAuditLibrary() {
     const clients = layout.querySelector("#connected-clients-panel");
     const connectionList = scanner.querySelector(":scope > .status-list");
     const connectionRow = connectionList?.firstElementChild;
-    const serviceRow = scanner.querySelector(".daemon-runtime-section .status-list > div");
+    const serviceRow = runtime?.querySelector(".status-list > div");
     if (!(connectionList instanceof HTMLElement) ||
         getComputedStyle(connectionList).alignSelf !== "start" ||
         getComputedStyle(connectionList).alignContent !== "start") {
@@ -2701,7 +2708,7 @@ export function browserAuditLibrary() {
     if (layoutStyle.display !== "grid") {
       failures.push(`Diagnostics layout display is ${layoutStyle.display}, expected grid`);
     }
-    const expectedColumns = window.innerWidth > 1100 ? 2 : 1;
+    const expectedColumns = window.innerWidth >= 704 ? 3 : 1;
     if (tracks.length !== expectedColumns) {
       failures.push(
         `Diagnostics layout exposes ${tracks.length} columns instead of ${expectedColumns}: ` +
@@ -2713,6 +2720,19 @@ export function browserAuditLibrary() {
     }
     if (scannerStyle.gridArea !== "auto") {
       failures.push(`scanner panel retains named grid placement ${scannerStyle.gridArea}`);
+    }
+    const peerModules = [scanner, runtime, audio].filter(
+      candidate => candidate instanceof HTMLElement,
+    );
+    if (peerModules.some(candidate => candidate.parentElement !== layout)) {
+      failures.push("Diagnostics modules are not direct layout peers");
+    }
+    if (peerModules.some(candidate => {
+      const style = getComputedStyle(candidate);
+      return style.borderTopStyle === "none" ||
+        Number.parseFloat(style.borderTopWidth) <= 0;
+    })) {
+      failures.push("Diagnostics module boundary is missing");
     }
     if (expectedColumns === 1 && scannerRect.width < layoutRect.width - tolerance * 2) {
       failures.push("Scanner panel does not fill the Diagnostics workspace");
@@ -2804,9 +2824,9 @@ export function browserAuditLibrary() {
 
   function switchTheme(theme) {
     const failures = [];
-    const audioTab = document.querySelector("#pane-tab-audio");
-    audioTab?.click();
-    const sentinel = document.querySelector("#audio-play");
+    const diagnosticsTab = document.querySelector("#pane-tab-diagnostics");
+    diagnosticsTab?.click();
+    const sentinel = diagnosticsTab;
     sentinel?.focus({preventScroll: true});
     const select = document.querySelector("#theme-select");
     if (!(select instanceof HTMLSelectElement)) {
@@ -2820,7 +2840,7 @@ export function browserAuditLibrary() {
     if (window.sdsctlTheme?.current() !== theme || select.value !== theme) {
       failures.push(`theme controller and selector disagree for ${theme}`);
     }
-    if (document.documentElement.dataset.workspacePane !== "audio") {
+    if (document.documentElement.dataset.workspacePane !== "diagnostics") {
       failures.push(`theme switch changed the active workspace pane`);
     }
     if (document.activeElement !== sentinel) {
@@ -2838,11 +2858,9 @@ export function browserAuditLibrary() {
   function switchSystemPalette(palette) {
     const failures = [];
     const currentPane = document.documentElement.dataset.workspacePane;
-    const sentinel = Array.from(document.querySelectorAll(
-      `.workspace-pane[data-workspace-pane="${currentPane}"] button:not(:disabled)`,
-    )).find(element => rendered(element) && !disabledOrInert(element) && element.tabIndex >= 0);
+    const sentinel = document.querySelector(`#pane-tab-${currentPane}`);
     if (!(sentinel instanceof HTMLElement)) {
-      return {failures: ["System palette focus probe has no visible enabled pane button"]};
+      return {failures: ["System palette focus probe has no active pane tab"]};
     }
     sentinel.focus({preventScroll: true});
     if (document.activeElement !== sentinel) {
@@ -3351,9 +3369,9 @@ async function auditAccessibility(cdp, collector, context, expectedPane) {
     node.properties?.find((candidate) => candidate.name === propertyName)?.value?.value;
   const failures = [];
   const tabs = exposed.filter((node) => role(node) === "tab");
-  const expectedTabNames = ["scanner", "controls", "waterfall", "audio", "recordings", "diagnostics"];
-  if (tabs.length !== 6) {
-    failures.push(`accessibility tree exposes ${tabs.length} tabs instead of six`);
+  const expectedTabNames = ["scanner", "controls", "waterfall", "recordings", "diagnostics"];
+  if (tabs.length !== 5) {
+    failures.push(`accessibility tree exposes ${tabs.length} tabs instead of five`);
   }
   if (
     JSON.stringify(tabs.map(normalizedName).sort()) !==
@@ -3379,14 +3397,14 @@ async function auditAccessibility(cdp, collector, context, expectedPane) {
     (node) => role(node) === "combobox" && normalizedName(node) === "theme",
   );
   if (themeSelect !== undefined) {
-    failures.push("closed Display & session drawer exposes the Theme selector");
+    failures.push("closed Menu drawer exposes the Theme selector");
   }
   const menuButton = exposed.find(
     (node) => role(node) === "button" &&
-      normalizedName(node) === "open display and session settings",
+      normalizedName(node) === "open dashboard menu",
   );
   if (menuButton === undefined) {
-    failures.push("accessibility tree does not expose the Display & session trigger");
+    failures.push("accessibility tree does not expose the Menu trigger");
   }
   const unnamedButtons = exposed.filter(
     (node) => role(node) === "button" && name(node).trim() === "",
@@ -3774,6 +3792,7 @@ async function auditUniversalDrawer(cdp, context) {
     const trigger = document.querySelector('#native-menu-toggle');
     const appearance = document.querySelector('.native-menu-appearance');
     const presentation = document.querySelector('.native-menu-presentation');
+    const audio = document.querySelector('.native-menu-audio');
     const page = document.querySelector('.native-menu-page');
     const details = document.querySelector('.native-menu-status-details');
     const toolbar = document.querySelector('.mimic-toolbar');
@@ -3797,6 +3816,11 @@ async function auditUniversalDrawer(cdp, context) {
     if (!presentation || (toolbar !== null && !presentation.contains(toolbar)) ||
         presentation?.hidden !== (toolbar === null || toolbar.hidden)) {
       failures.push('scanner presentation visibility or ownership is inconsistent');
+    }
+    if (!audio?.contains(document.querySelector('#audio-playback-controls')) ||
+        !document.querySelector('.browser-audio-diagnostics')?.contains(
+          document.querySelector('#audio-source'))) {
+      failures.push('audio playback and diagnostics ownership is inconsistent');
     }
     if (!page?.contains(identity) || !details?.contains(footer) ||
         !footer?.contains(document.querySelector('#last-update')) ||
@@ -3860,7 +3884,7 @@ async function auditUniversalDrawer(cdp, context) {
   const accessible = (role, name) => exposed.some(node =>
     node.role?.value === role &&
       (node.name?.value ?? '').trim().toLocaleLowerCase('en-US') === name);
-  if (!accessible('dialog', 'display & session') ||
+  if (!accessible('dialog', 'menu') ||
       !accessible('combobox', 'theme') ||
       exposed.some(node => node.role?.value === 'button' &&
         (node.name?.value ?? '').trim() === '')) {
@@ -4835,6 +4859,12 @@ async function auditNativeDrawer(cdp, {role, exerciseInteractions = false}) {
       document.querySelector('#native-menu #system-palette-picker') !== null &&
       document.querySelector('#native-menu #lcars-v2-appearance-pickers') !== null &&
       document.querySelector('#native-menu #theme-typography-pickers') !== null &&
+      (${role === 'display'} ?
+        document.querySelector('#audio-playback-controls').hidden &&
+          document.querySelector('#audio-play').disabled &&
+          document.querySelector('#audio-stop').disabled :
+        document.querySelector('#native-menu .native-menu-audio')?.contains(
+          document.querySelector('#audio-playback-controls'))) &&
       document.querySelector('#native-session-summary').textContent.includes(
         ${JSON.stringify(role === 'display' ? 'Display-only session' : 'Operator session')}) &&
       (${role === 'display'} || document.querySelector('.native-menu-views').hidden);
@@ -5027,7 +5057,7 @@ async function auditDisplayNavigation(cdp) {
       ]});
       await frames(cdp);
       const drawerFailures = await evaluate(cdp, `window.__sdsctlBrowserAudit.readabilityFailures(
-        document.querySelector('#native-menu'), 'Compact Display & session drawer')`);
+        document.querySelector('#native-menu'), 'Compact Menu drawer')`);
       if (drawerFailures.length) {
         throw new Error(`${theme}/${appearance} drawer: ${drawerFailures.join('; ')}`);
       }
@@ -5262,6 +5292,121 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
   }
 }
 
+async function auditDisplayAudioOptIn(cdp, baseUrl, timeoutMs, pageFailures) {
+  const baseline = pageFailures.length;
+  const installed = await cdp.send("Page.addScriptToEvaluateOnNewDocument", {source: `
+    (() => {
+      window.__displayAudioAudit = {requests: [], streamCancelled: false};
+      class AuditAudioContext {
+        constructor() {
+          this.audioWorklet = {addModule: async () => {}};
+          this.destination = {};
+        }
+        async resume() {}
+        async close() {}
+      }
+      class AuditAudioWorkletNode {
+        constructor() {
+          this.port = {postMessage() {}};
+        }
+        connect() {}
+        disconnect() {}
+      }
+      Object.defineProperty(window, 'AudioContext', {
+        configurable: true,
+        value: AuditAudioContext,
+      });
+      Object.defineProperty(window, 'AudioWorkletNode', {
+        configurable: true,
+        value: AuditAudioWorkletNode,
+      });
+      const originalFetch = window.fetch;
+      window.fetch = async (url, options) => {
+        const path = new URL(url, location.href).pathname;
+        window.__displayAudioAudit.requests.push(path);
+        if (path === '/auth/session') {
+          return new Response(JSON.stringify({display_only: true, remaining_seconds: 28800}),
+            {headers: {'Content-Type': 'application/json'}});
+        }
+        if (path === '/api/v1/audio') {
+          return new Response(new ReadableStream({
+            cancel() {
+              window.__displayAudioAudit.streamCancelled = true;
+            },
+          }), {headers: {'Content-Type': 'application/octet-stream'}});
+        }
+        return originalFetch(url, options);
+      };
+    })();
+  `});
+  try {
+    await setViewport(cdp, {width: 800, height: 480, dpr: 1});
+    await navigate(cdp, baseUrl + "/?kiosk=display-audio", timeoutMs, {
+      installAuditLibrary: false, waitForDashboardReady: false,
+    });
+    await evaluate(cdp, `(async () => {
+      for (let attempt = 0; attempt < 500 &&
+          document.querySelector('#status-badge').dataset.state !== 'online'; attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      stopEventStream();
+    })()`);
+    await clickElement(cdp, '#native-menu-toggle');
+    const initial = await evaluate(cdp, `({
+      optedIn: document.documentElement.dataset.displayAudio === 'enabled',
+      controlsVisible: !document.querySelector('#audio-playback-controls').hidden,
+      playEnabled: !document.querySelector('#audio-play').disabled,
+      stopDisabled: document.querySelector('#audio-stop').disabled,
+      status: document.querySelector('#audio-playback-status').textContent,
+      summary: document.querySelector('#native-session-summary').textContent,
+    })`);
+    if (!initial.optedIn || !initial.controlsVisible || !initial.playEnabled ||
+        !initial.stopDisabled || initial.status !== 'Stopped' ||
+        !initial.summary.includes('browser audio playback is enabled')) {
+      throw new Error(`display audio opt-in initial state failed: ${JSON.stringify(initial)}`);
+    }
+    await clickElement(cdp, '#audio-play');
+    const started = await evaluate(cdp, `(async () => {
+      for (let attempt = 0; attempt < 100 &&
+          !window.__displayAudioAudit.requests.includes('/api/v1/audio'); attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      return {
+        requested: window.__displayAudioAudit.requests.filter(
+          path => path === '/api/v1/audio').length,
+        active: audioPlaybackActive,
+        playDisabled: document.querySelector('#audio-play').disabled,
+        stopEnabled: !document.querySelector('#audio-stop').disabled,
+        status: document.querySelector('#audio-playback-status').textContent,
+      };
+    })()`);
+    if (started.requested !== 1 || !started.active || !started.playDisabled ||
+        !started.stopEnabled || started.status !== 'Buffering…') {
+      throw new Error(`display audio Play request failed: ${JSON.stringify(started)}`);
+    }
+    await clickElement(cdp, '#audio-stop');
+    const stopped = await evaluate(cdp, `({
+      active: audioPlaybackActive,
+      cancelled: window.__displayAudioAudit.streamCancelled,
+      playEnabled: !document.querySelector('#audio-play').disabled,
+      stopDisabled: document.querySelector('#audio-stop').disabled,
+      status: document.querySelector('#audio-playback-status').textContent,
+      requests: window.__displayAudioAudit.requests.filter(
+        path => path === '/api/v1/audio').length,
+    })`);
+    if (stopped.active || !stopped.cancelled || !stopped.playEnabled ||
+        !stopped.stopDisabled || stopped.status !== 'Stopped' || stopped.requests !== 1) {
+      throw new Error(`display audio Stop lifecycle failed: ${JSON.stringify(stopped)}`);
+    }
+    if (pageFailures.length !== baseline) {
+      throw new Error('Display audio opt-in raised browser exceptions.');
+    }
+    console.log('PASS: display-only audio opt-in Play request and Stop lifecycle');
+  } finally {
+    await cdp.send("Page.removeScriptToEvaluateOnNewDocument", {identifier: installed.identifier});
+  }
+}
+
 async function auditOperatorDrawer(cdp, baseUrl, timeoutMs, pageFailures) {
   const baseline = pageFailures.length;
   const installed = await cdp.send("Page.addScriptToEvaluateOnNewDocument", {source: `
@@ -5335,7 +5480,7 @@ async function auditOperatorDrawer(cdp, baseUrl, timeoutMs, pageFailures) {
       }
     }
     if (pageFailures.length !== baseline) throw new Error('Operator drawer raised browser exceptions.');
-    console.log('PASS: operator Display & session drawer geometry, focus, expiry and stopped retries');
+    console.log('PASS: operator Menu drawer geometry, focus, expiry and stopped retries');
   } finally {
     await cdp.send('Page.removeScriptToEvaluateOnNewDocument', {identifier: installed.identifier});
   }
@@ -5787,6 +5932,7 @@ async function run(options) {
     await auditNativeLogin(cdp, baseUrl, options.timeoutMs, pageFailures);
     await auditOperatorDrawer(cdp, baseUrl, options.timeoutMs, pageFailures);
     await auditDisplayKiosk(cdp, baseUrl, options.timeoutMs, pageFailures);
+    await auditDisplayAudioOptIn(cdp, baseUrl, options.timeoutMs, pageFailures);
     const result = await runMatrix(cdp, baseUrl, options.timeoutMs, pageFailures);
     if (result.caseCount !== THEMES.length * VIEWPORTS.length * PANES.length) {
       throw new Error(`internal matrix count mismatch: ${result.caseCount}`);

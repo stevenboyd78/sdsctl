@@ -76,7 +76,7 @@
 :root[data-theme-typography] :is(.technical-value, .radio-field-list dd, .radio-summary dd, .status-list dd, .native-summary dd, code, pre) { font-family: var(--type-data) !important; font-variant-numeric: tabular-nums slashed-zero; font-weight: 400 !important; }
 :root[data-theme="matrix"][data-theme-typography] :is(body, h1, h2, h3, button, select, input, textarea, dt, dd, .primary-value, .secondary-value, .technical-value) { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; text-shadow: none; }
 
-/* Typography controls always live in the shared Display & session drawer.
+/* Typography controls always live in the shared Menu drawer.
    Keep hidden theme-specific choices hidden despite the viewport layer, then
    give applicable controls one stable full-width layout at every viewport. */
 @layer sdsctl-viewport-contract {

@@ -252,19 +252,36 @@ The unreleased [display-only browser kiosk](browser-kiosk.md) optionally enables
 stored on the server session, never trusted from request parameters. Display
 requests use an explicit allowlist; scanner controls, audio, recording files,
 management, API documentation and unknown routes are denied before a daemon
-client is created. Both login forms share the same bounded password worker and
+client is created by default. A native authenticated-LAN server with a
+configured display identity may add only `GET /api/v1/audio` to that allowlist
+with `--lan-display-audio`. The Menu then exposes Play/Stop, but playback still
+requires a user gesture and never starts automatically; scanner controls,
+recordings and every other denied route remain denied. Both login forms share
+the same bounded password worker and
 failure budget. Existing operator login remains unchanged when no display
 password is configured. `/auth/session` exposes only the authenticated session's
 role and remaining absolute lifetime, without daemon access or credentials.
 
-Authenticated operator and display-only dashboards share one modal
-**Display & session** drawer. It contains the healthy role/session summary,
-canonical Theme/palette/typography controls and the single logout form.
+Authenticated operator and display-only dashboards share one modal **Menu**
+drawer. It contains the healthy role/session summary, canonical
+Theme/palette/typography controls and the single logout form. Operator and
+ordinary authenticated dashboards also place the existing live-audio status
+and Play/Stop controls there. Display-only sessions keep them hidden and
+disabled unless the server has explicitly enabled `--lan-display-audio` for
+its configured display identity.
 Compact display-only sessions additionally expose their permitted Scanner,
 Waterfall and Diagnostics views there; their API and pane restrictions do not
 change. Authentication expiry or an HTTP 401 closes and invalidates the drawer,
 stops native activity, and leaves a prominent sign-in-required/stale-data alert
 and role-correct login link visible outside it.
+
+The former Audio workspace tab is removed. Existing saved `audio` pane
+preferences fail safely to Diagnostics and are rewritten there. Diagnostics
+owns a distinct **Live audio** section for the browser stream source, packet
+count, queue loss and RTP loss. Those values remain separate from the daemon
+Audio service-health field. The move reuses the existing DOM nodes, listeners,
+single reader and user-gesture-started audio context; it does not add volume,
+output-device or automatic-play capability.
 
 Failed-login accounting uses a one-minute window bounded per peer, across the
 process, and to at most 256 tracked peers. Limits and concurrent-derivation
@@ -402,7 +419,7 @@ message rather than compressing either one.
   discarded rather than wrapping. Routine dashboard redraws do not reset or
   duplicate it; when a field changes, its previous packet keeps falling while a
   new packet containing the updated value begins above the viewport.
-  Matrix-only controls in **Display & session** adjust fall speed, density, rain
+  Matrix-only controls in **Menu** adjust fall speed, density, rain
   visibility, and trail length with an immediate preview. Those preferences are
   stored locally by that browser/display, can be reset to the balanced defaults,
   and never alter daemon or scanner state. The effect is frame-rate and density
@@ -483,8 +500,8 @@ HTML options, stylesheet links, and pre-paint browser metadata are generated
 from the same immutable ordered registry, so they cannot drift into separate
 hard-coded theme lists.
 
-The viewport-owned shell exposes six panes: **Scanner**, **Controls**,
-**Waterfall**, **Audio**, **Recordings**, and **Diagnostics**. At normal browser zoom, the
+The viewport-owned shell exposes five panes: **Scanner**, **Controls**,
+**Waterfall**, **Recordings**, and **Diagnostics**. At normal browser zoom, the
 document and active pane fit without horizontal or vertical scrolling at the
 390x844 portrait-phone, 800x480 compact-landscape, 1366x768 desktop, and
 1920x1080 full-HD reference viewports. Information that cannot fit concurrently
@@ -708,7 +725,7 @@ structure and behind the darker, readable terminal-glass panes. The brighter,
 full-string telemetry packets in the backdrop are fictional gallery data; a
 live dashboard draws the corresponding sanitized local scanner values.
 
-Open **Display & session** while Matrix-inspired is active to tune the effect
+Open **Menu** while Matrix-inspired is active to tune the effect
 for the display and room:
 
 - **Fall speed:** 25–200%, default 100%.
@@ -934,7 +951,7 @@ a claim of installed Home Assistant acceptance or a change to scanner cadence.
 
 The audit reuses the same fictional demo service and one isolated Chrome
 session. It resizes that session through all five reference CSS viewports and
-DPR transitions, exercises every built-in theme and all six panes, drives
+DPR transitions, exercises every built-in theme and all five panes, drives
 recording pagination and focus, reveals all 35 radio fields, and probes adaptive
 screen mappings, reduced motion, forced colors/high contrast, the browser-zoom
 scrolling escape, accessibility-tree semantics, and an Ingress-style URL
@@ -946,7 +963,7 @@ geometry, clipping, and readability checks to scanning, search, Close Call,
 weather, Tone-Out, and unknown automatic presentations.
 
 The same Real-Chrome acceptance also opens the authenticated native
-**Display & session** drawer for operator and display-only fixtures at the
+**Menu** drawer for operator and display-only fixtures at the
 authoritative viewports, plus the 400×240 zoom-reachability case. It verifies
 zero workspace reflow, internal scrolling, 44-pixel targets, unique canonical
 controls, keyboard/touch dismissal and focus restoration, appearance
@@ -960,7 +977,7 @@ pixels, or at least 18.66 CSS pixels with a bold weight. This standards-derived
 floor is shared by authoritative visible radio values and enabled control text;
 themes do not receive individual tolerances. The audit writes no gallery
 images. Use `--help` for executable overrides or `--list` to inspect the
-840-case matrix without opening Chrome.
+700-case matrix without opening Chrome.
 
 The browser performs one initial `/api/v1/status` request and opens
 `/api/v1/events` with the same origin. The event response uses
@@ -1104,6 +1121,14 @@ AudioWorklet, closes the `AudioContext`, and releases the daemon PCMU client.
 Hiding the dashboard intentionally suspends SSE but does not stop audio. Returning
 to the page reopens SSE while preserving the same audio stream. Closing or
 navigating away from the page stops both event and audio streams.
+
+Authenticated native-LAN display-only sessions remain unable to acquire this
+route by default. `--lan-display-audio` is an explicit server-wide opt-in for
+configured display identities (a separate display password or enrolled browser
+device). It adds only the read-only live-audio route and Menu Play/Stop controls;
+it does not enable autoplay, scanner controls, recordings, downloads, or write
+authority. The option is rejected outside authenticated-LAN mode and when no
+display identity is configured.
 
 ## Browser recording workflows
 

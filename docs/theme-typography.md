@@ -22,7 +22,7 @@ For the four non-LCARS themed layouts, **Typography** offers:
 **Font pairing** appears only where there are alternatives. Ordinary non-native
 dashboards keep the responsive overview placement described above. Authenticated
 operator and display-only native dashboards instead keep Theme, palette and
-typography together in the **Display & session** drawer at every viewport size.
+typography together in the **Menu** drawer at every viewport size.
 The drawer overlays the workspace, scrolls internally when space is short and
 retains full-sized touch controls. It moves the canonical controls rather than
 copying them, so resizing and reopening preserve the same nodes, selections and
