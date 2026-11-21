@@ -29,6 +29,7 @@ SNAPSHOT: dict[str, object] = {
         "department": "Dispatch",
         "site": "North",
         "channel": "Primary",
+        "channel_number": 3,
         "frequency": "155.2500 MHz",
         "modulation": "NFM",
         "service_type": "Fire Dispatch",
@@ -122,6 +123,7 @@ def test_device_discovery_uses_stable_topic_identity_and_read_only_entities() ->
         "department",
         "site",
         "channel",
+        "channel_number",
         "frequency",
         "modulation",
         "service_type",
@@ -200,6 +202,7 @@ def test_device_discovery_uses_stable_topic_identity_and_read_only_entities() ->
 
     for key, label in (
         ("site", "Site"),
+        ("channel_number", "Channel Number"),
         ("frequency", "Frequency"),
         ("modulation", "Modulation"),
         ("service_type", "Service Type"),
@@ -247,6 +250,7 @@ def test_optional_radio_sensors_are_fixed_when_current_fields_are_absent() -> No
     components = json.loads(discovery.payload)["components"]
     assert {
         "site",
+        "channel_number",
         "frequency",
         "modulation",
         "service_type",
@@ -261,6 +265,7 @@ def test_optional_radio_sensors_are_fixed_when_current_fields_are_absent() -> No
         components[key]["availability_mode"] == "all"
         for key in (
             "site",
+            "channel_number",
             "frequency",
             "modulation",
             "service_type",
@@ -326,6 +331,7 @@ def test_discovery_adds_deliberate_home_assistant_control_entities() -> None:
         "department",
         "site",
         "channel",
+        "channel_number",
         "frequency",
         "modulation",
         "service_type",

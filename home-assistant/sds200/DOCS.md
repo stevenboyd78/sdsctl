@@ -325,10 +325,10 @@ Home Assistant serves them to the frontend as:
 
 ```text
 /local/sds200/sds200-card.js?v=263439642bea86b5f006d68e90ae3e938d4e2ddff9d49fb2be73168d9732a62d
-/local/sds200/sds200-display-card.js?v=31e62f3d67b4d3a8577fbf69f3a5552a2880fb90984d1d15642a81ec58b15d1d
+/local/sds200/sds200-display-card.js?v=0a39d159082c5aa52719c8797fc63137181b8dc00ef6eee5c190fd6fc50cae7f
 /local/sds200/sds200-waterfall-card.js?v=9e398b169f4df0e11da8d94b4db1bdd0557aa2837b2131e77c5eb30885620626
 /local/sds200/sds200-mimic-card.js?v=ae72bdb6c5e0d9d4035ffa1d3ba42412cbff02bcf41daa0b1bbc0ec7d179bd59
-/local/sds200/sds200-cards.js?v=144da8dc3ac09eabf17fa90db6b00c119d16ddf842834951908826a5396d534f
+/local/sds200/sds200-cards.js?v=2882fbed83070901e419a84b20c5d9e5a358bcb47bd6918bc583c51ff47baa91
 ```
 
 The four byte-identical modules are independently packaged under
@@ -425,7 +425,7 @@ remains deliberately read-only. Scanner controls are separate standard Home
 Assistant switch and button entities and do not add a transport to the card.
 
 For the scanner-style presentation, add **SDS200 Display** from the picker,
-select the same twenty display entities, and choose a layout, palette, and fit
+select the display entities, and choose a layout, palette, and fit
 mode. To use automatic presentation, also select Screen Kind and choose the
 Simple or Detail scanning fallback. The corresponding YAML begins with:
 
@@ -443,6 +443,7 @@ entities:
   department: sensor.REPLACE_ME
   site: sensor.REPLACE_ME
   channel: sensor.REPLACE_ME
+  channel_number: sensor.REPLACE_ME
   frequency: sensor.REPLACE_ME
   modulation: sensor.REPLACE_ME
   service_type: sensor.REPLACE_ME
@@ -474,6 +475,9 @@ without copying scanner artwork, branding, or fonts.
 Auto maps Search and Close Call to the Search layout, Weather to Weather, and
 Tone-Out to Tone-Out. Scanning, missing, unavailable, unknown, and future Screen
 Kind values use `scan_layout`. Explicit layouts intentionally ignore Screen Kind.
+Special layouts prefer the scanner-reported channel name. Weather and Tone-Out
+prefix configured channel numbers with `WX` or `FTO`; unnamed Search and Close
+Call activity falls back to the active frequency.
 
 The compact card includes optional Tone A and Tone B detail rows, and the
 `tone_out` display layout presents both configured values. Numeric zero with an

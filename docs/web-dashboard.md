@@ -133,6 +133,15 @@ client. Closing the daemon session's final consumer releases shared demand and
 performs the existing GWF/PWF cleanup; the web process never sends scanner
 waterfall commands and never exposes the Unix socket path to the browser.
 
+Display-only kiosks can follow scanner-reported Waterfall mode automatically.
+That browser-local behavior only selects the existing pane after a debounce;
+it does not create a second transport or poll the HTTP endpoint repeatedly.
+The selected pane consumes one persistent SSE/NDJSON response. The daemon still
+owns the scanner-facing request/response loop because the qualified SDS200
+firmware returns one fresh 240-bin frame for each `GWF,1,ON` request rather than
+continuously pushing GWF frames. Its conservative 250 ms cadence and deadline,
+loss and overflow telemetry remain renderer-independent.
+
 ## Installation
 
 Install the optional web dependencies:

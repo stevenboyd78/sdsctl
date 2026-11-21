@@ -30,6 +30,7 @@ EXPECTED_ENTITY_FIELDS = {
     "department",
     "site",
     "channel",
+    "channel_number",
     "frequency",
     "modulation",
     "service_type",
@@ -95,7 +96,7 @@ global.window = {{}};
 def test_display_card_resource_url_uses_home_assistant_local_path() -> None:
     assert HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_RESOURCE_URL == (
         "/local/sds200/sds200-display-card.js?v="
-        "31e62f3d67b4d3a8577fbf69f3a5552a2880fb90984d1d15642a81ec58b15d1d"
+        "0a39d159082c5aa52719c8797fc63137181b8dc00ef6eee5c190fd6fc50cae7f"
     )
 
 
@@ -301,6 +302,49 @@ def test_display_card_tone_out_layout_presents_configured_tones() -> None:
     assert '["tone_out_tone_a", "tone_out_tone_b"].includes(field)' in text
     assert "special-layout-tone_out" in text
     assert "grid-template-rows: repeat(5, minmax(0, 1fr));" in text
+
+
+def test_display_card_derives_special_mode_channel_identity() -> None:
+    result = run_display_card_javascript(
+        """
+const card = Object.create(Sds200DisplayCard.prototype);
+card._config = requireDisplayCardConfig({entities: {
+  channel: "sensor.sds200_channel",
+  channel_number: "sensor.sds200_channel_number",
+  frequency: "sensor.sds200_frequency",
+}});
+const scenarios = {
+  weather_number: ["weather", {channel_number: "7"}],
+  weather_named: ["weather", {channel: "NOAA Weather", channel_number: "4"}],
+  weather_frequency: ["weather", {frequency: "162.550000MHz"}],
+  close_call_frequency: ["search", {frequency: "155.752500MHz"}],
+  close_call_named: ["search", {channel: "Close Call Hit", frequency: "155.752500MHz"}],
+  tone_out_named: ["tone_out", {channel: "Fire Dispatch", channel_number: "3"}],
+  tone_out_number: ["tone_out", {channel_number: "12"}],
+};
+const result = {};
+for (const [name, [layout, values]] of Object.entries(scenarios)) {
+  card._states = Object.fromEntries(
+    Object.entries(values).map(([field, state]) => [
+      card._config.entities[field],
+      {state},
+    ]),
+  );
+  result[name] = card._specialChannelText(layout);
+}
+process.stdout.write(JSON.stringify(result));
+"""
+    )
+
+    assert result == {
+        "weather_number": "WX 7",
+        "weather_named": "WX 4: NOAA Weather",
+        "weather_frequency": "162.550000MHz",
+        "close_call_frequency": "155.752500MHz",
+        "close_call_named": "Close Call Hit",
+        "tone_out_named": "FTO 3: Fire Dispatch",
+        "tone_out_number": "FTO 12",
+    }
 
 
 def test_display_card_preserves_raw_telemetry_and_clears_missing_values() -> None:

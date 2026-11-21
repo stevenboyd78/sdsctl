@@ -8,6 +8,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Changed
 
+- Let display-only kiosks follow scanner-reported Waterfall mode with a
+  debounced, locally configurable view switch, automatic return to Scanner,
+  and a manual-view override. Reuse the existing persistent SSE/NDJSON
+  waterfall response rather than adding browser polling or another scanner
+  transport.
 - Rename the universal dashboard drawer to **Menu**, move operator live-audio
   Play/Stop and status into it, and move source/packet/loss telemetry into a
   distinct **Live audio** Diagnostics section. Remove the redundant Audio
@@ -16,6 +21,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   servers may opt a configured display identity into user-initiated live
   playback with `--lan-display-audio`; it never enables autoplay, controls, or
   recordings.
+
+### Fixed
+
+- Show meaningful special-mode channel identity when Weather, Search, or Close
+  Call protocol records omit a channel name. Weather and Tone-Out retain their
+  numbered `WX`/`FTO` identities, while unnamed Search and Close Call activity
+  falls back to the active frequency in the web dashboard and Home Assistant
+  Display card.
 
 ## [0.33.0] - 2026-11-11
 

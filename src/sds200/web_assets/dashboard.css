@@ -122,6 +122,23 @@ select optgroup {
   background: var(--accent-soft, var(--surface));
   font-weight: 800;
 }
+.native-menu-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+.native-menu-checkbox input[type="checkbox"] {
+  width: auto;
+  margin: 0.2em 0 0;
+  accent-color: var(--accent);
+}
+.native-menu-help {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
 .native-menu-session {
   border-top: 1px solid var(--border);
   padding-top: 0.75rem;

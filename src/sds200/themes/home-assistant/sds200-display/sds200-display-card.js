@@ -73,6 +73,11 @@ const SDS200_DISPLAY_ENTITY_FIELDS = Object.freeze([
   Object.freeze({ key: "site", label: "Site", domain: "sensor" }),
   Object.freeze({ key: "channel", label: "Channel", domain: "sensor" }),
   Object.freeze({
+    key: "channel_number",
+    label: "Channel number",
+    domain: "sensor",
+  }),
+  Object.freeze({
     key: "frequency",
     label: "Frequency",
     domain: "sensor",
@@ -668,6 +673,22 @@ class Sds200DisplayCard extends HTMLElement {
     return mappings[layout];
   }
 
+  _specialChannelText(layout) {
+    const channel = this._stateText("channel", "");
+    const channelNumber = this._stateText("channel_number", "");
+    const frequency = this._stateText("frequency", "");
+
+    if (layout === "weather" || layout === "tone_out") {
+      const prefix = channelNumber === ""
+        ? ""
+        : `${layout === "weather" ? "WX" : "FTO"} ${channelNumber}`;
+      if (prefix !== "") {
+        return channel === "" ? prefix : `${prefix}: ${channel}`;
+      }
+    }
+    return channel || frequency || "—";
+  }
+
   _renderSpecial(documentObject, layout) {
     const content = documentObject.createElement("div");
     content.className = (
@@ -680,6 +701,9 @@ class Sds200DisplayCard extends HTMLElement {
       primary.append(
         this._cell(documentObject, label, field, {
           className: "special-primary-cell",
+          value: field === "channel"
+            ? this._specialChannelText(layout)
+            : undefined,
         }),
       );
     }

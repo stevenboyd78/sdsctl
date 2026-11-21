@@ -102,6 +102,23 @@ def test_generic_search_text_without_special_node() -> None:
     assert classify_scanner_screen(info) is ScannerScreenKind.SEARCH
 
 
+@pytest.mark.parametrize(
+    ("mode", "screen"),
+    [
+        ("Waterfall", "waterfall"),
+        ("Waterfall Hold", "future_screen"),
+        ("Unrecognized", "waterfall_display"),
+    ],
+)
+def test_waterfall_screen_text_is_classified(mode: str, screen: str) -> None:
+    info = ScannerInfoParser().parse(
+        "PSI",
+        f'<ScannerInfo Mode="{mode}" V_Screen="{screen}" />',
+    )
+
+    assert classify_scanner_screen(info) is ScannerScreenKind.WATERFALL
+
+
 def test_close_call_searching_without_frequency_node_is_classified() -> None:
     info = _fixture("synthetic-close-call-searching.xml")
     snapshot = snapshot_from_scanner_info(info)
