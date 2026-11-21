@@ -414,6 +414,7 @@
     --content-width: 120rem !important;
     --workspace-gap: clamp(0.35rem, 1.2vmin, 0.9rem) !important;
     --pane-padding: clamp(0.55rem, 1.35vmin, 1.15rem) !important;
+    --viewport-edge-inset: clamp(0.375rem, 1.2vw, 1rem) !important;
   }
 
   html {
@@ -427,6 +428,7 @@
     height: 100dvh !important;
     min-height: 0 !important;
     margin: 0 !important;
+    padding-block-start: var(--viewport-edge-inset) !important;
     overflow: hidden !important;
   }
 

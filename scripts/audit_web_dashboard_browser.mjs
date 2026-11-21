@@ -2558,6 +2558,7 @@ export function browserAuditLibrary() {
       Math.max(0.75 * rootFontSize, innerWidth * 0.024),
       2 * rootFontSize,
     );
+    const edgeInset = responsiveGutter / 2;
     const expectedWidth = Math.min(
       innerWidth - responsiveGutter,
       120 * rootFontSize,
@@ -2578,6 +2579,23 @@ export function browserAuditLibrary() {
       }
       if (Math.abs(rect.left - (innerWidth - rect.width) / 2) > tolerance) {
         failures.push(`${selector} is not centered in the CSS viewport`);
+      }
+    }
+    const header = document.querySelector(".site-header");
+    const bodyPaddingTop = Number.parseFloat(getComputedStyle(document.body).paddingTop);
+    if (!Number.isFinite(bodyPaddingTop) || Math.abs(bodyPaddingTop - edgeInset) > tolerance) {
+      failures.push(
+        `body top inset ${bodyPaddingTop.toFixed(1)} does not match the ` +
+          `responsive shell edge ${edgeInset.toFixed(1)}`,
+      );
+    }
+    if (header instanceof HTMLElement && rendered(header)) {
+      const headerTop = header.getBoundingClientRect().top;
+      if (Math.abs(headerTop - edgeInset) > tolerance) {
+        failures.push(
+          `.site-header top ${headerTop.toFixed(1)} does not preserve the ` +
+            `responsive shell edge ${edgeInset.toFixed(1)}`,
+        );
       }
     }
     return failures;

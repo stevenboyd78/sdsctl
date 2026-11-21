@@ -261,8 +261,12 @@ def test_dashboard_adaptive_profiles_offer_explicit_field_inspection() -> None:
 
 
 def test_production_skin_recomposition_is_trusted_and_viewport_bounded() -> None:
+    shared = _asset("dashboard.css")
     viewport = _asset("dashboard-viewport.css")
 
+    for stylesheet in (shared, viewport):
+        assert "--viewport-edge-inset: clamp(0.375rem, 1.2vw, 1rem)" in stylesheet
+        assert "padding-block-start: var(--viewport-edge-inset)" in stylesheet
     assert (
         "@media (min-width: 1280px) and (min-height: 720px) and (min-aspect-ratio: 3/2)"
     ) in viewport
