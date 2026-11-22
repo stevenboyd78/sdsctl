@@ -5458,6 +5458,15 @@ async function auditOperatorDrawer(cdp, baseUrl, timeoutMs, pageFailures) {
       const state = await evaluate(cdp, `(async () => {
         const menu = document.querySelector('#native-menu');
         if (!menu.open) document.querySelector('#native-menu-toggle').click();
+        // auditNativeDrawer() settles status before returning, but the
+        // dashboard's fallback timer may start another read in the CDP gap
+        // before this evaluation begins.  Drain that pre-expiry read here so
+        // the 401 below, the expiry transition and the no-retry observation
+        // share one ordered browser task boundary.
+        for (let attempt = 0; refreshInProgress && attempt < 500; attempt += 1) {
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        if (refreshInProgress) throw new Error('Operator expiry status did not settle');
         window.__operatorDrawerAudit.expired = true;
         await refreshStatus();
         const requestsAtExpiry = window.__operatorDrawerAudit.requests.length;
@@ -5482,6 +5491,7 @@ async function auditOperatorDrawer(cdp, baseUrl, timeoutMs, pageFailures) {
           boundedReads: window.__operatorDrawerAudit.boundedReads,
           requestsAtExpiry,
           requestsAfter: window.__operatorDrawerAudit.requests.length,
+          requestsAfterExpiry: window.__operatorDrawerAudit.requests.slice(requestsAtExpiry),
           displayViewsHidden: document.querySelector('.native-menu-views').hidden,
           displayTitleAbsent: document.querySelector('#native-view-title') === null,
           controlsVisible: document.querySelector('#pane-tab-controls').getBoundingClientRect().height > 0,
