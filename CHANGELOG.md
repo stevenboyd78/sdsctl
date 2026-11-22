@@ -6,8 +6,32 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-11-21
+
+Adaptive dashboard presentation, explicit display-audio playback, and
+scanner-mode-aware display behavior. See the [release scope and acceptance
+plan](docs/release-0.34.0.md). Publication and installed-release acceptance
+remain pending until the immutable tag, public artifacts, repository App, and
+required target checks are independently verified.
+
+### Added
+
+- Add deterministic Matrix code rain with reduced-motion and forced-colors
+  fallbacks. The effect can incorporate sanitized System, Department, Channel,
+  Site, mode, and scanner-screen text while allowing each emitted live-data
+  string to complete one bounded top-to-bottom fall.
+- Add explicit, user-initiated live-audio playback for authenticated native-LAN
+  display identities behind the default-off `--lan-display-audio` server
+  option. It does not enable autoplay, scanner controls, recordings, a second
+  scanner owner, or a Home Assistant App option.
+
 ### Changed
 
+- Make the responsive **Menu** available consistently across standalone,
+  static-preview, native-dashboard, and Home Assistant Ingress presentations.
+  Move appearance, scanner presentation, status details, typography and
+  role-appropriate session actions into the drawer while retaining the compact
+  header health instrument and established authorization boundaries.
 - Let display-only kiosks follow scanner-reported Waterfall mode with a
   debounced, locally configurable view switch, automatic return to Scanner,
   and a manual-view override. Reuse the existing persistent SSE/NDJSON
@@ -29,14 +53,21 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   numbered `WX`/`FTO` identities, while unnamed Search and Close Call activity
   falls back to the active frequency in the web dashboard and Home Assistant
   Display card.
+- Preserve a retryable recording state when transient recording-arm identity
+  locks contend, while keeping cancellation/deadline handling bounded and
+  terminal refusal immediate.
+- Make the documentation-only CI boundary fail closed and stabilize the
+  screenshot, qualified-peer, cancellation-clock, lost-child,
+  passive-handoff, and operator-expiry audit fixtures without weakening their
+  product or security assertions.
 
 ## [0.33.0] - 2026-11-11
 
 Cinematic dashboard environments, responsive display/session controls, and
-full-HD presentation refinements. See the [release scope and acceptance
-record](docs/release-0.33.0.md). Publication and installed-release acceptance
-remain pending until the immutable tag, public artifacts, repository App, and
-required display checks are independently verified.
+full-HD presentation refinements. See the [released scope and acceptance
+record](docs/release-0.33.0.md). The immutable tag, public Python/container/App
+artifacts, and installed-release checks were independently verified before the
+normal GitHub Release became Latest.
 
 ### Added
 
@@ -2408,7 +2439,8 @@ First planned GitHub prerelease.
 - Added serial discovery, transport, packet framing, core responses, CLI tools,
   examples, tests, and CI.
 
-[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.33.0...HEAD
+[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.34.0...HEAD
+[0.34.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.32.0...v0.33.0
 [0.32.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.30.0...v0.31.0

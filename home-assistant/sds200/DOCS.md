@@ -224,6 +224,36 @@ topics are scanner-control inputs even though the generic daemon MQTT command
 topic remains disabled, so broker publish permissions for the dedicated control
 namespace should be limited to trusted Home Assistant publishers.
 
+## v0.34.0 upgrade and rollback
+
+The v0.34.0 catalog and image retain the exact nine configuration fields shown
+above. Save a private copy of existing options, Network mappings, installed
+image identity, and digest-qualified dashboard resource URL. Use the normal
+repository-managed update only after Home Assistant offers v0.34.0, then
+confirm the installed version/image and all nine values before starting the
+App.
+
+This update packages the universal Menu, deterministic Matrix rain,
+special-mode identity, optional display-only automatic Waterfall following,
+and separate Scanner, Daemon runtime, and Live audio Diagnostics cards. Menu
+state, Matrix effect values, and automatic Waterfall choice remain
+browser-local. Native-LAN `--lan-display-audio` is a separately authenticated
+server opt-in and is not an App option or Ingress capability.
+
+An ordinary update preserves scanner host, MQTT namespace, recording
+directory, advanced-access settings, qualified Menu default, display-profile
+path, credentials, recordings, resources, and Core identity. After updating,
+confirm Ingress reports the expected scanner, the Menu and three Diagnostics
+cards render at the target geometry, special-mode identity is meaningful, and
+existing MQTT entities and recordings remain present.
+
+To roll back, preserve all nine values, Network mappings, credentials,
+recordings, profiles, and accepted state. Restore the prior reviewed App
+version through the normal Supervisor repository or backup mechanism and
+restore only that release's matching aggregate resource URL. Do not delete App
+data, alter scanner storage, remove Core integration files, enable native-LAN
+display audio, or change a browser role merely to make rollback succeed.
+
 ## v0.33.0 upgrade and rollback
 
 The v0.33.0 catalog and image retain the exact nine configuration fields shown

@@ -67,7 +67,7 @@ For a container installation, select a published version rather than a source
 checkout. The version-specific image for this release is:
 
 ```bash
-docker pull theboyd78/sdsctl:0.33.0
+docker pull theboyd78/sdsctl:0.34.0
 ```
 
 `theboyd78/sdsctl:latest` follows the newest successfully published release.
@@ -205,24 +205,25 @@ workflow. Hardware-independent tests must not require a physical scanner.
 
 ## Project status
 
-Version `0.33.0` adds 22 Cinematic dashboard choices, including six bespoke
-Full-HD panoramic environments; a responsive Menu drawer; the
-2×2 System/Department/Channel/Site hierarchy; theme-native held fields; and a
-stateful scanner-health instrument. It also expands the Full-HD shell and
-hardens browser and release validation. See the
-[release scope](docs/release-0.33.0.md) for included changes,
+Version `0.34.0` makes the responsive Menu universal across dashboard
+presentations, adds deterministic live-data Matrix rain, consolidates
+user-initiated display audio with Live audio Diagnostics, presents meaningful
+special-mode channel identity, and lets display-only kiosks optionally follow
+scanner Waterfall mode over the existing persistent stream. It also carries
+bounded recording and CI/browser-audit reliability fixes. See the
+[release scope](docs/release-0.34.0.md) for included changes,
 pre-publication evidence, upgrade requirements, and deferred work.
 
 The transport-aware Raspberry Pi TUI retains observe-only preflight and managed
 outage waiting/recovery.
 
-The new drawer reorganizes existing browser-local presentation controls and
+The Menu reorganizes existing browser-local presentation controls and
 role-aware session actions; it does not expand a role or replace manual login.
-Panoramas activate only on suitable HD geometry and fall back to the compact
-presentation on narrow/mobile screens. This release does not add host-key or
-unattended kiosk authentication, theme rotation, automatic display-kiosk
-audio, a web Favorites editor, Python 3.15 support, or a broader scanner
-control surface.
+Native-LAN display audio remains explicit, authenticated, user-initiated, and
+default-off, and it is not a Home Assistant App option. This release does not
+add unattended kiosk authentication, theme rotation, a web Favorites editor,
+Python 3.15 support, firmware 1.27 qualification, automatic deployment, or a
+broader scanner-control surface.
 See the
 [latest GitHub Release](https://github.com/stevenboyd78/sdsctl/releases/latest),
 [CHANGELOG.md](CHANGELOG.md), [ROADMAP.md](ROADMAP.md), and

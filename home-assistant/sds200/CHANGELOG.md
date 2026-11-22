@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 0.34.0
+
+- Package the universal Menu layout, deterministic Matrix rain, meaningful
+  Weather/Tone-Out/Search/Close Call identity, and optional display-only
+  automatic Waterfall following in the matching Ingress dashboard and Display
+  card.
+- Consolidate browser audio source/packet/loss telemetry into a distinct Live
+  audio Diagnostics card and remove the redundant Audio workspace tab.
+  Native-LAN `--lan-display-audio` playback is a separately authenticated
+  server opt-in and is deliberately not a Home Assistant App option.
+- Preserve the exact v0.31.0-v0.33.0 nine-field option/schema contract, App
+  slug/image identity, MQTT identities, credentials, ports, recordings,
+  ordinary Ingress, disabled advanced services, and independently versioned
+  Core integration artifacts.
+- Include bounded recording-arm and CI/browser-audit reliability fixes without
+  expanding scanner ownership, control, recording, or publication authority.
+
 - Show Weather and Tone-Out numbered channel identity and use active frequency
   for unnamed Search and Close Call activity in the packaged dashboard and
   Home Assistant Display card.

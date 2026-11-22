@@ -175,25 +175,25 @@ Home Assistant OS users should follow [Home Assistant](Home-Assistant). The
 published App does not require `pip`, a source checkout, or a Local App under
 `/addons`.
 
-## Upgrade to v0.33.0
+## Upgrade to v0.34.0
 
-Version 0.33.0 publishes the expanded Full-HD WebUI shell, 22 Cinematic theme
-choices with six bespoke panoramic environments, the 2×2 scanner hierarchy,
-held-field presentation, operational health instrument, and responsive
-Menu drawer. Panoramas activate only on suitable HD geometry;
-narrow and mobile displays retain the compact presentation.
+Version 0.34.0 publishes the universal Menu, deterministic live-data Matrix
+rain, explicit native-LAN display audio and Live audio Diagnostics,
+special-mode identity, and optional display-only automatic Waterfall
+following. It also includes bounded recording and CI/browser-audit fixes.
 
-The drawer reorganizes existing theme, palette, typography, session status,
-logout, and display-only navigation controls. It does not grant a role or
-replace manual authentication. This release does not add host-key or
-unattended kiosk login, theme rotation, automatic display-kiosk audio, a web
-Favorites editor, Python 3.15 support, or another scanner-control surface.
+The Menu reorganizes presentation controls and role-aware session actions
+without granting a role or replacing manual authentication. Native-LAN display
+audio remains explicit, default-off, user-initiated, and outside the Home
+Assistant App. This release does not add unattended login, theme rotation, a
+web Favorites editor, Python 3.15, firmware 1.27 qualification, automatic
+deployment, or another scanner-control surface.
 
 Activate the existing Python virtual environment and install the exact release
 only after PyPI shows the reviewed wheel and source distribution:
 
 ```bash
-python -m pip install --upgrade "sds200==0.33.0"
+python -m pip install --upgrade "sds200==0.34.0"
 python -m pip check
 sdsctl --version
 ```
@@ -201,7 +201,7 @@ sdsctl --version
 For every optional runtime interface:
 
 ```bash
-python -m pip install --upgrade "sds200[all]==0.33.0"
+python -m pip install --upgrade "sds200[all]==0.34.0"
 python -m pip check
 sdsctl --version
 ```
@@ -209,7 +209,7 @@ sdsctl --version
 Use the exact published container image for controlled container upgrades:
 
 ```bash
-docker pull theboyd78/sdsctl:0.33.0
+docker pull theboyd78/sdsctl:0.34.0
 ```
 
 Verify the reviewed manifest digest before using a registry tag as an
@@ -217,7 +217,7 @@ immutable deployment input. Preserve the exact previous package, image digest,
 profiles, configuration, credentials, recordings, and service definitions for
 rollback.
 
-The Home Assistant App tracks 0.33.0 while retaining the exact nine-field
+The Home Assistant App tracks 0.34.0 while retaining the exact nine-field
 catalog/runtime contract. Save a private copy of options, Network mappings,
 current image identity, and digest-qualified dashboard resource URL. After the
 matching repository update is offered, use the normal Supervisor path and
@@ -225,11 +225,11 @@ verify all nine values, Ingress, MQTT entities, recordings, resources, and
 Core identity before changing any client.
 
 For a browser kiosk, preserve its private role-bound profile and trust
-material, then verify the target geometry interactively: expanded shell,
-drawer focus/close behavior, selector readability, 2×2 hierarchy, held fields,
-Mission Control in windowed and full-screen modes, and manual re-login after
-session expiry. That test does not authorize audio, scanner controls,
-recordings, or an automatic boot change.
+material, then verify Menu focus/close behavior, the three Diagnostics cards,
+special-mode identity, automatic Waterfall entry/return, and manual re-login.
+If the server explicitly enables native-LAN display audio for that identity,
+verify only user-initiated Play/Stop. That test does not authorize scanner
+controls, recordings, or an automatic boot change.
 
 For rollback, restore the exact prior reviewed Python package or container
 image through its normal package/registry workflow. For the App, use the

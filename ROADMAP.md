@@ -21,9 +21,9 @@ fixes do not require a new milestone number. See the
 [milestone-to-release index](docs/release-tracking.md) for published history,
 partial publications and merged-but-unreleased work, and the
 [release policy](docs/releasing.md#0-choose-release-scope-and-version) for version
-selection. The [v0.33.0 release plan](docs/release-0.33.0.md) records the
+selection. The [v0.34.0 release plan](docs/release-0.34.0.md) records the
 reviewed next-release boundary and remaining publication/installed-upgrade
-gates. The [v0.32.0 release record](docs/release-0.32.0.md) remains the latest
+gates. The [v0.33.0 release record](docs/release-0.33.0.md) remains the latest
 completed public release and retains its explicit support limits.
 
 Keep `Released in vX.Y.Z` links on the applicable completed items. A closed
@@ -68,22 +68,32 @@ in the versioned release notes; these TUI checks do not qualify browser enrollme
 
 ## Current release
 
-### v0.33.0 release preparation
+### v0.34.0 release preparation
 
-**Targeted for v0.33.0; not yet released.** The reviewed [release
-plan](docs/release-0.33.0.md) includes the Full-HD shell correction, held-field
-styling across every built-in theme, 22 Cinematic choices with six bespoke
-panoramic environments, the 2×2 scanner hierarchy, stateful health
-instrument, and one responsive Menu drawer.
+**Targeted for v0.34.0; not yet released.** The reviewed [release
+plan](docs/release-0.34.0.md) includes the universal Menu layout,
+deterministic live-data Matrix rain, explicit native-LAN display-audio opt-in
+with Diagnostics consolidation, special-mode identity, optional display-only
+automatic Waterfall following, and bounded recording/CI/audit fixes.
 
-The drawer reorganizes existing browser-local presentation controls and
-role-aware session actions; it does not expand a role or replace manual
-authentication. Panoramas retain compact/mobile fallbacks, reduced-motion and
-forced-colors behavior, and local-only artwork. The Home Assistant App keeps
-the exact nine-field option contract. Host-key/unattended kiosk
-authentication, theme rotation, automatic display-kiosk audio, a web
-Favorites editor, Python 3.15 migration, and automatic target deployment remain
-outside this release.
+The Menu reorganizes existing browser-local presentation controls and
+role-aware session actions without expanding a role or replacing manual
+authentication. Native-LAN display audio is explicit, default-off and not a
+Home Assistant App option; the App keeps its exact nine-field contract.
+Unattended authentication, theme rotation, broader persistent configuration,
+a web Favorites editor, remaining visual overhauls, Python 3.15, firmware
+1.27 qualification, and automatic target deployment remain outside this
+release.
+
+### v0.33.0 release closure
+
+**Released in [v0.33.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.33.0).**
+The reviewed [release record](docs/release-0.33.0.md) includes the Full-HD
+shell correction, held-field styling, 22 Cinematic choices with six bespoke
+panoramas, the 2×2 scanner hierarchy, stateful health instrument, and
+responsive Display & session drawer. The immutable tag, Python/container/App
+artifacts, and release identities were verified before the normal GitHub
+Release became Latest.
 
 ### v0.32.0 release closure
 
@@ -122,8 +132,8 @@ rollback/re-upgrade exercise after public v0.31.0 was reverified.
 
 ### Post-release display preference follow-up
 
-**Merged after v0.31.0 in
-[PR #270](https://github.com/stevenboyd78/sdsctl/pull/270); not yet released.**
+**Released in [v0.32.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.32.0)
+after merge in [PR #270](https://github.com/stevenboyd78/sdsctl/pull/270).**
 The bounded application-configuration setting keeps the TUI dashboard as the
 default but lets a display-capable daemon client request Mimic-SDS as its
 initial screen. The managed Pi uses its existing service-account
