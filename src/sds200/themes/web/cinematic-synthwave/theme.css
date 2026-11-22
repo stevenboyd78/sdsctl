@@ -251,7 +251,7 @@
       inset 0 0 2.5rem rgb(255 65 195 / 0.08),
       0 0 2rem rgb(60 239 255 / 0.12),
       0 1rem 3.4rem rgb(0 0 0 / 0.7);
-    clip-path: polygon(1.8rem 0, calc(100% - 1.8rem) 0, 100% 50%, calc(100% - 1.8rem) 100%, 1.8rem 100%, 0 50%);
+    clip-path: polygon(1rem 0, calc(100% - 1rem) 0, 100% 50%, calc(100% - 1rem) 100%, 1rem 100%, 0 50%);
   }
 
   :root[data-theme="cinematic-synthwave"] .site-header::before {

@@ -267,6 +267,23 @@ def test_hero_cinematic_theme_reveals_only_its_matching_panorama(
     assert "display: inline" in stylesheet
 
 
+def test_synthwave_full_hd_header_keeps_symmetric_text_safe_corners() -> None:
+    stylesheet = read_built_in_web_theme_stylesheet(
+        built_in_web_theme_registry().require("cinematic-synthwave")
+    ).decode("utf-8")
+    full_hd = stylesheet.split(
+        "@media (min-width: 1280px) and (min-height: 720px) and (min-aspect-ratio: 3/2)",
+        1,
+    )[1]
+    header = re.search(r"\.site-header\s*\{([^}]+)\}", full_hd)
+
+    assert header is not None
+    assert (
+        "clip-path: polygon(1rem 0, calc(100% - 1rem) 0, 100% 50%, "
+        "calc(100% - 1rem) 100%, 1rem 100%, 0 50%);"
+    ) in header[1]
+
+
 def test_mission_control_full_hd_tabs_reserve_a_separate_lamp_lane() -> None:
     stylesheet = read_built_in_web_theme_stylesheet(
         built_in_web_theme_registry().require("cinematic-mission-control")
