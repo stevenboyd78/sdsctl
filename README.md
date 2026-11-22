@@ -152,6 +152,7 @@ Advanced, version-controlled references remain in the repository:
 
 - [Control transports](docs/transports.md)
 - [Layered configuration](docs/configuration.md)
+- [Portable display-service configuration](docs/service-configuration.md)
 - [Daemon deployment](docs/daemon-deployment.md)
 - [Authenticated remote daemon clients](docs/daemon-remote.md)
 - [Managed Raspberry Pi TUI display](docs/managed-pi-display.md)

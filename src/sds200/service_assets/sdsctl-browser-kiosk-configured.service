@@ -1,0 +1,22 @@
+[Unit]
+Description=sdsctl configured browser kiosk
+Documentation=https://github.com/stevenboyd78/sdsctl/blob/main/docs/service-configuration.md
+PartOf=graphical-session.target
+After=graphical-session.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+ExecStart=/opt/sdsctl-kiosk/bin/sdsctl service-config run --manifest /etc/sdsctl/browser-kiosk.toml
+Restart=on-failure
+RestartPreventExitStatus=78
+RestartSec=15s
+TimeoutStopSec=20s
+KillMode=control-group
+UMask=0077
+# Chromium needs its normal sandbox and graphical-session device access.
+# Do not copy the console TUI's namespace/device restrictions into this unit.
+
+[Install]
+WantedBy=graphical-session.target

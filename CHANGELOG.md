@@ -6,6 +6,17 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Added
+
+- Add strict versioned `display-client` and `browser-kiosk` service manifests,
+  with private-file and absolute-path checks, unknown-field rejection,
+  deterministic provenance, exact command review, bounded preflight, strict
+  temporary command-line overrides, atomic credential-free templates, and
+  optional thin systemd launchers. The runtime delegates to the existing TUI
+  and kiosk commands, legacy v0.33.0 units remain available, and browser device
+  credentials remain explicitly deferred until a server-side enrollment and
+  revocation protocol is accepted.
+
 ### Changed
 
 - Let display-only kiosks follow scanner-reported Waterfall mode with a
