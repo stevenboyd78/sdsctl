@@ -228,6 +228,8 @@ def test_browser_audit_covers_both_authenticated_native_drawer_roles() -> None:
     assert "Sign out reachability" in source
     assert "alertContract" in source
     assert "staleLogoutDisabled" in source
+    assert "Operator expiry status did not settle" in operator_source
+    assert "requestsAfterExpiry" in operator_source
     assert "requestsAtExpiry !== state.requestsAfter" in source
     assert source.index("await auditOperatorDrawer") < source.index("await auditDisplayKiosk")
     assert source.index("await auditDisplayKiosk") < source.index("await auditDisplayAudioOptIn")
