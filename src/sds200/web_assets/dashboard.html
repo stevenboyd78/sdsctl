@@ -704,9 +704,46 @@
     <div class="header-actions">
       <div class="theme-picker">
         <label for="theme-select">Theme</label>
-        <select id="theme-select">
-          <!-- SDSCTL_THEME_OPTIONS -->
-        </select>
+        <div class="theme-picker-controls">
+          <select id="theme-select">
+            <!-- SDSCTL_THEME_OPTIONS -->
+          </select>
+          <details id="theme-rotation-settings" class="theme-rotation-settings">
+            <summary aria-label="Theme rotation settings">Rotation</summary>
+            <div class="theme-rotation-controls">
+              <label class="native-menu-checkbox" for="theme-rotation-enabled">
+                <input id="theme-rotation-enabled" type="checkbox">
+                Rotate themes automatically
+              </label>
+              <label for="theme-rotation-interval">
+                Interval (minutes)
+                <input
+                  id="theme-rotation-interval"
+                  type="number"
+                  min="5"
+                  max="1440"
+                  step="5"
+                  value="30"
+                  inputmode="numeric"
+                >
+              </label>
+              <label for="theme-rotation-mode">
+                Order
+                <select id="theme-rotation-mode">
+                  <option value="sequential">Sequential</option>
+                  <option value="shuffle">Shuffle</option>
+                </select>
+              </label>
+              <fieldset id="theme-rotation-themes">
+                <legend>Themes in rotation</legend>
+                <div id="theme-rotation-theme-list"></div>
+              </fieldset>
+              <p id="theme-rotation-status" class="native-menu-help" role="status">
+                Rotation is off.
+              </p>
+            </div>
+          </details>
+        </div>
       </div>
     </div>
   </header>

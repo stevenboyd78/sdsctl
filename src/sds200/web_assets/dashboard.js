@@ -17,6 +17,10 @@ const AUDIO_FALLBACK_START_THRESHOLD_SAMPLES = 480;
 const AUDIO_FALLBACK_SCRIPT_BUFFER_SIZE = 1024;
 const WORKSPACE_PANE_STORAGE_KEY = "sdsctl.web.pane";
 const RADIO_SCAN_FALLBACK_STORAGE_KEY = "sdsctl.web.scan-fallback";
+const THEME_ROTATION_STORAGE_KEY = "sdsctl.web.theme-rotation.v1";
+const THEME_ROTATION_MINUTES_MIN = 5;
+const THEME_ROTATION_MINUTES_MAX = 1440;
+const THEME_ROTATION_MINUTES_DEFAULT = 30;
 const WATERFALL_AUTO_SWITCH_STORAGE_KEY = "sdsctl.web.waterfall-auto-switch";
 const WATERFALL_AUTO_SWITCH_DELAY_MS = 750;
 const WATERFALL_AUTO_RETURN_DELAY_MS = 1250;
@@ -880,6 +884,7 @@ function initializeThemeControl() {
   const select = element("theme-select");
   const systemPalettePicker = element("system-palette-picker");
   const systemPaletteSelect = element("system-palette-select");
+  const rotationSettings = document.getElementById("theme-rotation-settings");
   const controller = window.sdsctlTheme;
 
   if (
@@ -892,6 +897,7 @@ function initializeThemeControl() {
     select.disabled = true;
     systemPaletteSelect.disabled = true;
     systemPalettePicker.hidden = true;
+    if (rotationSettings !== null) rotationSettings.hidden = true;
     return;
   }
 
@@ -915,6 +921,257 @@ function initializeThemeControl() {
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(renderWaterfallCanvases);
     });
+  });
+
+  if (
+    rotationSettings === null ||
+    typeof controller.preview !== "function" ||
+    !Array.isArray(controller.choices)
+  ) {
+    if (rotationSettings !== null) rotationSettings.hidden = true;
+    return;
+  }
+
+  const rotationEnabled = element("theme-rotation-enabled");
+  const rotationInterval = element("theme-rotation-interval");
+  const rotationMode = element("theme-rotation-mode");
+  const rotationThemes = element("theme-rotation-themes");
+  const rotationThemeList = element("theme-rotation-theme-list");
+  const rotationStatus = element("theme-rotation-status");
+  const availableThemes = controller.choices.filter((identifier) =>
+    Array.from(select.options).some((option) => option.value === identifier));
+  const themeLabels = new Map(
+    Array.from(select.options).map((option) => [option.value, option.textContent]),
+  );
+  const themeCheckboxes = new Map();
+  let rotationTimer = null;
+  let rotationBag = [];
+  let manualTheme = controller.current();
+  let rotationPolicy;
+
+  for (const identifier of availableThemes) {
+    const label = document.createElement("label");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = identifier;
+    checkbox.checked = true;
+    label.append(
+      checkbox,
+      document.createTextNode(themeLabels.get(identifier) ?? identifier),
+    );
+    rotationThemeList.append(label);
+    themeCheckboxes.set(identifier, checkbox);
+  }
+
+  function normalizeRotationPolicy(value) {
+    const source = value !== null && typeof value === "object" ? value : {};
+    const requestedThemes = Array.isArray(source.themes)
+      ? source.themes
+      : availableThemes;
+    const themes = Array.from(new Set(requestedThemes)).filter(
+      (identifier) => typeof identifier === "string" &&
+        availableThemes.includes(identifier),
+    );
+    const requestedInterval = Number(source.intervalMinutes);
+    const intervalMinutes = Number.isInteger(requestedInterval) &&
+      requestedInterval >= THEME_ROTATION_MINUTES_MIN &&
+      requestedInterval <= THEME_ROTATION_MINUTES_MAX
+      ? requestedInterval
+      : THEME_ROTATION_MINUTES_DEFAULT;
+    const mode = source.mode === "shuffle" ? "shuffle" : "sequential";
+    return Object.freeze({
+      version: 1,
+      enabled: source.enabled === true && themes.length >= 2,
+      intervalMinutes,
+      mode,
+      themes: Object.freeze(themes),
+    });
+  }
+
+  function readRotationPolicy() {
+    const stored = readStoredValue(THEME_ROTATION_STORAGE_KEY);
+    if (stored === null) return normalizeRotationPolicy({themes: availableThemes});
+    try {
+      return normalizeRotationPolicy(JSON.parse(stored));
+    } catch {
+      return normalizeRotationPolicy({themes: availableThemes});
+    }
+  }
+
+  function rotationPolicySnapshot() {
+    return Object.freeze({
+      version: rotationPolicy.version,
+      enabled: rotationPolicy.enabled,
+      intervalMinutes: rotationPolicy.intervalMinutes,
+      mode: rotationPolicy.mode,
+      themes: Object.freeze([...rotationPolicy.themes]),
+    });
+  }
+
+  function clearRotationTimer() {
+    if (rotationTimer === null) return;
+    window.clearTimeout(rotationTimer);
+    rotationTimer = null;
+  }
+
+  function requestThemeRepaint() {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(renderWaterfallCanvases);
+    });
+  }
+
+  function synchronizeRotationControls() {
+    rotationEnabled.checked = rotationPolicy.enabled;
+    rotationInterval.value = String(rotationPolicy.intervalMinutes);
+    rotationMode.value = rotationPolicy.mode;
+    for (const [identifier, checkbox] of themeCheckboxes) {
+      checkbox.checked = rotationPolicy.themes.includes(identifier);
+    }
+    document.documentElement.dataset.themeRotation = rotationPolicy.enabled
+      ? "enabled"
+      : "off";
+  }
+
+  function updateRotationStatus() {
+    if (rotationPolicy.themes.length < 2) {
+      rotationStatus.textContent = "Select at least two themes to enable rotation.";
+    } else if (!rotationPolicy.enabled) {
+      rotationStatus.textContent = "Rotation is off. Your selected theme is unchanged.";
+    } else if (document.hidden) {
+      rotationStatus.textContent = "Rotation is paused while the dashboard is hidden.";
+    } else if (rotationSettings.open) {
+      rotationStatus.textContent = "Rotation is paused while these settings are open.";
+    } else {
+      const order = rotationPolicy.mode === "shuffle" ? "shuffled" : "sequential";
+      rotationStatus.textContent =
+        `Rotating ${rotationPolicy.themes.length} themes every ` +
+        `${rotationPolicy.intervalMinutes} minutes in ${order} order. ` +
+        "Operator interaction restarts the interval.";
+    }
+  }
+
+  function nextRotationTheme() {
+    const current = controller.current();
+    if (rotationPolicy.mode === "sequential") {
+      const currentIndex = rotationPolicy.themes.indexOf(current);
+      return rotationPolicy.themes[
+        currentIndex < 0 ? 0 : (currentIndex + 1) % rotationPolicy.themes.length
+      ];
+    }
+
+    rotationBag = rotationBag.filter(
+      (identifier) => rotationPolicy.themes.includes(identifier) &&
+        identifier !== current,
+    );
+    if (rotationBag.length === 0) {
+      rotationBag = rotationPolicy.themes.filter((identifier) => identifier !== current);
+      for (let index = rotationBag.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(Math.random() * (index + 1));
+        [rotationBag[index], rotationBag[swapIndex]] = [
+          rotationBag[swapIndex], rotationBag[index],
+        ];
+      }
+    }
+    return rotationBag.shift() ?? current;
+  }
+
+  function scheduleThemeRotation() {
+    clearRotationTimer();
+    updateRotationStatus();
+    if (
+      !rotationPolicy.enabled ||
+      rotationPolicy.themes.length < 2 ||
+      document.hidden ||
+      rotationSettings.open
+    ) {
+      return;
+    }
+    rotationTimer = window.setTimeout(
+      advanceThemeRotation,
+      rotationPolicy.intervalMinutes * 60_000,
+    );
+  }
+
+  function advanceThemeRotation() {
+    clearRotationTimer();
+    if (!rotationPolicy.enabled || document.hidden || rotationSettings.open) {
+      scheduleThemeRotation();
+      return controller.current();
+    }
+    const applied = controller.preview(nextRotationTheme());
+    synchronizePickers();
+    requestThemeRepaint();
+    scheduleThemeRotation();
+    return applied;
+  }
+
+  function applyRotationPolicy(value, {persist = true} = {}) {
+    const wasEnabled = rotationPolicy?.enabled === true;
+    const nextPolicy = normalizeRotationPolicy(value);
+    if (!wasEnabled && nextPolicy.enabled) manualTheme = controller.current();
+    rotationPolicy = nextPolicy;
+    rotationBag = [];
+    synchronizeRotationControls();
+    if (wasEnabled && !rotationPolicy.enabled) {
+      controller.select(manualTheme);
+      synchronizePickers();
+      requestThemeRepaint();
+    }
+    if (persist) {
+      writeStoredValue(THEME_ROTATION_STORAGE_KEY, JSON.stringify(rotationPolicy));
+    }
+    scheduleThemeRotation();
+    return rotationPolicySnapshot();
+  }
+
+  function policyFromControls() {
+    return {
+      enabled: rotationEnabled.checked,
+      intervalMinutes: Number(rotationInterval.value),
+      mode: rotationMode.value,
+      themes: Array.from(themeCheckboxes)
+        .filter(([, checkbox]) => checkbox.checked)
+        .map(([identifier]) => identifier),
+    };
+  }
+
+  rotationPolicy = readRotationPolicy();
+  synchronizeRotationControls();
+  scheduleThemeRotation();
+
+  for (const control of [rotationEnabled, rotationInterval, rotationMode]) {
+    control.addEventListener("change", () => {
+      applyRotationPolicy(policyFromControls());
+    });
+  }
+  rotationThemes.addEventListener("change", (event) => {
+    if (event.target instanceof HTMLInputElement && event.target.type === "checkbox") {
+      applyRotationPolicy(policyFromControls());
+    }
+  });
+  rotationSettings.addEventListener("toggle", scheduleThemeRotation);
+  document.addEventListener(
+    "visibilitychange",
+    scheduleThemeRotation,
+  );
+  for (const eventName of ["pointerdown", "keydown", "input"]) {
+    document.addEventListener(eventName, (event) => {
+      if (event.isTrusted && rotationPolicy.enabled) scheduleThemeRotation();
+    }, true);
+  }
+  window.addEventListener("pagehide", clearRotationTimer);
+
+  select.addEventListener("change", () => {
+    manualTheme = controller.current();
+    rotationBag = [];
+    scheduleThemeRotation();
+  });
+
+  window.sdsctlThemeRotation = Object.freeze({
+    advance: advanceThemeRotation,
+    manualTheme: () => manualTheme,
+    policy: rotationPolicySnapshot,
+    setPolicy: (value) => applyRotationPolicy(value),
   });
 }
 

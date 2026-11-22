@@ -348,6 +348,10 @@ class FakeNode {
     this.disabled = false;
     this.tabIndex = 0;
     this.value = "";
+    this.type = "";
+    this.checked = false;
+    this.open = false;
+    this.options = [];
     this._textContent = "";
     this.textContentWrites = 0;
     this.className = "";
@@ -404,6 +408,13 @@ class FakeNode {
     return child;
   }
 
+  append(...children) {
+    for (const child of children) {
+      if (child instanceof FakeNode) child.parentNode = this;
+      this.children.push(child);
+    }
+  }
+
   removeChild(child) {
     const index = this.children.indexOf(child);
     if (index >= 0) {
@@ -452,6 +463,7 @@ const document = {
   documentElement: new FakeNode("document-root"),
   activeElement: null,
   hidden: false,
+  listeners: {},
   getElementById(id) {
     return nodes.get(id) || null;
   },
@@ -470,11 +482,30 @@ const document = {
   createElement() {
     return new FakeNode();
   },
+  createTextNode(value) {
+    return {textContent: String(value)};
+  },
+  addEventListener(type, listener) {
+    (this.listeners[type] ||= []).push(listener);
+  },
 };
 
 const themeSelect = add("theme-select");
+themeSelect.options = [
+  {value: "system", textContent: "System"},
+  {value: "lcars", textContent: "LCARS"},
+  {value: "pip-boy-inspired", textContent: "Pip-Boy-inspired"},
+];
 const systemPalettePicker = add("system-palette-picker");
 const systemPaletteSelect = add("system-palette-select");
+const rotationSettings = add("theme-rotation-settings");
+const rotationEnabled = add("theme-rotation-enabled");
+rotationEnabled.type = "checkbox";
+const rotationInterval = add("theme-rotation-interval");
+const rotationMode = add("theme-rotation-mode");
+const rotationThemes = add("theme-rotation-themes");
+const rotationThemeList = add("theme-rotation-theme-list");
+const rotationStatus = add("theme-rotation-status");
 const waterfallAutoSwitch = add("waterfall-auto-switch");
 let selectedTheme = "system";
 let selectedSystemPalette = "auto";
@@ -512,7 +543,9 @@ const window = {
   clearTimeout(id) {
     timeouts.delete(id);
   },
+  addEventListener() {},
   sdsctlTheme: {
+    choices: ["system", "lcars", "pip-boy-inspired"],
     current() {
       return selectedTheme;
     },
@@ -521,6 +554,13 @@ const window = {
     },
     select(value) {
       selectedTheme = value;
+      themeSelect.value = value;
+      return value;
+    },
+    preview(value) {
+      selectedTheme = value;
+      themeSelect.value = value;
+      return value;
     },
     selectSystemPalette(value) {
       selectedSystemPalette = value;
@@ -530,6 +570,7 @@ const window = {
 globalThis.document = document;
 globalThis.window = window;
 globalThis.EventSource = FakeEventSource;
+globalThis.HTMLInputElement = FakeNode;
 """
 
     assertions = r"""
@@ -838,12 +879,45 @@ const preservedFocus = document.activeElement;
 const preservedFallback = fallbackSelect.value;
 initializeThemeControl();
 assert.equal(systemPalettePicker.hidden, false);
+assert.equal(rotationThemeList.children.length, 3);
+assert.equal(window.sdsctlThemeRotation.policy().enabled, false);
+let rotationPolicy = window.sdsctlThemeRotation.setPolicy({
+  enabled: true,
+  intervalMinutes: 5,
+  mode: "sequential",
+  themes: ["system", "lcars", "pip-boy-inspired"],
+});
+assert.equal(rotationPolicy.enabled, true);
+assert.equal(timeouts.size, 1);
+assert.equal([...timeouts.values()][0].delay, 300000);
+assert.equal(window.sdsctlThemeRotation.advance(), "lcars");
+assert.equal(selectedTheme, "lcars");
+assert.equal(timeouts.size, 1);
 systemPaletteSelect.value = "nord";
 systemPaletteSelect.dispatch("change");
 assert.equal(selectedSystemPalette, "nord");
 themeSelect.value = "pip-boy-inspired";
 themeSelect.dispatch("change");
 assert.equal(selectedTheme, "pip-boy-inspired");
+assert.equal(window.sdsctlThemeRotation.manualTheme(), "pip-boy-inspired");
+assert.equal(window.sdsctlThemeRotation.advance(), "system");
+rotationPolicy = window.sdsctlThemeRotation.setPolicy({
+  enabled: false,
+  intervalMinutes: 5,
+  mode: "sequential",
+  themes: ["system", "lcars", "pip-boy-inspired"],
+});
+assert.equal(rotationPolicy.enabled, false);
+assert.equal(selectedTheme, "pip-boy-inspired");
+assert.equal(timeouts.size, 0);
+rotationPolicy = window.sdsctlThemeRotation.setPolicy({
+  enabled: true,
+  intervalMinutes: 1,
+  mode: "sequential",
+  themes: ["system"],
+});
+assert.equal(rotationPolicy.enabled, false);
+assert.equal(rotationPolicy.intervalMinutes, 30);
 assert.equal(systemPalettePicker.hidden, true);
 assert.equal(activeWorkspacePane, "diagnostics");
 assert.equal(radioInspectionView, "auto");

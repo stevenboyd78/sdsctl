@@ -46,6 +46,21 @@ Theme choice is browser-local presentation state. It does not change daemon or
 scanner state. All 28 built-in choices share the same panes, controls, fields,
 keyboard behavior, and security boundary.
 
+Open **Menu > Appearance > Rotation** to rotate a selected set of themes on an
+unattended display. Rotation is off by default and requires at least two
+selected themes. Choose a 5-1440 minute interval and either sequential or
+shuffled order; shuffled rotation does not repeat the current theme
+immediately. The policy is stored only in the current browser profile.
+
+A scheduled change does not reload the dashboard, move focus, contact the
+scanner, or replace the saved manual theme. Manual theme changes become the new
+restoration choice, and turning rotation off restores that choice. Rotation
+pauses while its settings are open or the page is hidden, and operator input
+restarts the interval. Theme rotation can vary screen color, but it does not
+guarantee burn-in prevention because much of the dashboard geometry remains
+static; retain any display-provided pixel shift, dimming, sleep, or power
+schedule.
+
 Every theme is audited at 1920x1080 Full HD, 1366x768 desktop, 800x480 compact
 landscape/Raspberry Pi display, and 390x844 portrait phone at DPR2. The visual
 gallery retains all four references for the established themes and one

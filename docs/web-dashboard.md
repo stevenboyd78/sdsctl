@@ -387,6 +387,27 @@ status treatment, and adaptive screen profiles. The five established custom
 choices and the cinematic collection are more theatrical while preserving the
 same dashboard semantics:
 
+The **Appearance > Rotation** disclosure in **Menu** provides optional,
+browser-local rotation for unattended displays. Rotation is off by default.
+Choose at least two themes, select a 5-1440 minute interval, and use sequential
+or shuffled order; shuffle never repeats the currently displayed theme
+immediately. The allowlist can contain any mix of built-in and valid managed
+web themes available to that dashboard process.
+
+Rotation previews switch CSS in place. They do not reload the page, move
+keyboard focus, make a network request, change scanner state, or overwrite the
+saved manual theme. A manual picker change becomes the new restoration theme,
+and turning rotation off restores it. Opening the rotation settings or hiding
+the page pauses the timer, while trusted pointer, keyboard, and input activity
+restarts the full interval. The normalized policy is private to the current
+browser profile under `sdsctl.web.theme-rotation.v1`; it is not a daemon,
+Home Assistant, or scanner configuration value.
+
+Theme rotation can redistribute colors on an unattended screen, but it is not
+a burn-in guarantee: headings, pane geometry, and other static regions remain
+in similar locations. Use the display's own pixel-shift, dimming, sleep, or
+scheduled power controls where burn-in protection matters.
+
 When **System** is active, a second browser-local selector appears in the center
 of the overview row. **Follow device** preserves the adaptive behavior above.
 The remaining choices mirror Textual's full built-in TUI color-scheme inventory:

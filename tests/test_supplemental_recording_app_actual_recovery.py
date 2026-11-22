@@ -101,7 +101,7 @@ def run_recovery(
                 assert s.session.processes.exit_confirmed(m.base.NORMAL)
             actions.append("record")
             service.start_native(s, mapped, io, audit)
-            service.record_and_finalize(s, mapped, io)
+            service.record_and_finalize(s, mapped, io, monkeypatch)
             # Three original samples (including the pre-dispatch recheck)
             # bracket immutable files with inspections of the same terminal exec.
             io.handlers.extend(

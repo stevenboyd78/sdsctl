@@ -687,6 +687,19 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
     assert 'href="assets/favicon.svg"' in response.text
     assert 'type="image/svg+xml"' in response.text
     assert 'id="theme-select"' in response.text
+    assert 'class="theme-picker-controls"' in response.text
+    assert '<summary aria-label="Theme rotation settings">Rotation</summary>' in (
+        response.text
+    )
+    assert 'id="theme-rotation-enabled" type="checkbox"' in response.text
+    assert 'id="theme-rotation-interval"' in response.text
+    assert 'min="5"' in response.text
+    assert 'max="1440"' in response.text
+    assert 'id="theme-rotation-mode"' in response.text
+    assert '<option value="sequential">Sequential</option>' in response.text
+    assert '<option value="shuffle">Shuffle</option>' in response.text
+    assert 'id="theme-rotation-themes"' in response.text
+    assert 'id="theme-rotation-status"' in response.text
     assert 'id="system-palette-select"' in response.text
     assert '<option value="auto">Follow device</option>' in response.text
     for palette_name in sorted(BUILTIN_THEMES):
@@ -1128,6 +1141,19 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert "initializeThemeControl" in script.text
     assert 'element("theme-select")' in script.text
     assert "controller.select(select.value)" in script.text
+    assert 'THEME_ROTATION_STORAGE_KEY = "sdsctl.web.theme-rotation.v1"' in (
+        script.text
+    )
+    assert "THEME_ROTATION_MINUTES_MIN = 5" in script.text
+    assert "THEME_ROTATION_MINUTES_MAX = 1440" in script.text
+    assert "controller.preview(nextRotationTheme())" in script.text
+    assert "rotationSettings.open" in script.text
+    assert "window.sdsctlThemeRotation = Object.freeze" in script.text
+    assert "manualTheme: () => manualTheme" in script.text
+    assert (
+        ".theme-rotation-settings:not([open]) > .theme-rotation-controls"
+        in stylesheet_source.text
+    )
     assert "control.snapshot" in script.text
     assert "daemonEventGeneration" in script.text
     assert "eventGenerationAtStart" in script.text

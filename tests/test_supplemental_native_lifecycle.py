@@ -69,15 +69,19 @@ class LoopbackScanner:
             return [command for command in self.commands if command in REPLIES]
 
     def wait_for_reads(self, expected, *, timeout=2.0):
-        """Wait on command receipt instead of contending with the loopback peer."""
+        """Wait for an ordered prefix without contending with the loopback peer."""
         deadline = monotonic() + timeout
         with self.changed:
-            while [command for command in self.commands if command in REPLIES] != expected:
+            while True:
+                reads = [command for command in self.commands if command in REPLIES]
+                if reads[: len(expected)] == expected:
+                    return True
+                if len(reads) >= len(expected):
+                    return False
                 remaining = deadline - monotonic()
                 if remaining <= 0:
                     return False
                 self.changed.wait(remaining)
-        return True
 
     @contextmanager
     def hold(self, command):
@@ -144,6 +148,17 @@ class LoopbackScanner:
         self.socket.close()
         assert not self.thread.is_alive()
         assert not self.errors
+
+
+def test_wait_for_reads_accepts_a_completed_prefix_but_rejects_wrong_order():
+    peer = LoopbackScanner.__new__(LoopbackScanner)
+    peer.lock = Lock()
+    peer.changed = Condition(peer.lock)
+    peer.commands = ["FQK", "DTM"]
+
+    assert peer.wait_for_reads(["FQK"], timeout=0)
+    assert peer.wait_for_reads(["FQK", "DTM"], timeout=0)
+    assert not peer.wait_for_reads(["DTM"], timeout=0)
 
 
 @pytest.fixture

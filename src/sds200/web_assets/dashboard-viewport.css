@@ -95,6 +95,23 @@
     width: 100% !important;
     min-width: 0 !important;
   }
+  #native-menu .theme-picker-controls,
+  #native-menu .theme-rotation-settings,
+  #native-menu .theme-rotation-controls:not([hidden]) {
+    display: grid !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  #native-menu .theme-picker-controls {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+  }
+  #native-menu .theme-rotation-settings[open] {
+    grid-column: 1 / -1 !important;
+  }
+  #native-menu .theme-rotation-settings[open] > summary,
+  #native-menu .theme-rotation-controls {
+    grid-column: 1 / -1 !important;
+  }
   #native-menu .matrix-rain-controls:not([hidden]),
   #native-menu .matrix-rain-settings,
   #native-menu .matrix-rain-setting {
@@ -193,6 +210,11 @@
     min-width: 0 !important;
   }
   #native-menu .native-menu-checkbox input[type="checkbox"] {
+    width: 44px !important;
+    min-width: 44px !important;
+    padding: 0 !important;
+  }
+  #native-menu #theme-rotation-theme-list input[type="checkbox"] {
     width: 44px !important;
     min-width: 44px !important;
     padding: 0 !important;
