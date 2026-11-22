@@ -226,6 +226,13 @@ HERO_CINEMATIC_THEMES = (
         ("cyber-rain-far", "cyber-train-pass", "cyber-holo-a"),
         "cyber-hold-glitch",
     ),
+    (
+        "cinematic-synthwave",
+        "synthwave",
+        "synthwave-",
+        ("synthwave-star-pulse", "synthwave-road-flow", "synthwave-equalizer"),
+        "synthwave-hold-surge",
+    ),
 )
 
 

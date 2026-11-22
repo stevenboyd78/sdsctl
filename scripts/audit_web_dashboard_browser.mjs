@@ -69,6 +69,7 @@ const HERO_PANORAMA_SCENES = Object.freeze([
   Object.freeze({theme: "cinematic-galactic-operations", scene: "galactic-operations"}),
   Object.freeze({theme: "cinematic-mission-control", scene: "mission-control"}),
   Object.freeze({theme: "cinematic-cyberpunk-night", scene: "cyberpunk-night"}),
+  Object.freeze({theme: "cinematic-synthwave", scene: "synthwave"}),
 ]);
 
 const HERO_PANORAMA_BOUNDARIES = Object.freeze([
@@ -135,8 +136,8 @@ Usage: node scripts/audit_web_dashboard_browser.mjs [options]
 
 Run the deterministic dashboard and Home Assistant waterfall-card browser audit in one local
 Chrome/Chromium session. The audit writes no PNGs. It covers all 700 built-in
-theme × reference CSS viewport × workspace pane cases, 30 exact panoramic-boundary
-cases for the six hero environments, all 210 explicit System
+theme × reference CSS viewport × workspace pane cases, 35 exact panoramic-boundary
+cases for the seven hero environments, all 210 explicit System
 palette responsive cases, plus media-preference, enlarged-text,
 pagination-focus, trusted Tab/Shift+Tab traversal, WCAG AA contrast, complete
 adaptive-presentation, DPR-transition, and prefixed-URL probes. It also covers

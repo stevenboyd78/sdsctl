@@ -98,7 +98,7 @@ def test_browser_audit_help_documents_scope_and_dependencies() -> None:
     assert completed.stderr == ""
     for contract in (
         "all 700 built-in",
-        "30 exact panoramic-boundary",
+        "35 exact panoramic-boundary",
         "writes no PNGs",
         "enlarged-text",
         "pagination-focus",

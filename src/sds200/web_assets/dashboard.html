@@ -131,6 +131,38 @@
           <rect x="4" y="5" width="8" height="3" fill="#00e8ff" fill-opacity="0.35" />
           <rect x="16" y="18" width="6" height="3" fill="#ff2bd6" fill-opacity="0.3" />
         </pattern>
+        <linearGradient id="synthwave-sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#070018" />
+          <stop offset="0.48" stop-color="#21073c" />
+          <stop offset="0.72" stop-color="#54105e" />
+          <stop offset="1" stop-color="#090116" />
+        </linearGradient>
+        <radialGradient id="synthwave-sun" cx="50%" cy="38%">
+          <stop offset="0" stop-color="#fff7b8" />
+          <stop offset="0.3" stop-color="#ffd65f" />
+          <stop offset="0.72" stop-color="#ff638e" />
+          <stop offset="1" stop-color="#f22fb9" />
+        </radialGradient>
+        <linearGradient id="synthwave-road" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#1c0a38" />
+          <stop offset="0.62" stop-color="#09031a" />
+          <stop offset="1" stop-color="#020107" />
+        </linearGradient>
+        <linearGradient id="synthwave-glass" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#69f4ff" stop-opacity="0.18" />
+          <stop offset="0.38" stop-color="#34185c" stop-opacity="0.05" />
+          <stop offset="1" stop-color="#ff4fc7" stop-opacity="0.15" />
+        </linearGradient>
+        <pattern id="synthwave-starfield" width="132" height="92" patternUnits="userSpaceOnUse">
+          <circle cx="14" cy="18" r="1.5" fill="#d8f9ff" fill-opacity="0.74" />
+          <circle cx="78" cy="36" r="1" fill="#8ef8ff" fill-opacity="0.64" />
+          <circle cx="112" cy="72" r="1.4" fill="#ffb9eb" fill-opacity="0.7" />
+          <circle cx="42" cy="82" r="0.8" fill="#ffffff" fill-opacity="0.54" />
+        </pattern>
+        <pattern id="synthwave-city-windows" width="34" height="30" patternUnits="userSpaceOnUse">
+          <rect x="5" y="6" width="8" height="3" fill="#54efff" fill-opacity="0.55" />
+          <rect x="20" y="18" width="7" height="3" fill="#ff56c8" fill-opacity="0.48" />
+        </pattern>
       </defs>
 
       <g data-cinematic-scene="carrier-air-wing">
@@ -575,6 +607,77 @@
 
         <g class="cyber-cables" fill="none" stroke="#090711" stroke-width="13">
           <path d="M0 128 C440 250 648 12 1010 156 S1608 278 1920 92" /><path d="M0 238 C390 344 690 146 1024 270 S1588 340 1920 206" />
+        </g>
+      </g>
+
+      <g data-cinematic-scene="synthwave">
+        <rect width="1920" height="1080" fill="url(#synthwave-sky)" />
+        <rect class="synthwave-stars" width="1920" height="620" fill="url(#synthwave-starfield)" />
+
+        <g class="synthwave-moon" transform="translate(960 410)">
+          <circle r="238" fill="url(#synthwave-sun)" />
+          <g fill="#39104d" fill-opacity="0.82">
+            <rect x="-240" y="-18" width="480" height="13" />
+            <rect x="-235" y="24" width="470" height="17" />
+            <rect x="-224" y="72" width="448" height="21" />
+            <rect x="-207" y="125" width="414" height="27" />
+            <rect x="-177" y="184" width="354" height="34" />
+          </g>
+          <ellipse class="synthwave-sun-glare" cy="6" rx="294" ry="266" fill="none" stroke="#ff8ed9" stroke-opacity="0.32" stroke-width="4" />
+        </g>
+
+        <g class="synthwave-mountains synthwave-mountains-far" fill="#1b0a36" stroke="#ff4ac6" stroke-opacity="0.42" stroke-width="3">
+          <path d="M0 614 L118 488 208 548 332 392 470 558 596 448 742 586 862 468 960 594 1092 446 1204 558 1356 374 1492 548 1638 430 1764 544 1920 412 1920 700 0 700 Z" />
+        </g>
+        <g class="synthwave-mountains synthwave-mountains-near" fill="#08041a" stroke="#31e8ff" stroke-opacity="0.28" stroke-width="4">
+          <path d="M0 674 L172 512 296 616 470 456 618 644 782 528 934 654 1084 512 1236 642 1418 474 1588 616 1776 492 1920 608 1920 754 0 754 Z" />
+        </g>
+
+        <g class="synthwave-city" fill="#060313" stroke="#5bf4ff" stroke-opacity="0.3" stroke-width="2">
+          <path d="M0 570 H78 V474 H136 V570 H212 V434 H278 V570 H356 V506 H414 V570 H486 V458 H548 V570 H622 V520 H688 V570 H748 V486 H824 V570 H872 V530 H908 V708 H0 Z" />
+          <path d="M1012 708 V530 H1054 V470 H1128 V570 H1198 V512 H1270 V570 H1338 V446 H1406 V570 H1482 V500 H1548 V570 H1614 V416 H1688 V570 H1760 V468 H1822 V570 H1920 V708 Z" />
+          <path d="M0 570 H908 V708 H0 Z M1012 570 H1920 V708 H1012 Z" fill="url(#synthwave-city-windows)" fill-opacity="0.8" stroke="none" />
+        </g>
+
+        <g class="synthwave-horizon" fill="none">
+          <path d="M0 636 H1920" stroke="#ff48c7" stroke-width="7" />
+          <path d="M0 650 H1920" stroke="#61f2ff" stroke-opacity="0.82" stroke-width="3" />
+          <path d="M0 672 H1920" stroke="#c947ff" stroke-opacity="0.38" stroke-width="12" />
+        </g>
+
+        <path d="M0 658 H1920 V1080 H0 Z" fill="#06020d" />
+        <path d="M622 658 H1298 L1740 1080 H180 L622 658 Z" fill="url(#synthwave-road)" stroke="#b83eff" stroke-opacity="0.52" stroke-width="4" />
+
+        <g class="synthwave-grid" fill="none" stroke="#6a35d5" stroke-opacity="0.52" stroke-width="2">
+          <path d="M0 686 H1920 M0 726 H1920 M0 784 H1920 M0 864 H1920 M0 960 H1920 M0 1064 H1920" />
+          <path d="M960 658 L0 1080 M960 658 L246 1080 M960 658 L488 1080 M960 658 L716 1080 M960 658 L842 1080 M960 658 L1078 1080 M960 658 L1204 1080 M960 658 L1432 1080 M960 658 L1674 1080 M960 658 L1920 1080" />
+        </g>
+
+        <g class="synthwave-road-dashes" fill="#fff2a6" stroke="#ff62c9" stroke-width="2">
+          <path d="M844 702 H874 L852 730 H816 Z M784 770 H826 L790 816 H734 Z M688 880 H760 L690 970 H586 Z" />
+          <path d="M1046 702 H1076 L1104 730 H1068 Z M1094 770 H1136 L1186 816 H1130 Z M1160 880 H1232 L1334 970 H1230 Z" />
+        </g>
+
+        <g class="synthwave-side-pylons" fill="url(#synthwave-glass)" stroke="#57f4ff" stroke-opacity="0.72" stroke-width="4">
+          <path d="M28 708 H252 L352 1054 H50 Z" />
+          <path d="M1668 708 H1892 L1870 1054 H1568 Z" />
+          <g class="synthwave-equalizer synthwave-equalizer-left" fill="#ff4fc7" stroke="none">
+            <rect x="72" y="824" width="24" height="138" /><rect x="110" y="790" width="24" height="172" /><rect x="148" y="850" width="24" height="112" /><rect x="186" y="748" width="24" height="214" /><rect x="224" y="818" width="24" height="144" />
+          </g>
+          <g class="synthwave-equalizer synthwave-equalizer-right" fill="#43efff" stroke="none">
+            <rect x="1698" y="806" width="24" height="156" /><rect x="1736" y="752" width="24" height="210" /><rect x="1774" y="842" width="24" height="120" /><rect x="1812" y="782" width="24" height="180" /><rect x="1850" y="830" width="24" height="132" />
+          </g>
+        </g>
+
+        <g class="synthwave-windshield" fill="none" stroke="#e55bff" stroke-opacity="0.26" stroke-width="5">
+          <path d="M88 86 H1832 L1754 1008 H166 L88 86 Z" />
+          <path d="M126 126 H1794" stroke="#5cf5ff" stroke-opacity="0.34" />
+          <path d="M960 86 V218" />
+        </g>
+
+        <g class="synthwave-dash-lights" fill="#ffdf6b">
+          <circle cx="522" cy="1022" r="8" /><circle cx="610" cy="1022" r="8" /><circle cx="698" cy="1022" r="8" />
+          <circle cx="1222" cy="1022" r="8" /><circle cx="1310" cy="1022" r="8" /><circle cx="1398" cy="1022" r="8" />
         </g>
       </g>
     </svg>

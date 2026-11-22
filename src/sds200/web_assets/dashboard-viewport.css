@@ -2025,6 +2025,18 @@
       grid-row: 1 !important;
     }
 
+    :root[data-theme="cinematic-synthwave"] .workspace-shell {
+      grid-template-rows: minmax(0, 1fr) auto !important;
+    }
+
+    :root[data-theme="cinematic-synthwave"] .workspace-tabs {
+      grid-row: 2 !important;
+    }
+
+    :root[data-theme="cinematic-synthwave"] .workspace-deck {
+      grid-row: 1 !important;
+    }
+
     :root[data-theme="cinematic-wizarding-archive"] #radio-activity-panel {
       width: calc(100% - 16vw) !important;
       margin-inline: 8vw !important;
@@ -2092,6 +2104,15 @@
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
       grid-template-rows: repeat(5, minmax(0, 1fr)) !important;
       gap: 0.25rem 16vw !important;
+    }
+
+    :root[data-theme="cinematic-synthwave"]
+      .radio-field-group[data-radio-group="hierarchy"]
+      .radio-field-list {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      grid-template-rows: repeat(5, minmax(2.1rem, max-content)) !important;
+      align-content: start !important;
+      gap: 0.18rem 5.6rem !important;
     }
 
     :root:is(
