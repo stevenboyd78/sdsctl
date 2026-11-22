@@ -24,6 +24,8 @@ layout, image_umask, supervised = (
 )
 BASE = b"29 33 0:26 / /proc rw,nosuid,nodev,noexec,relatime shared:12 - proc proc rw\n"
 SYS = b"40 29 0:26 /sys /proc/sys ro,nosuid,nodev,noexec,relatime - proc proc rw\n"
+LOWER = b"28 33 0:25 / /proc ro,nosuid,nodev,noexec,relatime - proc proc rw\n"
+STACKED = LOWER + BASE.replace(b"29 33", b"29 28")
 
 
 def profile(raw=BASE, **kwargs):
@@ -39,6 +41,17 @@ def rejected(callback):
 def test_proc_root_and_optional_readonly_same_proc_sys_mount_are_distinct_profiles():
     assert len(profile()) == 64 and profile() == profile(BASE)
     assert profile(BASE + SYS) != profile()
+
+
+def test_descriptor_bound_proc_may_cover_one_strict_safe_ancestor_stack():
+    assert len(profile(STACKED)) == 64
+    assert profile(STACKED) == profile(STACKED[::-1][::-1])
+
+
+def test_proc_stack_table_order_does_not_replace_descriptor_identity():
+    reversed_rows = STACKED.splitlines(keepends=True)[1] + LOWER
+    assert len(profile(reversed_rows)) == 64
+    assert profile(STACKED) != profile(reversed_rows)
 
 
 @pytest.mark.parametrize(
@@ -126,6 +139,9 @@ def test_sys_readonly_remount_must_preserve_original_proc_superblock(before, aft
         BASE + b"\n",
         BASE + BASE,
         BASE + BASE.replace(b"29 33", b"30 33"),
+        LOWER + BASE,
+        LOWER.replace(b"nodev,", b"") + BASE.replace(b"29 33", b"29 28"),
+        LOWER + BASE.replace(b"29 33", b"29 28") + BASE.replace(b"29 33", b"30 28"),
         BASE + SYS + SYS,
         b"x" * (1024 * 1024 + 1),
         BASE.replace(b"proc rw", b"proc\x00 rw"),
@@ -189,6 +205,26 @@ def test_original_target_proc_descriptor_is_retained_during_hashing_then_closed(
     monkeypatch.setattr(m.runtime.Layout, "verify_supervised", inspect)
     assert helper.obj() is None
     assert helper.proc_reads == 4
+    proc_closed(helper)
+
+
+def test_short_mountinfo_reads_are_bounded_and_assembled_before_profiling(helper, monkeypatch):
+    actual = builtins.open
+
+    class ShortReads(io.BytesIO):
+        def read(self, size=-1):
+            return super().read(min(size, 17))
+
+    def short(path, *args, **kwargs):
+        stream = actual(path, *args, **kwargs)
+        if path != f"/proc/{helper.child.pid}/mountinfo":
+            return stream
+        with stream:
+            raw = stream.read()
+        return ShortReads(raw)
+
+    monkeypatch.setattr(builtins, "open", short)
+    assert helper.obj() is None
     proc_closed(helper)
 
 

@@ -863,7 +863,7 @@ def helper_proc_mount_profile(raw, *, mount_id, device):
         require("\x00" not in text and "\r" not in text and "\t" not in text)
         lines = text.splitlines()
         require(0 < len(lines) <= 4096)
-        ids, proc, sys_mount = set(), None, None
+        ids, proc_mounts, sys_mount = set(), {}, None
 
         def path(value, *, target=True):
             require(re.search(r"\\(?!040|011|012|134)", value) is None)
@@ -880,6 +880,7 @@ def helper_proc_mount_profile(raw, *, mount_id, device):
             require(separator >= 6 and len(fields) == separator + 4)
             require(all(re.fullmatch(r"[1-9][0-9]{0,19}", value) for value in fields[:2]))
             current_id = int(fields[0])
+            parent_id = int(fields[1])
             require(current_id not in ids)
             ids.add(current_id)
             require(re.fullmatch(r"[0-9]{1,10}:[0-9]{1,10}", fields[2]) is not None)
@@ -890,12 +891,11 @@ def helper_proc_mount_profile(raw, *, mount_id, device):
             options = fields[5].split(",")
             require(len(set(options)) == len(options) and all(options))
             if target == "/proc":
-                require(proc is None and root == "/")
+                require(root == "/")
                 require(fields[separator + 1] == "proc")
                 require({"nosuid", "nodev", "noexec"} <= set(options))
                 require(("ro" in options) != ("rw" in options))
-                require(current_id == mount_id and current_device == device)
-                proc = current_id
+                proc_mounts[current_id] = (parent_id, current_device)
             elif target == "/proc/sys":
                 require(sys_mount is None and root == "/sys")
                 require(fields[separator + 1] == "proc" and current_device == device)
@@ -912,7 +912,18 @@ def helper_proc_mount_profile(raw, *, mount_id, device):
                 )
             else:
                 require(current_id != mount_id)
-        require(proc is not None)
+        require(mount_id in proc_mounts and proc_mounts[mount_id][1] == device)
+        # A mount namespace can retain covered lower proc mounts at the same
+        # target. The open descriptor identifies the active top mount. Permit
+        # only a single strict ancestor chain below it; siblings, disconnected
+        # duplicates and a second active candidate still fail closed.
+        covered, current = set(), mount_id
+        while proc_mounts[current][0] in proc_mounts:
+            parent = proc_mounts[current][0]
+            require(parent not in covered and parent != mount_id)
+            covered.add(parent)
+            current = parent
+        require(covered == set(proc_mounts) - {mount_id})
         return base.checksum({"kind": "finite-helper-proc-mount-view-v1", "mountinfo": text})
     except Exception:
         raise UnconfirmedHostLaunch(MESSAGE) from None
@@ -1313,9 +1324,21 @@ class HelperQualification:
             def read(selected, limit):
                 self._guard(deadline)
                 with open(selected, "rb", buffering=0) as stream:
-                    raw = stream.read(limit + 1)
+                    raw = bytearray()
+                    for _ in range(4096):
+                        remaining = limit + 1 - len(raw)
+                        if remaining <= 0:
+                            break
+                        chunk = stream.read(remaining)
+                        require(type(chunk) is bytes and len(chunk) <= remaining)
+                        if not chunk:
+                            break
+                        raw.extend(chunk)
+                        self._guard(deadline)
+                    else:
+                        require(False)
                 require(len(raw) <= limit and time.monotonic() < deadline)
-                return raw
+                return bytes(raw)
 
             def sample():
                 self._guard(deadline)
