@@ -17,6 +17,9 @@ const AUDIO_FALLBACK_START_THRESHOLD_SAMPLES = 480;
 const AUDIO_FALLBACK_SCRIPT_BUFFER_SIZE = 1024;
 const WORKSPACE_PANE_STORAGE_KEY = "sdsctl.web.pane";
 const RADIO_SCAN_FALLBACK_STORAGE_KEY = "sdsctl.web.scan-fallback";
+const WATERFALL_AUTO_SWITCH_STORAGE_KEY = "sdsctl.web.waterfall-auto-switch";
+const WATERFALL_AUTO_SWITCH_DELAY_MS = 750;
+const WATERFALL_AUTO_RETURN_DELAY_MS = 1250;
 const RECORDINGS_PAGE_SIZE = 3;
 const WATERFALL_PROTOCOL = "sdsctl.waterfall";
 const WATERFALL_VERSION = 1;
@@ -76,6 +79,11 @@ let frontPanelInventoryIdentity = null;
 let frontPanelInventoryReady = false;
 let frontPanelInventoryInProgress = false;
 let activeWorkspacePane = "scanner";
+let waterfallAutoSwitchEnabled = false;
+let waterfallAutoSwitchTimer = null;
+let waterfallAutoReturnTimer = null;
+let waterfallAutoActive = false;
+let waterfallAutoSuppressed = false;
 let radioScanFallback = "detail";
 let radioInspectionView = "auto";
 let currentScreenKind = "unknown";
@@ -332,6 +340,23 @@ function initializeNativeMenu(logout, logoutButton) {
   presentation.setAttribute("aria-label", "Scanner presentation");
   presentation.append(make("h3", "Scanner presentation"));
   presentation.hidden = true;
+  const waterfall = make("section", null, "native-menu-waterfall");
+  waterfall.setAttribute("aria-label", "Waterfall behavior");
+  waterfall.append(make("h3", "Waterfall"));
+  const waterfallFollowLabel = make("label", null, "native-menu-checkbox");
+  const waterfallFollow = make("input");
+  waterfallFollow.id = "waterfall-auto-switch";
+  waterfallFollow.type = "checkbox";
+  waterfallFollowLabel.append(
+    waterfallFollow,
+    document.createTextNode(" Follow scanner Waterfall mode"),
+  );
+  const waterfallFollowHelp = make(
+    "p",
+    "Automatically open Waterfall after the scanner reports that mode. A manual view change overrides automation until the scanner leaves Waterfall mode.",
+    "native-menu-help",
+  );
+  waterfall.append(waterfallFollowLabel, waterfallFollowHelp);
   const audio = make("section", null, "native-menu-audio");
   audio.setAttribute("aria-label", "Live audio playback");
   audio.append(make("h3", "Live audio playback"));
@@ -366,7 +391,16 @@ function initializeNativeMenu(logout, logoutButton) {
     sessionSummary.setAttribute("role", "status");
     session.append(make("h3", "Session"), sessionSummary, logout);
   }
-  dialog.append(menuHeader, views, appearance, presentation, audio, page, details);
+  dialog.append(
+    menuHeader,
+    views,
+    appearance,
+    presentation,
+    waterfall,
+    audio,
+    page,
+    details,
+  );
   if (logout !== null) dialog.append(session);
   document.body.append(dialog);
 
@@ -501,6 +535,7 @@ function initializeNativeMenu(logout, logoutButton) {
     views,
     appearance,
     presentation,
+    waterfall,
     audio,
     page,
     details,
@@ -666,8 +701,26 @@ function reconcileMimicDisplay() {
   });
 }
 
-function activateWorkspacePane(value, {focus = false, persist = true} = {}) {
+function clearAutomaticWaterfallTimer(name) {
+  const timer = name === "switch"
+    ? waterfallAutoSwitchTimer
+    : waterfallAutoReturnTimer;
+  if (timer !== null) window.clearTimeout(timer);
+  if (name === "switch") waterfallAutoSwitchTimer = null;
+  else waterfallAutoReturnTimer = null;
+}
+
+function activateWorkspacePane(
+  value,
+  {focus = false, persist = true, reason = "manual"} = {},
+) {
   const pane = normalizedWorkspacePane(value);
+  if (reason === "manual") {
+    clearAutomaticWaterfallTimer("switch");
+    clearAutomaticWaterfallTimer("return");
+    if (currentScreenKind === "waterfall") waterfallAutoSuppressed = true;
+    waterfallAutoActive = false;
+  }
   activeWorkspacePane = pane;
 
   for (const tab of document.querySelectorAll("[data-workspace-tab]")) {
@@ -696,6 +749,92 @@ function activateWorkspacePane(value, {focus = false, persist = true} = {}) {
   }
 }
 
+function automaticWaterfallEnabledByDefault() {
+  return displayOnly;
+}
+
+function storedAutomaticWaterfallPreference() {
+  const stored = readStoredValue(WATERFALL_AUTO_SWITCH_STORAGE_KEY);
+  if (stored === null) return automaticWaterfallEnabledByDefault();
+  return stored === "enabled";
+}
+
+function reconcileAutomaticWaterfallSwitch(screenKind) {
+  const detected = screenKind === "waterfall";
+  clearAutomaticWaterfallTimer(detected ? "return" : "switch");
+
+  if (!waterfallAutoSwitchEnabled) {
+    clearAutomaticWaterfallTimer("switch");
+    clearAutomaticWaterfallTimer("return");
+    waterfallAutoActive = false;
+    waterfallAutoSuppressed = false;
+    return;
+  }
+
+  if (!detected) {
+    waterfallAutoSuppressed = false;
+    if (waterfallAutoActive && activeWorkspacePane === "waterfall") {
+      if (waterfallAutoReturnTimer === null) {
+        waterfallAutoReturnTimer = window.setTimeout(() => {
+          waterfallAutoReturnTimer = null;
+          if (
+            currentScreenKind !== "waterfall" &&
+            waterfallAutoActive &&
+            activeWorkspacePane === "waterfall"
+          ) {
+            waterfallAutoActive = false;
+            activateWorkspacePane("scanner", {
+              persist: false,
+              reason: "waterfall-auto",
+            });
+          }
+        }, WATERFALL_AUTO_RETURN_DELAY_MS);
+      }
+    } else {
+      waterfallAutoActive = false;
+    }
+    return;
+  }
+
+  if (
+    waterfallAutoSuppressed ||
+    waterfallAutoActive ||
+    activeWorkspacePane !== "scanner" ||
+    waterfallAutoSwitchTimer !== null
+  ) {
+    return;
+  }
+  waterfallAutoSwitchTimer = window.setTimeout(() => {
+    waterfallAutoSwitchTimer = null;
+    if (
+      waterfallAutoSwitchEnabled &&
+      !waterfallAutoSuppressed &&
+      currentScreenKind === "waterfall" &&
+      activeWorkspacePane === "scanner"
+    ) {
+      waterfallAutoActive = true;
+      activateWorkspacePane("waterfall", {
+        persist: false,
+        reason: "waterfall-auto",
+      });
+    }
+  }, WATERFALL_AUTO_SWITCH_DELAY_MS);
+}
+
+function initializeAutomaticWaterfallSwitch() {
+  const control = element("waterfall-auto-switch");
+  waterfallAutoSwitchEnabled = storedAutomaticWaterfallPreference();
+  control.checked = waterfallAutoSwitchEnabled;
+  control.addEventListener("change", () => {
+    waterfallAutoSwitchEnabled = control.checked;
+    writeStoredValue(
+      WATERFALL_AUTO_SWITCH_STORAGE_KEY,
+      waterfallAutoSwitchEnabled ? "enabled" : "disabled",
+    );
+    reconcileAutomaticWaterfallSwitch(currentScreenKind);
+  });
+}
+
 function initializeWorkspace() {
   const tabs = Array.from(
     document.querySelectorAll("[data-workspace-tab]"),
@@ -704,6 +843,7 @@ function initializeWorkspace() {
   const storedPane = readStoredValue(WORKSPACE_PANE_STORAGE_KEY);
   activateWorkspacePane(storedPane, {
     persist: false,
+    reason: "restore",
   });
   if (storedPane === "audio") {
     writeStoredValue(WORKSPACE_PANE_STORAGE_KEY, "diagnostics");
@@ -1854,6 +1994,7 @@ const RADIO_SCREEN_PROFILES = Object.freeze({
   close_call: "Close Call",
   weather: "Weather",
   tone_out: "Tone-Out",
+  waterfall: "Waterfall",
   unknown: "Scanner activity",
 });
 
@@ -1951,12 +2092,42 @@ function toneOutDisplayValue(value) {
   return value;
 }
 
+function specialRadioChannelDisplayValue(radio) {
+  const text = (value) => {
+    if (value === null || value === undefined || value === "") {
+      return "";
+    }
+    return String(value);
+  };
+  const channel = text(radio.channel);
+  const channelNumber = text(radio.channel_number);
+  const frequency = text(radio.frequency);
+
+  if (radio.screen_kind === "weather") {
+    const prefix = channelNumber === "" ? "" : `WX ${channelNumber}`;
+    return prefix === ""
+      ? channel || frequency
+      : channel === "" ? prefix : `${prefix}: ${channel}`;
+  }
+  if (radio.screen_kind === "tone_out") {
+    const prefix = channelNumber === "" ? "" : `FTO ${channelNumber}`;
+    return prefix === ""
+      ? channel || frequency
+      : channel === "" ? prefix : `${prefix}: ${channel}`;
+  }
+  if (radio.screen_kind === "search" || radio.screen_kind === "close_call") {
+    return channel || frequency;
+  }
+  return channel;
+}
+
 function renderRadioProfile(value) {
   const screenKind = normalizedScreenKind(value);
   currentScreenKind = screenKind;
   element("radio-activity-panel").dataset.screenKind = screenKind;
   element("activity-title").textContent = RADIO_SCREEN_PROFILES[screenKind];
   applyRadioPresentation();
+  reconcileAutomaticWaterfallSwitch(screenKind);
 }
 
 function renderRadioState(radio) {
@@ -1967,6 +2138,7 @@ function renderRadioState(radio) {
     if (field === "system") {
       fallback = "No active system";
     } else if (field === "channel") {
+      value = specialRadioChannelDisplayValue(radio);
       fallback = "No active channel";
     } else if (field === "signal") {
       value = signalLabel(value);
@@ -4876,6 +5048,7 @@ initializeMimicDisplay();
 void initializeNativeSession();
 initializeWaterfallWorkspace();
 initializeWorkspace();
+initializeAutomaticWaterfallSwitch();
 initializeThemeControl();
 initializeRadioViewControls();
 initializeAudioPlayback();

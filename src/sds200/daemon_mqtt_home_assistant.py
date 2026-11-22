@@ -307,6 +307,7 @@ def build_home_assistant_device_discovery(
 
     for key, label in (
         ("site", "Site"),
+        ("channel_number", "Channel Number"),
         ("frequency", "Frequency"),
         ("modulation", "Modulation"),
         ("service_type", "Service Type"),

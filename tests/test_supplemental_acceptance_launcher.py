@@ -149,7 +149,7 @@ def test_real_owner_arm_is_passive_until_explicit_demand_and_expires(rig, tmp_pa
         delivery.frame(context)
     assert not rig.peer.reads
     delivery.demand(context, str(uuid4()))
-    wait_for(lambda: rig.peer.reads == ["FQK"])
+    assert rig.peer.wait_for_reads(["FQK"]), "Loopback scanner read did not complete"
     rig.clock.now = 85
     case.join()
     result = report(case)

@@ -541,6 +541,7 @@ def test_managed_stylesheet_cannot_escape_shared_viewport_cascade(
     ) in viewport.text
     for protected in (
         "height: 100dvh !important",
+        "padding-block-start: var(--viewport-edge-inset) !important",
         "overflow: hidden !important",
         "grid-template-rows: auto minmax(0, 1fr) auto !important",
         "display: none !important",

@@ -16,6 +16,7 @@ class ScannerScreenKind(StrEnum):
     CLOSE_CALL = "close_call"
     WEATHER = "weather"
     TONE_OUT = "tone_out"
+    WATERFALL = "waterfall"
     UNKNOWN = "unknown"
 
 
@@ -43,6 +44,8 @@ def classify_scanner_screen(info: ScannerInfo) -> ScannerScreenKind:
         return ScannerScreenKind.TONE_OUT
     if "weather" in terms or "wx" in terms:
         return ScannerScreenKind.WEATHER
+    if "waterfall" in terms:
+        return ScannerScreenKind.WATERFALL
 
     for tag, kind in _SCREEN_KIND_BY_NODE.items():
         if info.node(tag) is not None:

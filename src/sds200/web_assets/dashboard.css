@@ -122,6 +122,23 @@ select optgroup {
   background: var(--accent-soft, var(--surface));
   font-weight: 800;
 }
+.native-menu-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+.native-menu-checkbox input[type="checkbox"] {
+  width: auto;
+  margin: 0.2em 0 0;
+  accent-color: var(--accent);
+}
+.native-menu-help {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
 .native-menu-session {
   border-top: 1px solid var(--border);
   padding-top: 0.75rem;
@@ -1051,6 +1068,7 @@ select optgroup {
 :root {
   --workspace-gap: clamp(0.35rem, 1.2vmin, 0.9rem);
   --pane-padding: clamp(0.55rem, 1.35vmin, 1.15rem);
+  --viewport-edge-inset: clamp(0.375rem, 1.2vw, 1rem);
   --content-width: 120rem;
   --waterfall-background: #07111c;
   --waterfall-grid: #31516a;
@@ -1070,6 +1088,7 @@ body {
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100dvh;
   min-height: 0;
+  padding-block-start: var(--viewport-edge-inset);
   overflow: hidden;
 }
 

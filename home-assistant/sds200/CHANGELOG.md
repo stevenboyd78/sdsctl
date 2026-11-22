@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Show Weather and Tone-Out numbered channel identity and use active frequency
+  for unnamed Search and Close Call activity in the packaged dashboard and
+  Home Assistant Display card.
+
 ## 0.33.0
 
 - Package the expanded Full-HD dashboard shell, 22 Cinematic choices, six

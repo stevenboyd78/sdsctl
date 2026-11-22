@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import json
 import re
+import shutil
+import subprocess
 from dataclasses import fields
 from pathlib import Path
 from xml.etree import ElementTree
+
+import pytest
 
 import sds200
 from sds200.state import RadioStateSnapshot
@@ -23,6 +28,42 @@ def _field_targets(script: str) -> dict[str, str]:
     )
     assert match is not None
     return dict(re.findall(r'^\s{2}([a-z0-9_]+): "([a-z0-9-]+)",$', match["body"], re.MULTILINE))
+
+
+def _javascript_function(script: str, name: str) -> str:
+    start = script.index(f"function {name}(")
+    brace = script.index("{", start)
+    depth = 0
+    for index in range(brace, len(script)):
+        if script[index] == "{":
+            depth += 1
+        elif script[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return script[start : index + 1]
+    raise AssertionError(f"JavaScript function {name!r} is not balanced")
+
+
+def _run_javascript_function(name: str, argument: object) -> object:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is required for dashboard runtime validation.")
+
+    source = _javascript_function(_asset("dashboard.js"), name)
+    completed = subprocess.run(
+        [
+            node,
+            "-e",
+            (
+                f"{source}\nprocess.stdout.write(JSON.stringify("
+                f"{name}({json.dumps(argument)})));"
+            ),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return json.loads(completed.stdout)
 
 
 def test_dashboard_field_inventory_matches_shared_radio_state_contract() -> None:
@@ -69,6 +110,63 @@ def test_dashboard_field_projection_preserves_zero_and_false_like_values() -> No
     assert "value === undefined" in display_value
     assert "if (!value)" not in display_value
     assert "return String(value);" in display_value
+
+
+@pytest.mark.parametrize(
+    ("radio", "expected"),
+    [
+        ({"screen_kind": "weather", "channel_number": 7}, "WX 7"),
+        (
+            {
+                "screen_kind": "weather",
+                "channel": "NOAA Weather",
+                "channel_number": 4,
+            },
+            "WX 4: NOAA Weather",
+        ),
+        (
+            {"screen_kind": "weather", "frequency": "162.550000MHz"},
+            "162.550000MHz",
+        ),
+        (
+            {"screen_kind": "close_call", "frequency": "155.752500MHz"},
+            "155.752500MHz",
+        ),
+        (
+            {
+                "screen_kind": "close_call",
+                "channel": "Close Call Hit",
+                "frequency": "155.752500MHz",
+            },
+            "Close Call Hit",
+        ),
+        (
+            {"screen_kind": "search", "frequency": "154.280000MHz"},
+            "154.280000MHz",
+        ),
+        (
+            {
+                "screen_kind": "tone_out",
+                "channel": "Fire Dispatch",
+                "channel_number": 3,
+            },
+            "FTO 3: Fire Dispatch",
+        ),
+        ({"screen_kind": "tone_out", "channel_number": 12}, "FTO 12"),
+        (
+            {"screen_kind": "scanning", "channel": "Dispatch 1"},
+            "Dispatch 1",
+        ),
+    ],
+)
+def test_dashboard_derives_special_mode_channel_identity(
+    radio: dict[str, object],
+    expected: str,
+) -> None:
+    assert _run_javascript_function(
+        "specialRadioChannelDisplayValue",
+        radio,
+    ) == expected
 
 
 def test_dashboard_exposes_mode_transition_and_unknown_fallback_hooks() -> None:
@@ -132,6 +230,7 @@ def test_dashboard_adaptive_profiles_offer_explicit_field_inspection() -> None:
         ("close_call", "Close Call"),
         ("weather", "Weather"),
         ("tone_out", "Tone-Out"),
+        ("waterfall", "Waterfall"),
         ("unknown", "Scanner activity"),
     ):
         assert f'{kind}: "{title}"' in script
@@ -149,14 +248,25 @@ def test_dashboard_adaptive_profiles_offer_explicit_field_inspection() -> None:
     ):
         assert contract in script
     assert 'const RADIO_SCAN_FALLBACK_STORAGE_KEY = "sdsctl.web.scan-fallback";' in script
+    assert (
+        'const WATERFALL_AUTO_SWITCH_STORAGE_KEY = "sdsctl.web.waterfall-auto-switch";'
+        in script
+    )
+    assert 'waterfallFollow.id = "waterfall-auto-switch";' in script
+    assert 'reason: "waterfall-auto"' in script
+    assert 'currentScreenKind === "waterfall"' in script
     assert 'radioScanFallback === "detail" ? "hierarchy" : null' in script
     assert "element(`radio-group-${fieldGroup}`).hidden = fieldGroup !== group;" in script
     assert "value = toneOutDisplayValue(value);" in script
 
 
 def test_production_skin_recomposition_is_trusted_and_viewport_bounded() -> None:
+    shared = _asset("dashboard.css")
     viewport = _asset("dashboard-viewport.css")
 
+    for stylesheet in (shared, viewport):
+        assert "--viewport-edge-inset: clamp(0.375rem, 1.2vw, 1rem)" in stylesheet
+        assert "padding-block-start: var(--viewport-edge-inset)" in stylesheet
     assert (
         "@media (min-width: 1280px) and (min-height: 720px) and (min-aspect-ratio: 3/2)"
     ) in viewport
