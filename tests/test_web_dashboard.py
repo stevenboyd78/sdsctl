@@ -780,9 +780,17 @@ def test_raw_dashboard_source_has_truthful_static_file_preview() -> None:
     assert 'aria-atomic="true"' in dashboard
     assert 'globalThis.location?.protocol !== "file:"' in preview
     assert 'dataset.previewMode = "static"' in preview
-    assert "sample data only; no daemon or scanner is connected" in preview
+    assert "SAMPLE DATA — no live scanner connected" in preview
     assert '"scanner-connected": "Static fixture"' in preview
     assert '"scanner-endpoint": "No live endpoint"' in preview
+    assert "function initializeStaticPreviewMenu()" in preview
+    assert 'trigger.id = "native-menu-toggle"' in preview
+    assert 'dialog.id = "native-menu"' in preview
+    assert 'document.getElementById("theme-effects-controls")' in preview
+    assert 'document.querySelector(".overview").hidden = true' in preview
+    assert 'document.getElementById("dashboard-message")' in preview
+    assert "dialog.showModal()" in preview
+    assert 'event.key !== "Tab"' in preview
     assert "fetch(" not in preview
 
 

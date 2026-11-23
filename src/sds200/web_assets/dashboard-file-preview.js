@@ -79,6 +79,114 @@
     "radio-channel-hold": "On",
   });
 
+  function initializeStaticPreviewMenu() {
+    const make = (tag, text, className) => {
+      const node = document.createElement(tag);
+      if (text) node.textContent = text;
+      if (className) node.className = className;
+      return node;
+    };
+    const heading = document.querySelector(".brand h1");
+    const headingRow = make("div", null, "native-menu-heading");
+    heading.before(headingRow);
+    const trigger = make("button");
+    trigger.id = "native-menu-toggle";
+    trigger.type = "button";
+    trigger.setAttribute("aria-label", "Open dashboard menu");
+    trigger.setAttribute("aria-haspopup", "dialog");
+    trigger.setAttribute("aria-controls", "native-menu");
+    trigger.setAttribute("aria-expanded", "false");
+    const triggerLabel = make("span", "Menu", "native-menu-label");
+    const triggerIcon = make("span", "☰", "native-menu-icon");
+    triggerIcon.setAttribute("aria-hidden", "true");
+    trigger.append(triggerLabel, triggerIcon);
+    headingRow.append(trigger, heading);
+
+    const dialog = make("dialog", null, "native-menu");
+    dialog.id = "native-menu";
+    dialog.tabIndex = -1;
+    dialog.setAttribute("aria-labelledby", "native-menu-title");
+    const menuHeader = make("div", null, "native-menu-header");
+    const title = make("h2", "Menu");
+    title.id = "native-menu-title";
+    const closeButton = make("button", "Close");
+    closeButton.type = "button";
+    closeButton.setAttribute("aria-label", "Close dashboard menu");
+    menuHeader.append(title, closeButton);
+    const appearance = make("section", null, "native-menu-appearance");
+    appearance.setAttribute("aria-label", "Appearance");
+    appearance.append(make("h3", "Appearance"));
+    const page = make("section", null, "native-menu-page");
+    page.setAttribute("aria-label", "Page information");
+    page.append(make("h3", "Page"));
+    const details = make("section", null, "native-menu-status-details");
+    details.setAttribute("aria-label", "Status details");
+    details.append(make("h3", "Status details"));
+    dialog.append(menuHeader, appearance, page, details);
+    document.body.append(dialog);
+
+    for (const node of [
+      document.querySelector(".theme-picker"),
+      document.getElementById("system-palette-picker"),
+      document.getElementById("lcars-v2-appearance-pickers"),
+      document.getElementById("theme-typography-pickers"),
+      document.getElementById("theme-effects-controls"),
+      document.getElementById("matrix-rain-controls"),
+    ]) {
+      if (!(node instanceof HTMLElement)) throw new Error("Static preview appearance control is unavailable.");
+      appearance.append(node);
+    }
+    page.append(document.getElementById("dashboard-page-identity"));
+    details.append(document.getElementById("dashboard-status-details"));
+    document.querySelector(".header-actions").append(
+      document.getElementById("dashboard-message"),
+    );
+    document.querySelector(".overview").hidden = true;
+
+    const focusableControls = () => [...dialog.querySelectorAll(
+      "button, input, select, summary, [tabindex]:not([tabindex='-1'])",
+    )].filter(node => !node.disabled && node.getClientRects().length > 0 &&
+      node.closest("[hidden], [inert], [aria-hidden='true']") === null);
+    const close = () => {
+      trigger.setAttribute("aria-expanded", "false");
+      if (dialog.open) dialog.close();
+      if (trigger.getClientRects().length > 0) trigger.focus();
+    };
+    const open = () => {
+      if (dialog.open) return;
+      dialog.showModal();
+      trigger.setAttribute("aria-expanded", "true");
+      (focusableControls()[0] ?? dialog).focus();
+    };
+    trigger.addEventListener("click", () => dialog.open ? close() : open());
+    closeButton.addEventListener("click", close);
+    dialog.addEventListener("cancel", event => {
+      event.preventDefault();
+      close();
+    });
+    dialog.addEventListener("close", () => {
+      trigger.setAttribute("aria-expanded", "false");
+    });
+    dialog.addEventListener("keydown", event => {
+      if (event.key !== "Tab") return;
+      const controls = focusableControls();
+      if (controls.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = controls[0];
+      const last = controls.at(-1);
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialog)) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     document.title = "sdsctl cinematic static preview — sample data only";
 
@@ -88,8 +196,7 @@
 
     const message = document.getElementById("dashboard-message");
     message.dataset.state = "preview";
-    message.textContent =
-      "LOCAL SOURCE PREVIEW — sample data only; no daemon or scanner is connected.";
+    message.textContent = "SAMPLE DATA — no live scanner connected.";
 
     const activityTitle = document.getElementById("activity-title");
     activityTitle.textContent = "Sample scanner activity";
@@ -121,5 +228,11 @@
       target.searchParams.set("theme", picker.value);
       globalThis.location.assign(target.href);
     });
+    const effects = document.getElementById("theme-effects-select");
+    effects.value = "full";
+    effects.addEventListener("change", () => {
+      document.documentElement.dataset.themeEffects = effects.value;
+    });
+    initializeStaticPreviewMenu();
   });
 })();
