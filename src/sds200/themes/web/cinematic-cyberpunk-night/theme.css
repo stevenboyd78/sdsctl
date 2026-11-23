@@ -131,6 +131,93 @@
   text-transform: uppercase;
 }
 
+/* Live scanner telemetry becomes part of the neon instrument language instead
+ * of a separate widget. RSSI fills the header's dual-color link rail while
+ * signal strength raises a protected equalizer behind the hierarchy data. */
+:root[data-theme="cinematic-cyberpunk-night"] .site-header::before {
+  transform-origin: right center;
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .radio-field-groups {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .radio-field-groups::before {
+  position: absolute;
+  z-index: 0;
+  right: clamp(0.5rem, 2vw, 2rem);
+  bottom: 0;
+  left: clamp(0.5rem, 2vw, 2rem);
+  height: 58%;
+  background:
+    linear-gradient(180deg, rgb(255 49 143 / 0.08), rgb(22 244 255 / 0.28)),
+    repeating-linear-gradient(90deg, rgb(22 244 255 / 0.78) 0 0.28rem, transparent 0.28rem 0.76rem);
+  content: "";
+  pointer-events: none;
+  transform: scaleY(0);
+  transform-origin: bottom center;
+  opacity: 0;
+  clip-path: polygon(0 100%, 0 62%, 8% 62%, 8% 28%, 16% 28%, 16% 75%, 24% 75%, 24% 42%, 32% 42%, 32% 12%, 40% 12%, 40% 54%, 48% 54%, 48% 34%, 56% 34%, 56% 68%, 64% 68%, 64% 18%, 72% 18%, 72% 48%, 80% 48%, 80% 8%, 88% 8%, 88% 58%, 96% 58%, 96% 38%, 100% 38%, 100% 100%);
+}
+
+:root[data-theme="cinematic-cyberpunk-night"] .radio-field-groups > * {
+  position: relative;
+  z-index: 1;
+}
+
+:root[data-theme="cinematic-cyberpunk-night"][data-theme-effects="subtle"][data-theme-rssi-state="available"]
+  .site-header::before {
+  transform: scaleX(calc(0.66 + var(--theme-rssi-normalized, 0.5) * 0.34));
+  opacity: 0.74;
+  transition: transform 720ms ease-out, opacity 240ms ease-out;
+}
+
+:root[data-theme="cinematic-cyberpunk-night"][data-theme-effects="subtle"][data-theme-signal-state="available"]
+  .radio-field-groups::before {
+  transform: scaleY(calc(0.12 + var(--theme-signal-normalized, 0.5) * 0.2));
+  opacity: 0.12;
+  transition: transform 720ms ease-out, opacity 320ms ease-out;
+}
+
+:root[data-theme="cinematic-cyberpunk-night"][data-theme-effects="full"][data-theme-rssi-state="available"]
+  .site-header::before {
+  transform: scaleX(calc(0.18 + var(--theme-rssi-normalized, 0.5) * 0.82));
+  opacity: 1;
+  filter: drop-shadow(
+    0 0 calc(0.18rem + var(--theme-rssi-normalized, 0.5) * 0.55rem)
+      rgb(22 244 255 / 0.76)
+  );
+  transition: transform 480ms cubic-bezier(0.2, 0.75, 0.25, 1), opacity 220ms ease-out;
+}
+
+:root[data-theme="cinematic-cyberpunk-night"][data-theme-effects="full"][data-theme-signal-state="available"]
+  .radio-field-groups::before {
+  transform: scaleY(calc(0.16 + var(--theme-signal-normalized, 0.5) * 0.84));
+  opacity: calc(0.18 + var(--theme-signal-normalized, 0.5) * 0.24);
+  filter: drop-shadow(
+    0 0 calc(0.2rem + var(--theme-signal-normalized, 0.5) * 0.7rem)
+      rgb(255 49 143 / 0.42)
+  );
+  transition: transform 520ms cubic-bezier(0.2, 0.75, 0.25, 1), opacity 260ms ease-out;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cinematic-cyberpunk-night"][data-theme-effects="full"][data-theme-activity="active"]
+    .radio-field-groups::before {
+    animation: cyberpunk-telemetry-glitch 1.8s steps(4, end) infinite;
+  }
+}
+
+@keyframes cyberpunk-telemetry-glitch {
+  0%, 100% { translate: 0; }
+  48% { translate: 0; }
+  50% { translate: 0.22rem 0; }
+  52% { translate: -0.12rem 0; }
+  54% { translate: 0; }
+}
+
 /* Wide displays reserve an asymmetric neon command rail on the right. */
 :root[data-theme="cinematic-cyberpunk-night"] .workspace-shell {
   grid-template-columns: minmax(0, 1fr) clamp(9rem, 12vw, 13rem);
@@ -330,6 +417,7 @@
   :root[data-theme="cinematic-cyberpunk-night"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups, .scanner-display-hierarchy > div) { background: Canvas; box-shadow: none; clip-path: none; }
   :root[data-theme="cinematic-cyberpunk-night"] :is(.site-header, .panel)::before,
   :root[data-theme="cinematic-cyberpunk-night"] :is(.site-header, .panel)::after { display: none; }
+  :root[data-theme="cinematic-cyberpunk-night"] .radio-field-groups::before { display: none; }
 }
 
 /* Full-HD production environment: an asymmetric rain-soaked megacity terminal. */

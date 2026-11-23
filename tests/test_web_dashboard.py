@@ -1091,6 +1091,19 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
         ".radio-field-groups::before",
     ):
         assert telemetry_contract in cold_war_radar
+    cyberpunk_night = theme_text["cinematic-cyberpunk-night"]
+    for telemetry_contract in (
+        '[data-theme-effects="subtle"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="subtle"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="full"][data-theme-signal-state="available"]',
+        '[data-theme-activity="active"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        "cyberpunk-telemetry-glitch",
+        ".radio-field-groups::before",
+    ):
+        assert telemetry_contract in cyberpunk_night
 
     assert "theme-stage" in shell.text
     assert 'aria-hidden="true"' in shell.text
