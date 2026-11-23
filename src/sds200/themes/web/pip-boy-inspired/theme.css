@@ -262,6 +262,44 @@
       rgb(134 241 118 / 0.025) 3px 4px
     );
   box-shadow: inset 0 0 2.2rem rgb(0 0 0 / 0.52);
+  transition:
+    background-position 560ms ease-out,
+    opacity 420ms ease-out;
+}
+
+:root[data-theme="pip-boy-inspired"][data-theme-effects="subtle"][data-theme-signal-state="available"]
+  .workspace-deck::after {
+  background-position:
+    0 calc(var(--theme-signal-normalized, 0.5) * 1rem);
+  opacity: calc(0.74 + var(--theme-rssi-normalized, 0.5) * 0.16);
+}
+
+:root[data-theme="pip-boy-inspired"][data-theme-effects="full"][data-theme-signal-state="available"][data-theme-rssi-state="available"]
+  .workspace-deck::after {
+  animation: pip-boy-telemetry-roll
+    calc(3.2s - var(--theme-signal-normalized, 0.5) * 1.55s) linear infinite;
+  opacity: calc(0.78 + var(--theme-rssi-normalized, 0.5) * 0.2);
+}
+
+:root[data-theme="pip-boy-inspired"][data-theme-effects="full"][data-theme-activity="active"]
+  #radio-system {
+  text-shadow:
+    0 0 calc(0.3rem + var(--theme-rssi-normalized, 0.5) * 0.55rem)
+      rgb(134 241 118 / 0.52),
+    0 0 calc(0.65rem + var(--theme-signal-normalized, 0.5) * 1.2rem)
+      rgb(114 223 104 / 0.2);
+}
+
+@keyframes pip-boy-telemetry-roll {
+  from {
+    background-position:
+      0 calc(var(--theme-signal-normalized, 0.5) * 1rem);
+  }
+
+  to {
+    background-position:
+      0 calc(var(--theme-signal-normalized, 0.5) * 1rem + 4rem);
+  }
 }
 
 :root[data-theme="pip-boy-inspired"] [data-workspace-pane] {
@@ -453,6 +491,7 @@
   }
 
   :root[data-theme="pip-boy-inspired"] .workspace-deck::after {
+    animation: none;
     background: transparent;
     box-shadow: none;
   }
