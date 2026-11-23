@@ -93,6 +93,9 @@ def test_one_native_rtp_owner_serves_pcmu_and_recording_through_shutdown(
                 client.connect().settimeout(1)
                 wait_for(lambda: rig.packets.connected_clients == 1)
                 with connect(rig.socket) as peer, rig.peer.hold(command) as gate:
+                    # The coexistence contract does not measure daemon-API latency;
+                    # allow the loaded CI worker the same window as the GET gate.
+                    peer.settimeout(4)
                     trial.request_start()
                     wait_for(lambda: rig.acquisition.status().armed)
                     context = query(peer, Op.DISPLAY_SUPPLEMENTAL_CONTEXT)["result"]["context"]

@@ -29,6 +29,7 @@
       ? window.matchMedia("(prefers-color-scheme: dark)")
       : null;
   let activeTheme = "system";
+  let persistManagedThemeFailure = true;
   let activeSystemPalette = "auto";
 
   function normalizeTheme(value) {
@@ -151,9 +152,10 @@
     });
   }
 
-  function applyTheme(value, persist) {
+  function applyTheme(value, persist, persistFailure = persist) {
     const theme = normalizeTheme(value);
     activeTheme = theme;
+    persistManagedThemeFailure = persistFailure;
     updateManagedStylesheet(theme);
     document.documentElement.dataset.theme = theme;
     updateMetadata(theme);
@@ -193,7 +195,7 @@
     link.addEventListener("error", () => {
       link.removeAttribute("href");
       if (activeTheme === identifier) {
-        applyTheme("system", true);
+        applyTheme("system", persistManagedThemeFailure);
       }
     });
   });
@@ -204,7 +206,11 @@
     storedSystemPalette.palette,
     storedSystemPalette.repair,
   );
-  activeTheme = applyTheme(storedSelection.theme, storedSelection.repair);
+  activeTheme = applyTheme(
+    storedSelection.theme,
+    storedSelection.repair,
+    true,
+  );
 
   if (
     systemColorQuery !== null &&
@@ -221,6 +227,7 @@
     choices: THEMES,
     current: () => activeTheme,
     currentSystemPalette: () => activeSystemPalette,
+    preview: (value) => applyTheme(value, false),
     select: (value) => applyTheme(value, true),
     selectSystemPalette: (value) => applySystemPalette(value, true),
     systemPaletteChoices: SYSTEM_PALETTES,

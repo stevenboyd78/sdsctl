@@ -3821,6 +3821,7 @@ async function auditUniversalDrawer(cdp, context) {
     const overview = document.querySelector('.overview');
     const controls = [
       '.theme-picker',
+      '#theme-rotation-settings',
       '#system-palette-picker',
       '#lcars-v2-appearance-pickers',
       '#theme-typography-pickers',
@@ -3862,7 +3863,9 @@ async function auditUniversalDrawer(cdp, context) {
       'dashboard-status-details', 'theme-select', 'system-palette-select',
       'theme-font-select', 'theme-typography-select', 'matrix-rain-speed',
       'matrix-rain-density', 'matrix-rain-transparency', 'matrix-rain-trail',
-      'matrix-rain-reset'];
+      'matrix-rain-reset', 'theme-rotation-settings', 'theme-rotation-enabled',
+      'theme-rotation-interval', 'theme-rotation-mode', 'theme-rotation-themes',
+      'theme-rotation-theme-list', 'theme-rotation-status'];
     if (!unique.every(id => document.querySelectorAll('#' + id).length === 1)) {
       failures.push('drawer controls and moved metadata must remain unique');
     }
@@ -3974,33 +3977,41 @@ async function auditMatrixRainControls(cdp, baseUrl, timeoutMs) {
     throw new Error(`Matrix rain controls did not apply and persist: ${JSON.stringify(configured)}`);
   }
 
-  const baselinePackets = await evaluate(cdp, `(() => {
+  const changedPacketCounts = await evaluate(cdp, `(async () => {
     const canvas = document.querySelector('.matrix-rain-canvas');
     const field = document.querySelector('#radio-channel');
-    const baseline = Number(canvas.dataset.matrixRainPacketCount);
+    const before = Number(canvas.dataset.matrixRainPacketCount);
     field.textContent = 'Audit telemetry update';
-    return baseline;
+    await new Promise(resolve => setTimeout(resolve, 0));
+    return {
+      before,
+      after: Number(canvas.dataset.matrixRainPacketCount),
+    };
   })()`);
-  await frames(cdp);
-  const changedPackets = await evaluate(cdp,
-    `Number(document.querySelector('.matrix-rain-canvas').dataset.matrixRainPacketCount)`);
-  if (!Number.isFinite(baselinePackets) || changedPackets !== baselinePackets + 1) {
+  const changedPackets = changedPacketCounts.after;
+  if (!Number.isFinite(changedPacketCounts.before) ||
+      changedPackets !== changedPacketCounts.before + 1) {
     throw new Error(
       `Matrix telemetry update did not preserve the old packet and add one new packet: `
-      + `${baselinePackets} -> ${changedPackets}`,
+      + `${JSON.stringify(changedPacketCounts)}`,
     );
   }
-  await evaluate(cdp, `(() => {
+  const repeatedPacketCounts = await evaluate(cdp, `(async () => {
+    const canvas = document.querySelector('.matrix-rain-canvas');
     const field = document.querySelector('#radio-channel');
+    const before = Number(canvas.dataset.matrixRainPacketCount);
     field.textContent = field.textContent;
+    await new Promise(resolve => setTimeout(resolve, 0));
+    return {
+      before,
+      after: Number(canvas.dataset.matrixRainPacketCount),
+    };
   })()`);
-  await frames(cdp);
-  const repeatedPackets = await evaluate(cdp,
-    `Number(document.querySelector('.matrix-rain-canvas').dataset.matrixRainPacketCount)`);
-  if (repeatedPackets !== changedPackets) {
+  if (repeatedPacketCounts.before !== changedPackets ||
+      repeatedPacketCounts.after !== changedPackets) {
     throw new Error(
       `Identical Matrix telemetry redraw spawned a duplicate packet: `
-      + `${changedPackets} -> ${repeatedPackets}`,
+      + `${changedPackets} -> ${JSON.stringify(repeatedPacketCounts)}`,
     );
   }
 
@@ -4038,11 +4049,205 @@ async function auditMatrixRainControls(cdp, baseUrl, timeoutMs) {
   await pressKey(cdp, 'Escape', 'Escape', 27);
 }
 
+async function auditThemeRotation(cdp) {
+  const behavior = await evaluate(cdp, `(() => {
+    const failures = [];
+    const themeKey = 'sdsctl.web.theme';
+    const rotationKey = 'sdsctl.web.theme-rotation.v1';
+    const controller = window.sdsctlTheme;
+    const rotation = window.sdsctlThemeRotation;
+    const picker = document.querySelector('#theme-select');
+    const settings = document.querySelector('#theme-rotation-settings');
+    const originalTheme = controller?.current();
+    const originalStoredTheme = localStorage.getItem(themeKey);
+    const originalStoredRotation = localStorage.getItem(rotationKey);
+    const sequence = ['system', 'lcars', 'matrix'];
+
+    const expectedNext = current => {
+      const index = sequence.indexOf(current);
+      return sequence[index < 0 ? 0 : (index + 1) % sequence.length];
+    };
+    const verifyApplied = (expected, description) => {
+      if (controller.current() !== expected ||
+          document.documentElement.dataset.theme !== expected ||
+          picker?.value !== expected) {
+        failures.push(description + ' did not synchronize the theme controller, document and picker');
+      }
+    };
+
+    try {
+      if (controller === undefined || rotation === undefined ||
+          !(picker instanceof HTMLSelectElement) ||
+          !(settings instanceof HTMLDetailsElement)) {
+        return {failures: ['theme rotation controls are unavailable']};
+      }
+      if (!sequence.every(theme => controller.choices.includes(theme))) {
+        return {failures: ['theme rotation audit themes are unavailable']};
+      }
+
+      const focusTarget = document.querySelector('#pane-tab-scanner');
+      focusTarget?.focus({preventScroll: true});
+      const storedThemeBeforeRotation = localStorage.getItem(themeKey);
+      const policy = rotation.setPolicy({
+        enabled: true,
+        intervalMinutes: 5,
+        mode: 'sequential',
+        themes: sequence,
+      });
+      if (!policy.enabled || policy.intervalMinutes !== 5 ||
+          rotation.manualTheme() !== originalTheme) {
+        failures.push('valid sequential rotation policy did not preserve its manual theme');
+      }
+
+      let expected = expectedNext(controller.current());
+      rotation.advance();
+      verifyApplied(expected, 'first sequential advance');
+      if (localStorage.getItem(themeKey) !== storedThemeBeforeRotation) {
+        failures.push('rotation preview overwrote the saved manual theme');
+      }
+      if (focusTarget !== null && document.activeElement !== focusTarget) {
+        failures.push('rotation preview moved keyboard focus');
+      }
+
+      expected = expectedNext(expected);
+      rotation.advance();
+      verifyApplied(expected, 'second sequential advance');
+
+      rotation.setPolicy({
+        enabled: true,
+        intervalMinutes: 5,
+        mode: 'shuffle',
+        themes: sequence,
+      });
+      for (let index = 0; index < 12; index += 1) {
+        const previous = controller.current();
+        const current = rotation.advance();
+        if (current === previous || !sequence.includes(current)) {
+          failures.push('shuffle repeated immediately or escaped its allowlist');
+          break;
+        }
+      }
+
+      settings.open = true;
+      const pausedTheme = controller.current();
+      rotation.advance();
+      if (controller.current() !== pausedTheme) {
+        failures.push('rotation advanced while its settings were open');
+      }
+      settings.open = false;
+
+      picker.value = 'lcars';
+      picker.dispatchEvent(new Event('change', {bubbles: true}));
+      if (rotation.manualTheme() !== 'lcars') {
+        failures.push('manual theme change did not update the restoration theme');
+      }
+      rotation.advance();
+      rotation.setPolicy({
+        enabled: false,
+        intervalMinutes: 5,
+        mode: 'sequential',
+        themes: sequence,
+      });
+      verifyApplied('lcars', 'rotation disable restoration');
+
+      const rejected = rotation.setPolicy({
+        enabled: true,
+        intervalMinutes: 1,
+        mode: 'sequential',
+        themes: ['system'],
+      });
+      if (rejected.enabled || rejected.intervalMinutes !== 30) {
+        failures.push('invalid one-theme policy did not fail closed with the default interval');
+      }
+    } catch (error) {
+      failures.push('theme rotation audit threw: ' +
+        (error instanceof Error ? error.message : String(error)));
+    } finally {
+      if (settings instanceof HTMLDetailsElement) settings.open = false;
+      rotation?.setPolicy({
+        enabled: false,
+        intervalMinutes: 30,
+        mode: 'sequential',
+        themes: sequence,
+      });
+      if (typeof originalTheme === 'string') controller?.select(originalTheme);
+      if (originalStoredTheme === null) localStorage.removeItem(themeKey);
+      else localStorage.setItem(themeKey, originalStoredTheme);
+      if (originalStoredRotation === null) localStorage.removeItem(rotationKey);
+      else localStorage.setItem(rotationKey, originalStoredRotation);
+    }
+    return {failures};
+  })()`);
+  if (behavior.failures.length) {
+    throw new Error(`Theme rotation behavior: ${behavior.failures.join('; ')}`);
+  }
+  await frames(cdp);
+
+  for (const viewport of [
+    {width: 1920, height: 1080, dpr: 1},
+    {width: 800, height: 480, dpr: 1},
+    {width: 390, height: 844, dpr: 2},
+  ]) {
+    await setViewport(cdp, viewport);
+    await clickElement(cdp, '#native-menu-toggle');
+    const geometry = await evaluate(cdp, `(() => {
+      const menu = document.querySelector('#native-menu');
+      const settings = document.querySelector('#theme-rotation-settings');
+      const panel = document.querySelector('.theme-rotation-controls');
+      if (!(menu instanceof HTMLDialogElement) ||
+          !(settings instanceof HTMLDetailsElement) ||
+          !(panel instanceof HTMLElement)) {
+        return {failures: ['theme rotation panel is unavailable']};
+      }
+      settings.open = true;
+      settings.scrollIntoView({block: 'nearest'});
+      const failures = [];
+      const themeChoices = panel.querySelectorAll(
+        '#theme-rotation-theme-list input[type="checkbox"]',
+      );
+      if (themeChoices.length !== window.sdsctlTheme.choices.length) {
+        failures.push('theme allowlist does not expose every available theme');
+      }
+      const controls = [...panel.querySelectorAll('input, select')];
+      for (const control of controls) {
+        control.scrollIntoView({block: 'nearest'});
+        control.focus({preventScroll: true});
+        const rect = control.getBoundingClientRect();
+        const bounds = menu.getBoundingClientRect();
+        if (document.activeElement !== control || rect.width < 44 || rect.height < 44 ||
+            rect.left < bounds.left - 1 || rect.right > bounds.right + 1 ||
+            rect.top < bounds.top - 1 || rect.bottom > bounds.bottom + 1) {
+          failures.push('rotation control is not focusable, touch-sized and contained: ' + control.id);
+        }
+        if ((control.labels?.[0]?.textContent ?? '').trim() === '') {
+          failures.push('rotation control is missing a readable label: ' + control.id);
+        }
+      }
+      const menuRect = menu.getBoundingClientRect();
+      if (menuRect.left < -1 || menuRect.top < -1 ||
+          menuRect.right > innerWidth + 1 || menuRect.bottom > innerHeight + 1 ||
+          menu.scrollWidth > menu.clientWidth + 1) {
+        failures.push('open Menu or theme rotation panel escapes the CSS viewport');
+      }
+      return {controlCount: controls.length, failures};
+    })()`);
+    if (geometry.failures.length || geometry.controlCount < 6) {
+      throw new Error(
+        `Theme rotation panel ${viewport.width}x${viewport.height}@${viewport.dpr}: ` +
+        `${JSON.stringify(geometry)}`,
+      );
+    }
+    await pressKey(cdp, 'Escape', 'Escape', 27);
+  }
+  await setViewport(cdp, VIEWPORTS[0]);
+}
+
 export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
   const collector = new FailureCollector();
   await setViewport(cdp, VIEWPORTS[0]);
   await navigate(cdp, `${baseUrl}/`, timeoutMs);
   await auditUniversalDrawer(cdp, "standalone dashboard");
+  await auditThemeRotation(cdp);
   await auditMatrixRainControls(cdp, baseUrl, timeoutMs);
 
   let caseCount = 0;

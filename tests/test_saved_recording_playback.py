@@ -55,9 +55,13 @@ def test_saved_player_lifecycle(scenario):
             "async function dashboardFetch(", 1
         )[0]
     )
+    pagehide_marker = (
+        'window.addEventListener("pagehide", () => {\n'
+        "  mimicPageSuspended = true;"
+    )
     pagehide = (
-        'window.addEventListener("pagehide",'
-        + script.split('window.addEventListener("pagehide",', 1)[1].split(
+        pagehide_marker
+        + script.split(pagehide_marker, 1)[1].split(
             'window.addEventListener("pageshow",', 1
         )[0]
     )

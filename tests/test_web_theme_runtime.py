@@ -320,6 +320,7 @@ const colorScheme = {{ content: "" }};
 const themeColor = {{ content: "" }};
 const picker = {{ value: "solarized" }};
 let stored = "solarized";
+let storedPalette = null;
 global.document = {{
   documentElement: {{ dataset: {{}} }},
   querySelectorAll: (selector) =>
@@ -333,8 +334,11 @@ global.document = {{
 }};
 global.window = {{
   localStorage: {{
-    getItem: () => stored,
-    setItem: (_key, value) => {{ stored = value; }},
+    getItem: (key) => key === "sdsctl.web.theme" ? stored : storedPalette,
+    setItem: (key, value) => {{
+      if (key === "sdsctl.web.theme") stored = value;
+      else storedPalette = value;
+    }},
   }},
   matchMedia: () => ({{ matches: false, addEventListener: () => {{}} }}),
 }};
@@ -347,6 +351,17 @@ if (lifecycle.indexOf("listen-error") > lifecycle.indexOf("set-href")) {{
   throw new Error("href activated before error listener");
 }}
 if (picker.value !== "solarized") throw new Error("initial picker");
+if (window.sdsctlTheme.preview("system") !== "system") throw new Error("preview");
+if (stored !== "solarized") throw new Error("preview persisted");
+if (picker.value !== "system") throw new Error("preview picker");
+if (window.sdsctlTheme.preview("solarized") !== "solarized") {{
+  throw new Error("managed preview");
+}}
+if (stored !== "solarized") throw new Error("managed preview persisted");
+listeners.error();
+if (window.sdsctlTheme.current() !== "system") throw new Error("preview error fallback");
+if (stored !== "solarized") throw new Error("preview error persisted");
+if (window.sdsctlTheme.select("solarized") !== "solarized") throw new Error("restore");
 if (window.sdsctlTheme.select("missing") !== "system") throw new Error("fallback");
 if (link.media !== "not all") throw new Error("managed link not disabled");
 if (stored !== "system") throw new Error("fallback not persisted");
