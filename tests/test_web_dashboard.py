@@ -1078,6 +1078,19 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
         ".workspace-deck::after",
     ):
         assert telemetry_contract in motorsport
+    cold_war_radar = theme_text["cinematic-cold-war-radar"]
+    for telemetry_contract in (
+        '[data-theme-effects="subtle"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="subtle"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="full"][data-theme-signal-state="available"]',
+        '[data-theme-activity="active"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        "cold-war-radar-telemetry-sweep",
+        ".radio-field-groups::before",
+    ):
+        assert telemetry_contract in cold_war_radar
 
     assert "theme-stage" in shell.text
     assert 'aria-hidden="true"' in shell.text
