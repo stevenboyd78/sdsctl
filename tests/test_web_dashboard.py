@@ -1182,6 +1182,21 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
         ".archive-candlelight",
     ):
         assert telemetry_contract in wizarding_archive
+    art_deco_radio = theme_text["cinematic-art-deco-radio"]
+    for telemetry_contract in (
+        '[data-theme-effects="subtle"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="subtle"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="full"][data-theme-signal-state="available"]',
+        '[data-theme-activity="active"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        "--theme-activity-level",
+        "art-deco-radio-on-air",
+        "#radio-activity-panel .panel-header::before",
+        "#radio-activity-panel .panel-header::after",
+    ):
+        assert telemetry_contract in art_deco_radio
 
     assert "theme-stage" in shell.text
     assert 'aria-hidden="true"' in shell.text
