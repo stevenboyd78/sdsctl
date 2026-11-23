@@ -529,6 +529,74 @@
 @keyframes tactical-route-flow { to { stroke-dashoffset: -136; } }
 @keyframes tactical-contact-pulse { 0%, 100% { opacity: 0.48; } 38% { opacity: 1; } }
 
+/* Live scanner telemetry becomes field-map sensor telemetry. Signal strength
+ * energizes tracked contacts, RSSI strengthens the plotted route, and active
+ * traffic accelerates the scope sweep. The held-scope route/contact lock below
+ * remains authoritative. */
+:root[data-theme="cinematic-tactical-field"][data-theme-effects="subtle"][data-theme-signal-state="available"]:not(:has(
+  #radio-activity-panel [data-hold-state="held"]
+)) .tactical-contact {
+  opacity: calc(0.5 + var(--theme-signal-normalized, 0.5) * 0.24);
+  filter: drop-shadow(
+    0 0 calc(0.06rem + var(--theme-signal-normalized, 0.5) * 0.18rem)
+      rgb(240 219 106 / 0.36)
+  );
+  transition: opacity 640ms ease-out, filter 640ms ease-out;
+}
+
+:root[data-theme="cinematic-tactical-field"][data-theme-effects="subtle"][data-theme-rssi-state="available"]:not(:has(
+  #radio-activity-panel [data-hold-state="held"]
+)) .tactical-route-line {
+  stroke-opacity: calc(0.58 + var(--theme-rssi-normalized, 0.5) * 0.24);
+  filter: drop-shadow(
+    0 0 calc(0.05rem + var(--theme-rssi-normalized, 0.5) * 0.16rem)
+      rgb(242 201 93 / 0.34)
+  );
+  transition: stroke-opacity 720ms ease-out, filter 720ms ease-out;
+}
+
+:root[data-theme="cinematic-tactical-field"][data-theme-effects="full"][data-theme-signal-state="available"]:not(:has(
+  #radio-activity-panel [data-hold-state="held"]
+)) .tactical-contact {
+  opacity: calc(0.36 + var(--theme-signal-normalized, 0.5) * 0.64);
+  stroke-width: calc(2.4px + var(--theme-signal-normalized, 0.5) * 2.8px);
+  filter: drop-shadow(
+    0 0 calc(0.1rem + var(--theme-signal-normalized, 0.5) * 0.58rem)
+      rgb(240 219 106 / 0.76)
+  );
+  transition: opacity 420ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    stroke-width 420ms cubic-bezier(0.2, 0.75, 0.25, 1), filter 420ms ease-out;
+}
+
+:root[data-theme="cinematic-tactical-field"][data-theme-effects="full"][data-theme-rssi-state="available"]:not(:has(
+  #radio-activity-panel [data-hold-state="held"]
+)) .tactical-route-line {
+  stroke-opacity: calc(0.38 + var(--theme-rssi-normalized, 0.5) * 0.62);
+  stroke-width: calc(4px + var(--theme-rssi-normalized, 0.5) * 3px);
+  filter: brightness(calc(0.88 + var(--theme-rssi-normalized, 0.5) * 0.28))
+    drop-shadow(
+      0 0 calc(0.1rem + var(--theme-rssi-normalized, 0.5) * 0.54rem)
+        rgb(242 201 93 / 0.7)
+    );
+  transition: stroke-opacity 480ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    stroke-width 480ms cubic-bezier(0.2, 0.75, 0.25, 1), filter 480ms ease-out;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cinematic-tactical-field"][data-theme-effects="subtle"][data-theme-activity="active"]
+    .tactical-sweep {
+    animation-duration: 17s;
+  }
+
+  :root[data-theme="cinematic-tactical-field"][data-theme-effects="full"][data-theme-activity="active"]:not(:has(
+    #radio-activity-panel [data-hold-state="held"]
+  )) .tactical-sweep {
+    animation-duration: calc(15s - var(--theme-activity-level, 0.5) * 8.5s);
+    fill-opacity: calc(0.1 + var(--theme-activity-level, 0.5) * 0.15);
+    filter: drop-shadow(0 0 0.48rem rgb(188 229 141 / 0.62));
+  }
+}
+
 /* A held scope is plotted as a locked route/contact on the field map. */
 :root[data-theme="cinematic-tactical-field"]:has(
   #radio-activity-panel [data-hold-state="held"]
