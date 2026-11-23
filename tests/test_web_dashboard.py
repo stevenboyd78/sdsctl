@@ -1135,6 +1135,22 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
         ".galactic-tactical",
     ):
         assert telemetry_contract in galactic_operations
+    carrier_air_wing = theme_text["cinematic-carrier-air-wing"]
+    for telemetry_contract in (
+        '[data-theme-effects="subtle"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="subtle"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="full"][data-theme-signal-state="available"]',
+        '[data-theme-activity="active"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        "--theme-activity-level",
+        ".carrier-hud-ring-inner",
+        ".carrier-signal-trace",
+        ".carrier-radar-sweep",
+        ".carrier-deck-lights",
+    ):
+        assert telemetry_contract in carrier_air_wing
 
     assert "theme-stage" in shell.text
     assert 'aria-hidden="true"' in shell.text
