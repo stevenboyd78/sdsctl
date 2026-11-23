@@ -535,6 +535,80 @@
 @keyframes galactic-sweep-turn { to { transform: rotate(360deg); } }
 @keyframes galactic-planet-breathe { to { opacity: 0.78; } }
 
+/* Live scanner telemetry becomes bridge sensor telemetry. Signal strength
+ * energizes the tactical rings, RSSI illuminates the orbital body, and active
+ * traffic accelerates the sensor sweep and raises the tactical display glow.
+ * The existing held-scope tactical lock remains authoritative. */
+:root[data-theme="cinematic-galactic-operations"][data-theme-effects="subtle"][data-theme-signal-state="available"]:not(:has(
+  #radio-activity-panel [data-hold-state="held"]
+)) :is(.galactic-ring-a, .galactic-ring-b) {
+  stroke-opacity: calc(0.48 + var(--theme-signal-normalized, 0.5) * 0.2);
+  filter: drop-shadow(
+    0 0 calc(0.08rem + var(--theme-signal-normalized, 0.5) * 0.18rem)
+      rgb(105 234 255 / 0.4)
+  );
+  transition: stroke-opacity 640ms ease-out, filter 640ms ease-out;
+}
+
+:root[data-theme="cinematic-galactic-operations"][data-theme-effects="subtle"][data-theme-rssi-state="available"]
+  .galactic-planet {
+  filter: brightness(calc(0.92 + var(--theme-rssi-normalized, 0.5) * 0.16))
+    drop-shadow(
+      0 0 calc(0.08rem + var(--theme-rssi-normalized, 0.5) * 0.2rem)
+        rgb(125 240 255 / 0.34)
+    );
+  transition: filter 720ms ease-out;
+}
+
+:root[data-theme="cinematic-galactic-operations"][data-theme-effects="full"][data-theme-signal-state="available"]:not(:has(
+  #radio-activity-panel [data-hold-state="held"]
+)) :is(.galactic-ring-a, .galactic-ring-b) {
+  stroke-opacity: calc(0.36 + var(--theme-signal-normalized, 0.5) * 0.64);
+  stroke-width: calc(2.6px + var(--theme-signal-normalized, 0.5) * 2.4px);
+  filter: drop-shadow(
+    0 0 calc(0.12rem + var(--theme-signal-normalized, 0.5) * 0.64rem)
+      rgb(105 234 255 / 0.82)
+  );
+  transition: stroke-opacity 420ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    stroke-width 420ms cubic-bezier(0.2, 0.75, 0.25, 1), filter 420ms ease-out;
+}
+
+:root[data-theme="cinematic-galactic-operations"][data-theme-effects="full"][data-theme-rssi-state="available"]
+  .galactic-planet {
+  filter: brightness(calc(0.82 + var(--theme-rssi-normalized, 0.5) * 0.38))
+    saturate(calc(0.9 + var(--theme-rssi-normalized, 0.5) * 0.32))
+    drop-shadow(
+      0 0 calc(0.16rem + var(--theme-rssi-normalized, 0.5) * 0.76rem)
+        rgb(125 240 255 / 0.62)
+    );
+  transition: filter 480ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+:root[data-theme="cinematic-galactic-operations"][data-theme-effects="full"][data-theme-activity="active"]:not(:has(
+  #radio-activity-panel [data-hold-state="held"]
+)) .galactic-tactical {
+  filter: drop-shadow(
+    0 0 calc(0.18rem + var(--theme-activity-level, 0.5) * 0.58rem)
+      rgb(105 234 255 / 0.56)
+  );
+  transition: filter 320ms ease-out;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cinematic-galactic-operations"][data-theme-effects="subtle"][data-theme-activity="active"]
+    .galactic-sweep {
+    animation-duration: 16s;
+  }
+
+  :root[data-theme="cinematic-galactic-operations"][data-theme-effects="full"][data-theme-activity="active"]:not(:has(
+    #radio-activity-panel [data-hold-state="held"]
+  )) .galactic-sweep {
+    animation-duration: 5.4s;
+    fill-opacity: calc(0.1 + var(--theme-activity-level, 0.5) * 0.12);
+    filter: drop-shadow(0 0 0.55rem rgb(92 234 255 / 0.68));
+  }
+}
+
 /* A held scope propagates as a bridge-wide tactical lock. */
 :root[data-theme="cinematic-galactic-operations"]:has(
   #radio-activity-panel [data-hold-state="held"]

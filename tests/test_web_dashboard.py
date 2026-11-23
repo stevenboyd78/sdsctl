@@ -1119,6 +1119,22 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
         ".synthwave-road-dashes",
     ):
         assert telemetry_contract in synthwave
+    galactic_operations = theme_text["cinematic-galactic-operations"]
+    for telemetry_contract in (
+        '[data-theme-effects="subtle"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="subtle"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="full"][data-theme-signal-state="available"]',
+        '[data-theme-activity="active"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        "--theme-activity-level",
+        ".galactic-ring-a",
+        ".galactic-planet",
+        ".galactic-sweep",
+        ".galactic-tactical",
+    ):
+        assert telemetry_contract in galactic_operations
 
     assert "theme-stage" in shell.text
     assert 'aria-hidden="true"' in shell.text
