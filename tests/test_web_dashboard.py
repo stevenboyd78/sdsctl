@@ -1166,6 +1166,22 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
         ".tactical-sweep",
     ):
         assert telemetry_contract in tactical_field
+    wizarding_archive = theme_text["cinematic-wizarding-archive"]
+    for telemetry_contract in (
+        '[data-theme-effects="subtle"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="subtle"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="full"][data-theme-signal-state="available"]',
+        '[data-theme-activity="active"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        "--theme-activity-level",
+        ".archive-orrery-ring-a",
+        ".archive-orrery-ring-b",
+        ".archive-stars",
+        ".archive-candlelight",
+    ):
+        assert telemetry_contract in wizarding_archive
 
     assert "theme-stage" in shell.text
     assert 'aria-hidden="true"' in shell.text
