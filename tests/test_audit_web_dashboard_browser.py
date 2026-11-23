@@ -266,6 +266,20 @@ def test_browser_audit_covers_universal_non_native_drawer_contexts() -> None:
     assert "did not restore focus after Escape" in universal
 
 
+def test_matrix_duplicate_packet_guard_uses_one_atomic_snapshot() -> None:
+    source = _SCRIPT.read_text(encoding="utf-8")
+    matrix_controls = source.split(
+        "async function auditMatrixRainControls", 1
+    )[1].split("async function auditThemeTelemetry", 1)[0]
+
+    assert (
+        "repeatedPacketCounts.after !== repeatedPacketCounts.before"
+        in matrix_controls
+    )
+    assert "repeatedPacketCounts.before !== changedPackets" not in matrix_controls
+    assert "racing unrelated live data" in matrix_controls
+
+
 def test_browser_audit_persists_each_applicable_appearance_control() -> None:
     source = _SCRIPT.read_text(encoding="utf-8")
     drawer_source = source.split("async function auditNativeDrawer", 1)[1].split(

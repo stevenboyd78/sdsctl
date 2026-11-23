@@ -4007,11 +4007,14 @@ async function auditMatrixRainControls(cdp, baseUrl, timeoutMs) {
       after: Number(canvas.dataset.matrixRainPacketCount),
     };
   })()`);
-  if (repeatedPacketCounts.before !== changedPackets ||
-      repeatedPacketCounts.after !== changedPackets) {
+  // The demo's live scanner refresh may legitimately restore the field between
+  // these two CDP evaluations and enqueue its own packet. Judge only the
+  // identical redraw's atomic before/after snapshot so that real duplicate
+  // packets still fail without racing unrelated live data.
+  if (repeatedPacketCounts.after !== repeatedPacketCounts.before) {
     throw new Error(
       `Identical Matrix telemetry redraw spawned a duplicate packet: `
-      + `${changedPackets} -> ${JSON.stringify(repeatedPacketCounts)}`,
+      + `${JSON.stringify(repeatedPacketCounts)}`,
     );
   }
 
