@@ -1175,6 +1175,15 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     ):
         assert telemetry_contract in tactical_field
     wizarding_archive = theme_text["cinematic-wizarding-archive"]
+    assert (
+        ':root[data-theme="cinematic-wizarding-archive"] .workspace-tabs {\n'
+        "      grid-template-columns: repeat(5, minmax(0, 1fr)) !important;"
+    ) in viewport_stylesheet.text
+    assert (
+        ':root[data-theme="cinematic-wizarding-archive"] '
+        ".workspace-tabs-with-home-assistant {\n"
+        "      grid-template-columns: repeat(6, minmax(0, 1fr)) !important;"
+    ) in viewport_stylesheet.text
     for telemetry_contract in (
         '[data-theme-effects="subtle"][data-theme-rssi-state="available"]',
         '[data-theme-effects="subtle"][data-theme-signal-state="available"]',

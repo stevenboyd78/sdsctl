@@ -2059,6 +2059,14 @@
       grid-row: 1 !important;
     }
 
+    :root[data-theme="cinematic-wizarding-archive"] .workspace-tabs {
+      grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    }
+
+    :root[data-theme="cinematic-wizarding-archive"] .workspace-tabs-with-home-assistant {
+      grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    }
+
     :root[data-theme="cinematic-wizarding-archive"] #radio-activity-panel {
       width: calc(100% - 16vw) !important;
       margin-inline: 8vw !important;
