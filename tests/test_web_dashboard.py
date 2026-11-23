@@ -1015,6 +1015,19 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
         ".mission-needle-b",
     ):
         assert telemetry_contract in mission_control
+    first_responder = theme_text["first-responder"]
+    for telemetry_contract in (
+        '[data-theme-effects="subtle"]',
+        '[data-theme-effects="full"]',
+        '[data-theme-activity="active"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        "--theme-activity-level",
+        "dispatch-beacon-pulse",
+        "#radio-activity-panel::before",
+        "#radio-activity-panel::after",
+    ):
+        assert telemetry_contract in first_responder
 
     assert "theme-stage" in shell.text
     assert 'aria-hidden="true"' in shell.text
