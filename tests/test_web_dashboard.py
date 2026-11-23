@@ -982,6 +982,20 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert "color: var(--background);" in stylesheet_source.text
     assert "color: var(--background);" in theme_text["system"]
     assert "--lcars-v2-rail:" in theme_text["lcars"]
+    lcars = theme_text["lcars"]
+    for telemetry_contract in (
+        '[data-theme-effects="subtle"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="subtle"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="full"][data-theme-signal-state="available"]',
+        '[data-theme-activity="active"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        "lcars-telemetry-pulse",
+        ".site-header::after",
+        ".workspace-deck::after",
+    ):
+        assert telemetry_contract in lcars
     assert "--term-accent:" in theme_text["matrix"]
     for matrix_glass_contract in (
         "--matrix-glass-underlay: rgb(2 10 5 / 0.26);",
