@@ -1104,6 +1104,21 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
         ".radio-field-groups::before",
     ):
         assert telemetry_contract in cyberpunk_night
+    synthwave = theme_text["cinematic-synthwave"]
+    for telemetry_contract in (
+        '[data-theme-effects="subtle"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="subtle"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="full"][data-theme-signal-state="available"]',
+        '[data-theme-activity="active"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        "--theme-activity-level",
+        ".synthwave-equalizer rect",
+        ".synthwave-horizon",
+        ".synthwave-road-dashes",
+    ):
+        assert telemetry_contract in synthwave
 
     assert "theme-stage" in shell.text
     assert 'aria-hidden="true"' in shell.text

@@ -673,6 +673,76 @@
 }
 @keyframes synthwave-console-scan { to { left: 112%; } }
 
+/* Live scanner telemetry becomes the cockpit's instrument drive. Signal
+ * strength energizes the paired equalizers, RSSI brightens the horizon, and
+ * active traffic accelerates the road markers and dash lamps. The existing
+ * held-scope surge remains authoritative while a hold is present. */
+:root[data-theme="cinematic-synthwave"][data-theme-effects="subtle"][data-theme-signal-state="available"]
+  .synthwave-equalizer rect {
+  fill-opacity: calc(0.5 + var(--theme-signal-normalized, 0.5) * 0.28);
+  filter: drop-shadow(
+    0 0 calc(0.08rem + var(--theme-signal-normalized, 0.5) * 0.2rem)
+      rgb(255 79 197 / 0.46)
+  );
+  transition: fill-opacity 620ms ease-out, filter 620ms ease-out;
+}
+
+:root[data-theme="cinematic-synthwave"][data-theme-effects="subtle"][data-theme-rssi-state="available"]:not(:has(
+  #radio-activity-panel [data-hold-state="held"]
+)) .synthwave-horizon {
+  stroke-opacity: calc(0.4 + var(--theme-rssi-normalized, 0.5) * 0.28);
+  filter: drop-shadow(
+    0 0 calc(0.12rem + var(--theme-rssi-normalized, 0.5) * 0.28rem)
+      rgb(56 239 255 / 0.48)
+  );
+  transition: stroke-opacity 720ms ease-out, filter 720ms ease-out;
+}
+
+:root[data-theme="cinematic-synthwave"][data-theme-effects="full"][data-theme-signal-state="available"]
+  .synthwave-equalizer rect {
+  fill-opacity: calc(0.38 + var(--theme-signal-normalized, 0.5) * 0.62);
+  filter: drop-shadow(
+    0 0 calc(0.12rem + var(--theme-signal-normalized, 0.5) * 0.58rem)
+      rgb(255 79 197 / 0.82)
+  );
+  transition: fill-opacity 420ms cubic-bezier(0.2, 0.75, 0.25, 1), filter 420ms ease-out;
+}
+
+:root[data-theme="cinematic-synthwave"][data-theme-effects="full"][data-theme-rssi-state="available"]:not(:has(
+  #radio-activity-panel [data-hold-state="held"]
+)) .synthwave-horizon {
+  stroke-opacity: calc(0.3 + var(--theme-rssi-normalized, 0.5) * 0.7);
+  filter: drop-shadow(
+    0 0 calc(0.16rem + var(--theme-rssi-normalized, 0.5) * 0.82rem)
+      rgb(56 239 255 / 0.78)
+  );
+  transition: stroke-opacity 480ms cubic-bezier(0.2, 0.75, 0.25, 1), filter 480ms ease-out;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cinematic-synthwave"][data-theme-effects="subtle"][data-theme-activity="active"]
+    .synthwave-road-dashes {
+    animation-duration: 2.1s;
+  }
+
+  :root[data-theme="cinematic-synthwave"][data-theme-effects="full"][data-theme-activity="active"]
+    .synthwave-road-dashes {
+    animation-duration: 1.25s;
+    filter: drop-shadow(0 0 0.5rem rgb(255 221 105 / 0.72));
+  }
+}
+
+:root[data-theme="cinematic-synthwave"][data-theme-effects="full"][data-theme-activity="active"]:not(:has(
+  #radio-activity-panel [data-hold-state="held"]
+)) .synthwave-dash-lights {
+  opacity: calc(0.58 + var(--theme-activity-level, 0.5) * 0.42);
+  filter: drop-shadow(
+    0 0 calc(0.2rem + var(--theme-activity-level, 0.5) * 0.52rem)
+      rgb(255 221 105 / 0.74)
+  );
+  transition: opacity 320ms ease-out, filter 320ms ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root[data-theme="cinematic-synthwave"] *,
   :root[data-theme="cinematic-synthwave"] *::before,
