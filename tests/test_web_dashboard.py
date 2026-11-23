@@ -700,6 +700,9 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
     assert '<option value="shuffle">Shuffle</option>' in response.text
     assert 'id="theme-rotation-themes"' in response.text
     assert 'id="theme-rotation-status"' in response.text
+    assert 'id="theme-effects-select"' in response.text
+    assert '<option value="full" selected>Full</option>' in response.text
+    assert 'id="theme-effects-description"' in response.text
     assert 'id="system-palette-select"' in response.text
     assert '<option value="auto">Follow device</option>' in response.text
     for palette_name in sorted(BUILTIN_THEMES):
@@ -1000,6 +1003,18 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert "--terminal-amber:" in theme_text["pip-boy-inspired"]
     assert "@import" not in theme_text["pip-boy-inspired"]
     assert "url(" not in theme_text["pip-boy-inspired"]
+    mission_control = theme_text["cinematic-mission-control"]
+    for telemetry_contract in (
+        '[data-theme-effects="full"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="subtle"][data-theme-signal-state="available"]',
+        '[data-theme-effects="subtle"][data-theme-rssi-state="available"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        ".mission-needle-a",
+        ".mission-needle-b",
+    ):
+        assert telemetry_contract in mission_control
 
     assert "theme-stage" in shell.text
     assert 'aria-hidden="true"' in shell.text
@@ -1097,6 +1112,15 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert 'typeof context.createScriptProcessor === "function"' in script.text
     assert "class PcmuScriptProcessor" in script.text
     assert "new AbortController" in script.text
+    assert 'THEME_EFFECTS_STORAGE_KEY = "sdsctl.web.theme-effects.v1"' in script.text
+    assert 'THEME_EFFECTS_DEFAULT = "full"' in script.text
+    assert 'THEME_TELEMETRY_EVENT = "sdsctl:theme-telemetry"' in script.text
+    assert "THEME_TELEMETRY_VERSION = 1" in script.text
+    assert "function updateThemeTelemetry(radio" in script.text
+    assert 'dataset.themeTelemetry = "paused"' in script.text
+    assert '"--theme-signal-normalized"' in script.text
+    assert '"--theme-rssi-normalized"' in script.text
+    assert "new CustomEvent(THEME_TELEMETRY_EVENT, {detail})" in script.text
     assert "getBigUint64" in script.text
     assert "PCMU stream gap does not match daemon queue-loss counters" in script.text
     assert 'dashboardFetch(webUrl("api/v1/recording")' in script.text
@@ -2414,6 +2438,7 @@ def test_universal_dashboard_menu_contract() -> None:
     assert 'document.createComment("native drawer control position")' in script
     assert "appearance.append(node)" in script
     assert 'element("matrix-rain-controls")' in script
+    assert 'element("theme-effects-controls")' in script
     assert 'const presentation = make("section", null, "native-menu-presentation")' in script
     assert 'document.createComment("native drawer presentation position")' in script
     assert "presentation.append(mimicToolbar)" in script

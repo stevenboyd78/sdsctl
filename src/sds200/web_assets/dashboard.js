@@ -21,6 +21,13 @@ const THEME_ROTATION_STORAGE_KEY = "sdsctl.web.theme-rotation.v1";
 const THEME_ROTATION_MINUTES_MIN = 5;
 const THEME_ROTATION_MINUTES_MAX = 1440;
 const THEME_ROTATION_MINUTES_DEFAULT = 30;
+const THEME_EFFECTS_STORAGE_KEY = "sdsctl.web.theme-effects.v1";
+const THEME_EFFECTS_DEFAULT = "full";
+const THEME_TELEMETRY_EVENT = "sdsctl:theme-telemetry";
+const THEME_TELEMETRY_VERSION = 1;
+const THEME_TELEMETRY_SMOOTHING = 0.38;
+const THEME_RSSI_FLOOR_DBM = -120;
+const THEME_RSSI_CEILING_DBM = -40;
 const WATERFALL_AUTO_SWITCH_STORAGE_KEY = "sdsctl.web.waterfall-auto-switch";
 const WATERFALL_AUTO_SWITCH_DELAY_MS = 750;
 const WATERFALL_AUTO_RETURN_DELAY_MS = 1250;
@@ -91,6 +98,9 @@ let waterfallAutoSuppressed = false;
 let radioScanFallback = "detail";
 let radioInspectionView = "auto";
 let currentScreenKind = "unknown";
+let themeEffectsMode = THEME_EFFECTS_DEFAULT;
+let themeTelemetryState = null;
+let pendingThemeTelemetry = null;
 let recordingEntries = [];
 let recordingTotalEntries = 0;
 let recordingPageIndex = 0;
@@ -413,6 +423,7 @@ function initializeNativeMenu(logout, logoutButton) {
     element("system-palette-picker"),
     element("lcars-v2-appearance-pickers"),
     element("theme-typography-pickers"),
+    element("theme-effects-controls"),
     element("matrix-rain-controls"),
   ]) {
     if (!(node instanceof HTMLElement)) throw new Error("Native appearance control is unavailable.");
@@ -877,6 +888,52 @@ function initializeWorkspace() {
         focus: true,
       });
     });
+  }
+}
+
+function normalizedThemeEffectsMode(value) {
+  return value === "off" || value === "subtle" || value === "full"
+    ? value
+    : THEME_EFFECTS_DEFAULT;
+}
+
+function themeMotionPreference() {
+  if (typeof window.matchMedia !== "function") return "enabled";
+  if (window.matchMedia("(forced-colors: active)").matches) return "forced-colors";
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ? "reduced"
+    : "enabled";
+}
+
+function applyThemeEffectsMode(value, {persist = true} = {}) {
+  themeEffectsMode = normalizedThemeEffectsMode(value);
+  document.documentElement.dataset.themeEffects = themeEffectsMode;
+  document.documentElement.dataset.themeMotion = themeMotionPreference();
+  element("theme-effects-select").value = themeEffectsMode;
+  if (persist) writeStoredValue(THEME_EFFECTS_STORAGE_KEY, themeEffectsMode);
+  updateThemeTelemetry(record(currentSnapshot.radio_state), {smooth: false});
+  return themeEffectsMode;
+}
+
+function initializeThemeEffectsControl() {
+  const select = element("theme-effects-select");
+  applyThemeEffectsMode(readStoredValue(THEME_EFFECTS_STORAGE_KEY), {
+    persist: false,
+  });
+  select.addEventListener("change", () => applyThemeEffectsMode(select.value));
+  if (typeof window.matchMedia === "function") {
+    for (const query of [
+      "(prefers-reduced-motion: reduce)",
+      "(forced-colors: active)",
+    ]) {
+      const media = window.matchMedia(query);
+      if (typeof media.addEventListener === "function") {
+        media.addEventListener("change", () => {
+          document.documentElement.dataset.themeMotion = themeMotionPreference();
+          updateThemeTelemetry(record(currentSnapshot.radio_state), {smooth: false});
+        });
+      }
+    }
   }
 }
 
@@ -2408,6 +2465,7 @@ function renderRadioState(radio) {
     setText(target, value, fallback);
   }
   renderRadioProfile(radio.screen_kind);
+  updateThemeTelemetry(radio);
 }
 
 function booleanLabel(value, trueLabel, falseLabel) {
@@ -2425,6 +2483,109 @@ function signalLabel(value) {
     return `${value} / 5`;
   }
   return "Unavailable";
+}
+
+function themeClamp(value, minimum = 0, maximum = 1) {
+  return Math.max(minimum, Math.min(maximum, value));
+}
+
+function normalizedThemeSignal(value) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? themeClamp(value / 5)
+    : null;
+}
+
+function normalizedThemeRssi(value) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? themeClamp(
+      (value - THEME_RSSI_FLOOR_DBM) /
+        (THEME_RSSI_CEILING_DBM - THEME_RSSI_FLOOR_DBM),
+    )
+    : null;
+}
+
+function smoothedThemeValue(previous, target, smooth) {
+  if (target === null || previous === null || !smooth) return target;
+  return previous + (target - previous) * THEME_TELEMETRY_SMOOTHING;
+}
+
+function themeTelemetryBand(value) {
+  if (value === null) return "unknown";
+  if (value <= 0.04) return "none";
+  if (value < 0.32) return "weak";
+  if (value < 0.58) return "fair";
+  if (value < 0.82) return "good";
+  return "strong";
+}
+
+function themeTelemetryActivity(radio, signal) {
+  if (signal !== null && signal > 0.04) return "active";
+  for (const field of ["channel", "frequency", "talkgroup_id", "unit_id"]) {
+    if (radio[field] !== null && radio[field] !== undefined && radio[field] !== "") {
+      return "active";
+    }
+  }
+  return "idle";
+}
+
+function applyThemeTelemetry(detail) {
+  const root = document.documentElement;
+  pendingThemeTelemetry = null;
+  root.dataset.themeTelemetry = "live";
+  root.dataset.themeSignal = detail.signalBand;
+  root.dataset.themeRssi = detail.rssiBand;
+  root.dataset.themeActivity = detail.activity;
+  root.dataset.themeScreen = detail.screenKind;
+  root.dataset.themeSignalState = detail.signal === null ? "unavailable" : "available";
+  root.dataset.themeRssiState = detail.rssi === null ? "unavailable" : "available";
+  root.style.setProperty(
+    "--theme-signal-normalized",
+    detail.signal === null ? "0.5" : detail.signal.toFixed(4),
+  );
+  root.style.setProperty(
+    "--theme-rssi-normalized",
+    detail.rssi === null ? "0.5" : detail.rssi.toFixed(4),
+  );
+  root.style.setProperty(
+    "--theme-activity-level",
+    detail.activity === "active" ? "1" : "0",
+  );
+  window.dispatchEvent(new CustomEvent(THEME_TELEMETRY_EVENT, {detail}));
+}
+
+function updateThemeTelemetry(radio, {smooth = true} = {}) {
+  const signalTarget = normalizedThemeSignal(radio.signal);
+  const rssiTarget = normalizedThemeRssi(radio.rssi);
+  const signal = smoothedThemeValue(
+    themeTelemetryState?.signal ?? null,
+    signalTarget,
+    smooth,
+  );
+  const rssi = smoothedThemeValue(
+    themeTelemetryState?.rssi ?? null,
+    rssiTarget,
+    smooth,
+  );
+  const detail = Object.freeze({
+    version: THEME_TELEMETRY_VERSION,
+    effects: themeEffectsMode,
+    signal,
+    rssi,
+    signalBand: themeTelemetryBand(signal),
+    rssiBand: themeTelemetryBand(rssi),
+    activity: themeTelemetryActivity(radio, signal),
+    screenKind: normalizedScreenKind(radio.screen_kind),
+    mode: typeof radio.mode === "string" ? radio.mode : null,
+    modulation: typeof radio.modulation === "string" ? radio.modulation : null,
+  });
+  themeTelemetryState = detail;
+  if (document.hidden) {
+    pendingThemeTelemetry = detail;
+    document.documentElement.dataset.themeTelemetry = "paused";
+    return detail;
+  }
+  applyThemeTelemetry(detail);
+  return detail;
 }
 
 function finiteNumber(value, fallback = 0) {
@@ -5165,12 +5326,16 @@ async function refreshConnectedClients() {
 document.addEventListener("visibilitychange", () => {
   reconcileMimicDisplay();
   if (document.hidden) {
+    document.documentElement.dataset.themeTelemetry = "paused";
     clearHomeAssistantBridgeKey();
     clearHomeAssistantAdvancedSecrets();
     stopEventStream();
     stopWaterfallStream({status: "Open this pane to start the waterfall stream."});
     return;
   }
+
+  if (pendingThemeTelemetry !== null) applyThemeTelemetry(pendingThemeTelemetry);
+  else updateThemeTelemetry(record(currentSnapshot.radio_state), {smooth: false});
 
   void refreshStatus();
   void refreshRecordingStatus();
@@ -5181,6 +5346,7 @@ document.addEventListener("visibilitychange", () => {
 
 window.addEventListener("pagehide", () => {
   mimicPageSuspended = true;
+  document.documentElement.dataset.themeTelemetry = "paused";
   reconcileMimicDisplay();
   clearHomeAssistantBridgeKey();
   clearHomeAssistantAdvancedSecrets();
@@ -5306,6 +5472,7 @@ void initializeNativeSession();
 initializeWaterfallWorkspace();
 initializeWorkspace();
 initializeAutomaticWaterfallSwitch();
+initializeThemeEffectsControl();
 initializeThemeControl();
 initializeRadioViewControls();
 initializeAudioPlayback();

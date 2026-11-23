@@ -356,6 +356,10 @@ class FakeNode {
     this.textContentWrites = 0;
     this.className = "";
     this.parentNode = null;
+    this.styleValues = new Map();
+    this.style = {
+      setProperty: (name, value) => this.styleValues.set(name, String(value)),
+    };
   }
 
   setAttribute(name, value) {
@@ -496,6 +500,7 @@ themeSelect.options = [
   {value: "lcars", textContent: "LCARS"},
   {value: "pip-boy-inspired", textContent: "Pip-Boy-inspired"},
 ];
+const themeEffectsSelect = add("theme-effects-select");
 const systemPalettePicker = add("system-palette-picker");
 const systemPaletteSelect = add("system-palette-select");
 const rotationSettings = add("theme-rotation-settings");
@@ -543,6 +548,10 @@ const window = {
   clearTimeout(id) {
     timeouts.delete(id);
   },
+  dispatchEvent(event) {
+    this.lastDispatchedEvent = event;
+    return true;
+  },
   addEventListener() {},
   sdsctlTheme: {
     choices: ["system", "lcars", "pip-boy-inspired"],
@@ -571,6 +580,12 @@ globalThis.document = document;
 globalThis.window = window;
 globalThis.EventSource = FakeEventSource;
 globalThis.HTMLInputElement = FakeNode;
+globalThis.CustomEvent = class CustomEvent {
+  constructor(type, options = {}) {
+    this.type = type;
+    this.detail = options.detail;
+  }
+};
 """
 
     assertions = r"""
@@ -581,6 +596,19 @@ assert.equal(workspacePanels[4].hidden, false);
 assert.equal(workspacePanels[0].hidden, true);
 assert.equal(storageValues.get("sdsctl.web.pane"), "diagnostics");
 assert.equal(document.documentElement.hidden, false);
+
+initializeThemeEffectsControl();
+assert.equal(themeEffectsSelect.value, "full");
+assert.equal(document.documentElement.dataset.themeEffects, "full");
+assert.equal(document.documentElement.dataset.themeMotion, "enabled");
+themeEffectsSelect.value = "subtle";
+themeEffectsSelect.dispatch("change");
+assert.equal(document.documentElement.dataset.themeEffects, "subtle");
+assert.equal(storageValues.get(THEME_EFFECTS_STORAGE_KEY), "subtle");
+applyThemeEffectsMode("full");
+assert.equal(document.documentElement.dataset.themeEffects, "full");
+applyThemeEffectsMode("not-a-mode");
+assert.equal(document.documentElement.dataset.themeEffects, "full");
 
 const endEvent = workspaceTabs[4].dispatch("keydown", {key: "End"});
 assert.equal(endEvent.defaultPrevented, true);
@@ -866,11 +894,32 @@ for (const target of Object.values(RADIO_STATE_FIELD_TARGETS)) {
 }
 renderRadioState({
   screen_kind: "tone_out",
+  signal: 5,
+  rssi: -60,
   tone_out_tone_a: "0.0",
   tone_out_tone_b: "67.0",
 });
 assert.equal(nodes.get("radio-tone-out-tone-a").textContent, "Detect");
 assert.equal(nodes.get("radio-tone-out-tone-b").textContent, "67.0");
+assert.equal(document.documentElement.dataset.themeSignal, "strong");
+assert.equal(document.documentElement.dataset.themeRssi, "good");
+assert.equal(
+  document.documentElement.styleValues.get("--theme-signal-normalized"),
+  "1.0000",
+);
+assert.equal(window.lastDispatchedEvent.type, "sdsctl:theme-telemetry");
+assert.equal(window.lastDispatchedEvent.detail.version, 1);
+assert.equal(window.lastDispatchedEvent.detail.signal, 1);
+const liveTelemetryEvent = window.lastDispatchedEvent;
+document.hidden = true;
+renderRadioState({screen_kind: "scanning", signal: 0, rssi: -120});
+assert.equal(document.documentElement.dataset.themeTelemetry, "paused");
+assert.equal(window.lastDispatchedEvent, liveTelemetryEvent);
+assert.notEqual(pendingThemeTelemetry, null);
+document.hidden = false;
+applyThemeTelemetry(pendingThemeTelemetry);
+assert.equal(document.documentElement.dataset.themeTelemetry, "live");
+assert.notEqual(window.lastDispatchedEvent, liveTelemetryEvent);
 
 activateWorkspacePane("audio");
 nodes.get("radio-view-special").focus();

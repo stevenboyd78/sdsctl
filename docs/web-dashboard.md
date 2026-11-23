@@ -408,6 +408,23 @@ a burn-in guarantee: headings, pane geometry, and other static regions remain
 in similar locations. Use the display's own pixel-shift, dimming, sleep, or
 scheduled power controls where burn-in protection matters.
 
+**Appearance > Live effects** controls how strongly supported themes react to
+the scanner. **Full** is the default, **Subtle** keeps a reduced response, and
+**Off** freezes live reactions without changing scanner data or ordinary
+dashboard updates. The browser-local choice is stored under
+`sdsctl.web.theme-effects.v1`. Reduced-motion and forced-colors preferences are
+honored independently, and live effects pause while the page is hidden.
+
+The dashboard derives a versioned presentation signal from the radio state it
+already receives; it does not poll the scanner again. Theme authors can consume
+the root `data-theme-signal`, `data-theme-rssi`, `data-theme-activity`, and
+`data-theme-telemetry` states, the normalized `--theme-signal-normalized`,
+`--theme-rssi-normalized`, and `--theme-activity-level` custom properties, or
+the `sdsctl:theme-telemetry` browser event. Mission Control is the first proof:
+its two background meter needles respond separately to scanner signal and RSSI.
+Unavailable values settle at a neutral midpoint, while smoothing prevents
+normal scanner jitter from making the instruments distracting.
+
 When **System** is active, a second browser-local selector appears in the center
 of the overview row. **Follow device** preserves the adaptive behavior above.
 The remaining choices mirror Textual's full built-in TUI color-scheme inventory:

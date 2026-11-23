@@ -61,6 +61,14 @@ guarantee burn-in prevention because much of the dashboard geometry remains
 static; retain any display-provided pixel shift, dimming, sleep, or power
 schedule.
 
+**Menu > Appearance > Live effects** controls scanner-driven theme reactions.
+Full is the default, Subtle reduces the response, and Off freezes those effects
+without changing ordinary dashboard data. The browser-local preference honors
+reduced-motion and forced-colors settings and pauses while the page is hidden.
+Effects reuse the radio state already delivered to the dashboard; they do not
+add scanner polling. Mission Control currently uses signal and RSSI to drive its
+two background meter needles.
+
 Every theme is audited at 1920x1080 Full HD, 1366x768 desktop, 800x480 compact
 landscape/Raspberry Pi display, and 390x844 portrait phone at DPR2. The visual
 gallery retains all four references for the established themes and one

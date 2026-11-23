@@ -25,6 +25,14 @@
   document.documentElement.dataset.theme = theme;
   document.documentElement.dataset.previewMode = "static";
   document.documentElement.dataset.connectionState = "preview";
+  document.documentElement.dataset.themeEffects = "full";
+  document.documentElement.dataset.themeTelemetry = "preview";
+  document.documentElement.dataset.themeSignal = "strong";
+  document.documentElement.dataset.themeRssi = "good";
+  document.documentElement.dataset.themeSignalState = "available";
+  document.documentElement.dataset.themeRssiState = "available";
+  document.documentElement.style.setProperty("--theme-signal-normalized", "1");
+  document.documentElement.style.setProperty("--theme-rssi-normalized", "0.6625");
 
   for (const href of [
     "dashboard.css",
