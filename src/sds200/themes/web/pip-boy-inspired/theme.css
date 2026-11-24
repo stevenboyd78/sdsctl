@@ -195,6 +195,7 @@
   line-height: clamp(6.4rem, 10vw, 11.2rem);
   text-align: center;
   text-indent: 0.12em;
+  transform: translateX(-50%);
 }
 
 :root[data-theme="pip-boy-inspired"] .theme-stage-b::after {

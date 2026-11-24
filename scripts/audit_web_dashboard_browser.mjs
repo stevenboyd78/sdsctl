@@ -2517,6 +2517,73 @@ export function browserAuditLibrary() {
     const failures = [];
     const header = document.querySelector(".site-header");
     const brand = header?.querySelector(".brand");
+    if (
+      theme === "pip-boy-inspired" &&
+      matchMedia(
+        "(min-width: 1280px) and (min-height: 720px) and " +
+          "(min-aspect-ratio: 3/2)",
+      ).matches
+    ) {
+      const chassis = document.querySelector(".theme-stage-b");
+      if (!(chassis instanceof HTMLElement) || !rendered(chassis)) {
+        failures.push("Pip-Boy signal-meter chassis is unavailable");
+      } else {
+        const chassisStyle = getComputedStyle(chassis);
+        const meterStyle = getComputedStyle(chassis, "::before");
+        const chassisRect = chassis.getBoundingClientRect();
+        const borderLeft = Number.parseFloat(chassisStyle.borderLeftWidth);
+        const borderRight = Number.parseFloat(chassisStyle.borderRightWidth);
+        const meterWidth = Number.parseFloat(meterStyle.width);
+        const meterBorderLeft = Number.parseFloat(meterStyle.borderLeftWidth);
+        const meterBorderRight = Number.parseFloat(meterStyle.borderRightWidth);
+        const meterLeftOffset = Number.parseFloat(meterStyle.left);
+        let meterTranslateX = 0;
+        try {
+          if (meterStyle.transform !== "none") {
+            meterTranslateX = new DOMMatrixReadOnly(meterStyle.transform).m41;
+          }
+        } catch (_error) {
+          meterTranslateX = Number.NaN;
+        }
+        const values = [
+          borderLeft,
+          borderRight,
+          meterWidth,
+          meterBorderLeft,
+          meterBorderRight,
+          meterLeftOffset,
+          meterTranslateX,
+        ];
+        if (meterStyle.content === "none" || values.some((value) => !Number.isFinite(value))) {
+          failures.push("Pip-Boy signal meter has invalid computed geometry");
+        } else {
+          const meterPaintedWidth =
+            meterWidth +
+            (meterStyle.boxSizing === "border-box" ? 0 : meterBorderLeft + meterBorderRight);
+          const meterLeft =
+            chassisRect.left + borderLeft + meterLeftOffset + meterTranslateX;
+          const meterRight = meterLeft + meterPaintedWidth;
+          const chassisContentLeft = chassisRect.left + borderLeft;
+          const chassisContentRight = chassisRect.right - borderRight;
+          if (
+            meterLeft < chassisContentLeft - tolerance ||
+            meterRight > chassisContentRight + tolerance
+          ) {
+            failures.push(
+              `Pip-Boy signal meter escapes its side chassis ` +
+                `(${meterLeft.toFixed(1)}..${meterRight.toFixed(1)} outside ` +
+                `${chassisContentLeft.toFixed(1)}..${chassisContentRight.toFixed(1)})`,
+            );
+          }
+          if (meterLeft < -tolerance || meterRight > innerWidth + tolerance) {
+            failures.push(
+              `Pip-Boy signal meter is clipped by the CSS viewport ` +
+                `(${meterLeft.toFixed(1)}..${meterRight.toFixed(1)} of ${innerWidth})`,
+            );
+          }
+        }
+      }
+    }
     if (theme === "lcars" && rendered(header) && rendered(brand)) {
       const railWidth = Number.parseFloat(getComputedStyle(header).borderLeftWidth);
       if (brand.getBoundingClientRect().left < header.getBoundingClientRect().left + railWidth + 4) {

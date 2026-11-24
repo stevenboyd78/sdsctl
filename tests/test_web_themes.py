@@ -284,6 +284,17 @@ def test_synthwave_full_hd_header_keeps_symmetric_text_safe_corners() -> None:
     ) in header[1]
 
 
+def test_pip_boy_wide_signal_meter_is_centered_in_its_side_chassis() -> None:
+    stylesheet = read_built_in_web_theme_stylesheet(
+        built_in_web_theme_registry().require("pip-boy-inspired")
+    ).decode("utf-8")
+    meter = re.search(r"\.theme-stage-b::before\s*\{([^}]+)\}", stylesheet)
+
+    assert meter is not None
+    assert "left: 50%;" in meter[1]
+    assert "transform: translateX(-50%);" in meter[1]
+
+
 def test_mission_control_full_hd_tabs_reserve_a_separate_lamp_lane() -> None:
     stylesheet = read_built_in_web_theme_stylesheet(
         built_in_web_theme_registry().require("cinematic-mission-control")
