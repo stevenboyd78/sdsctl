@@ -2362,7 +2362,10 @@ def test_replaced_observer_receive_owners_refuse_original_watched_handoff(
     monkeypatch.setattr(p.bootstrap.Endpoint, "send_retirement", forbidden)
     assert s.sender.send() is None
     with pytest.raises(delivery_tests.m.UnconfirmedDelivery):
-        finish(s, monkeypatch, lambda: arm_original_watch(s))
+        fixture_raw_clock_samples(
+            lambda: finish(s, monkeypatch, lambda: arm_original_watch(s)),
+            monkeypatch,
+        )
     assert s.watch.closed and s.watch.finished
     assert s.pair.passive_completion_attempted and not released
     # The receiver may reject/close before the sender finishes its own plan
