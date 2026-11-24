@@ -615,6 +615,70 @@
   50% { opacity: 1; filter: drop-shadow(0 0 0.65rem rgb(255 176 80 / 0.46)); }
 }
 
+/* Live scanner telemetry becomes celestial archive instrumentation. Signal
+ * energizes the orrery rings, RSSI resolves the star chart, and active traffic
+ * drives the candlelight. The held-scope constellation ink and seal below
+ * remain authoritative. */
+:root[data-theme="cinematic-wizarding-archive"][data-theme-effects="subtle"][data-theme-signal-state="available"]
+  :is(.archive-orrery-ring-a, .archive-orrery-ring-b) {
+  stroke-opacity: calc(0.46 + var(--theme-signal-normalized, 0.5) * 0.24);
+  filter: drop-shadow(
+    0 0 calc(0.05rem + var(--theme-signal-normalized, 0.5) * 0.16rem)
+      rgb(255 213 119 / 0.34)
+  );
+  transition: stroke-opacity 680ms ease-out, filter 680ms ease-out;
+}
+
+:root[data-theme="cinematic-wizarding-archive"][data-theme-effects="subtle"][data-theme-rssi-state="available"]
+  .archive-stars {
+  fill-opacity: calc(0.52 + var(--theme-rssi-normalized, 0.5) * 0.24);
+  filter: drop-shadow(
+    0 0 calc(0.04rem + var(--theme-rssi-normalized, 0.5) * 0.14rem)
+      rgb(255 234 176 / 0.32)
+  );
+  transition: fill-opacity 760ms ease-out, filter 760ms ease-out;
+}
+
+:root[data-theme="cinematic-wizarding-archive"][data-theme-effects="full"][data-theme-signal-state="available"]
+  :is(.archive-orrery-ring-a, .archive-orrery-ring-b) {
+  stroke-opacity: calc(0.28 + var(--theme-signal-normalized, 0.5) * 0.72);
+  stroke-width: calc(3.2px + var(--theme-signal-normalized, 0.5) * 3.2px);
+  filter: brightness(calc(0.9 + var(--theme-signal-normalized, 0.5) * 0.32))
+    drop-shadow(
+      0 0 calc(0.1rem + var(--theme-signal-normalized, 0.5) * 0.62rem)
+        rgb(255 213 119 / 0.72)
+    );
+  transition: stroke-opacity 440ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    stroke-width 440ms cubic-bezier(0.2, 0.75, 0.25, 1), filter 440ms ease-out;
+}
+
+:root[data-theme="cinematic-wizarding-archive"][data-theme-effects="full"][data-theme-rssi-state="available"]
+  .archive-stars {
+  fill-opacity: calc(0.28 + var(--theme-rssi-normalized, 0.5) * 0.72);
+  filter: brightness(calc(0.82 + var(--theme-rssi-normalized, 0.5) * 0.44))
+    drop-shadow(
+      0 0 calc(0.08rem + var(--theme-rssi-normalized, 0.5) * 0.48rem)
+        rgb(255 234 176 / 0.68)
+    );
+  transition: fill-opacity 500ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    filter 500ms ease-out;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cinematic-wizarding-archive"][data-theme-effects="subtle"][data-theme-activity="active"]
+    .archive-candlelight {
+    animation-duration: 5.6s;
+    fill-opacity: 0.14;
+  }
+
+  :root[data-theme="cinematic-wizarding-archive"][data-theme-effects="full"][data-theme-activity="active"]
+    .archive-candlelight {
+    animation-duration: calc(5.4s - var(--theme-activity-level, 0.5) * 2.6s);
+    fill-opacity: calc(0.12 + var(--theme-activity-level, 0.5) * 0.2);
+    filter: drop-shadow(0 0 0.72rem rgb(255 176 80 / 0.56));
+  }
+}
+
 /* A held scope inks the constellation and warms the physical archive seal. */
 :root[data-theme="cinematic-wizarding-archive"]:has(
   #radio-activity-panel [data-hold-state="held"]

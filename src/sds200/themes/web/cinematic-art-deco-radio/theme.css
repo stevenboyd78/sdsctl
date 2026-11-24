@@ -25,5 +25,71 @@
 :root[data-theme="cinematic-art-deco-radio"] :is(button, .recording-action, select, input, textarea) { border-color: #9b8351; border-radius: 0; background: linear-gradient(#304a44, #172622); color: var(--text); }
 :root[data-theme="cinematic-art-deco-radio"] :is(button, .recording-action):hover:not(:disabled) { color: var(--text); border-color: var(--accent-strong); background: #356258; }
 :root[data-theme="cinematic-art-deco-radio"] .status-badge { border-radius: 0; letter-spacing: 0.12em; text-transform: uppercase; }
+
+/* Live telemetry becomes a geometric broadcast tuning scale. Signal controls
+ * the illuminated span, RSSI controls the receiver-eye glow, and active
+ * traffic gives the scale a restrained on-air pulse. */
+:root[data-theme="cinematic-art-deco-radio"] #radio-activity-panel .panel-header {
+  position: relative;
+}
+
+:root[data-theme="cinematic-art-deco-radio"] #radio-activity-panel .panel-header::before,
+:root[data-theme="cinematic-art-deco-radio"] #radio-activity-panel .panel-header::after {
+  position: absolute;
+  bottom: -0.18rem;
+  left: 0;
+  height: 0.24rem;
+  pointer-events: none;
+  content: "";
+}
+
+:root[data-theme="cinematic-art-deco-radio"] #radio-activity-panel .panel-header::before {
+  right: 0;
+  background: repeating-linear-gradient(90deg, #9b8351 0 1px, transparent 1px 5%);
+  opacity: 0.62;
+}
+
+:root[data-theme="cinematic-art-deco-radio"] #radio-activity-panel .panel-header::after {
+  width: calc(var(--theme-signal-normalized, 0.5) * 100%);
+  background: linear-gradient(90deg, #26594f, #74bd91 62%, #d7ba6d 86%, #f0d994);
+  box-shadow: 0 0
+    calc(0.08rem + var(--theme-rssi-normalized, 0.5) * 0.44rem)
+    rgb(240 217 148 / 0.68);
+  opacity: 0;
+  transform-origin: 0 50%;
+  transition: width 540ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    box-shadow 640ms ease-out, opacity 280ms ease-out;
+}
+
+:root[data-theme="cinematic-art-deco-radio"][data-theme-effects="subtle"][data-theme-signal-state="available"]
+  #radio-activity-panel .panel-header::after { opacity: 0.58; }
+
+:root[data-theme="cinematic-art-deco-radio"][data-theme-effects="subtle"][data-theme-rssi-state="available"]
+  #radio-activity-panel .panel-header::after {
+  filter: brightness(calc(0.94 + var(--theme-rssi-normalized, 0.5) * 0.14));
+}
+
+:root[data-theme="cinematic-art-deco-radio"][data-theme-effects="full"][data-theme-signal-state="available"]
+  #radio-activity-panel .panel-header::after { opacity: 0.96; }
+
+:root[data-theme="cinematic-art-deco-radio"][data-theme-effects="full"][data-theme-rssi-state="available"]
+  #radio-activity-panel .panel-header::after {
+  filter: brightness(calc(0.82 + var(--theme-rssi-normalized, 0.5) * 0.46))
+    saturate(calc(0.88 + var(--theme-rssi-normalized, 0.5) * 0.34));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cinematic-art-deco-radio"][data-theme-effects="full"][data-theme-activity="active"]
+    #radio-activity-panel .panel-header::after {
+    animation: art-deco-radio-on-air
+      calc(2.8s - var(--theme-activity-level, 0.5) * 1.2s) ease-in-out infinite;
+  }
+}
+
+@keyframes art-deco-radio-on-air {
+  0%, 100% { opacity: 0.72; }
+  50% { opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) { :root[data-theme="cinematic-art-deco-radio"] *, :root[data-theme="cinematic-art-deco-radio"] *::before, :root[data-theme="cinematic-art-deco-radio"] *::after { animation: none !important; transition: none !important; } }
-@media (forced-colors: active) { :root[data-theme="cinematic-art-deco-radio"] { --background: Canvas; --surface: Canvas; --surface-emphasis: Canvas; --text: CanvasText; --muted: CanvasText; --border: CanvasText; --accent: Highlight; --accent-strong: Highlight; --focus: Highlight; } :root[data-theme="cinematic-art-deco-radio"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups) { background: Canvas; box-shadow: none; } :root[data-theme="cinematic-art-deco-radio"] .site-header::after { display: none; } }
+@media (forced-colors: active) { :root[data-theme="cinematic-art-deco-radio"] { --background: Canvas; --surface: Canvas; --surface-emphasis: Canvas; --text: CanvasText; --muted: CanvasText; --border: CanvasText; --accent: Highlight; --accent-strong: Highlight; --focus: Highlight; } :root[data-theme="cinematic-art-deco-radio"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups) { background: Canvas; box-shadow: none; } :root[data-theme="cinematic-art-deco-radio"] .site-header::after, :root[data-theme="cinematic-art-deco-radio"] #radio-activity-panel .panel-header::before, :root[data-theme="cinematic-art-deco-radio"] #radio-activity-panel .panel-header::after { display: none; } }

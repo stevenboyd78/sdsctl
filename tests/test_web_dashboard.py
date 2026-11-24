@@ -700,6 +700,9 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
     assert '<option value="shuffle">Shuffle</option>' in response.text
     assert 'id="theme-rotation-themes"' in response.text
     assert 'id="theme-rotation-status"' in response.text
+    assert 'id="theme-effects-select"' in response.text
+    assert '<option value="full" selected>Full</option>' in response.text
+    assert 'id="theme-effects-description"' in response.text
     assert 'id="system-palette-select"' in response.text
     assert '<option value="auto">Follow device</option>' in response.text
     for palette_name in sorted(BUILTIN_THEMES):
@@ -777,9 +780,17 @@ def test_raw_dashboard_source_has_truthful_static_file_preview() -> None:
     assert 'aria-atomic="true"' in dashboard
     assert 'globalThis.location?.protocol !== "file:"' in preview
     assert 'dataset.previewMode = "static"' in preview
-    assert "sample data only; no daemon or scanner is connected" in preview
+    assert "SAMPLE DATA — no live scanner connected" in preview
     assert '"scanner-connected": "Static fixture"' in preview
     assert '"scanner-endpoint": "No live endpoint"' in preview
+    assert "function initializeStaticPreviewMenu()" in preview
+    assert 'trigger.id = "native-menu-toggle"' in preview
+    assert 'dialog.id = "native-menu"' in preview
+    assert 'document.getElementById("theme-effects-controls")' in preview
+    assert 'document.querySelector(".overview").hidden = true' in preview
+    assert 'document.getElementById("dashboard-message")' in preview
+    assert "dialog.showModal()" in preview
+    assert 'event.key !== "Tab"' in preview
     assert "fetch(" not in preview
 
 
@@ -979,6 +990,20 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert "color: var(--background);" in stylesheet_source.text
     assert "color: var(--background);" in theme_text["system"]
     assert "--lcars-v2-rail:" in theme_text["lcars"]
+    lcars = theme_text["lcars"]
+    for telemetry_contract in (
+        '[data-theme-effects="subtle"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="subtle"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="full"][data-theme-signal-state="available"]',
+        '[data-theme-activity="active"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        "lcars-telemetry-pulse",
+        ".site-header::after",
+        ".workspace-deck::after",
+    ):
+        assert telemetry_contract in lcars
     assert "--term-accent:" in theme_text["matrix"]
     for matrix_glass_contract in (
         "--matrix-glass-underlay: rgb(2 10 5 / 0.26);",
@@ -1000,6 +1025,195 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert "--terminal-amber:" in theme_text["pip-boy-inspired"]
     assert "@import" not in theme_text["pip-boy-inspired"]
     assert "url(" not in theme_text["pip-boy-inspired"]
+    mission_control = theme_text["cinematic-mission-control"]
+    for telemetry_contract in (
+        '[data-theme-effects="full"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="subtle"][data-theme-signal-state="available"]',
+        '[data-theme-effects="subtle"][data-theme-rssi-state="available"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        ".mission-needle-a",
+        ".mission-needle-b",
+    ):
+        assert telemetry_contract in mission_control
+    first_responder = theme_text["first-responder"]
+    for telemetry_contract in (
+        '[data-theme-effects="subtle"]',
+        '[data-theme-effects="full"]',
+        '[data-theme-activity="active"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        "--theme-activity-level",
+        "dispatch-beacon-pulse",
+        "#radio-activity-panel::before",
+        "#radio-activity-panel::after",
+    ):
+        assert telemetry_contract in first_responder
+    amateur_radio = theme_text["amateur-radio"]
+    for telemetry_contract in (
+        '[data-theme-effects="subtle"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-activity="active"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        "#radio-activity-panel .panel-header::before",
+        "#radio-activity-panel .panel-header::after",
+    ):
+        assert telemetry_contract in amateur_radio
+    pip_boy = theme_text["pip-boy-inspired"]
+    for telemetry_contract in (
+        '[data-theme-effects="subtle"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-signal-state="available"]',
+        '[data-theme-rssi-state="available"]',
+        '[data-theme-activity="active"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        "pip-boy-telemetry-roll",
+        ".workspace-deck::after",
+    ):
+        assert telemetry_contract in pip_boy
+    motorsport = theme_text["cinematic-motorsport-pit-wall"]
+    for telemetry_contract in (
+        '[data-theme-effects="subtle"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="subtle"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="full"][data-theme-signal-state="available"]',
+        '[data-theme-activity="active"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        "motorsport-pit-telemetry-sweep",
+        ".workspace-deck::after",
+    ):
+        assert telemetry_contract in motorsport
+    cold_war_radar = theme_text["cinematic-cold-war-radar"]
+    for telemetry_contract in (
+        '[data-theme-effects="subtle"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="subtle"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="full"][data-theme-signal-state="available"]',
+        '[data-theme-activity="active"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        "cold-war-radar-telemetry-sweep",
+        ".radio-field-groups::before",
+    ):
+        assert telemetry_contract in cold_war_radar
+    cyberpunk_night = theme_text["cinematic-cyberpunk-night"]
+    for telemetry_contract in (
+        '[data-theme-effects="subtle"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="subtle"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="full"][data-theme-signal-state="available"]',
+        '[data-theme-activity="active"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        "cyberpunk-telemetry-glitch",
+        ".radio-field-groups::before",
+    ):
+        assert telemetry_contract in cyberpunk_night
+    synthwave = theme_text["cinematic-synthwave"]
+    for telemetry_contract in (
+        '[data-theme-effects="subtle"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="subtle"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="full"][data-theme-signal-state="available"]',
+        '[data-theme-activity="active"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        "--theme-activity-level",
+        ".synthwave-equalizer rect",
+        ".synthwave-horizon",
+        ".synthwave-road-dashes",
+    ):
+        assert telemetry_contract in synthwave
+    galactic_operations = theme_text["cinematic-galactic-operations"]
+    for telemetry_contract in (
+        '[data-theme-effects="subtle"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="subtle"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="full"][data-theme-signal-state="available"]',
+        '[data-theme-activity="active"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        "--theme-activity-level",
+        ".galactic-ring-a",
+        ".galactic-planet",
+        ".galactic-sweep",
+        ".galactic-tactical",
+    ):
+        assert telemetry_contract in galactic_operations
+    carrier_air_wing = theme_text["cinematic-carrier-air-wing"]
+    for telemetry_contract in (
+        '[data-theme-effects="subtle"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="subtle"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="full"][data-theme-signal-state="available"]',
+        '[data-theme-activity="active"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        "--theme-activity-level",
+        ".carrier-hud-ring-inner",
+        ".carrier-signal-trace",
+        ".carrier-radar-sweep",
+        ".carrier-deck-lights",
+    ):
+        assert telemetry_contract in carrier_air_wing
+    tactical_field = theme_text["cinematic-tactical-field"]
+    for telemetry_contract in (
+        '[data-theme-effects="subtle"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="subtle"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="full"][data-theme-signal-state="available"]',
+        '[data-theme-activity="active"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        "--theme-activity-level",
+        ".tactical-contact",
+        ".tactical-route-line",
+        ".tactical-sweep",
+    ):
+        assert telemetry_contract in tactical_field
+    wizarding_archive = theme_text["cinematic-wizarding-archive"]
+    assert (
+        ':root[data-theme="cinematic-wizarding-archive"] .workspace-tabs {\n'
+        "      grid-template-columns: repeat(5, minmax(0, 1fr)) !important;"
+    ) in viewport_stylesheet.text
+    assert (
+        ':root[data-theme="cinematic-wizarding-archive"] '
+        ".workspace-tabs-with-home-assistant {\n"
+        "      grid-template-columns: repeat(6, minmax(0, 1fr)) !important;"
+    ) in viewport_stylesheet.text
+    for telemetry_contract in (
+        '[data-theme-effects="subtle"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="subtle"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="full"][data-theme-signal-state="available"]',
+        '[data-theme-activity="active"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        "--theme-activity-level",
+        ".archive-orrery-ring-a",
+        ".archive-orrery-ring-b",
+        ".archive-stars",
+        ".archive-candlelight",
+    ):
+        assert telemetry_contract in wizarding_archive
+    art_deco_radio = theme_text["cinematic-art-deco-radio"]
+    for telemetry_contract in (
+        '[data-theme-effects="subtle"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="subtle"][data-theme-signal-state="available"]',
+        '[data-theme-effects="full"][data-theme-rssi-state="available"]',
+        '[data-theme-effects="full"][data-theme-signal-state="available"]',
+        '[data-theme-activity="active"]',
+        "--theme-signal-normalized",
+        "--theme-rssi-normalized",
+        "--theme-activity-level",
+        "art-deco-radio-on-air",
+        "#radio-activity-panel .panel-header::before",
+        "#radio-activity-panel .panel-header::after",
+    ):
+        assert telemetry_contract in art_deco_radio
 
     assert "theme-stage" in shell.text
     assert 'aria-hidden="true"' in shell.text
@@ -1097,6 +1311,15 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert 'typeof context.createScriptProcessor === "function"' in script.text
     assert "class PcmuScriptProcessor" in script.text
     assert "new AbortController" in script.text
+    assert 'THEME_EFFECTS_STORAGE_KEY = "sdsctl.web.theme-effects.v1"' in script.text
+    assert 'THEME_EFFECTS_DEFAULT = "full"' in script.text
+    assert 'THEME_TELEMETRY_EVENT = "sdsctl:theme-telemetry"' in script.text
+    assert "THEME_TELEMETRY_VERSION = 1" in script.text
+    assert "function updateThemeTelemetry(radio" in script.text
+    assert 'dataset.themeTelemetry = "paused"' in script.text
+    assert '"--theme-signal-normalized"' in script.text
+    assert '"--theme-rssi-normalized"' in script.text
+    assert "new CustomEvent(THEME_TELEMETRY_EVENT, {detail})" in script.text
     assert "getBigUint64" in script.text
     assert "PCMU stream gap does not match daemon queue-loss counters" in script.text
     assert 'dashboardFetch(webUrl("api/v1/recording")' in script.text
@@ -2414,6 +2637,7 @@ def test_universal_dashboard_menu_contract() -> None:
     assert 'document.createComment("native drawer control position")' in script
     assert "appearance.append(node)" in script
     assert 'element("matrix-rain-controls")' in script
+    assert 'element("theme-effects-controls")' in script
     assert 'const presentation = make("section", null, "native-menu-presentation")' in script
     assert 'document.createComment("native drawer presentation position")' in script
     assert "presentation.append(mimicToolbar)" in script

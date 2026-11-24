@@ -23,6 +23,7 @@ from .test_tui import _settle_responsive_layout
 from .test_tui_audio_workflow import CollectingPlaybackSink, _wait_for_status
 
 XML = """<ScannerInfo Mode="Trunk Scan" V_Screen="trunk_scan">
+<MonitorList Name="Regional Favorites"/>
 <System Name="Example system"/><Department Name="Example department"/>
 <TGID Name="Example channel" TGID="TGID:000123" U_Id="UID:000045"/>
 <Property P25Status="unrecognized status" Battery="0"/>
@@ -44,6 +45,7 @@ def test_scanner_details_preserve_actual_parser_shared_snapshot_and_daemon_field
     state = _state()
     if remote:
         state = _radio_state_snapshot(asdict(state))
+    assert state.favorites_list == "Regional Favorites"
     text = _render(state).plain
     assert "Talkgroup ID: TGID:000123\n" in text
     assert "Unit ID: UID:000045\n" in text

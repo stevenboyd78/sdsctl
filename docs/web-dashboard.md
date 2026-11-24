@@ -408,6 +408,36 @@ a burn-in guarantee: headings, pane geometry, and other static regions remain
 in similar locations. Use the display's own pixel-shift, dimming, sleep, or
 scheduled power controls where burn-in protection matters.
 
+**Appearance > Live effects** controls how strongly supported themes react to
+the scanner. **Full** is the default, **Subtle** keeps a reduced response, and
+**Off** freezes live reactions without changing scanner data or ordinary
+dashboard updates. The browser-local choice is stored under
+`sdsctl.web.theme-effects.v1`. Reduced-motion and forced-colors preferences are
+honored independently, and live effects pause while the page is hidden.
+
+The dashboard derives a versioned presentation signal from the radio state it
+already receives; it does not poll the scanner again. Theme authors can consume
+the root `data-theme-signal`, `data-theme-rssi`, `data-theme-activity`, and
+`data-theme-telemetry` states, the normalized `--theme-signal-normalized`,
+`--theme-rssi-normalized`, and `--theme-activity-level` custom properties, or
+the `sdsctl:theme-telemetry` browser event. The current built-in reactions are
+deliberately theme-specific rather than one recolored template:
+
+- Mission Control drives its two background meter needles separately from
+  scanner signal and RSSI. Amateur Radio and Art Deco Radio animate their own
+  radio instruments, while Pip-Boy changes its phosphor response.
+- First Responder varies its status beacon; LCARS energizes its data rails;
+  Matrix injects changed scanner text as complete falling rain packets.
+- Cold War Radar varies its sweep, Motorsport Pit Wall its timing rails,
+  Cyberpunk Night its equalizer, and Synthwave its drive horizon.
+- Galactic Operations responds through its bridge display, Carrier Air Wing
+  through its flight-deck instruments, Tactical Field through its tactical map,
+  and Wizarding Archive through its magical instrumentation.
+
+Unavailable values settle into each theme's neutral presentation, while
+smoothing prevents normal scanner jitter from making the instruments
+distracting.
+
 When **System** is active, a second browser-local selector appears in the center
 of the overview row. **Follow device** preserves the adaptive behavior above.
 The remaining choices mirror Textual's full built-in TUI color-scheme inventory:

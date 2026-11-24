@@ -800,6 +800,18 @@
         </div>
       </div>
 
+      <div id="theme-effects-controls" class="system-palette-picker">
+        <label for="theme-effects-select">Live theme effects</label>
+        <select id="theme-effects-select" aria-describedby="theme-effects-description">
+          <option value="off">Off</option>
+          <option value="subtle">Subtle</option>
+          <option value="full" selected>Full</option>
+        </select>
+        <p id="theme-effects-description" class="native-menu-help">
+          Let supported themes respond to live scanner activity, signal and RSSI.
+        </p>
+      </div>
+
       <div id="matrix-rain-controls" class="matrix-rain-controls" hidden>
         <h4>Matrix rain</h4>
         <p id="matrix-rain-description" class="matrix-rain-description">
@@ -1125,24 +1137,33 @@
           </div>
         </div>
 
-        <dl class="scanner-display-hierarchy">
-          <div data-hold-scope="system" data-hold-state="unknown">
-            <dt>System</dt>
-            <dd id="radio-system" class="primary-value">No active system</dd>
-          </div>
-          <div data-hold-scope="department" data-hold-state="unknown">
-            <dt>Department</dt>
-            <dd id="radio-department" class="secondary-value">Unavailable</dd>
-          </div>
-          <div data-hold-scope="channel" data-hold-state="unknown">
-            <dt>Channel</dt>
-            <dd id="radio-channel" class="secondary-value">No active channel</dd>
-          </div>
-          <div data-hold-scope="site" data-hold-state="unknown">
-            <dt>Site</dt>
-            <dd id="radio-site" class="secondary-value">Unavailable</dd>
-          </div>
-        </dl>
+        <div class="scanner-display-context">
+          <dl class="scanner-display-favorites scanner-display-hierarchy">
+            <div>
+              <dt>Favorites List</dt>
+              <dd id="radio-favorites-list" class="primary-value">Unavailable</dd>
+            </div>
+          </dl>
+
+          <dl class="scanner-display-hierarchy">
+            <div data-hold-scope="system" data-hold-state="unknown">
+              <dt>System</dt>
+              <dd id="radio-system" class="primary-value">No active system</dd>
+            </div>
+            <div data-hold-scope="department" data-hold-state="unknown">
+              <dt>Department</dt>
+              <dd id="radio-department" class="secondary-value">Unavailable</dd>
+            </div>
+            <div data-hold-scope="channel" data-hold-state="unknown">
+              <dt>Channel</dt>
+              <dd id="radio-channel" class="secondary-value">No active channel</dd>
+            </div>
+            <div data-hold-scope="site" data-hold-state="unknown">
+              <dt>Site</dt>
+              <dd id="radio-site" class="secondary-value">Unavailable</dd>
+            </div>
+          </dl>
+        </div>
 
         <dl class="status-list status-list-compact radio-summary">
           <div>

@@ -580,6 +580,7 @@ _STRING_FIELDS = frozenset(
     {
         "mode",
         "screen",
+        "favorites_list",
         "system",
         "department",
         "site",

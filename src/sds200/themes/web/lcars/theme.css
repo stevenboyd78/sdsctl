@@ -44,12 +44,86 @@
 
 /* Borders take real space. No decorative element is placed over a label. */
 :root[data-theme="lcars"] .site-header {
+  position: relative;
   border: 0;
   border-left: var(--lcars-v2-rail) solid var(--lcars-v2-lilac);
   border-bottom: 0.7rem solid var(--lcars-v2-blue);
   border-radius: 0 0 0 clamp(2rem, 5vw, 4.25rem);
   background: var(--background);
   box-shadow: none;
+}
+
+/* Live telemetry turns the existing LCARS frame into two quiet sensor bars:
+ * RSSI fills the header rail and scanner signal fills the active workspace.
+ * The bars occupy reserved frame edges, so they never cover labels or controls. */
+:root[data-theme="lcars"] .site-header::after,
+:root[data-theme="lcars"] .workspace-deck::after {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  height: 0.24rem;
+  border-radius: 999px;
+  content: "";
+  pointer-events: none;
+  transform: scaleX(0);
+  transform-origin: left center;
+  opacity: 0;
+}
+
+:root[data-theme="lcars"] .site-header::after {
+  right: 0;
+  bottom: -0.47rem;
+  background: var(--lcars-v2-blue);
+}
+
+:root[data-theme="lcars"] .workspace-deck::after {
+  right: 0;
+  bottom: 0;
+  background: var(--lcars-v2-apricot);
+}
+
+:root[data-theme="lcars"][data-theme-effects="subtle"][data-theme-rssi-state="available"]
+  .site-header::after {
+  transform: scaleX(calc(0.18 + var(--theme-rssi-normalized, 0.5) * 0.42));
+  opacity: 0.58;
+  transition: transform 720ms ease-out, opacity 240ms ease-out;
+}
+
+:root[data-theme="lcars"][data-theme-effects="subtle"][data-theme-signal-state="available"]
+  .workspace-deck::after {
+  transform: scaleX(calc(0.18 + var(--theme-signal-normalized, 0.5) * 0.42));
+  opacity: 0.58;
+  transition: transform 620ms ease-out, opacity 240ms ease-out;
+}
+
+:root[data-theme="lcars"][data-theme-effects="full"][data-theme-rssi-state="available"]
+  .site-header::after {
+  transform: scaleX(var(--theme-rssi-normalized, 0.5));
+  opacity: 0.94;
+  box-shadow: 0 0 0.65rem color-mix(in srgb, var(--lcars-v2-blue) 72%, transparent);
+  transition: transform 520ms cubic-bezier(0.2, 0.75, 0.25, 1), opacity 220ms ease-out;
+}
+
+:root[data-theme="lcars"][data-theme-effects="full"][data-theme-signal-state="available"]
+  .workspace-deck::after {
+  transform: scaleX(var(--theme-signal-normalized, 0.5));
+  opacity: 0.94;
+  box-shadow: 0 0 0.65rem color-mix(in srgb, var(--lcars-v2-apricot) 72%, transparent);
+  transition: transform 420ms cubic-bezier(0.2, 0.75, 0.25, 1), opacity 220ms ease-out;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="lcars"][data-theme-effects="full"][data-theme-activity="active"]
+    .site-header::after,
+  :root[data-theme="lcars"][data-theme-effects="full"][data-theme-activity="active"]
+    .workspace-deck::after {
+    animation: lcars-telemetry-pulse 1.8s ease-in-out infinite;
+  }
+}
+
+@keyframes lcars-telemetry-pulse {
+  0%, 100% { filter: brightness(0.92); }
+  50% { filter: brightness(1.28); }
 }
 
 :root[data-theme="lcars"] .brand h1 {
@@ -323,6 +397,9 @@
     color: HighlightText;
     background: Highlight;
     outline: 2px solid Highlight;
+  }
+  :root[data-theme="lcars"] :is(.site-header, .workspace-deck)::after {
+    display: none;
   }
 }
 

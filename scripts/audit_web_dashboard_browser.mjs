@@ -94,6 +94,7 @@ const RADIO_FIELD_IDS = Object.freeze([
   "radio-mode",
   "radio-screen-raw",
   "radio-screen",
+  "radio-favorites-list",
   "radio-system",
   "radio-department",
   "radio-site",
@@ -2516,6 +2517,73 @@ export function browserAuditLibrary() {
     const failures = [];
     const header = document.querySelector(".site-header");
     const brand = header?.querySelector(".brand");
+    if (
+      theme === "pip-boy-inspired" &&
+      matchMedia(
+        "(min-width: 1280px) and (min-height: 720px) and " +
+          "(min-aspect-ratio: 3/2)",
+      ).matches
+    ) {
+      const chassis = document.querySelector(".theme-stage-b");
+      if (!(chassis instanceof HTMLElement) || !rendered(chassis)) {
+        failures.push("Pip-Boy signal-meter chassis is unavailable");
+      } else {
+        const chassisStyle = getComputedStyle(chassis);
+        const meterStyle = getComputedStyle(chassis, "::before");
+        const chassisRect = chassis.getBoundingClientRect();
+        const borderLeft = Number.parseFloat(chassisStyle.borderLeftWidth);
+        const borderRight = Number.parseFloat(chassisStyle.borderRightWidth);
+        const meterWidth = Number.parseFloat(meterStyle.width);
+        const meterBorderLeft = Number.parseFloat(meterStyle.borderLeftWidth);
+        const meterBorderRight = Number.parseFloat(meterStyle.borderRightWidth);
+        const meterLeftOffset = Number.parseFloat(meterStyle.left);
+        let meterTranslateX = 0;
+        try {
+          if (meterStyle.transform !== "none") {
+            meterTranslateX = new DOMMatrixReadOnly(meterStyle.transform).m41;
+          }
+        } catch (_error) {
+          meterTranslateX = Number.NaN;
+        }
+        const values = [
+          borderLeft,
+          borderRight,
+          meterWidth,
+          meterBorderLeft,
+          meterBorderRight,
+          meterLeftOffset,
+          meterTranslateX,
+        ];
+        if (meterStyle.content === "none" || values.some((value) => !Number.isFinite(value))) {
+          failures.push("Pip-Boy signal meter has invalid computed geometry");
+        } else {
+          const meterPaintedWidth =
+            meterWidth +
+            (meterStyle.boxSizing === "border-box" ? 0 : meterBorderLeft + meterBorderRight);
+          const meterLeft =
+            chassisRect.left + borderLeft + meterLeftOffset + meterTranslateX;
+          const meterRight = meterLeft + meterPaintedWidth;
+          const chassisContentLeft = chassisRect.left + borderLeft;
+          const chassisContentRight = chassisRect.right - borderRight;
+          if (
+            meterLeft < chassisContentLeft - tolerance ||
+            meterRight > chassisContentRight + tolerance
+          ) {
+            failures.push(
+              `Pip-Boy signal meter escapes its side chassis ` +
+                `(${meterLeft.toFixed(1)}..${meterRight.toFixed(1)} outside ` +
+                `${chassisContentLeft.toFixed(1)}..${chassisContentRight.toFixed(1)})`,
+            );
+          }
+          if (meterLeft < -tolerance || meterRight > innerWidth + tolerance) {
+            failures.push(
+              `Pip-Boy signal meter is clipped by the CSS viewport ` +
+                `(${meterLeft.toFixed(1)}..${meterRight.toFixed(1)} of ${innerWidth})`,
+            );
+          }
+        }
+      }
+    }
     if (theme === "lcars" && rendered(header) && rendered(brand)) {
       const railWidth = Number.parseFloat(getComputedStyle(header).borderLeftWidth);
       if (brand.getBoundingClientRect().left < header.getBoundingClientRect().left + railWidth + 4) {
@@ -2560,10 +2628,15 @@ export function browserAuditLibrary() {
       2 * rootFontSize,
     );
     const edgeInset = responsiveGutter / 2;
-    const expectedWidth = Math.min(
-      innerWidth - responsiveGutter,
-      120 * rootFontSize,
-    );
+    const usesPipBoyChassis =
+      document.documentElement.dataset.theme === "pip-boy-inspired" &&
+      matchMedia(
+        "(min-width: 1280px) and (min-height: 720px) and " +
+          "(min-aspect-ratio: 3/2)",
+      ).matches;
+    const expectedWidth = usesPipBoyChassis
+      ? Math.min(innerWidth * 0.84, 100 * rootFontSize)
+      : Math.min(innerWidth - responsiveGutter, 120 * rootFontSize);
     const regions = [".site-header", ".dashboard"];
     for (const selector of regions) {
       const region = document.querySelector(selector);
@@ -2957,8 +3030,10 @@ export function browserAuditLibrary() {
 
   function hierarchyFieldAlignmentFailures() {
     const failures = [];
+    const hierarchySelector =
+      ".scanner-display-hierarchy:not(.scanner-display-favorites)";
     for (const field of document.querySelectorAll(
-      ".scanner-display-hierarchy .secondary-value",
+      `${hierarchySelector} .secondary-value`,
     )) {
       const minHeight = Number.parseFloat(getComputedStyle(field).minHeight);
       if (!Number.isFinite(minHeight) || minHeight > tolerance) {
@@ -2968,9 +3043,9 @@ export function browserAuditLibrary() {
         );
       }
     }
-    const hierarchy = document.querySelector(".scanner-display-hierarchy");
+    const hierarchy = document.querySelector(hierarchySelector);
     const channel = document.querySelector(
-      '.scanner-display-hierarchy > [data-hold-scope="channel"]',
+      `${hierarchySelector} > [data-hold-scope="channel"]`,
     );
     if (
       hierarchy instanceof HTMLElement &&
@@ -3067,8 +3142,8 @@ export function browserAuditLibrary() {
     const failures = [];
     const seen = new Set();
     const views = ["hierarchy", "rf", "identity", "special"];
-    if (fieldIds.length !== 35 || new Set(fieldIds).size !== 35) {
-      failures.push(`audit field inventory is not exactly 35 unique targets`);
+    if (fieldIds.length !== 36 || new Set(fieldIds).size !== 36) {
+      failures.push(`audit field inventory is not exactly 36 unique targets`);
     }
     for (const id of fieldIds) {
       if (!(document.getElementById(id) instanceof HTMLElement)) {
@@ -4007,11 +4082,14 @@ async function auditMatrixRainControls(cdp, baseUrl, timeoutMs) {
       after: Number(canvas.dataset.matrixRainPacketCount),
     };
   })()`);
-  if (repeatedPacketCounts.before !== changedPackets ||
-      repeatedPacketCounts.after !== changedPackets) {
+  // The demo's live scanner refresh may legitimately restore the field between
+  // these two CDP evaluations and enqueue its own packet. Judge only the
+  // identical redraw's atomic before/after snapshot so that real duplicate
+  // packets still fail without racing unrelated live data.
+  if (repeatedPacketCounts.after !== repeatedPacketCounts.before) {
     throw new Error(
       `Identical Matrix telemetry redraw spawned a duplicate packet: `
-      + `${changedPackets} -> ${JSON.stringify(repeatedPacketCounts)}`,
+      + `${JSON.stringify(repeatedPacketCounts)}`,
     );
   }
 
@@ -6241,7 +6319,7 @@ async function run(options) {
     }
     console.log(
       `PASS: ${result.caseCount} matrix cases plus ${result.panoramaBoundaryCases} ` +
-        `hero panoramic-boundary cases, theme switching, all 35 radio ` +
+        `hero panoramic-boundary cases, theme switching, all 36 radio ` +
         "fields, Simple/Detail and adaptive screens, trusted Tab/Shift+Tab and " +
         `pagination focus, ${result.hoverContrastCases} explicit workspace-tab hover states, ` +
         "WCAG AA normal/hover/forced-color contrast, reduced motion, " +
