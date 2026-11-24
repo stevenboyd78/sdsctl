@@ -198,6 +198,7 @@ jobs:
       - name: Check documentation links
         run: |
           python scripts/check_docs.py
+          python scripts/sync_theme_fonts.py --check
           python scripts/generate_web_dashboard_screenshots.py --verify-gallery
 
       - name: Real-Chrome dashboard acceptance
