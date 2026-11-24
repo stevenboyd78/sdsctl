@@ -2561,10 +2561,15 @@ export function browserAuditLibrary() {
       2 * rootFontSize,
     );
     const edgeInset = responsiveGutter / 2;
-    const expectedWidth = Math.min(
-      innerWidth - responsiveGutter,
-      120 * rootFontSize,
-    );
+    const usesPipBoyChassis =
+      document.documentElement.dataset.theme === "pip-boy-inspired" &&
+      matchMedia(
+        "(min-width: 1280px) and (min-height: 720px) and " +
+          "(min-aspect-ratio: 3/2)",
+      ).matches;
+    const expectedWidth = usesPipBoyChassis
+      ? Math.min(innerWidth * 0.84, 100 * rootFontSize)
+      : Math.min(innerWidth - responsiveGutter, 120 * rootFontSize);
     const regions = [".site-header", ".dashboard"];
     for (const selector of regions) {
       const region = document.querySelector(selector);
@@ -2958,8 +2963,10 @@ export function browserAuditLibrary() {
 
   function hierarchyFieldAlignmentFailures() {
     const failures = [];
+    const hierarchySelector =
+      ".scanner-display-hierarchy:not(.scanner-display-favorites)";
     for (const field of document.querySelectorAll(
-      ".scanner-display-hierarchy .secondary-value",
+      `${hierarchySelector} .secondary-value`,
     )) {
       const minHeight = Number.parseFloat(getComputedStyle(field).minHeight);
       if (!Number.isFinite(minHeight) || minHeight > tolerance) {
@@ -2969,9 +2976,9 @@ export function browserAuditLibrary() {
         );
       }
     }
-    const hierarchy = document.querySelector(".scanner-display-hierarchy");
+    const hierarchy = document.querySelector(hierarchySelector);
     const channel = document.querySelector(
-      '.scanner-display-hierarchy > [data-hold-scope="channel"]',
+      `${hierarchySelector} > [data-hold-scope="channel"]`,
     );
     if (
       hierarchy instanceof HTMLElement &&
