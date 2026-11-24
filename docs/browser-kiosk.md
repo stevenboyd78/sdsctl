@@ -21,9 +21,11 @@ role, and a legacy display profile cannot be adopted by operator mode.
 ## What each role can do
 
 The browser shows the scanner, Waterfall and read-only diagnostics from one
-existing daemon. It cannot hold or navigate the scanner, reconnect it, play
-audio, record, browse/download recordings, manage Home Assistant, or change
-credentials. The server enforces this even if someone changes the page's HTML.
+existing daemon. It cannot hold or navigate the scanner, reconnect it, record,
+browse/download recordings, manage Home Assistant, or change credentials. The
+server enforces this even if someone changes the page's HTML. Display-only
+browser audio is separately denied by default and grants no additional authority
+when explicitly enabled as described below.
 Theme selection and Waterfall pause/history/pointer controls affect only the
 local display. Visible Waterfall still acquires shared scanner demand through
 the daemon; it is not a separate scanner owner.
@@ -32,8 +34,8 @@ Operator mode opens the ordinary privileged dashboard instead. It can stream
 scanner audio and exposes the same scanner controls, recording access and
 management actions as any other native operator session. Anyone with physical
 access to an unlocked operator kiosk can invoke those controls. Do not describe
-or deploy that role as observe-only. Audio remains user-initiated through the
-dashboard; the launcher does not disable Chromium's autoplay policy.
+or deploy that role as observe-only. Operator audio remains user-initiated
+through the dashboard; automatic audio is rejected for operator profiles.
 
 Both roles use **manual sign-in**. A session lasts at most eight hours;
 inactive sessions can expire after thirty minutes. Restarting the web service
@@ -112,9 +114,10 @@ want browser playback there, also add:
 
 This option is accepted only with a configured display identity. It exposes
 Play/Stop in the Menu and permits only the display session's read-only live-audio
-stream. Playback still requires a local user gesture and never starts
-automatically; controls, recordings, downloads, and other operator authority
-remain unavailable. Remove the option and restart to restore the default denial.
+stream. Playback remains user-initiated unless the dedicated display browser is
+also configured with the two explicit automatic-audio opt-ins below. Controls,
+recordings, downloads, and other operator authority remain unavailable. Remove
+the option and restart to restore the default denial.
 
 Verify the server certificate identity and fingerprint through a trusted route.
 Configure trust in the dedicated browser account and test the exact HTTPS URL
@@ -181,6 +184,35 @@ isolates it from ordinary browsing, but it may still contain sensitive cookies,
 saved passwords and browser data. It is not guaranteed to be memory-only
 storage. Treat an operator profile as a privileged credential store.
 
+### Optional automatic display audio
+
+Manual **Play audio** remains the default. Automatic audio is available only to
+the display role, only when the server already permits that display with
+`--lan-display-audio`, and only through a new dedicated browser profile. It does
+not provide authentication, renew an expired session, retry an authorization
+failure, or add scanner controls, recordings, downloads, or operator authority.
+
+First launch a new display profile with the explicit browser-policy opt-in:
+
+```bash
+/opt/sdsctl-kiosk/bin/sdsctl browser-kiosk \
+  --origin https://scanner.example:8443 \
+  --ca-file /home/display/server.crt \
+  --browser /usr/bin/chromium \
+  --role display \
+  --profile-directory /home/display/.sdsctl-kiosk-automatic-audio \
+  --automatic-audio
+```
+
+The launcher binds `--autoplay-policy=no-user-gesture-required` to that exact
+private profile with a mode-`0600` policy marker. It rejects operator mode,
+cross-policy profile reuse, and adding this policy to an existing populated
+profile. After signing in manually, open **Menu** and select **Start live audio
+automatically in this display profile**. That browser-local preference defaults
+off. **Stop** suppresses automatic playback for the current browser session;
+manual **Play audio** remains available. A terminal stream or authorization
+error is shown once and is not retried automatically.
+
 At **Display-only sign in**, enter the display password manually. Never enter
 the operator password into this profile. Passwords start hidden; use **Show
 password** to check your typing, then **Hide password** before anyone else can
@@ -202,12 +234,14 @@ to protect the dedicated account and physical display.
 Every authenticated operator and display-only native dashboard has one
 **Menu** button beside **Scanner dashboard**. It opens an overlay drawer
 containing the current role/session summary, Theme, the theme-specific palette
-and typography choices, and **Sign out**. Operator sessions also receive the
-existing browser live-audio status and Play/Stop controls there. The existing
-controls are moved into this drawer rather than copied, so selections,
+and typography choices, and **Sign out**. Operator sessions and explicitly
+authorized display-audio sessions also receive the existing browser live-audio
+status and Play/Stop controls there. Eligible display sessions additionally
+receive the default-off automatic-start preference. The existing controls are
+moved into this drawer rather than copied, so selections,
 listeners, stream ownership, and browser-local preferences remain stable
-across resizing and repeated opens. Display-only sessions do not receive
-actionable audio controls.
+across resizing and repeated opens. Display-only sessions without the server
+audio opt-in do not receive actionable audio controls.
 
 On compact displays such as an 800×480 Pi screen, the display-only drawer also
 offers Scanner, Waterfall and Diagnostics. Changing a view closes the drawer
@@ -261,6 +295,7 @@ SDSCTL_KIOSK_BROWSER=/usr/bin/chromium
 SDSCTL_KIOSK_CA_FILE=/home/display/server.crt
 SDSCTL_KIOSK_ROLE=display
 SDSCTL_KIOSK_PROFILE_DIRECTORY=/home/display/.sdsctl-kiosk
+SDSCTL_KIOSK_AUTOMATIC_AUDIO=
 ```
 
 The packaged defaults are `display` and `%h/.sdsctl-kiosk`. To select operator
@@ -268,6 +303,11 @@ mode, set `SDSCTL_KIOSK_ROLE=operator` and an absolute, distinct
 `SDSCTL_KIOSK_PROFILE_DIRECTORY`, such as
 `/home/display/.sdsctl-operator-kiosk`. Passwords remain absent from the
 environment file.
+
+For an already reviewed automatic-audio display deployment, use a new absolute
+profile directory and set `SDSCTL_KIOSK_AUTOMATIC_AUDIO=--automatic-audio`.
+Leave the variable empty for the default manual-playback policy. Never set it
+for `SDSCTL_KIOSK_ROLE=operator`.
 
 Keep passwords out of this file. Review the template's executable path and
 profile directory, then install it under the dedicated account's user-service

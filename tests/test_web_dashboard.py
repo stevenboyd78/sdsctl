@@ -2644,12 +2644,29 @@ def test_universal_dashboard_menu_contract() -> None:
     assert 'const audio = make("section", null, "native-menu-audio")' in script
     assert "const displayAudioAllowed = !displayOnly ||" in script
     assert 'document.documentElement.dataset.displayAudio === "enabled"' in script
+    assert "if (displayOnly && displayAudioAllowed)" in script
+    assert 'automaticAudio.id = "display-audio-auto-start"' in script
+    assert "Start live audio automatically in this display profile" in script
     assert "if (!displayAudioAllowed)" in script
-    start_audio = script.split("async function startAudioPlayback()", 1)[1].split(
+    start_audio = script.split("async function startAudioPlayback(", 1)[1].split(
         "function initializeAudioPlayback()", 1
     )[0]
     assert "if (!displayAudioAllowed || authenticationRequired) return;" in start_audio
     assert "if (displayOnly || authenticationRequired) return;" not in start_audio
+    assert "setTimeout" not in start_audio
+    assert "Automatic playback stopped:" in start_audio
+    assert "Use Play audio to retry." in start_audio
+    initialize_audio = script.split("function initializeAudioPlayback()", 1)[1].split(
+        "function homeAssistantIntegrationPanelAvailable()", 1
+    )[0]
+    assert 'readStoredValue(DISPLAY_AUDIO_AUTO_START_STORAGE_KEY) === "enabled"' in initialize_audio
+    assert (
+        'readSessionValue(DISPLAY_AUDIO_AUTO_SUPPRESSION_KEY) !== "suppressed"'
+        in initialize_audio
+    )
+    assert "void startAudioPlayback({automatic: true})" in initialize_audio
+    assert 'writeSessionValue(DISPLAY_AUDIO_AUTO_SUPPRESSION_KEY, "suppressed")' in script
+    assert "stopAudioPlayback({suppressAutomatic: true})" in script
     assert 'element("audio-playback-controls")' in script
     assert 'document.createComment("native drawer audio playback position")' in script
     assert "audio.append(audioPlayback)" in script

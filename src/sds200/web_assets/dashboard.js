@@ -23,6 +23,8 @@ const THEME_ROTATION_MINUTES_MAX = 1440;
 const THEME_ROTATION_MINUTES_DEFAULT = 30;
 const THEME_EFFECTS_STORAGE_KEY = "sdsctl.web.theme-effects.v1";
 const THEME_EFFECTS_DEFAULT = "full";
+const DISPLAY_AUDIO_AUTO_START_STORAGE_KEY = "sdsctl.web.display-audio-auto-start.v1";
+const DISPLAY_AUDIO_AUTO_SUPPRESSION_KEY = "sdsctl.web.display-audio-auto-suppressed.v1";
 const THEME_TELEMETRY_EVENT = "sdsctl:theme-telemetry";
 const THEME_TELEMETRY_VERSION = 1;
 const THEME_TELEMETRY_SMOOTHING = 0.38;
@@ -374,6 +376,22 @@ function initializeNativeMenu(logout, logoutButton) {
   const audio = make("section", null, "native-menu-audio");
   audio.setAttribute("aria-label", "Live audio playback");
   audio.append(make("h3", "Live audio playback"));
+  if (displayOnly && displayAudioAllowed) {
+    const automaticAudioLabel = make("label", null, "native-menu-checkbox");
+    const automaticAudio = make("input");
+    automaticAudio.id = "display-audio-auto-start";
+    automaticAudio.type = "checkbox";
+    automaticAudioLabel.append(
+      automaticAudio,
+      document.createTextNode(" Start live audio automatically in this display profile"),
+    );
+    const automaticAudioHelp = make(
+      "p",
+      "Off by default. Requires an automatic-audio kiosk profile; Stop suppresses automatic playback for this browser session.",
+      "native-menu-help",
+    );
+    audio.append(automaticAudioLabel, automaticAudioHelp);
+  }
   const audioPlayback = element("audio-playback-controls");
   audioPlayback.before(document.createComment("native drawer audio playback position"));
   if (!displayAudioAllowed) {
@@ -695,6 +713,23 @@ function writeStoredValue(key, value) {
     window.localStorage.setItem(key, value);
   } catch {
     // Storage may be unavailable in privacy modes or embedded WebViews.
+  }
+}
+
+function readSessionValue(key) {
+  try {
+    return window.sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionValue(key, value) {
+  try {
+    if (value === null) window.sessionStorage.removeItem(key);
+    else window.sessionStorage.setItem(key, value);
+  } catch {
+    // Session storage may be unavailable in privacy modes or embedded WebViews.
   }
 }
 
@@ -4127,14 +4162,17 @@ function releaseAudioResources() {
   }
 }
 
-function stopAudioPlayback() {
+function stopAudioPlayback({suppressAutomatic = false} = {}) {
+  if (suppressAutomatic && displayOnly && displayAudioAllowed) {
+    writeSessionValue(DISPLAY_AUDIO_AUTO_SUPPRESSION_KEY, "suppressed");
+  }
   audioPlaybackGeneration += 1;
   audioPlaybackActive = false;
   releaseAudioResources();
   setAudioControls("Stopped", false);
 }
 
-async function startAudioPlayback() {
+async function startAudioPlayback({automatic = false} = {}) {
   if (!displayAudioAllowed || authenticationRequired) return;
   if (audioPlaybackActive) {
     return;
@@ -4238,7 +4276,12 @@ async function startAudioPlayback() {
       error instanceof Error
         ? error.message
         : "Browser audio playback failed.";
-    setAudioControls(message, false);
+    setAudioControls(
+      automatic
+        ? `Automatic playback stopped: ${message} Use Play audio to retry.`
+        : message,
+      false,
+    );
   } finally {
     if (generation === audioPlaybackGeneration) {
       audioPlaybackActive = false;
@@ -4269,6 +4312,25 @@ function initializeAudioPlayback() {
   }
 
   setAudioControls("Stopped", false);
+  const automaticAudio = document.getElementById("display-audio-auto-start");
+  if (!(automaticAudio instanceof HTMLInputElement)) return;
+  automaticAudio.checked =
+    readStoredValue(DISPLAY_AUDIO_AUTO_START_STORAGE_KEY) === "enabled";
+  automaticAudio.addEventListener("change", () => {
+    writeStoredValue(
+      DISPLAY_AUDIO_AUTO_START_STORAGE_KEY,
+      automaticAudio.checked ? "enabled" : "disabled",
+    );
+    writeSessionValue(DISPLAY_AUDIO_AUTO_SUPPRESSION_KEY, null);
+    if (automaticAudio.checked) void startAudioPlayback();
+    else stopAudioPlayback();
+  });
+  if (
+    automaticAudio.checked &&
+    readSessionValue(DISPLAY_AUDIO_AUTO_SUPPRESSION_KEY) !== "suppressed"
+  ) {
+    void startAudioPlayback({automatic: true});
+  }
 }
 
 function homeAssistantIntegrationPanelAvailable() {
@@ -5365,7 +5427,9 @@ window.addEventListener("pageshow", () => {
 element("audio-play").addEventListener("click", () => {
   void startAudioPlayback();
 });
-element("audio-stop").addEventListener("click", stopAudioPlayback);
+element("audio-stop").addEventListener("click", () => {
+  stopAudioPlayback({suppressAutomatic: true});
+});
 element("recording-start").addEventListener("click", () => {
   void performRecordingAction("start");
 });

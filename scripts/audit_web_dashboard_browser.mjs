@@ -5661,10 +5661,15 @@ async function auditDisplayAudioOptIn(cdp, baseUrl, timeoutMs, pageFailures) {
       stopDisabled: document.querySelector('#audio-stop').disabled,
       status: document.querySelector('#audio-playback-status').textContent,
       summary: document.querySelector('#native-session-summary').textContent,
+      automaticVisible: document.querySelector('#display-audio-auto-start')?.getClientRects().length > 0,
+      automaticChecked: document.querySelector('#display-audio-auto-start')?.checked,
+      audioRequests: window.__displayAudioAudit.requests.filter(
+        path => path === '/api/v1/audio').length,
     })`);
     if (!initial.optedIn || !initial.controlsVisible || !initial.playEnabled ||
         !initial.stopDisabled || initial.status !== 'Stopped' ||
-        !initial.summary.includes('browser audio playback is enabled')) {
+        !initial.summary.includes('browser audio playback is enabled') ||
+        !initial.automaticVisible || initial.automaticChecked || initial.audioRequests !== 0) {
       throw new Error(`display audio opt-in initial state failed: ${JSON.stringify(initial)}`);
     }
     await clickElement(cdp, '#audio-play');
@@ -5700,10 +5705,73 @@ async function auditDisplayAudioOptIn(cdp, baseUrl, timeoutMs, pageFailures) {
         !stopped.stopDisabled || stopped.status !== 'Stopped' || stopped.requests !== 1) {
       throw new Error(`display audio Stop lifecycle failed: ${JSON.stringify(stopped)}`);
     }
+    await clickElement(cdp, '#display-audio-auto-start');
+    const enabled = await evaluate(cdp, `(async () => {
+      for (let attempt = 0; attempt < 100 &&
+          window.__displayAudioAudit.requests.filter(
+            path => path === '/api/v1/audio').length < 2; attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      return {
+        checked: document.querySelector('#display-audio-auto-start').checked,
+        preference: localStorage.getItem('sdsctl.web.display-audio-auto-start.v1'),
+        suppression: sessionStorage.getItem('sdsctl.web.display-audio-auto-suppressed.v1'),
+        requests: window.__displayAudioAudit.requests.filter(
+          path => path === '/api/v1/audio').length,
+      };
+    })()`);
+    if (!enabled.checked || enabled.preference !== 'enabled' ||
+        enabled.suppression !== null || enabled.requests !== 2) {
+      throw new Error(`display automatic-audio enable failed: ${JSON.stringify(enabled)}`);
+    }
+
+    await navigate(cdp, baseUrl + "/?kiosk=display-audio", timeoutMs, {
+      installAuditLibrary: false, waitForDashboardReady: false,
+    });
+    const automatic = await evaluate(cdp, `(async () => {
+      for (let attempt = 0; attempt < 100 &&
+          !window.__displayAudioAudit.requests.includes('/api/v1/audio'); attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      stopEventStream();
+      return {
+        checked: document.querySelector('#display-audio-auto-start').checked,
+        requests: window.__displayAudioAudit.requests.filter(
+          path => path === '/api/v1/audio').length,
+        active: audioPlaybackActive,
+        status: document.querySelector('#audio-playback-status').textContent,
+      };
+    })()`);
+    if (!automatic.checked || automatic.requests !== 1 || !automatic.active ||
+        automatic.status !== 'Buffering…') {
+      throw new Error(`display automatic-audio reload failed: ${JSON.stringify(automatic)}`);
+    }
+
+    await clickElement(cdp, '#native-menu-toggle');
+    await clickElement(cdp, '#audio-stop');
+    await navigate(cdp, baseUrl + "/?kiosk=display-audio", timeoutMs, {
+      installAuditLibrary: false, waitForDashboardReady: false,
+    });
+    const suppressed = await evaluate(cdp, `(async () => {
+      await new Promise(resolve => setTimeout(resolve, 250));
+      stopEventStream();
+      return {
+        checked: document.querySelector('#display-audio-auto-start').checked,
+        suppression: sessionStorage.getItem('sdsctl.web.display-audio-auto-suppressed.v1'),
+        requests: window.__displayAudioAudit.requests.filter(
+          path => path === '/api/v1/audio').length,
+        active: audioPlaybackActive,
+        status: document.querySelector('#audio-playback-status').textContent,
+      };
+    })()`);
+    if (!suppressed.checked || suppressed.suppression !== 'suppressed' ||
+        suppressed.requests !== 0 || suppressed.active || suppressed.status !== 'Stopped') {
+      throw new Error(`display automatic-audio Stop suppression failed: ${JSON.stringify(suppressed)}`);
+    }
     if (pageFailures.length !== baseline) {
       throw new Error('Display audio opt-in raised browser exceptions.');
     }
-    console.log('PASS: display-only audio opt-in Play request and Stop lifecycle');
+    console.log('PASS: display-only audio manual lifecycle, default-off automatic preference and session Stop suppression');
   } finally {
     await cdp.send("Page.removeScriptToEvaluateOnNewDocument", {identifier: installed.identifier});
   }

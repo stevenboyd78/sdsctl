@@ -1315,6 +1315,14 @@ def build_parser(
     kiosk.add_argument(
         "--preflight-only", action="store_true", help="Check HTTPS without launching",
     )
+    kiosk.add_argument(
+        "--automatic-audio",
+        action="store_true",
+        help=(
+            "Allow an opted-in display profile to start authorized browser audio "
+            "without a gesture"
+        ),
+    )
 
     browser_server = subparsers.add_parser(
         "browser-device-server", help="Prepare/check an experimental server offline",
@@ -6945,7 +6953,11 @@ def main(
             from .exceptions import ConfigurationError
 
             try:
+                if args.automatic_audio and args.role != "display":
+                    raise ValueError("Automatic audio is available only to a display kiosk.")
                 if args.preflight_only:
+                    if args.automatic_audio:
+                        raise ValueError("Automatic audio applies only when launching a kiosk.")
                     kiosk_preflight(args.origin, args.ca_file, args.role)
                     print(
                         f"{args.role.capitalize()} login/TLS preflight passed; "
@@ -6955,7 +6967,12 @@ def main(
                 if args.browser is None or args.profile_directory is None:
                     raise ValueError("Kiosk launch requires --browser and --profile-directory.")
                 return run_browser_kiosk(
-                    args.origin, args.browser, args.profile_directory, args.ca_file, args.role,
+                    args.origin,
+                    args.browser,
+                    args.profile_directory,
+                    args.ca_file,
+                    args.role,
+                    args.automatic_audio,
                 )
             except (ConfigurationError, ValueError):
                 print("Kiosk setup requires attention; check HTTPS trust, paths and desktop.",
