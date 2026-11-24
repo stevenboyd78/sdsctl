@@ -186,6 +186,7 @@ def test_kiosk_command_contains_no_credential_or_verification_bypass() -> None:
     assert command[-1] == "https://display.example:8443/auth/display/login"
     assert "--kiosk" in command
     assert "--user-data-dir=/home/display/private-profile" in command
+    assert "--autoplay-policy=no-user-gesture-required" not in command
     assert not any(
         "password" in arg or "ignore-certificate" in arg or "no-sandbox" in arg for arg in command
     )
@@ -198,6 +199,22 @@ def test_kiosk_command_contains_no_credential_or_verification_bypass() -> None:
         "operator",
     )
     assert operator[-1] == "https://display.example/auth/login"
+    automatic = kiosk.kiosk_command(
+        "https://display.example",
+        Path("/usr/bin/chromium"),
+        Path("/home/display/private-automatic-audio-profile"),
+        automatic_audio=True,
+    )
+    assert "--autoplay-policy=no-user-gesture-required" in automatic
+    assert automatic[-1] == "https://display.example/auth/display/login"
+    with pytest.raises(ConfigurationError, match="display role"):
+        kiosk.kiosk_command(
+            "https://display.example",
+            Path("/usr/bin/chromium"),
+            Path("/home/display/private-operator-profile"),
+            "operator",
+            True,
+        )
     with pytest.raises(ConfigurationError, match="role"):
         kiosk.kiosk_command(
             "https://display.example",
@@ -303,6 +320,8 @@ def test_profile_is_private_exclusive_and_does_not_adopt_personal_data(tmp_path:
     with kiosk._profile_lock(profile):
         assert profile.stat().st_mode & 0o777 == 0o700
         assert (profile / kiosk.PROFILE_ROLE_FILE).read_text() == "display\n"
+        assert (profile / kiosk.PROFILE_AUDIO_FILE).read_text() == "manual\n"
+        assert (profile / kiosk.PROFILE_AUDIO_FILE).stat().st_mode & 0o777 == 0o600
         with pytest.raises(ConfigurationError, match="already owns"), kiosk._profile_lock(profile):
             pytest.fail("duplicate acquired")
     with kiosk._profile_lock(profile):
@@ -359,15 +378,58 @@ def test_profile_role_binding_refuses_cross_role_and_legacy_operator_reuse(
         pytest.fail("symlink role marker accepted")
 
 
+@pytest.mark.skipif(os.name != "posix", reason="Linux audio-policy-bound browser profile")
+def test_profile_audio_policy_requires_dedicated_private_display_profile(
+    tmp_path: Path,
+) -> None:
+    automatic = tmp_path / "automatic"
+    with kiosk._profile_lock(automatic, "display", True):
+        audio_file = automatic / kiosk.PROFILE_AUDIO_FILE
+        assert audio_file.read_text() == "automatic\n"
+        assert audio_file.stat().st_mode & 0o777 == 0o600
+    with kiosk._profile_lock(automatic, "display", True):
+        pass
+    with pytest.raises(ConfigurationError, match="audio policy"), kiosk._profile_lock(
+        automatic, "display", False
+    ):
+        pytest.fail("automatic-audio profile reused as a manual profile")
+    operator = tmp_path / "operator"
+    with pytest.raises(ConfigurationError, match="display role"), kiosk._profile_lock(
+        operator, "operator", True
+    ):
+        pytest.fail("automatic audio granted to an operator profile")
+    assert not operator.exists()
+
+    existing = tmp_path / "existing-display"
+    existing.mkdir(mode=0o700)
+    (existing / ".sdsctl-kiosk.lock").write_text("")
+    (existing / ".sdsctl-kiosk.lock").chmod(0o600)
+    (existing / kiosk.PROFILE_ROLE_FILE).write_text("display\n")
+    (existing / kiosk.PROFILE_ROLE_FILE).chmod(0o600)
+    (existing / "Cookies").write_text("fictional display data")
+    with pytest.raises(ConfigurationError, match="new dedicated"), kiosk._profile_lock(
+        existing, "display", True
+    ):
+        pytest.fail("existing browser profile silently gained autoplay policy")
+
+
 def test_kiosk_cli_and_service_do_not_enable_or_publish_anything(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     calls: list[tuple[str, str]] = []
+    launches: list[tuple[str, str, bool]] = []
     monkeypatch.setattr(
         kiosk,
         "kiosk_preflight",
         lambda origin, ca, role: calls.append((origin, role)),
+    )
+    monkeypatch.setattr(
+        kiosk,
+        "run_browser_kiosk",
+        lambda origin, browser, profile, ca, role, automatic: launches.append(
+            (origin, role, automatic)
+        ) or 0,
     )
     assert (
         cli.main(["browser-kiosk", "--origin", "https://display.example", "--preflight-only"]) == 0
@@ -382,6 +444,37 @@ def test_kiosk_cli_and_service_do_not_enable_or_publish_anything(
         "--preflight-only",
     ]) == 0
     assert calls[-1] == ("https://display.example", "operator")
+    assert cli.main([
+        "browser-kiosk",
+        "--origin",
+        "https://display.example",
+        "--browser",
+        "/usr/bin/chromium",
+        "--profile-directory",
+        "/home/display/private-automatic-audio-profile",
+        "--automatic-audio",
+    ]) == 0
+    assert launches == [("https://display.example", "display", True)]
+    assert cli.main([
+        "browser-kiosk",
+        "--origin",
+        "https://display.example",
+        "--role",
+        "operator",
+        "--browser",
+        "/usr/bin/chromium",
+        "--profile-directory",
+        "/home/display/private-operator-profile",
+        "--automatic-audio",
+    ]) == 78
+    assert launches == [("https://display.example", "display", True)]
+    assert cli.main([
+        "browser-kiosk",
+        "--origin",
+        "https://display.example",
+        "--preflight-only",
+        "--automatic-audio",
+    ]) == 78
     assert cli.main(["browser-kiosk", "--origin", "https://display.example"]) == 78
     assert cli.main(["browser-kiosk-service"]) == 0
     output = capsys.readouterr().out
@@ -390,7 +483,9 @@ def test_kiosk_cli_and_service_do_not_enable_or_publish_anything(
     assert "graphical-session.target" in output
     assert "SDSCTL_KIOSK_ROLE=display" in output
     assert "SDSCTL_KIOSK_PROFILE_DIRECTORY=%h/.sdsctl-kiosk" in output
+    assert "SDSCTL_KIOSK_AUTOMATIC_AUDIO=" in output
     assert "--role ${SDSCTL_KIOSK_ROLE}" in output
+    assert "$SDSCTL_KIOSK_AUTOMATIC_AUDIO" in output
     assert "tty1" not in output
     assert "tty2" not in output
     assert "getty@" not in output
