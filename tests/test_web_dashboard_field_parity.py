@@ -71,7 +71,7 @@ def test_dashboard_field_inventory_matches_shared_radio_state_contract() -> None
     targets = _field_targets(_asset("dashboard.js"))
     shared_fields = {field.name for field in fields(RadioStateSnapshot)}
 
-    assert len(shared_fields) == 35
+    assert len(shared_fields) == 36
     assert set(targets) == shared_fields
     assert len(set(targets.values())) == len(targets)
     for target in targets.values():
@@ -210,9 +210,13 @@ def test_dashboard_adaptive_profiles_offer_explicit_field_inspection() -> None:
     assert dashboard.count('id="radio-view-auto"') == 1
     assert dashboard.count('id="radio-scan-fallback-select"') == 1
 
-    hierarchy_start = dashboard.index('class="scanner-display-hierarchy"')
+    context_start = dashboard.index('class="scanner-display-context"')
+    hierarchy_start = dashboard.index('class="scanner-display-hierarchy"', context_start)
     hierarchy_end = dashboard.index("</dl>", hierarchy_start)
     hierarchy = dashboard[hierarchy_start:hierarchy_end]
+    favorites = dashboard[context_start:hierarchy_start]
+    assert 'id="radio-favorites-list"' in favorites
+    assert dashboard.count('id="radio-favorites-list"') == 1
     primary_targets = ("radio-system", "radio-department", "radio-channel", "radio-site")
     for target in primary_targets:
         assert f'id="{target}"' in hierarchy

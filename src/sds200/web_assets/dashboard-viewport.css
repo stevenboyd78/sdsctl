@@ -10,6 +10,14 @@
 @layer sdsctl-viewport-contract, sdsctl-shared, sdsctl-managed-theme;
 
 @layer sdsctl-viewport-contract {
+  .scanner-display-hierarchy.scanner-display-favorites {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .scanner-display-hierarchy.scanner-display-favorites > div {
+    grid-column: 1 / -1 !important;
+  }
+
   /* Every dashboard context uses the same controls, moved rather than copied. */
   .native-menu-heading {
     display: flex !important;
@@ -1619,7 +1627,7 @@
       grid-column: 1 / -1 !important;
     }
 
-    #radio-activity-panel > .scanner-display-hierarchy {
+    #radio-activity-panel > .scanner-display-context {
       grid-column: 1 !important;
       grid-row: 3 !important;
     }
@@ -1635,7 +1643,7 @@
     }
 
     #radio-activity-panel[data-active-radio-group="none"]
-      > .scanner-display-hierarchy,
+      > .scanner-display-context,
     #radio-activity-panel[data-active-radio-group="none"] > .radio-summary {
       grid-column: 1 / -1 !important;
     }

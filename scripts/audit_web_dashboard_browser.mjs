@@ -94,6 +94,7 @@ const RADIO_FIELD_IDS = Object.freeze([
   "radio-mode",
   "radio-screen-raw",
   "radio-screen",
+  "radio-favorites-list",
   "radio-system",
   "radio-department",
   "radio-site",
@@ -3067,8 +3068,8 @@ export function browserAuditLibrary() {
     const failures = [];
     const seen = new Set();
     const views = ["hierarchy", "rf", "identity", "special"];
-    if (fieldIds.length !== 35 || new Set(fieldIds).size !== 35) {
-      failures.push(`audit field inventory is not exactly 35 unique targets`);
+    if (fieldIds.length !== 36 || new Set(fieldIds).size !== 36) {
+      failures.push(`audit field inventory is not exactly 36 unique targets`);
     }
     for (const id of fieldIds) {
       if (!(document.getElementById(id) instanceof HTMLElement)) {
@@ -6244,7 +6245,7 @@ async function run(options) {
     }
     console.log(
       `PASS: ${result.caseCount} matrix cases plus ${result.panoramaBoundaryCases} ` +
-        `hero panoramic-boundary cases, theme switching, all 35 radio ` +
+        `hero panoramic-boundary cases, theme switching, all 36 radio ` +
         "fields, Simple/Detail and adaptive screens, trusted Tab/Shift+Tab and " +
         `pagination focus, ${result.hoverContrastCases} explicit workspace-tab hover states, ` +
         "WCAG AA normal/hover/forced-color contrast, reduced motion, " +

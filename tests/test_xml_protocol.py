@@ -37,6 +37,12 @@ def test_xml_assembler() -> None:
     assert result == ("GSI", XML)
 
 
+def test_scanner_info_projects_monitor_list_display_name() -> None:
+    info = ScannerInfoParser().parse("GSI", XML)
+
+    assert info.favorites_list == "Full Database"
+
+
 def test_xml_response_assembly_limit_defaults_are_public() -> None:
     expected = {
         "XML_RESPONSE_DEFAULT_MAX_BYTES": XML_RESPONSE_DEFAULT_MAX_BYTES,

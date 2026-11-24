@@ -3,6 +3,7 @@ from sds200.xml_protocol import ScannerInfoParser
 
 XML = """<?xml version="1.0" encoding="utf-8"?>
 <ScannerInfo Mode="Trunk Scan" V_Screen="trunk_scan">
+<MonitorList Name="Utah County Favorites" />
 <System Name="Utah Communications Authority (P25)" Index="100" Hold="On" />
 <Department Name="Harris Dynamic Patch - Northern Utah" Index="200" Hold="Off" />
 <Site Name="Utah County Simulcast" Index="300" Hold="Off" Mod="NFM" />
@@ -17,6 +18,7 @@ XML = """<?xml version="1.0" encoding="utf-8"?>
 def test_scanner_info_converts_to_shared_snapshot() -> None:
     snapshot = snapshot_from_scanner_info(ScannerInfoParser().parse("PSI", XML))
 
+    assert snapshot.favorites_list == "Utah County Favorites"
     assert snapshot.channel == "Patch 65132"
     assert snapshot.system_index == 100
     assert snapshot.department_index == 200
@@ -96,3 +98,21 @@ def test_battery_zero_is_distinct_from_absence_and_absence_clears_state() -> Non
     assert absent_change is not None
     assert absent_change.current.battery is None
     assert absent_change.changed("battery")
+
+
+def test_favorites_list_absence_clears_previous_display_name() -> None:
+    state = RadioState()
+    with_favorites = ScannerInfoParser().parse(
+        "PSI",
+        '<ScannerInfo><MonitorList Name="Local Public Safety" /></ScannerInfo>',
+    )
+    without_favorites = ScannerInfoParser().parse("PSI", "<ScannerInfo />")
+
+    initial_change = state.update(with_favorites)
+    assert initial_change is not None
+    assert initial_change.current.favorites_list == "Local Public Safety"
+
+    absent_change = state.update(without_favorites)
+    assert absent_change is not None
+    assert absent_change.current.favorites_list is None
+    assert absent_change.changed("favorites_list")

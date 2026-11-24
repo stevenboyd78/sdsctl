@@ -382,6 +382,12 @@ class ScannerInfo:
         return self._attribute(("System",), "Name")
 
     @property
+    def favorites_list(self) -> str | None:
+        """Return the scanner's active Favorites List display name."""
+
+        return self._attribute(("MonitorList",), "Name")
+
+    @property
     def department(self) -> str | None:
         return self._attribute(("Department",), "Name")
 

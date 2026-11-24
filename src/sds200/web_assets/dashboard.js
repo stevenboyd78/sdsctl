@@ -2268,6 +2268,7 @@ const RADIO_STATE_FIELD_TARGETS = Object.freeze({
   mode: "radio-mode",
   screen: "radio-screen-raw",
   screen_kind: "radio-screen",
+  favorites_list: "radio-favorites-list",
   system: "radio-system",
   department: "radio-department",
   site: "radio-site",

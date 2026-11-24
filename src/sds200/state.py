@@ -65,6 +65,7 @@ class RadioStateSnapshot:
     mode: str | None = None
     screen: str | None = None
     screen_kind: ScannerScreenKind | None = None
+    favorites_list: str | None = None
     system: str | None = None
     department: str | None = None
     site: str | None = None
@@ -116,6 +117,7 @@ def snapshot_from_scanner_info(info: ScannerInfo) -> RadioStateSnapshot:
         mode=info.mode,
         screen=info.screen,
         screen_kind=classify_scanner_screen(info),
+        favorites_list=info.favorites_list,
         system=info.system,
         department=info.department,
         site=info.site,

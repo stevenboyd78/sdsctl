@@ -58,6 +58,7 @@
     "audio-state": "Not connected",
     "router-state": "Not connected",
     "transition-sequence": "—",
+    "radio-favorites-list": "Demo Regional Favorites",
     "radio-system": "Demo Metro Public Safety",
     "radio-department": "Central Dispatch",
     "radio-channel": "Dispatch 1 (Demo)",
