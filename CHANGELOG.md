@@ -6,6 +6,15 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Added
+
+- Add a bounded, process-local Favorites web workspace foundation for a future
+  operator-only browser editor. It uses configured copied-tree source labels,
+  opaque owner-bound workspaces and navigation IDs, exact revisions, aggregate
+  no-store review presentation, resource/lifetime limits, and path-free source
+  failures. It intentionally adds no HTTP route, browser UI, durable draft,
+  target discovery, or write executor.
+
 ### Changed
 
 - Let display-only kiosks follow scanner-reported Waterfall mode with a
