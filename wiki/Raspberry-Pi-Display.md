@@ -206,3 +206,12 @@ package is installed, verify drawer focus/close behavior, selector readability,
 the 2×2 hierarchy, held fields, windowed/full-screen Mission Control, and
 manual re-login after expiry. The update does not add host-key login, theme
 rotation, automatic audio, or an automatic role/profile migration.
+
+Version v0.34.0 keeps those role-bound profiles while making the Menu
+consistent across dashboard presentations, adding scanner-mode-aware identity
+and optional display-only automatic Waterfall following. Native-LAN display
+audio is available only when the server explicitly opts the configured display
+identity in; playback remains user-initiated, default-off, and separate from
+Home Assistant Ingress. Preserve the profile and trust material, then verify
+Menu focus, Diagnostics, Play/Stop if enabled, and Waterfall entry/return after
+installing the exact public package.

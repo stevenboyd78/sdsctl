@@ -21,23 +21,40 @@ Treat implementation, physical acceptance and publication as separate facts.
 When only a slice ships, name that slice instead of marking the parent milestone
 complete. Existing historical milestone IDs remain unchanged.
 
-## Targeted next release — v0.33.0
+## Targeted next release — v0.34.0
 
-**Targeted for v0.33.0; not yet released.** The reviewed [release scope and
-acceptance plan](release-0.33.0.md) includes the Full-HD dashboard correction,
-held-field presentation, 22 Cinematic choices with six independently
-constructed panoramas, the 2×2 scanner hierarchy, stateful health instrument,
-and responsive Display & session drawer.
+**Targeted for v0.34.0; not yet released.** The reviewed [release scope and
+acceptance plan](release-0.34.0.md) includes the universal Menu layout,
+deterministic live-data Matrix rain, selectable theme rotation, theme-specific
+live telemetry, the rebuilt Synthwave panorama, explicit native-LAN display
+audio and Diagnostics consolidation, optional display-kiosk automatic audio,
+special-mode identity, optional display-only automatic Waterfall following,
+portable service manifests, and bounded recording/CI/audit fixes.
 
 The Home Assistant App advances in lockstep with the package while retaining
-the exact nine-field options/schema contract. Drawer actions retain the
-current server-enforced display/operator role; the release does not add
-host-key or unattended login, theme rotation, automatic display-kiosk audio, a
-web Favorites editor, or Python 3.15. Keep v0.32.0 as Latest until every tagged
-artifact, required installed-release gate, and target-specific visual check is
-verified and the normal GitHub Release is created.
+the exact nine-field options/schema contract. Native-LAN display audio remains
+an explicit default-off server option and is not an App option. The release
+includes bounded Favorites-workspace and compatibility-qualification
+foundations, not a browser editor, physical Favorites write, Python 3.15
+support declaration, or completed firmware 1.27 qualification. It does not add
+unattended login or automatic deployment. Keep v0.33.0 as Latest until every
+tagged artifact, required installed-release gate, and target-specific visual
+check is verified and the normal GitHub Release is created.
 
-## Latest release — v0.32.0
+## Latest release — v0.33.0
+
+**Released in [v0.33.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.33.0)**
+on November 12, 2026. The reviewed [release scope and acceptance
+record](release-0.33.0.md) includes the expanded Full-HD dashboard, held-field
+presentation, 22 Cinematic choices with six bespoke panoramas, 2×2 scanner
+hierarchy, health instrument, and responsive Display & session drawer.
+
+The immutable tag, PyPI distributions, generic multi-platform images, Home
+Assistant App images, and exact release identities were independently verified
+before the normal GitHub Release became Latest. Publication did not authorize
+automatic browser login, display audio, scanner programming, or deployment.
+
+## Previous release — v0.32.0
 
 **Released in [v0.32.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.32.0)**
 on November 3, 2026. The reviewed [release scope and acceptance
@@ -51,7 +68,7 @@ upgrade were independently verified before the normal GitHub Release became
 Latest. Publication did not authorize a physical Favorites write, unattended
 browser authentication, or automatic target activation.
 
-## Previous release — v0.31.0
+## Earlier release — v0.31.0
 
 **Released in [v0.31.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.31.0)**
 on October 7, 2026. The reviewed [release scope and acceptance
@@ -116,7 +133,8 @@ milestone number.
 | [Display improvements, recording continuity and experimental browser foundations](release-0.30.0.md) | [v0.30.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.30.0) | Released; published Pi/App upgrades and audio/recording acceptance passed; unattended browser qualification remains separate |
 | [Mimic-SDS displays and installed profiles](release-0.31.0.md) | [v0.31.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.31.0) | Released; public artifacts, repository App, managed Pi displays and approved system installations accepted; unattended browser enrollment remains excluded |
 | [Operator kiosk and controlled Favorites writes](release-0.32.0.md) | [v0.32.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.32.0) | Released; public artifacts and repository App upgrade passed; Favorites physical writes and automatic kiosk activation remain excluded |
-| [Cinematic dashboards and responsive session controls](release-0.33.0.md) | Targeted for v0.33.0 | Preparation authorized; public artifacts, target visual acceptance, and installed upgrade remain pending |
+| [Cinematic dashboards and responsive session controls](release-0.33.0.md) | [v0.33.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.33.0) | Released; immutable tag and public Python/container/App artifact identities verified; automatic login, display audio and deployment remained excluded |
+| [Adaptive dashboards and portable displays](release-0.34.0.md) | Targeted for v0.34.0 | Preparation in review; publication, installed upgrade and final target acceptance remain pending |
 
 ## Keeping the mapping current
 

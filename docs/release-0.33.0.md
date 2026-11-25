@@ -1,12 +1,11 @@
 # v0.33.0 release scope — cinematic dashboards and responsive session controls
 
-Status: **Targeted for v0.33.0; not yet released**
+Status: **Released in [v0.33.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.33.0)**
 
-This record defines the reviewed release boundary before an immutable tag is
-created. Passing source, pull-request, browser, image, or package checks does
-not prove publication or an installed public upgrade. Update this record with
-the exact final commit, tag object, public artifact identities, and installed
-acceptance only after those gates complete.
+This record preserves the reviewed release boundary and the immutable public
+artifact identities accepted on November 12, 2026. Source, pull-request,
+browser, image, and package checks remained distinct from publication and
+installed acceptance throughout the release.
 
 ## Identity and title
 
@@ -15,10 +14,36 @@ acceptance only after those gates complete.
   session controls**.
 - Accepted source base before release preparation:
   `4e6182421f30b27367fb2a8de6c196618b3576b3`.
-- Release-preparation commit: pending review and commit.
-- Final release commit and annotated tag object: pending.
-- Latest completed public release remains `v0.32.0` until every publication
-  and installed-release gate below passes.
+- Release-preparation commit: `7744c50`.
+- Final release commit:
+  `f9c05bf500ef1c94ecf7c60e834ffd8577e9b723`.
+- Immutable annotated tag object:
+  `f3dbc5be7e1885b662ce07d54ec7f1a2a86e8178`.
+- `v0.33.0` became the normal Latest GitHub Release after publication and
+  acceptance completed.
+
+## Published artifact closure — November 12, 2026
+
+- GitHub and PyPI publish `0.33.0`; the accepted PyPI wheel SHA-256 is
+  `d975f59767704fafcd02ec09c1196e5fb3b654c53524df9ebe0d3586d45a642e`
+  and the source archive SHA-256 is
+  `2bee75bbf6e0c129c39fa92a3a80181f98afe7a24d8fe404c4651d842697601b`.
+- Docker Hub tags `0.33.0` and `latest` share multi-architecture index
+  `sha256:15d2966c794c43b49c892d4d109602328f27eb7cc2227ea5e04d0b0f47722c7f`.
+  Its linux/amd64 manifest is
+  `sha256:128736611b6ffe9a89fdd48ce1b470d81516b6535fdd9874c2d425052e939574`
+  and linux/arm64 manifest is
+  `sha256:8ba71f7969f0abff35da8a2a8311c0f303569bb4991110a9acf601be22099f67`.
+- The Home Assistant GHCR App index is
+  `sha256:c7a86beccd96fa1678193b346587000a5255664ea3b31ed64cee8cd5409f0095`.
+  Its amd64 manifest is
+  `sha256:7126ff989a3467bf3befce93b288e3fffa82291d6dc3506fe90959e9015b0eb7`
+  and aarch64 manifest is
+  `sha256:ac5c7d8c613d72b98c8cddce13ca2889ef925c57172f3635c1580407565ca568`.
+- The release retained the exact nine-field App option/schema contract and all
+  stated browser-role, scanner-ownership, recording, credential, listener,
+  and deferred-feature boundaries. Publication did not authorize automatic
+  target deployment or broaden physical scanner control.
 
 ## Included user-visible scope
 
