@@ -98,7 +98,7 @@ def test_browser_audit_help_documents_scope_and_dependencies() -> None:
     assert completed.stderr == ""
     for contract in (
         "all 700 built-in",
-        "30 exact panoramic-boundary",
+        "35 exact panoramic-boundary",
         "writes no PNGs",
         "enlarged-text",
         "pagination-focus",
@@ -264,6 +264,20 @@ def test_browser_audit_covers_universal_non_native_drawer_contexts() -> None:
     assert "accessible('dialog', 'menu')" in universal
     assert "accessible('combobox', 'theme')" in universal
     assert "did not restore focus after Escape" in universal
+
+
+def test_matrix_duplicate_packet_guard_uses_one_atomic_snapshot() -> None:
+    source = _SCRIPT.read_text(encoding="utf-8")
+    matrix_controls = source.split(
+        "async function auditMatrixRainControls", 1
+    )[1].split("async function auditThemeTelemetry", 1)[0]
+
+    assert (
+        "repeatedPacketCounts.after !== repeatedPacketCounts.before"
+        in matrix_controls
+    )
+    assert "repeatedPacketCounts.before !== changedPackets" not in matrix_controls
+    assert "racing unrelated live data" in matrix_controls
 
 
 def test_browser_audit_persists_each_applicable_appearance_control() -> None:
@@ -581,7 +595,14 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         "shellGeometryFailures",
         "responsive shell target",
         "120 * rootFontSize",
+        "usesPipBoyChassis",
+        "Math.min(innerWidth * 0.84, 100 * rootFontSize)",
+        'getComputedStyle(chassis, "::before")',
+        "new DOMMatrixReadOnly(meterStyle.transform).m41",
+        "Pip-Boy signal meter escapes its side chassis",
+        "Pip-Boy signal meter is clipped by the CSS viewport",
         "hierarchyFieldAlignmentFailures",
+        '".scanner-display-hierarchy:not(.scanner-display-favorites)"',
         "compact Channel field has no separation before Site",
         "radioFieldCardIntersectionFailures",
         "overlap by",

@@ -25,6 +25,7 @@ DISPLAY_LOGIN_PATH = "/auth/display/login"
 OPERATOR_LOGIN_PATH = "/auth/login"
 KIOSK_ROLES = frozenset({"display", "operator"})
 PROFILE_ROLE_FILE = ".sdsctl-kiosk-role"
+PROFILE_AUDIO_FILE = ".sdsctl-kiosk-audio"
 
 
 def kiosk_role(value: str) -> str:
@@ -131,27 +132,45 @@ def kiosk_command(
     browser: Path,
     profile: Path,
     role: str = "display",
+    automatic_audio: bool = False,
 ) -> tuple[str, ...]:
     """Build fixed Chromium arguments without TLS/sandbox bypass or credentials."""
 
     normalized = kiosk_origin(origin)
+    selected_role = kiosk_role(role)
+    if not isinstance(automatic_audio, bool):
+        raise ConfigurationError("Kiosk automatic-audio selection must be boolean.")
+    if automatic_audio and selected_role != "display":
+        raise ConfigurationError("Automatic kiosk audio is available only to the display role.")
     if not browser.is_absolute() or not profile.is_absolute():
         raise ConfigurationError("Kiosk browser and private profile paths must be absolute.")
-    return (
+    command = [
         os.fspath(browser),
         "--kiosk",
         "--no-first-run",
         "--no-default-browser-check",
         "--disable-background-networking",
         f"--user-data-dir={profile}",
-        normalized + kiosk_login_path(role),
-    )
+    ]
+    if automatic_audio:
+        command.append("--autoplay-policy=no-user-gesture-required")
+    command.append(normalized + kiosk_login_path(selected_role))
+    return tuple(command)
 
 
 @contextmanager
-def _profile_lock(profile: Path, role: str = "display") -> Iterator[None]:
+def _profile_lock(
+    profile: Path,
+    role: str = "display",
+    automatic_audio: bool = False,
+) -> Iterator[None]:
     import fcntl
 
+    selected_role = kiosk_role(role)
+    if not isinstance(automatic_audio, bool):
+        raise ConfigurationError("Kiosk automatic-audio selection must be boolean.")
+    if automatic_audio and selected_role != "display":
+        raise ConfigurationError("Automatic kiosk audio is available only to the display role.")
     if not profile.is_absolute() or profile.is_symlink() or profile.resolve() != profile:
         raise ConfigurationError("Kiosk profile must be an absolute directory without symlinks.")
     # Only the explicitly selected profile may be created. Parents must already exist.
@@ -163,9 +182,9 @@ def _profile_lock(profile: Path, role: str = "display") -> Iterator[None]:
         or stat.S_IMODE(observed.st_mode) != 0o700
     ):
         raise ConfigurationError("Kiosk profile must be owned by this user and mode 0700.")
-    selected_role = kiosk_role(role)
     lock_path = profile / ".sdsctl-kiosk.lock"
     role_path = profile / PROFILE_ROLE_FILE
+    audio_path = profile / PROFILE_AUDIO_FILE
     if not lock_path.exists() and any(profile.iterdir()):
         raise ConfigurationError("Refusing to reuse a non-kiosk browser profile.")
     flags = os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC
@@ -216,6 +235,43 @@ def _profile_lock(profile: Path, role: str = "display") -> Iterator[None]:
                     os.fsync(role_descriptor)
                 finally:
                     os.close(role_descriptor)
+        selected_audio_policy = "automatic" if automatic_audio else "manual"
+        if audio_path.is_symlink():
+            raise ConfigurationError("Kiosk profile audio marker must not be a symlink.")
+        if audio_path.exists():
+            audio_stat = audio_path.stat(follow_symlinks=False)
+            try:
+                recorded_audio_policy = audio_path.read_text(encoding="ascii")
+            except (OSError, UnicodeError) as error:
+                raise ConfigurationError("Kiosk profile audio marker is unreadable.") from error
+            if (
+                not stat.S_ISREG(audio_stat.st_mode)
+                or audio_stat.st_uid != os.getuid()
+                or stat.S_IMODE(audio_stat.st_mode) != 0o600
+                or recorded_audio_policy != selected_audio_policy + "\n"
+            ):
+                raise ConfigurationError(
+                    "Kiosk profile audio policy does not match or is not private."
+                )
+        else:
+            browser_entries = tuple(
+                entry
+                for entry in profile.iterdir()
+                if entry.name not in {lock_path.name, role_path.name}
+            )
+            if automatic_audio and browser_entries:
+                raise ConfigurationError(
+                    "Automatic kiosk audio requires a new dedicated browser profile."
+                )
+            audio_flags = (
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
+            )
+            audio_descriptor = os.open(audio_path, audio_flags, 0o600)
+            try:
+                os.write(audio_descriptor, (selected_audio_policy + "\n").encode("ascii"))
+                os.fsync(audio_descriptor)
+            finally:
+                os.close(audio_descriptor)
         yield
     finally:
         os.close(descriptor)
@@ -227,6 +283,7 @@ def run_browser_kiosk(
     profile: Path,
     ca_file: Path | None,
     role: str = "display",
+    automatic_audio: bool = False,
 ) -> int:
     """Run in an existing Linux desktop; clean close succeeds, crash returns 75."""
 
@@ -237,12 +294,20 @@ def run_browser_kiosk(
     if not browser.is_absolute() or not browser.is_file() or not os.access(browser, os.X_OK):
         raise ConfigurationError("Select the absolute installed Chromium executable path.")
     selected_role = kiosk_role(role)
+    if not isinstance(automatic_audio, bool):
+        raise ConfigurationError("Kiosk automatic-audio selection must be boolean.")
+    if automatic_audio and selected_role != "display":
+        raise ConfigurationError("Automatic kiosk audio is available only to the display role.")
     command = kiosk_command(
-        kiosk_preflight(origin, ca_file, selected_role), browser, profile, selected_role
+        kiosk_preflight(origin, ca_file, selected_role),
+        browser,
+        profile,
+        selected_role,
+        automatic_audio,
     )
     # Do not relay browser diagnostics, which can contain URLs or profile data.
     with (
-        _profile_lock(profile, selected_role),
+        _profile_lock(profile, selected_role, automatic_audio),
         subprocess.Popen(
             command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         ) as child,

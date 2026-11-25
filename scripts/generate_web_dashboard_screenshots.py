@@ -293,6 +293,7 @@ _READY_TEXT = {
     "status-badge": "Connected",
     "daemon-state": "running",
     "scanner-model": "SDS200",
+    "radio-favorites-list": "Demo Regional Favorites",
     "radio-system": "Demo Metro Public Safety",
     "recording-status": "recording",
     "recordings-message": "7 recent of 12 finalized recordings.",
@@ -532,6 +533,7 @@ DEMO_SNAPSHOT: Mapping[str, object] = {
     "psi_interval_ms": 500,
     "transition_sequence": 1842,
     "radio_state": {
+        "favorites_list": "Demo Regional Favorites",
         "system": "Demo Metro Public Safety",
         "department": "Central Dispatch",
         "site": "Metro Simulcast",

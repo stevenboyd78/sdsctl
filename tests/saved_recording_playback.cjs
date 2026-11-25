@@ -33,6 +33,7 @@ const context = {
   recordingFileUrl(id) { return "/api/v1/recordings/file/" + id; },
   savedPlaybackGeneration: 0, authenticationRequired: false, displayOnly: false,
   window: page, mimicPageSuspended: false, nativeSessionTimer: null,
+  document: {documentElement: {dataset: {}}},
   mimicDisplay: {stop() {}}, currentDaemonHello: {},
   reconcileMimicDisplay() {}, clearHomeAssistantBridgeKey() {},
   clearHomeAssistantAdvancedSecrets() {}, stopEventStream() {},

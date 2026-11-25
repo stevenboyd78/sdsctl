@@ -226,6 +226,13 @@ HERO_CINEMATIC_THEMES = (
         ("cyber-rain-far", "cyber-train-pass", "cyber-holo-a"),
         "cyber-hold-glitch",
     ),
+    (
+        "cinematic-synthwave",
+        "synthwave",
+        "synthwave-",
+        ("synthwave-star-pulse", "synthwave-road-flow", "synthwave-equalizer"),
+        "synthwave-hold-surge",
+    ),
 )
 
 
@@ -258,6 +265,34 @@ def test_hero_cinematic_theme_reveals_only_its_matching_panorama(
     assert all(other not in stylesheet for other in other_scenes)
     assert ".theme-stage > span" in stylesheet
     assert "display: inline" in stylesheet
+
+
+def test_synthwave_full_hd_header_keeps_symmetric_text_safe_corners() -> None:
+    stylesheet = read_built_in_web_theme_stylesheet(
+        built_in_web_theme_registry().require("cinematic-synthwave")
+    ).decode("utf-8")
+    full_hd = stylesheet.split(
+        "@media (min-width: 1280px) and (min-height: 720px) and (min-aspect-ratio: 3/2)",
+        1,
+    )[1]
+    header = re.search(r"\.site-header\s*\{([^}]+)\}", full_hd)
+
+    assert header is not None
+    assert (
+        "clip-path: polygon(1rem 0, calc(100% - 1rem) 0, 100% 50%, "
+        "calc(100% - 1rem) 100%, 1rem 100%, 0 50%);"
+    ) in header[1]
+
+
+def test_pip_boy_wide_signal_meter_is_centered_in_its_side_chassis() -> None:
+    stylesheet = read_built_in_web_theme_stylesheet(
+        built_in_web_theme_registry().require("pip-boy-inspired")
+    ).decode("utf-8")
+    meter = re.search(r"\.theme-stage-b::before\s*\{([^}]+)\}", stylesheet)
+
+    assert meter is not None
+    assert "left: 50%;" in meter[1]
+    assert "transform: translateX(-50%);" in meter[1]
 
 
 def test_mission_control_full_hd_tabs_reserve_a_separate_lamp_lane() -> None:
@@ -320,12 +355,57 @@ def test_mission_control_short_production_hierarchy_uses_compact_instrument_bank
 
     assert field_list is not None and card is not None
     assert "grid-template-columns: repeat(4, minmax(0, 1fr)) !important;" in field_list[1]
-    assert "grid-template-rows: repeat(3, auto) !important;" in field_list[1]
-    assert "align-content: start !important;" in field_list[1]
+    assert "grid-template-rows: repeat(3, minmax(0, 1fr)) !important;" in field_list[1]
+    assert "align-content: stretch !important;" in field_list[1]
     assert "gap: 0.0625rem 0.35rem !important;" in field_list[1]
+    assert "padding-block: 0.08rem !important;" in field_list[1]
     assert "grid-column: auto !important;" in card[1]
     assert "grid-row: auto !important;" in card[1]
     assert "padding-block: 0 !important;" in card[1]
+
+
+def test_mission_control_short_production_identity_uses_bounded_rows() -> None:
+    viewport = files("sds200.web_assets").joinpath("dashboard-viewport.css").read_text()
+    compact = viewport.split(
+        "@media (min-width: 1280px) and (min-height: 720px) and "
+        "(max-height: 800px) and (min-aspect-ratio: 3/2)",
+        1,
+    )[1]
+    identity = compact.split(
+        '.radio-field-group[data-radio-group="identity"]',
+        1,
+    )[1]
+    field_list = re.search(r"\.radio-field-list\s*\{([^}]+)\}", identity)
+    card = re.search(r"\.radio-field-list\s*> div\s*\{([^}]+)\}", identity)
+
+    assert field_list is not None and card is not None
+    assert "grid-template-columns: repeat(4, minmax(0, 1fr)) !important;" in field_list[1]
+    assert "grid-template-rows: repeat(2, minmax(0, 1fr)) !important;" in field_list[1]
+    assert "align-content: stretch !important;" in field_list[1]
+    assert "gap: 0.0625rem 0.35rem !important;" in field_list[1]
+    assert "padding-block: 0.08rem !important;" in field_list[1]
+    assert "padding-block: 0 !important;" in card[1]
+
+
+def test_synthwave_short_production_hierarchy_uses_bounded_rows() -> None:
+    viewport = files("sds200.web_assets").joinpath("dashboard-viewport.css").read_text()
+    compact = viewport.split(
+        "@media (min-width: 1280px) and (min-height: 720px) and "
+        "(max-height: 800px) and (min-aspect-ratio: 3/2)",
+        1,
+    )[1]
+    synthwave = compact.split(
+        ':root[data-theme="cinematic-synthwave"]',
+        1,
+    )[1]
+    field_list = re.search(r"\.radio-field-list\s*\{([^}]+)\}", synthwave)
+    card = re.search(r"\.radio-field-list\s*> div\s*\{([^}]+)\}", synthwave)
+
+    assert field_list is not None and card is not None
+    assert "grid-template-rows: repeat(5, minmax(0, 1fr)) !important;" in field_list[1]
+    assert "align-content: stretch !important;" in field_list[1]
+    assert "margin-top: 0 !important;" in field_list[1]
+    assert "padding-block: 0.06rem !important;" in card[1]
 
 
 @pytest.mark.parametrize(

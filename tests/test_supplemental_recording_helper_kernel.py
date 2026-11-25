@@ -238,6 +238,11 @@ def test_real_owned_unprivileged_process_is_not_accepted_as_helper(collector, mo
 def test_changed_status_on_second_read_is_not_a_new_baseline(collector, monkeypatch):
     actual = m.os.read
     cycles = []
+    now = time.monotonic()
+
+    # This test controls read drift, not elapsed-time refusal. Keep runner
+    # scheduling from consuming the bounded production deadline before a read.
+    monkeypatch.setattr(time, "monotonic", lambda: now)
 
     def drift(fd, size):
         raw = actual(fd, size)

@@ -6,13 +6,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
-## [0.34.0] - 2026-11-21
+## [0.34.0] - 2026-11-24
 
-Adaptive dashboard presentation, explicit display-audio playback, and
-scanner-mode-aware display behavior. See the [release scope and acceptance
-plan](docs/release-0.34.0.md). Publication and installed-release acceptance
-remain pending until the immutable tag, public artifacts, repository App, and
-required target checks are independently verified.
+Adaptive dashboard presentation, live theme behavior, portable display
+configuration, and explicit display-audio playback. See the
+[release scope and acceptance plan](docs/release-0.34.0.md). Publication and
+installed-release acceptance remain pending until the immutable tag, public
+artifacts, repository App, and required target checks are independently
+verified.
 
 ### Added
 
@@ -24,6 +25,36 @@ required target checks are independently verified.
   display identities behind the default-off `--lan-display-audio` server
   option. It does not enable autoplay, scanner controls, recordings, a second
   scanner owner, or a Home Assistant App option.
+- Add an independently opted-in automatic-audio preference for dedicated
+  display-role kiosks. It requires the server audio opt-in, a new role-bound
+  private profile, an explicit kiosk flag, and a saved browser preference;
+  Stop suppresses it for the current session, terminal failures are not
+  retried, and operator kiosks retain manual playback.
+- Add browser-local selectable theme rotation with a 5-1440 minute interval,
+  sequential or nonrepeating shuffled order, trusted-activity resets, and
+  manual-theme restoration. Rotation is off by default and neither changes
+  scanner state nor claims burn-in prevention.
+- Add normalized browser-local signal, RSSI, and activity telemetry with
+  Full, Subtle, and Off live-effect levels. Supported themes react through
+  their own instruments and motion grammars without new scanner polling or a
+  shared recolored template; Full is the default.
+- Add strict versioned `display-client` and `browser-kiosk` service manifests,
+  with private-file and absolute-path checks, unknown-field rejection,
+  deterministic provenance, exact command review, bounded preflight, strict
+  temporary command-line overrides, atomic credential-free templates, and
+  optional thin systemd launchers. The runtime delegates to the existing TUI
+  and kiosk commands, legacy v0.33.0 units remain available, and browser device
+  credentials remain explicitly deferred until a server-side enrollment and
+  revocation protocol is accepted.
+- Add a bounded, process-local Favorites web workspace foundation for a future
+  operator-only browser editor. It uses configured copied-tree source labels,
+  opaque owner-bound workspaces and navigation IDs, exact revisions, aggregate
+  no-store review presentation, resource/lifetime limits, and path-free source
+  failures. It intentionally adds no HTTP route, browser UI, durable draft,
+  target discovery, or write executor.
+- Add bounded qualification records for SDS100/SDS200 firmware 1.27.00 and
+  CPython 3.15. The records preserve firmware 1.26.01 and Python 3.11-3.14 as
+  the accepted contracts until their separate runtime and hardware gates pass.
 
 ### Changed
 
@@ -45,6 +76,9 @@ required target checks are independently verified.
   servers may opt a configured display identity into user-initiated live
   playback with `--lan-display-audio`; it never enables autoplay, controls, or
   recordings.
+- Rebuild Synthwave Outrun as a distinct full-HD neon-highway panorama with
+  theme-native instruments and live drive-horizon response while retaining its
+  compact/mobile, reduced-motion, forced-colors, and static-preview fallbacks.
 
 ### Fixed
 
@@ -56,10 +90,13 @@ required target checks are independently verified.
 - Preserve a retryable recording state when transient recording-arm identity
   locks contend, while keeping cancellation/deadline handling bounded and
   terminal refusal immediate.
+- Keep host-launched supplemental recording helpers inside their private proc
+  mount and PID namespace throughout readiness, cancellation, and cleanup,
+  preventing host `/proc` leakage without relaxing process ownership.
 - Make the documentation-only CI boundary fail closed and stabilize the
-  screenshot, qualified-peer, cancellation-clock, lost-child,
-  passive-handoff, and operator-expiry audit fixtures without weakening their
-  product or security assertions.
+  Python 3.13 clock, screenshot, qualified-peer, cancellation-clock,
+  lost-child, passive-handoff, and operator-expiry audit fixtures without
+  weakening their product or security assertions.
 
 ## [0.33.0] - 2026-11-11
 

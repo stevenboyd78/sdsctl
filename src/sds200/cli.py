@@ -780,8 +780,10 @@ def build_parser(
     subparsers = parser.add_subparsers(dest="action", required=True)
 
     from .scanner_display_profile_cli import add_display_profile_parser
+    from .service_configuration_cli import add_service_configuration_parser
 
     add_display_profile_parser(subparsers)
+    add_service_configuration_parser(subparsers)
 
     discover = subparsers.add_parser(
         "discover",
@@ -1314,6 +1316,14 @@ def build_parser(
     )
     kiosk.add_argument(
         "--preflight-only", action="store_true", help="Check HTTPS without launching",
+    )
+    kiosk.add_argument(
+        "--automatic-audio",
+        action="store_true",
+        help=(
+            "Allow an opted-in display profile to start authorized browser audio "
+            "without a gesture"
+        ),
     )
 
     browser_server = subparsers.add_parser(
@@ -6770,6 +6780,10 @@ def main(
         return _run_browser_device_server_setup(args)
     if args.action in {"browser-device-service", "browser-device-maintenance"}:
         return _run_browser_device_lifecycle(args)
+    if args.action == "service-config":
+        from .service_configuration_cli import run_service_configuration_command
+
+        return run_service_configuration_command(args)
 
     try:
         _apply_cli_configuration(
@@ -6945,7 +6959,11 @@ def main(
             from .exceptions import ConfigurationError
 
             try:
+                if args.automatic_audio and args.role != "display":
+                    raise ValueError("Automatic audio is available only to a display kiosk.")
                 if args.preflight_only:
+                    if args.automatic_audio:
+                        raise ValueError("Automatic audio applies only when launching a kiosk.")
                     kiosk_preflight(args.origin, args.ca_file, args.role)
                     print(
                         f"{args.role.capitalize()} login/TLS preflight passed; "
@@ -6955,7 +6973,12 @@ def main(
                 if args.browser is None or args.profile_directory is None:
                     raise ValueError("Kiosk launch requires --browser and --profile-directory.")
                 return run_browser_kiosk(
-                    args.origin, args.browser, args.profile_directory, args.ca_file, args.role,
+                    args.origin,
+                    args.browser,
+                    args.profile_directory,
+                    args.ca_file,
+                    args.role,
+                    args.automatic_audio,
                 )
             except (ConfigurationError, ValueError):
                 print("Kiosk setup requires attention; check HTTPS trust, paths and desktop.",

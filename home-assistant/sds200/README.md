@@ -50,10 +50,12 @@ changes. They do not add automatic login, theme rotation, display-kiosk audio,
 a Favorites editor, another listener, or another scanner owner.
 
 v0.34.0 retains the same contract while packaging the universal Menu,
-deterministic Matrix rain, meaningful special-mode identity, optional
-display-only automatic Waterfall following, and the three-card Diagnostics
-layout. Native-LAN display audio is a separate authenticated server opt-in and
-is not an App option; Ingress does not gain native login or playback authority.
+deterministic Matrix rain, selectable theme rotation, theme-specific live
+effects, the rebuilt Synthwave panorama, meaningful special-mode identity,
+optional display-only automatic Waterfall following, and the three-card
+Diagnostics layout. Native-LAN display audio and automatic kiosk audio are
+separate authenticated native-dashboard opt-ins and are not App options;
+Ingress does not gain native login or playback authority.
 
 The App requires a LAN-connected SDS200 and publishes UDP port `50000` for the
 scanner's inbound RTP audio. It does not enable host networking or expose the

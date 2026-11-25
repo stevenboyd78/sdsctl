@@ -72,18 +72,23 @@ in the versioned release notes; these TUI checks do not qualify browser enrollme
 
 **Targeted for v0.34.0; not yet released.** The reviewed [release
 plan](docs/release-0.34.0.md) includes the universal Menu layout,
-deterministic live-data Matrix rain, explicit native-LAN display-audio opt-in
-with Diagnostics consolidation, special-mode identity, optional display-only
-automatic Waterfall following, and bounded recording/CI/audit fixes.
+deterministic live-data Matrix rain, selectable theme rotation, theme-specific
+live telemetry, the rebuilt Synthwave panorama, explicit native-LAN
+display-audio opt-in with Diagnostics consolidation, optional display-kiosk
+automatic audio, special-mode identity, optional display-only automatic
+Waterfall following, portable service manifests, and bounded
+recording/CI/audit fixes.
 
 The Menu reorganizes existing browser-local presentation controls and
 role-aware session actions without expanding a role or replacing manual
 authentication. Native-LAN display audio is explicit, default-off and not a
-Home Assistant App option; the App keeps its exact nine-field contract.
-Unattended authentication, theme rotation, broader persistent configuration,
-a web Favorites editor, remaining visual overhauls, Python 3.15, firmware
-1.27 qualification, and automatic target deployment remain outside this
-release.
+Home Assistant App option; the App keeps its exact nine-field contract. The
+release includes a bounded server-side Favorites workspace foundation and
+qualification plans for Python 3.15 and firmware 1.27, not a browser editor,
+physical Favorites write, Python 3.15 support declaration, or completed
+firmware qualification. Unattended authentication, broader persistent
+configuration beyond the reviewed service manifests, remaining visual
+overhauls, and automatic target deployment remain outside this release.
 
 ### v0.33.0 release closure
 

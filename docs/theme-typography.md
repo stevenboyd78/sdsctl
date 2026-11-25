@@ -58,3 +58,35 @@ every added font and license. Antonio's attribution is in the LCARS document.
 Assets are same-origin with explicit display-only GET authorization; third-party
 font hosting and broader filesystem access are not enabled. `font-display: swap`
 allows readable fallback immediately and only fonts in use are requested.
+
+### Maintainer synchronization
+
+The dashboard never downloads fonts at runtime. Maintainers can verify the
+bundled assets and provenance manifest without network access:
+
+```console
+python scripts/sync_theme_fonts.py --check
+```
+
+Updating the pinned source is an explicit review operation. Choose an exact
+40-character lowercase commit from the official `google/fonts` repository,
+then run:
+
+```console
+python scripts/sync_theme_fonts.py --sync --revision <google-fonts-commit-sha>
+python scripts/sync_theme_fonts.py --check
+```
+
+The synchronizer accepts only exact HTTPS `raw.githubusercontent.com` URLs
+under that pinned commit's `google/fonts` OFL tree. It rejects redirects,
+moving refs, credentials, query strings, unsafe paths, duplicate sources,
+unrecognized font or license payloads, and files larger than 16 MiB. Every
+asset is downloaded and validated before any tracked file changes. Asset and
+manifest writes are atomic; a write or post-write verification failure rolls
+the complete set back to its prior contents.
+
+Review the resulting font binaries, license files and
+[`theme-font-sources.json`](theme-font-sources.json) together before commit.
+The regular CI check runs only `--check`; it never uses the network or changes
+the pinned revision. Cloning the full Google Fonts repository is therefore not
+required for builds or installations.

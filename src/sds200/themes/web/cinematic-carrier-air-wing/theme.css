@@ -673,6 +673,81 @@
 @keyframes carrier-attitude-breathe { 0%, 100% { transform: translateY(-3px); opacity: 0.48; } 50% { transform: translateY(5px); opacity: 0.78; } }
 @keyframes carrier-signal-glow { 0%, 100% { opacity: 0.52; } 50% { opacity: 1; } }
 
+/* Live scanner telemetry becomes flight-deck sensor telemetry. Signal strength
+ * energizes the HUD ring, RSSI drives the receiver trace, and active traffic
+ * accelerates the radar sweep and deck lights. The existing held-scope target
+ * acquisition remains authoritative. */
+:root[data-theme="cinematic-carrier-air-wing"][data-theme-effects="subtle"][data-theme-signal-state="available"]:not(:has(
+  #radio-activity-panel [data-hold-state="held"]
+)) .carrier-hud-ring-inner {
+  stroke-opacity: calc(0.48 + var(--theme-signal-normalized, 0.5) * 0.22);
+  filter: drop-shadow(
+    0 0 calc(0.08rem + var(--theme-signal-normalized, 0.5) * 0.18rem)
+      rgb(114 231 255 / 0.38)
+  );
+  transition: stroke-opacity 640ms ease-out, filter 640ms ease-out;
+}
+
+:root[data-theme="cinematic-carrier-air-wing"][data-theme-effects="subtle"][data-theme-rssi-state="available"]
+  .carrier-signal-trace {
+  opacity: calc(0.54 + var(--theme-rssi-normalized, 0.5) * 0.3);
+  filter: brightness(calc(0.92 + var(--theme-rssi-normalized, 0.5) * 0.18))
+    drop-shadow(
+      0 0 calc(0.06rem + var(--theme-rssi-normalized, 0.5) * 0.2rem)
+        rgb(88 230 155 / 0.36)
+    );
+  transition: opacity 720ms ease-out, filter 720ms ease-out;
+}
+
+:root[data-theme="cinematic-carrier-air-wing"][data-theme-effects="full"][data-theme-signal-state="available"]:not(:has(
+  #radio-activity-panel [data-hold-state="held"]
+)) .carrier-hud-ring-inner {
+  stroke-opacity: calc(0.36 + var(--theme-signal-normalized, 0.5) * 0.64);
+  stroke-width: calc(1.8px + var(--theme-signal-normalized, 0.5) * 2.2px);
+  filter: drop-shadow(
+    0 0 calc(0.12rem + var(--theme-signal-normalized, 0.5) * 0.6rem)
+      rgb(114 231 255 / 0.78)
+  );
+  transition: stroke-opacity 420ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    stroke-width 420ms cubic-bezier(0.2, 0.75, 0.25, 1), filter 420ms ease-out;
+}
+
+:root[data-theme="cinematic-carrier-air-wing"][data-theme-effects="full"][data-theme-rssi-state="available"]
+  .carrier-signal-trace {
+  opacity: calc(0.36 + var(--theme-rssi-normalized, 0.5) * 0.64);
+  filter: brightness(calc(0.8 + var(--theme-rssi-normalized, 0.5) * 0.48))
+    saturate(calc(0.88 + var(--theme-rssi-normalized, 0.5) * 0.4))
+    drop-shadow(
+      0 0 calc(0.12rem + var(--theme-rssi-normalized, 0.5) * 0.68rem)
+        rgb(88 230 155 / 0.72)
+    );
+  transition: opacity 480ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    filter 480ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cinematic-carrier-air-wing"][data-theme-effects="subtle"][data-theme-activity="active"]
+    .carrier-radar-sweep {
+    animation-duration: 12.5s;
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"][data-theme-effects="full"][data-theme-activity="active"]:not(:has(
+    #radio-activity-panel [data-hold-state="held"]
+  )) .carrier-radar-sweep {
+    animation-duration: calc(11.5s - var(--theme-activity-level, 0.5) * 6.2s);
+    fill-opacity: calc(0.12 + var(--theme-activity-level, 0.5) * 0.16);
+    filter: drop-shadow(0 0 0.5rem rgb(85 220 255 / 0.64));
+  }
+
+  :root[data-theme="cinematic-carrier-air-wing"][data-theme-effects="full"][data-theme-activity="active"]:not(:has(
+    #radio-activity-panel [data-hold-state="held"]
+  )) .carrier-deck-lights {
+    animation-duration: calc(4.6s - var(--theme-activity-level, 0.5) * 2s);
+    opacity: calc(0.56 + var(--theme-activity-level, 0.5) * 0.44);
+    filter: drop-shadow(0 0 0.48rem rgb(94 232 255 / 0.58));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root[data-theme="cinematic-carrier-air-wing"] *,
   :root[data-theme="cinematic-carrier-air-wing"] *::before,

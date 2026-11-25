@@ -17,6 +17,19 @@ const AUDIO_FALLBACK_START_THRESHOLD_SAMPLES = 480;
 const AUDIO_FALLBACK_SCRIPT_BUFFER_SIZE = 1024;
 const WORKSPACE_PANE_STORAGE_KEY = "sdsctl.web.pane";
 const RADIO_SCAN_FALLBACK_STORAGE_KEY = "sdsctl.web.scan-fallback";
+const THEME_ROTATION_STORAGE_KEY = "sdsctl.web.theme-rotation.v1";
+const THEME_ROTATION_MINUTES_MIN = 5;
+const THEME_ROTATION_MINUTES_MAX = 1440;
+const THEME_ROTATION_MINUTES_DEFAULT = 30;
+const THEME_EFFECTS_STORAGE_KEY = "sdsctl.web.theme-effects.v1";
+const THEME_EFFECTS_DEFAULT = "full";
+const DISPLAY_AUDIO_AUTO_START_STORAGE_KEY = "sdsctl.web.display-audio-auto-start.v1";
+const DISPLAY_AUDIO_AUTO_SUPPRESSION_KEY = "sdsctl.web.display-audio-auto-suppressed.v1";
+const THEME_TELEMETRY_EVENT = "sdsctl:theme-telemetry";
+const THEME_TELEMETRY_VERSION = 1;
+const THEME_TELEMETRY_SMOOTHING = 0.38;
+const THEME_RSSI_FLOOR_DBM = -120;
+const THEME_RSSI_CEILING_DBM = -40;
 const WATERFALL_AUTO_SWITCH_STORAGE_KEY = "sdsctl.web.waterfall-auto-switch";
 const WATERFALL_AUTO_SWITCH_DELAY_MS = 750;
 const WATERFALL_AUTO_RETURN_DELAY_MS = 1250;
@@ -87,6 +100,9 @@ let waterfallAutoSuppressed = false;
 let radioScanFallback = "detail";
 let radioInspectionView = "auto";
 let currentScreenKind = "unknown";
+let themeEffectsMode = THEME_EFFECTS_DEFAULT;
+let themeTelemetryState = null;
+let pendingThemeTelemetry = null;
 let recordingEntries = [];
 let recordingTotalEntries = 0;
 let recordingPageIndex = 0;
@@ -360,6 +376,22 @@ function initializeNativeMenu(logout, logoutButton) {
   const audio = make("section", null, "native-menu-audio");
   audio.setAttribute("aria-label", "Live audio playback");
   audio.append(make("h3", "Live audio playback"));
+  if (displayOnly && displayAudioAllowed) {
+    const automaticAudioLabel = make("label", null, "native-menu-checkbox");
+    const automaticAudio = make("input");
+    automaticAudio.id = "display-audio-auto-start";
+    automaticAudio.type = "checkbox";
+    automaticAudioLabel.append(
+      automaticAudio,
+      document.createTextNode(" Start live audio automatically in this display profile"),
+    );
+    const automaticAudioHelp = make(
+      "p",
+      "Off by default. Requires an automatic-audio kiosk profile; Stop suppresses automatic playback for this browser session.",
+      "native-menu-help",
+    );
+    audio.append(automaticAudioLabel, automaticAudioHelp);
+  }
   const audioPlayback = element("audio-playback-controls");
   audioPlayback.before(document.createComment("native drawer audio playback position"));
   if (!displayAudioAllowed) {
@@ -409,6 +441,7 @@ function initializeNativeMenu(logout, logoutButton) {
     element("system-palette-picker"),
     element("lcars-v2-appearance-pickers"),
     element("theme-typography-pickers"),
+    element("theme-effects-controls"),
     element("matrix-rain-controls"),
   ]) {
     if (!(node instanceof HTMLElement)) throw new Error("Native appearance control is unavailable.");
@@ -683,6 +716,23 @@ function writeStoredValue(key, value) {
   }
 }
 
+function readSessionValue(key) {
+  try {
+    return window.sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionValue(key, value) {
+  try {
+    if (value === null) window.sessionStorage.removeItem(key);
+    else window.sessionStorage.setItem(key, value);
+  } catch {
+    // Session storage may be unavailable in privacy modes or embedded WebViews.
+  }
+}
+
 function normalizedWorkspacePane(value) {
   const candidate = value === "audio" ? "diagnostics" : value;
   return typeof candidate === "string" &&
@@ -876,10 +926,57 @@ function initializeWorkspace() {
   }
 }
 
+function normalizedThemeEffectsMode(value) {
+  return value === "off" || value === "subtle" || value === "full"
+    ? value
+    : THEME_EFFECTS_DEFAULT;
+}
+
+function themeMotionPreference() {
+  if (typeof window.matchMedia !== "function") return "enabled";
+  if (window.matchMedia("(forced-colors: active)").matches) return "forced-colors";
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ? "reduced"
+    : "enabled";
+}
+
+function applyThemeEffectsMode(value, {persist = true} = {}) {
+  themeEffectsMode = normalizedThemeEffectsMode(value);
+  document.documentElement.dataset.themeEffects = themeEffectsMode;
+  document.documentElement.dataset.themeMotion = themeMotionPreference();
+  element("theme-effects-select").value = themeEffectsMode;
+  if (persist) writeStoredValue(THEME_EFFECTS_STORAGE_KEY, themeEffectsMode);
+  updateThemeTelemetry(record(currentSnapshot.radio_state), {smooth: false});
+  return themeEffectsMode;
+}
+
+function initializeThemeEffectsControl() {
+  const select = element("theme-effects-select");
+  applyThemeEffectsMode(readStoredValue(THEME_EFFECTS_STORAGE_KEY), {
+    persist: false,
+  });
+  select.addEventListener("change", () => applyThemeEffectsMode(select.value));
+  if (typeof window.matchMedia === "function") {
+    for (const query of [
+      "(prefers-reduced-motion: reduce)",
+      "(forced-colors: active)",
+    ]) {
+      const media = window.matchMedia(query);
+      if (typeof media.addEventListener === "function") {
+        media.addEventListener("change", () => {
+          document.documentElement.dataset.themeMotion = themeMotionPreference();
+          updateThemeTelemetry(record(currentSnapshot.radio_state), {smooth: false});
+        });
+      }
+    }
+  }
+}
+
 function initializeThemeControl() {
   const select = element("theme-select");
   const systemPalettePicker = element("system-palette-picker");
   const systemPaletteSelect = element("system-palette-select");
+  const rotationSettings = document.getElementById("theme-rotation-settings");
   const controller = window.sdsctlTheme;
 
   if (
@@ -892,6 +989,7 @@ function initializeThemeControl() {
     select.disabled = true;
     systemPaletteSelect.disabled = true;
     systemPalettePicker.hidden = true;
+    if (rotationSettings !== null) rotationSettings.hidden = true;
     return;
   }
 
@@ -915,6 +1013,257 @@ function initializeThemeControl() {
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(renderWaterfallCanvases);
     });
+  });
+
+  if (
+    rotationSettings === null ||
+    typeof controller.preview !== "function" ||
+    !Array.isArray(controller.choices)
+  ) {
+    if (rotationSettings !== null) rotationSettings.hidden = true;
+    return;
+  }
+
+  const rotationEnabled = element("theme-rotation-enabled");
+  const rotationInterval = element("theme-rotation-interval");
+  const rotationMode = element("theme-rotation-mode");
+  const rotationThemes = element("theme-rotation-themes");
+  const rotationThemeList = element("theme-rotation-theme-list");
+  const rotationStatus = element("theme-rotation-status");
+  const availableThemes = controller.choices.filter((identifier) =>
+    Array.from(select.options).some((option) => option.value === identifier));
+  const themeLabels = new Map(
+    Array.from(select.options).map((option) => [option.value, option.textContent]),
+  );
+  const themeCheckboxes = new Map();
+  let rotationTimer = null;
+  let rotationBag = [];
+  let manualTheme = controller.current();
+  let rotationPolicy;
+
+  for (const identifier of availableThemes) {
+    const label = document.createElement("label");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = identifier;
+    checkbox.checked = true;
+    label.append(
+      checkbox,
+      document.createTextNode(themeLabels.get(identifier) ?? identifier),
+    );
+    rotationThemeList.append(label);
+    themeCheckboxes.set(identifier, checkbox);
+  }
+
+  function normalizeRotationPolicy(value) {
+    const source = value !== null && typeof value === "object" ? value : {};
+    const requestedThemes = Array.isArray(source.themes)
+      ? source.themes
+      : availableThemes;
+    const themes = Array.from(new Set(requestedThemes)).filter(
+      (identifier) => typeof identifier === "string" &&
+        availableThemes.includes(identifier),
+    );
+    const requestedInterval = Number(source.intervalMinutes);
+    const intervalMinutes = Number.isInteger(requestedInterval) &&
+      requestedInterval >= THEME_ROTATION_MINUTES_MIN &&
+      requestedInterval <= THEME_ROTATION_MINUTES_MAX
+      ? requestedInterval
+      : THEME_ROTATION_MINUTES_DEFAULT;
+    const mode = source.mode === "shuffle" ? "shuffle" : "sequential";
+    return Object.freeze({
+      version: 1,
+      enabled: source.enabled === true && themes.length >= 2,
+      intervalMinutes,
+      mode,
+      themes: Object.freeze(themes),
+    });
+  }
+
+  function readRotationPolicy() {
+    const stored = readStoredValue(THEME_ROTATION_STORAGE_KEY);
+    if (stored === null) return normalizeRotationPolicy({themes: availableThemes});
+    try {
+      return normalizeRotationPolicy(JSON.parse(stored));
+    } catch {
+      return normalizeRotationPolicy({themes: availableThemes});
+    }
+  }
+
+  function rotationPolicySnapshot() {
+    return Object.freeze({
+      version: rotationPolicy.version,
+      enabled: rotationPolicy.enabled,
+      intervalMinutes: rotationPolicy.intervalMinutes,
+      mode: rotationPolicy.mode,
+      themes: Object.freeze([...rotationPolicy.themes]),
+    });
+  }
+
+  function clearRotationTimer() {
+    if (rotationTimer === null) return;
+    window.clearTimeout(rotationTimer);
+    rotationTimer = null;
+  }
+
+  function requestThemeRepaint() {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(renderWaterfallCanvases);
+    });
+  }
+
+  function synchronizeRotationControls() {
+    rotationEnabled.checked = rotationPolicy.enabled;
+    rotationInterval.value = String(rotationPolicy.intervalMinutes);
+    rotationMode.value = rotationPolicy.mode;
+    for (const [identifier, checkbox] of themeCheckboxes) {
+      checkbox.checked = rotationPolicy.themes.includes(identifier);
+    }
+    document.documentElement.dataset.themeRotation = rotationPolicy.enabled
+      ? "enabled"
+      : "off";
+  }
+
+  function updateRotationStatus() {
+    if (rotationPolicy.themes.length < 2) {
+      rotationStatus.textContent = "Select at least two themes to enable rotation.";
+    } else if (!rotationPolicy.enabled) {
+      rotationStatus.textContent = "Rotation is off. Your selected theme is unchanged.";
+    } else if (document.hidden) {
+      rotationStatus.textContent = "Rotation is paused while the dashboard is hidden.";
+    } else if (rotationSettings.open) {
+      rotationStatus.textContent = "Rotation is paused while these settings are open.";
+    } else {
+      const order = rotationPolicy.mode === "shuffle" ? "shuffled" : "sequential";
+      rotationStatus.textContent =
+        `Rotating ${rotationPolicy.themes.length} themes every ` +
+        `${rotationPolicy.intervalMinutes} minutes in ${order} order. ` +
+        "Operator interaction restarts the interval.";
+    }
+  }
+
+  function nextRotationTheme() {
+    const current = controller.current();
+    if (rotationPolicy.mode === "sequential") {
+      const currentIndex = rotationPolicy.themes.indexOf(current);
+      return rotationPolicy.themes[
+        currentIndex < 0 ? 0 : (currentIndex + 1) % rotationPolicy.themes.length
+      ];
+    }
+
+    rotationBag = rotationBag.filter(
+      (identifier) => rotationPolicy.themes.includes(identifier) &&
+        identifier !== current,
+    );
+    if (rotationBag.length === 0) {
+      rotationBag = rotationPolicy.themes.filter((identifier) => identifier !== current);
+      for (let index = rotationBag.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(Math.random() * (index + 1));
+        [rotationBag[index], rotationBag[swapIndex]] = [
+          rotationBag[swapIndex], rotationBag[index],
+        ];
+      }
+    }
+    return rotationBag.shift() ?? current;
+  }
+
+  function scheduleThemeRotation() {
+    clearRotationTimer();
+    updateRotationStatus();
+    if (
+      !rotationPolicy.enabled ||
+      rotationPolicy.themes.length < 2 ||
+      document.hidden ||
+      rotationSettings.open
+    ) {
+      return;
+    }
+    rotationTimer = window.setTimeout(
+      advanceThemeRotation,
+      rotationPolicy.intervalMinutes * 60_000,
+    );
+  }
+
+  function advanceThemeRotation() {
+    clearRotationTimer();
+    if (!rotationPolicy.enabled || document.hidden || rotationSettings.open) {
+      scheduleThemeRotation();
+      return controller.current();
+    }
+    const applied = controller.preview(nextRotationTheme());
+    synchronizePickers();
+    requestThemeRepaint();
+    scheduleThemeRotation();
+    return applied;
+  }
+
+  function applyRotationPolicy(value, {persist = true} = {}) {
+    const wasEnabled = rotationPolicy?.enabled === true;
+    const nextPolicy = normalizeRotationPolicy(value);
+    if (!wasEnabled && nextPolicy.enabled) manualTheme = controller.current();
+    rotationPolicy = nextPolicy;
+    rotationBag = [];
+    synchronizeRotationControls();
+    if (wasEnabled && !rotationPolicy.enabled) {
+      controller.select(manualTheme);
+      synchronizePickers();
+      requestThemeRepaint();
+    }
+    if (persist) {
+      writeStoredValue(THEME_ROTATION_STORAGE_KEY, JSON.stringify(rotationPolicy));
+    }
+    scheduleThemeRotation();
+    return rotationPolicySnapshot();
+  }
+
+  function policyFromControls() {
+    return {
+      enabled: rotationEnabled.checked,
+      intervalMinutes: Number(rotationInterval.value),
+      mode: rotationMode.value,
+      themes: Array.from(themeCheckboxes)
+        .filter(([, checkbox]) => checkbox.checked)
+        .map(([identifier]) => identifier),
+    };
+  }
+
+  rotationPolicy = readRotationPolicy();
+  synchronizeRotationControls();
+  scheduleThemeRotation();
+
+  for (const control of [rotationEnabled, rotationInterval, rotationMode]) {
+    control.addEventListener("change", () => {
+      applyRotationPolicy(policyFromControls());
+    });
+  }
+  rotationThemes.addEventListener("change", (event) => {
+    if (event.target instanceof HTMLInputElement && event.target.type === "checkbox") {
+      applyRotationPolicy(policyFromControls());
+    }
+  });
+  rotationSettings.addEventListener("toggle", scheduleThemeRotation);
+  document.addEventListener(
+    "visibilitychange",
+    scheduleThemeRotation,
+  );
+  for (const eventName of ["pointerdown", "keydown", "input"]) {
+    document.addEventListener(eventName, (event) => {
+      if (event.isTrusted && rotationPolicy.enabled) scheduleThemeRotation();
+    }, true);
+  }
+  window.addEventListener("pagehide", clearRotationTimer);
+
+  select.addEventListener("change", () => {
+    manualTheme = controller.current();
+    rotationBag = [];
+    scheduleThemeRotation();
+  });
+
+  window.sdsctlThemeRotation = Object.freeze({
+    advance: advanceThemeRotation,
+    manualTheme: () => manualTheme,
+    policy: rotationPolicySnapshot,
+    setPolicy: (value) => applyRotationPolicy(value),
   });
 }
 
@@ -1954,6 +2303,7 @@ const RADIO_STATE_FIELD_TARGETS = Object.freeze({
   mode: "radio-mode",
   screen: "radio-screen-raw",
   screen_kind: "radio-screen",
+  favorites_list: "radio-favorites-list",
   system: "radio-system",
   department: "radio-department",
   site: "radio-site",
@@ -2151,6 +2501,7 @@ function renderRadioState(radio) {
     setText(target, value, fallback);
   }
   renderRadioProfile(radio.screen_kind);
+  updateThemeTelemetry(radio);
 }
 
 function booleanLabel(value, trueLabel, falseLabel) {
@@ -2168,6 +2519,109 @@ function signalLabel(value) {
     return `${value} / 5`;
   }
   return "Unavailable";
+}
+
+function themeClamp(value, minimum = 0, maximum = 1) {
+  return Math.max(minimum, Math.min(maximum, value));
+}
+
+function normalizedThemeSignal(value) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? themeClamp(value / 5)
+    : null;
+}
+
+function normalizedThemeRssi(value) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? themeClamp(
+      (value - THEME_RSSI_FLOOR_DBM) /
+        (THEME_RSSI_CEILING_DBM - THEME_RSSI_FLOOR_DBM),
+    )
+    : null;
+}
+
+function smoothedThemeValue(previous, target, smooth) {
+  if (target === null || previous === null || !smooth) return target;
+  return previous + (target - previous) * THEME_TELEMETRY_SMOOTHING;
+}
+
+function themeTelemetryBand(value) {
+  if (value === null) return "unknown";
+  if (value <= 0.04) return "none";
+  if (value < 0.32) return "weak";
+  if (value < 0.58) return "fair";
+  if (value < 0.82) return "good";
+  return "strong";
+}
+
+function themeTelemetryActivity(radio, signal) {
+  if (signal !== null && signal > 0.04) return "active";
+  for (const field of ["channel", "frequency", "talkgroup_id", "unit_id"]) {
+    if (radio[field] !== null && radio[field] !== undefined && radio[field] !== "") {
+      return "active";
+    }
+  }
+  return "idle";
+}
+
+function applyThemeTelemetry(detail) {
+  const root = document.documentElement;
+  pendingThemeTelemetry = null;
+  root.dataset.themeTelemetry = "live";
+  root.dataset.themeSignal = detail.signalBand;
+  root.dataset.themeRssi = detail.rssiBand;
+  root.dataset.themeActivity = detail.activity;
+  root.dataset.themeScreen = detail.screenKind;
+  root.dataset.themeSignalState = detail.signal === null ? "unavailable" : "available";
+  root.dataset.themeRssiState = detail.rssi === null ? "unavailable" : "available";
+  root.style.setProperty(
+    "--theme-signal-normalized",
+    detail.signal === null ? "0.5" : detail.signal.toFixed(4),
+  );
+  root.style.setProperty(
+    "--theme-rssi-normalized",
+    detail.rssi === null ? "0.5" : detail.rssi.toFixed(4),
+  );
+  root.style.setProperty(
+    "--theme-activity-level",
+    detail.activity === "active" ? "1" : "0",
+  );
+  window.dispatchEvent(new CustomEvent(THEME_TELEMETRY_EVENT, {detail}));
+}
+
+function updateThemeTelemetry(radio, {smooth = true} = {}) {
+  const signalTarget = normalizedThemeSignal(radio.signal);
+  const rssiTarget = normalizedThemeRssi(radio.rssi);
+  const signal = smoothedThemeValue(
+    themeTelemetryState?.signal ?? null,
+    signalTarget,
+    smooth,
+  );
+  const rssi = smoothedThemeValue(
+    themeTelemetryState?.rssi ?? null,
+    rssiTarget,
+    smooth,
+  );
+  const detail = Object.freeze({
+    version: THEME_TELEMETRY_VERSION,
+    effects: themeEffectsMode,
+    signal,
+    rssi,
+    signalBand: themeTelemetryBand(signal),
+    rssiBand: themeTelemetryBand(rssi),
+    activity: themeTelemetryActivity(radio, signal),
+    screenKind: normalizedScreenKind(radio.screen_kind),
+    mode: typeof radio.mode === "string" ? radio.mode : null,
+    modulation: typeof radio.modulation === "string" ? radio.modulation : null,
+  });
+  themeTelemetryState = detail;
+  if (document.hidden) {
+    pendingThemeTelemetry = detail;
+    document.documentElement.dataset.themeTelemetry = "paused";
+    return detail;
+  }
+  applyThemeTelemetry(detail);
+  return detail;
 }
 
 function finiteNumber(value, fallback = 0) {
@@ -3708,14 +4162,17 @@ function releaseAudioResources() {
   }
 }
 
-function stopAudioPlayback() {
+function stopAudioPlayback({suppressAutomatic = false} = {}) {
+  if (suppressAutomatic && displayOnly && displayAudioAllowed) {
+    writeSessionValue(DISPLAY_AUDIO_AUTO_SUPPRESSION_KEY, "suppressed");
+  }
   audioPlaybackGeneration += 1;
   audioPlaybackActive = false;
   releaseAudioResources();
   setAudioControls("Stopped", false);
 }
 
-async function startAudioPlayback() {
+async function startAudioPlayback({automatic = false} = {}) {
   if (!displayAudioAllowed || authenticationRequired) return;
   if (audioPlaybackActive) {
     return;
@@ -3819,7 +4276,12 @@ async function startAudioPlayback() {
       error instanceof Error
         ? error.message
         : "Browser audio playback failed.";
-    setAudioControls(message, false);
+    setAudioControls(
+      automatic
+        ? `Automatic playback stopped: ${message} Use Play audio to retry.`
+        : message,
+      false,
+    );
   } finally {
     if (generation === audioPlaybackGeneration) {
       audioPlaybackActive = false;
@@ -3850,6 +4312,25 @@ function initializeAudioPlayback() {
   }
 
   setAudioControls("Stopped", false);
+  const automaticAudio = document.getElementById("display-audio-auto-start");
+  if (!(automaticAudio instanceof HTMLInputElement)) return;
+  automaticAudio.checked =
+    readStoredValue(DISPLAY_AUDIO_AUTO_START_STORAGE_KEY) === "enabled";
+  automaticAudio.addEventListener("change", () => {
+    writeStoredValue(
+      DISPLAY_AUDIO_AUTO_START_STORAGE_KEY,
+      automaticAudio.checked ? "enabled" : "disabled",
+    );
+    writeSessionValue(DISPLAY_AUDIO_AUTO_SUPPRESSION_KEY, null);
+    if (automaticAudio.checked) void startAudioPlayback();
+    else stopAudioPlayback();
+  });
+  if (
+    automaticAudio.checked &&
+    readSessionValue(DISPLAY_AUDIO_AUTO_SUPPRESSION_KEY) !== "suppressed"
+  ) {
+    void startAudioPlayback({automatic: true});
+  }
 }
 
 function homeAssistantIntegrationPanelAvailable() {
@@ -4908,12 +5389,16 @@ async function refreshConnectedClients() {
 document.addEventListener("visibilitychange", () => {
   reconcileMimicDisplay();
   if (document.hidden) {
+    document.documentElement.dataset.themeTelemetry = "paused";
     clearHomeAssistantBridgeKey();
     clearHomeAssistantAdvancedSecrets();
     stopEventStream();
     stopWaterfallStream({status: "Open this pane to start the waterfall stream."});
     return;
   }
+
+  if (pendingThemeTelemetry !== null) applyThemeTelemetry(pendingThemeTelemetry);
+  else updateThemeTelemetry(record(currentSnapshot.radio_state), {smooth: false});
 
   void refreshStatus();
   void refreshRecordingStatus();
@@ -4924,6 +5409,7 @@ document.addEventListener("visibilitychange", () => {
 
 window.addEventListener("pagehide", () => {
   mimicPageSuspended = true;
+  document.documentElement.dataset.themeTelemetry = "paused";
   reconcileMimicDisplay();
   clearHomeAssistantBridgeKey();
   clearHomeAssistantAdvancedSecrets();
@@ -4941,7 +5427,9 @@ window.addEventListener("pageshow", () => {
 element("audio-play").addEventListener("click", () => {
   void startAudioPlayback();
 });
-element("audio-stop").addEventListener("click", stopAudioPlayback);
+element("audio-stop").addEventListener("click", () => {
+  stopAudioPlayback({suppressAutomatic: true});
+});
 element("recording-start").addEventListener("click", () => {
   void performRecordingAction("start");
 });
@@ -5049,6 +5537,7 @@ void initializeNativeSession();
 initializeWaterfallWorkspace();
 initializeWorkspace();
 initializeAutomaticWaterfallSwitch();
+initializeThemeEffectsControl();
 initializeThemeControl();
 initializeRadioViewControls();
 initializeAudioPlayback();

@@ -608,3 +608,38 @@
 
 @keyframes mission-hold-lamp { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
 @keyframes mission-hold-needle { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(12deg); } }
+
+/* Shared live-theme telemetry replaces ambient meter motion when data exists. */
+:root[data-theme="cinematic-mission-control"]
+  :is(.mission-needle-a, .mission-needle-b) {
+  transform-box: view-box;
+  transform-origin: 190px 178px;
+}
+
+:root[data-theme="cinematic-mission-control"][data-theme-effects="full"][data-theme-signal-state="available"]
+  .mission-needle-a {
+  animation: none;
+  transform: rotate(calc(-34deg + var(--theme-signal-normalized, 0.5) * 68deg));
+  transition: transform 420ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+:root[data-theme="cinematic-mission-control"][data-theme-effects="full"][data-theme-rssi-state="available"]
+  .mission-needle-b {
+  animation: none;
+  transform: rotate(calc(-34deg + var(--theme-rssi-normalized, 0.5) * 68deg));
+  transition: transform 520ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+:root[data-theme="cinematic-mission-control"][data-theme-effects="subtle"][data-theme-signal-state="available"]
+  .mission-needle-a {
+  animation: none;
+  transform: rotate(calc(-14deg + var(--theme-signal-normalized, 0.5) * 28deg));
+  transition: transform 620ms ease-out;
+}
+
+:root[data-theme="cinematic-mission-control"][data-theme-effects="subtle"][data-theme-rssi-state="available"]
+  .mission-needle-b {
+  animation: none;
+  transform: rotate(calc(-14deg + var(--theme-rssi-normalized, 0.5) * 28deg));
+  transition: transform 720ms ease-out;
+}

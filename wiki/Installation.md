@@ -178,16 +178,21 @@ published App does not require `pip`, a source checkout, or a Local App under
 ## Upgrade to v0.34.0
 
 Version 0.34.0 publishes the universal Menu, deterministic live-data Matrix
-rain, explicit native-LAN display audio and Live audio Diagnostics,
-special-mode identity, and optional display-only automatic Waterfall
-following. It also includes bounded recording and CI/browser-audit fixes.
+rain, selectable theme rotation, theme-specific live telemetry, the rebuilt
+Synthwave panorama, explicit native-LAN display audio and Live audio
+Diagnostics, special-mode identity, and optional display-only automatic
+Waterfall following. It also includes an independently opted-in automatic
+audio preference for dedicated display kiosks, strict portable service
+manifests, and bounded recording and CI/browser-audit fixes.
 
 The Menu reorganizes presentation controls and role-aware session actions
 without granting a role or replacing manual authentication. Native-LAN display
 audio remains explicit, default-off, user-initiated, and outside the Home
-Assistant App. This release does not add unattended login, theme rotation, a
-web Favorites editor, Python 3.15, firmware 1.27 qualification, automatic
-deployment, or another scanner-control surface.
+Assistant App. The release includes bounded Favorites-workspace, Python 3.15,
+and firmware 1.27 qualification groundwork, but not a web editor or physical
+Favorites write, a Python 3.15 support declaration, completed firmware 1.27
+qualification, unattended login, automatic deployment, or another
+scanner-control surface.
 
 Activate the existing Python virtual environment and install the exact release
 only after PyPI shows the reviewed wheel and source distribution:

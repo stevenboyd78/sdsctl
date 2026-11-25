@@ -17,6 +17,7 @@ import pytest
 
 from . import test_supplemental_recording_app_actual_startup as accepted
 from ._supplemental_failure_diagnostics import failure_locations
+from ._supplemental_fixture_clock import compressed_scheduler_time
 
 actual = accepted.actual
 startup = accepted.startup
@@ -54,7 +55,7 @@ def service_case(launch_case, tmp_path, monkeypatch, request):
 
         return fail
 
-    for policy in (AppStart, m.begin.relayed.Relay):
+    for policy in (AppStart, m.begin.relayed.Relay, m.begin.worker_exit.reconcile.Operator):
         monkeypatch.setattr(policy, "_fail", observed_failure(policy._fail))
     original = (
         (launch.engine, "Endpoint", launch.engine.Endpoint),
@@ -108,7 +109,7 @@ def start_native(s, mapped, io, audit):
     assert s.ledger.state.count == 1 and not mapped.scanner.reads
 
 
-def record_and_finalize(s, mapped, io, *, lost_completion=False):
+def record_and_finalize(s, mapped, io, monkeypatch, *, lost_completion=False):
     assert s.driver.start_recording()
     phase = s.driver.recording
     assert s.driver.native.retired and phase.started
@@ -123,14 +124,48 @@ def record_and_finalize(s, mapped, io, *, lost_completion=False):
             ),
             mapped.rtsp.target,
         )
-    finished = s.driver.finish_recording()
+    # This broad composition verifies finalization evidence, not scheduler
+    # latency across the parent policy's two-second brackets.  Keep the native
+    # child and relay transport on their real clocks while direct deadline
+    # suites retain every production limit.
+    from supplemental_recording_app_recording import finalized
+
+    finalized_init = m.begin.worker_exit.Finalized.__init__
+
+    def stable_finalized_init(owner, *args, **kwargs):
+        with compressed_scheduler_time(monkeypatch, time_modules=(m.begin.worker_exit,)):
+            return finalized_init(owner, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(m.begin.worker_exit.Finalized, "__init__", stable_finalized_init)
+        with compressed_scheduler_time(
+            monkeypatch,
+            time_modules=(
+                m.begin,
+                m.begin.binding,
+                m.begin.launch,
+                m.begin.launch.bootstrap,
+                m.begin.launch.binding.protected.evidence,
+                m.begin.worker_exit.reconcile,
+                m.begin.worker_exit.reconcile.dispatch,
+                m.begin.worker_exit.reconcile.engine,
+                finalized,
+            ),
+        ):
+            finished = s.driver.finish_recording()
     if lost_completion:
         assert not finished and phase.uncertain and phase.finish_attempted
         assert phase.reader is None and not s.ledger.state.closed
         assert phase.relay.phase == "unconfirmed" and len(io.requests) == 6
         assert not phase.recovery_attempted and not phase.abandon_attempted
         return
-    assert finished
+    assert finished, {
+        "relay_phase": phase.relay.phase,
+        "completion": phase.completion is not None,
+        "reader_phase": None if phase.reader is None else phase.reader.phase,
+        "operator_done": phase.operator.done,
+        "operator_failed": phase.operator.failed,
+    }
     assert phase.reader.phase == "published" and s.ledger.state.closed
     assert phase.completion.collected.artifact.samples == 1280
     assert s.journal.machine.state.operator_exit_sha256 is not None
@@ -169,7 +204,13 @@ def test_original_service_reaches_native_ready_then_hard_expiry_refuses_further_
             attempts.append(True)
             start_native(s, mapped, io, audit)
             if recording:
-                record_and_finalize(s, mapped, io, lost_completion=recording == "lost_completed")
+                record_and_finalize(
+                    s,
+                    mapped,
+                    io,
+                    monkeypatch,
+                    lost_completion=recording == "lost_completed",
+                )
             # Advance only the fixture clock: exercise the original service's
             # hard-deadline failure path, without a second writer or new lease.
             driver.expire(s, monkeypatch, hard=True)

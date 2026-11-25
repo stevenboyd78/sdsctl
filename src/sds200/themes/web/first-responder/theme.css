@@ -173,6 +173,8 @@
 
 :root[data-theme="first-responder"] #radio-activity-panel {
   --panel-signal: var(--dispatch-accent);
+  isolation: isolate;
+  overflow: hidden;
   border: 1px solid #7198ba;
   border-top: 0.35rem solid var(--dispatch-accent);
   background:
@@ -183,6 +185,103 @@
     0 0 0 0.18rem #1b344c,
     0 0 1.4rem rgb(78 161 255 / 0.15),
     0 0.7rem 1.4rem rgb(0 0 0 / 0.38);
+}
+
+:root[data-theme="first-responder"] #radio-activity-panel::before,
+:root[data-theme="first-responder"] #radio-activity-panel::after {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  content: "";
+}
+
+:root[data-theme="first-responder"] #radio-activity-panel::before {
+  inset: 0;
+  background:
+    radial-gradient(circle at 17% 31%, rgb(78 161 255 / 0.68) 0 0.16rem, transparent 0.2rem),
+    radial-gradient(circle at 69% 64%, rgb(217 79 79 / 0.62) 0 0.14rem, transparent 0.19rem),
+    radial-gradient(circle at 84% 24%, rgb(255 209 102 / 0.55) 0 0.11rem, transparent 0.16rem),
+    linear-gradient(28deg, transparent 0 34%, rgb(78 161 255 / 0.13) 34.2% 34.7%, transparent 34.9%),
+    linear-gradient(151deg, transparent 0 57%, rgb(217 79 79 / 0.12) 57.2% 57.65%, transparent 57.85%),
+    repeating-linear-gradient(0deg, transparent 0 2.15rem, rgb(173 192 214 / 0.05) 2.2rem 2.25rem),
+    repeating-linear-gradient(90deg, transparent 0 2.8rem, rgb(173 192 214 / 0.045) 2.85rem 2.9rem);
+  background-position:
+    calc(var(--theme-rssi-normalized, 0.5) * 1.25rem)
+      calc(var(--theme-signal-normalized, 0.5) * -0.8rem),
+    0 0,
+    0 0,
+    0 0,
+    0 0,
+    0 0,
+    0 0;
+  opacity: 0.24;
+  transition:
+    background-position 700ms ease-out,
+    opacity 400ms ease-out;
+}
+
+:root[data-theme="first-responder"] #radio-activity-panel::after {
+  top: calc(88% - var(--theme-signal-normalized, 0.5) * 16%);
+  left: calc(16% + var(--theme-rssi-normalized, 0.5) * 68%);
+  width: 0.9rem;
+  aspect-ratio: 1;
+  border: 0.12rem solid rgb(185 220 255 / 0.88);
+  border-radius: 50%;
+  background: rgb(78 161 255 / 0.45);
+  box-shadow:
+    0 0 0 0.25rem rgb(78 161 255 / 0.14),
+    0 0 calc(0.45rem + var(--theme-signal-normalized, 0.5) * 1.2rem)
+      rgb(78 161 255 / 0.82);
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  transition:
+    top 520ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    left 620ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    opacity 300ms ease-out;
+}
+
+:root[data-theme="first-responder"] #radio-activity-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+:root[data-theme="first-responder"][data-theme-effects="subtle"]
+  #radio-activity-panel::before {
+  opacity: 0.32;
+}
+
+:root[data-theme="first-responder"][data-theme-effects="subtle"][data-theme-activity="active"]
+  #radio-activity-panel::after {
+  opacity: 0.58;
+}
+
+:root[data-theme="first-responder"][data-theme-effects="full"]
+  #radio-activity-panel::before {
+  opacity: calc(0.34 + var(--theme-activity-level, 0) * 0.18);
+}
+
+:root[data-theme="first-responder"][data-theme-effects="full"][data-theme-activity="active"]
+  #radio-activity-panel::after {
+  animation: dispatch-beacon-pulse 1.8s ease-out infinite;
+  opacity: 0.9;
+}
+
+@keyframes dispatch-beacon-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0.18rem rgb(78 161 255 / 0.24),
+      0 0 calc(0.45rem + var(--theme-signal-normalized, 0.5) * 1.2rem)
+        rgb(78 161 255 / 0.82);
+  }
+
+  50% {
+    box-shadow:
+      0 0 0 calc(0.45rem + var(--theme-signal-normalized, 0.5) * 0.5rem)
+        rgb(78 161 255 / 0.02),
+      0 0 calc(0.8rem + var(--theme-signal-normalized, 0.5) * 1.55rem)
+        rgb(78 161 255 / 0.72);
+  }
 }
 
 :root[data-theme="first-responder"] #radio-activity-panel h2 {
@@ -308,6 +407,10 @@
     scroll-behavior: auto !important;
     transition-duration: 0.001ms !important;
   }
+
+  :root[data-theme="first-responder"] #radio-activity-panel::after {
+    animation: none !important;
+  }
 }
 
 @media (forced-colors: active) {
@@ -342,5 +445,10 @@
   :root[data-theme="first-responder"] .panel h3::before {
     background: Highlight;
     color: Highlight;
+  }
+
+  :root[data-theme="first-responder"] #radio-activity-panel::before,
+  :root[data-theme="first-responder"] #radio-activity-panel::after {
+    display: none;
   }
 }

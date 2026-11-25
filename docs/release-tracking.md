@@ -25,17 +25,21 @@ complete. Existing historical milestone IDs remain unchanged.
 
 **Targeted for v0.34.0; not yet released.** The reviewed [release scope and
 acceptance plan](release-0.34.0.md) includes the universal Menu layout,
-deterministic live-data Matrix rain, explicit native-LAN display audio and
-Diagnostics consolidation, special-mode identity, optional display-only
-automatic Waterfall following, and bounded recording/CI/audit fixes.
+deterministic live-data Matrix rain, selectable theme rotation, theme-specific
+live telemetry, the rebuilt Synthwave panorama, explicit native-LAN display
+audio and Diagnostics consolidation, optional display-kiosk automatic audio,
+special-mode identity, optional display-only automatic Waterfall following,
+portable service manifests, and bounded recording/CI/audit fixes.
 
 The Home Assistant App advances in lockstep with the package while retaining
 the exact nine-field options/schema contract. Native-LAN display audio remains
 an explicit default-off server option and is not an App option. The release
-does not add unattended login, theme rotation, a web Favorites editor, Python
-3.15, firmware 1.27 qualification, or automatic deployment. Keep v0.33.0 as Latest until every tagged
-artifact, required installed-release gate, and target-specific visual check is
-verified and the normal GitHub Release is created.
+includes bounded Favorites-workspace and compatibility-qualification
+foundations, not a browser editor, physical Favorites write, Python 3.15
+support declaration, or completed firmware 1.27 qualification. It does not add
+unattended login or automatic deployment. Keep v0.33.0 as Latest until every
+tagged artifact, required installed-release gate, and target-specific visual
+check is verified and the normal GitHub Release is created.
 
 ## Latest release — v0.33.0
 
@@ -130,7 +134,7 @@ milestone number.
 | [Mimic-SDS displays and installed profiles](release-0.31.0.md) | [v0.31.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.31.0) | Released; public artifacts, repository App, managed Pi displays and approved system installations accepted; unattended browser enrollment remains excluded |
 | [Operator kiosk and controlled Favorites writes](release-0.32.0.md) | [v0.32.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.32.0) | Released; public artifacts and repository App upgrade passed; Favorites physical writes and automatic kiosk activation remain excluded |
 | [Cinematic dashboards and responsive session controls](release-0.33.0.md) | [v0.33.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.33.0) | Released; immutable tag and public Python/container/App artifact identities verified; automatic login, display audio and deployment remained excluded |
-| [Adaptive dashboards and display audio](release-0.34.0.md) | Targeted for v0.34.0 | Preparation in review; publication, installed upgrade and final target acceptance remain pending |
+| [Adaptive dashboards and portable displays](release-0.34.0.md) | Targeted for v0.34.0 | Preparation in review; publication, installed upgrade and final target acceptance remain pending |
 
 ## Keeping the mapping current
 

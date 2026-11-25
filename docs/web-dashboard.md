@@ -263,9 +263,11 @@ requests use an explicit allowlist; scanner controls, audio, recording files,
 management, API documentation and unknown routes are denied before a daemon
 client is created by default. A native authenticated-LAN server with a
 configured display identity may add only `GET /api/v1/audio` to that allowlist
-with `--lan-display-audio`. The Menu then exposes Play/Stop, but playback still
-requires a user gesture and never starts automatically; scanner controls,
-recordings and every other denied route remain denied. Both login forms share
+with `--lan-display-audio`. The Menu then exposes Play/Stop. Playback remains
+manual by default; a display-only dedicated kiosk may separately opt in to the
+profile-bound automatic-audio browser policy and browser-local automatic-start
+preference described in the kiosk guide. Scanner controls, recordings and every
+other denied route remain denied. Both login forms share
 the same bounded password worker and
 failure budget. Existing operator login remains unchanged when no display
 password is configured. `/auth/session` exposes only the authenticated session's
@@ -386,6 +388,57 @@ scanner pane around the established scanner-display proportions, hierarchy,
 status treatment, and adaptive screen profiles. The five established custom
 choices and the cinematic collection are more theatrical while preserving the
 same dashboard semantics:
+
+The **Appearance > Rotation** disclosure in **Menu** provides optional,
+browser-local rotation for unattended displays. Rotation is off by default.
+Choose at least two themes, select a 5-1440 minute interval, and use sequential
+or shuffled order; shuffle never repeats the currently displayed theme
+immediately. The allowlist can contain any mix of built-in and valid managed
+web themes available to that dashboard process.
+
+Rotation previews switch CSS in place. They do not reload the page, move
+keyboard focus, make a network request, change scanner state, or overwrite the
+saved manual theme. A manual picker change becomes the new restoration theme,
+and turning rotation off restores it. Opening the rotation settings or hiding
+the page pauses the timer, while trusted pointer, keyboard, and input activity
+restarts the full interval. The normalized policy is private to the current
+browser profile under `sdsctl.web.theme-rotation.v1`; it is not a daemon,
+Home Assistant, or scanner configuration value.
+
+Theme rotation can redistribute colors on an unattended screen, but it is not
+a burn-in guarantee: headings, pane geometry, and other static regions remain
+in similar locations. Use the display's own pixel-shift, dimming, sleep, or
+scheduled power controls where burn-in protection matters.
+
+**Appearance > Live effects** controls how strongly supported themes react to
+the scanner. **Full** is the default, **Subtle** keeps a reduced response, and
+**Off** freezes live reactions without changing scanner data or ordinary
+dashboard updates. The browser-local choice is stored under
+`sdsctl.web.theme-effects.v1`. Reduced-motion and forced-colors preferences are
+honored independently, and live effects pause while the page is hidden.
+
+The dashboard derives a versioned presentation signal from the radio state it
+already receives; it does not poll the scanner again. Theme authors can consume
+the root `data-theme-signal`, `data-theme-rssi`, `data-theme-activity`, and
+`data-theme-telemetry` states, the normalized `--theme-signal-normalized`,
+`--theme-rssi-normalized`, and `--theme-activity-level` custom properties, or
+the `sdsctl:theme-telemetry` browser event. The current built-in reactions are
+deliberately theme-specific rather than one recolored template:
+
+- Mission Control drives its two background meter needles separately from
+  scanner signal and RSSI. Amateur Radio and Art Deco Radio animate their own
+  radio instruments, while Pip-Boy changes its phosphor response.
+- First Responder varies its status beacon; LCARS energizes its data rails;
+  Matrix injects changed scanner text as complete falling rain packets.
+- Cold War Radar varies its sweep, Motorsport Pit Wall its timing rails,
+  Cyberpunk Night its equalizer, and Synthwave its drive horizon.
+- Galactic Operations responds through its bridge display, Carrier Air Wing
+  through its flight-deck instruments, Tactical Field through its tactical map,
+  and Wizarding Archive through its magical instrumentation.
+
+Unavailable values settle into each theme's neutral presentation, while
+smoothing prevents normal scanner jitter from making the instruments
+distracting.
 
 When **System** is active, a second browser-local selector appears in the center
 of the overview row. **Follow device** preserves the adaptive behavior above.
@@ -1103,8 +1156,8 @@ disabled, and framing denied.
 
 ## Browser audio playback
 
-Browser playback is explicit and never starts on page load. Press **Play audio**
-from the dashboard to satisfy browser autoplay requirements and create one
+Browser playback is manual by default. Press **Play audio** from the dashboard
+to satisfy browser autoplay requirements and create one
 same-origin `GET /api/v1/audio` stream. The route connects its independent
 `DaemonPcmuClient` before returning HTTP `200`, then forwards complete
 `encode_pcmu_delivery` frames as `application/octet-stream`.
@@ -1127,6 +1180,11 @@ both destination channels.
 
 **Stop** aborts the HTTP request, cancels the reader, disconnects the
 AudioWorklet, closes the `AudioContext`, and releases the daemon PCMU client.
+For an explicitly opted-in display kiosk, Stop also suppresses automatic
+playback for that browser session. The default-off preference is stored only in
+the dedicated browser profile. Automatic startup never retries a terminal
+stream or authorization failure; the Menu reports it and leaves manual Play
+available.
 Hiding the dashboard intentionally suspends SSE but does not stop audio. Returning
 to the page reopens SSE while preserving the same audio stream. Closing or
 navigating away from the page stops both event and audio streams.
@@ -1135,9 +1193,11 @@ Authenticated native-LAN display-only sessions remain unable to acquire this
 route by default. `--lan-display-audio` is an explicit server-wide opt-in for
 configured display identities (a separate display password or enrolled browser
 device). It adds only the read-only live-audio route and Menu Play/Stop controls;
-it does not enable autoplay, scanner controls, recordings, downloads, or write
-authority. The option is rejected outside authenticated-LAN mode and when no
-display identity is configured.
+it does not by itself enable autoplay, scanner controls, recordings, downloads,
+or write authority. Automatic playback additionally requires the display-only
+profile-bound kiosk option and browser-local preference. The server option is
+rejected outside authenticated-LAN mode and when no display identity is
+configured.
 
 ## Browser recording workflows
 

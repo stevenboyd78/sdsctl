@@ -87,7 +87,7 @@ audio remains a separate subsystem capability.
 
 ## Shared live-state field inventory
 
-`RadioStateSnapshot` is the canonical 35-field renderer-neutral scanner state.
+`RadioStateSnapshot` is the canonical 36-field renderer-neutral scanner state.
 The daemon API, SSE payloads, and generic MQTT `state/radio` publication preserve
 the complete mapping. The following presentation legend applies only to this
 matrix:
@@ -119,6 +119,7 @@ requests or infer P25/battery semantics.
 | `mode` | GSI/PSI; `P200`, `F` | R | R | U/R* | R | J | — | R1: Home Assistant |
 | `screen` | GSI/PSI; `P200`, `F` | R | — | U/R* | R | J | — | R1: monitor and Home Assistant |
 | `screen_kind` | Derived classification; `F`, `I` | — | — | U | R | J | R* | R1: CLI |
+| `favorites_list` | GSI/PSI `MonitorList.Name`; `F` | — | — | — | R | J | — | R1: CLI, monitor, Textual TUI, and Home Assistant |
 | `system` | GSI/PSI; `P200`, `F` | R | R | R* | R | J | R | Covered on applicable panels |
 | `department` | GSI/PSI; `P200`, `F` | R | R | R* | R | J | R | Covered on applicable panels |
 | `site` | GSI/PSI; `P200`, `F` | R | R | R* | R | J | R | Covered on applicable panels |

@@ -233,12 +233,14 @@ repository-managed update only after Home Assistant offers v0.34.0, then
 confirm the installed version/image and all nine values before starting the
 App.
 
-This update packages the universal Menu, deterministic Matrix rain,
+This update packages the universal Menu, deterministic Matrix rain, selectable
+theme rotation, theme-specific live effects, the rebuilt Synthwave panorama,
 special-mode identity, optional display-only automatic Waterfall following,
 and separate Scanner, Daemon runtime, and Live audio Diagnostics cards. Menu
-state, Matrix effect values, and automatic Waterfall choice remain
-browser-local. Native-LAN `--lan-display-audio` is a separately authenticated
-server opt-in and is not an App option or Ingress capability.
+state, rotation, live-effect values, Matrix settings, and automatic Waterfall
+choice remain browser-local. Native-LAN `--lan-display-audio`, automatic kiosk
+audio, and portable native-display service manifests are separate host-side
+opt-ins and are not App options or Ingress capabilities.
 
 An ordinary update preserves scanner host, MQTT namespace, recording
 directory, advanced-access settings, qualified Menu default, display-profile

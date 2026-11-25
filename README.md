@@ -152,6 +152,7 @@ Advanced, version-controlled references remain in the repository:
 
 - [Control transports](docs/transports.md)
 - [Layered configuration](docs/configuration.md)
+- [Portable display-service configuration](docs/service-configuration.md)
 - [Daemon deployment](docs/daemon-deployment.md)
 - [Authenticated remote daemon clients](docs/daemon-remote.md)
 - [Managed Raspberry Pi TUI display](docs/managed-pi-display.md)
@@ -161,6 +162,7 @@ Advanced, version-controlled references remain in the repository:
 - [Home Assistant App](docs/home-assistant-app.md)
 - [Advanced Home Assistant App access](docs/home-assistant-advanced-access.md)
 - [Favorites Workspace](docs/favorites-workspace-editor.md)
+- [Favorites web workspace foundation](docs/favorites-web-workspace.md)
 - [Capability and field-parity audit](docs/capability-field-parity-audit.md)
 
 ## Security and safety
@@ -206,11 +208,13 @@ workflow. Hardware-independent tests must not require a physical scanner.
 ## Project status
 
 Version `0.34.0` makes the responsive Menu universal across dashboard
-presentations, adds deterministic live-data Matrix rain, consolidates
-user-initiated display audio with Live audio Diagnostics, presents meaningful
-special-mode channel identity, and lets display-only kiosks optionally follow
-scanner Waterfall mode over the existing persistent stream. It also carries
-bounded recording and CI/browser-audit reliability fixes. See the
+presentations; adds deterministic live-data Matrix rain, selectable theme
+rotation, theme-specific live telemetry, and the rebuilt Synthwave panorama;
+and consolidates explicit display audio with Live audio Diagnostics. It also
+presents meaningful special-mode channel identity, lets display-only kiosks
+optionally follow scanner Waterfall mode, adds an independently opted-in kiosk
+automatic-audio preference, and introduces strict portable service manifests
+over the existing launchers. See the
 [release scope](docs/release-0.34.0.md) for included changes,
 pre-publication evidence, upgrade requirements, and deferred work.
 
@@ -220,10 +224,13 @@ outage waiting/recovery.
 The Menu reorganizes existing browser-local presentation controls and
 role-aware session actions; it does not expand a role or replace manual login.
 Native-LAN display audio remains explicit, authenticated, user-initiated, and
-default-off, and it is not a Home Assistant App option. This release does not
-add unattended kiosk authentication, theme rotation, a web Favorites editor,
-Python 3.15 support, firmware 1.27 qualification, automatic deployment, or a
-broader scanner-control surface.
+default-off, and it is not a Home Assistant App option. Automatic kiosk audio
+requires separate display-only server, kiosk-profile, and browser preferences;
+an upgrade cannot enable it. The release includes bounded Favorites-workspace,
+Python 3.15, and firmware 1.27 qualification groundwork, but does not add a web
+Favorites editor or physical write, claim Python 3.15 runtime support or
+firmware 1.27 hardware qualification, provide unattended kiosk authentication,
+perform automatic service migration/deployment, or broaden scanner controls.
 See the
 [latest GitHub Release](https://github.com/stevenboyd78/sdsctl/releases/latest),
 [CHANGELOG.md](CHANGELOG.md), [ROADMAP.md](ROADMAP.md), and

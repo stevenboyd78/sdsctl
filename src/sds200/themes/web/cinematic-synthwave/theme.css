@@ -1,35 +1,797 @@
-/* Original neon sunset and night-drive presentation. */
+/*
+ * Original neon-sunset night-drive environment.
+ *
+ * Compact displays retain a restrained, readable colorway. Roomy landscape
+ * displays open into a dedicated vector cockpit with its own horizon, road,
+ * skyline, instrument pylons, glass console and motion language. The artwork
+ * is decorative; live scanner meaning remains in the semantic HTML controls.
+ */
+
 :root[data-theme="cinematic-synthwave"] {
   color-scheme: dark;
-  --background: #100522; --surface: #1a0c32; --surface-emphasis: #281247;
-  --text: #fff1ff; --muted: #caaee7; --border: #7547a1;
-  --accent: #31e8ff; --accent-strong: #8af4ff; --success: #5df5b5;
-  --warning: #ffd25e; --danger: #ff4fb8; --focus: #ffffff;
-  --shadow: 0 0.9rem 2.4rem rgb(0 0 0 / 0.56); --radius-small: 0.2rem; --radius-large: 0.3rem;
-  --hold-field-background: #443313; --hold-field-border: #ffd25e; --hold-field-label: #ffe18e; --hold-field-value: #ffffff;
+  --background: #080212;
+  --surface: #17092a;
+  --surface-emphasis: #251040;
+  --text: #fff3ff;
+  --muted: #d6b8eb;
+  --border: #744397;
+  --accent: #38efff;
+  --accent-strong: #9af8ff;
+  --on-accent: #080414;
+  --success: #65f5bf;
+  --warning: #ffdd69;
+  --danger: #ff4fc5;
+  --focus: #ffffff;
+  --shadow: 0 0.9rem 2.5rem rgb(0 0 0 / 0.6);
+  --radius-small: 0.18rem;
+  --radius-large: 0.28rem;
+  --hold-field-background: #4c3212;
+  --hold-field-border: #ffdd69;
+  --hold-field-label: #ffe99d;
+  --hold-field-value: #ffffff;
 }
+
 :root[data-theme="cinematic-synthwave"] body {
   background:
-    radial-gradient(circle at 50% 5%, #ff7a76 0 7%, #df3dac 8% 15%, transparent 16%),
-    linear-gradient(180deg, transparent 42%, rgb(49 232 255 / 0.08) 43% 44%, transparent 45%),
-    repeating-linear-gradient(90deg, rgb(49 232 255 / 0.05) 0 1px, transparent 1px 4rem),
-    linear-gradient(#17072c, #080313);
+    radial-gradient(circle at 50% 7%, #ff816d 0 6%, #e73dab 7% 14%, transparent 15%),
+    linear-gradient(180deg, transparent 41%, rgb(56 239 255 / 0.1) 42% 43%, transparent 44%),
+    repeating-linear-gradient(90deg, rgb(56 239 255 / 0.045) 0 1px, transparent 1px 4rem),
+    linear-gradient(#17052c, #06010f);
 }
-:root[data-theme="cinematic-synthwave"] .site-header { position: relative; border: 1px solid #9b58c6; border-bottom: 0.25rem solid var(--danger); background: linear-gradient(105deg, #30125a, #120622 72%); box-shadow: 0 0 1.4rem rgb(255 79 184 / 0.2), var(--shadow); }
-:root[data-theme="cinematic-synthwave"] .site-header::after { position: absolute; right: 1rem; bottom: 0.5rem; width: min(28rem, 36vw); height: 0.2rem; background: linear-gradient(90deg, var(--danger), var(--accent)); content: ""; box-shadow: 0 0 0.8rem var(--accent); }
-:root[data-theme="cinematic-synthwave"] :is(.brand h1, .panel h2, .panel h3, .workspace-tabs [role="tab"]) { font-family: "Audiowide", sans-serif; letter-spacing: 0.055em; text-transform: uppercase; }
-:root[data-theme="cinematic-synthwave"] .workspace-shell { border: 1px solid #9b58c6; background: #10061f; box-shadow: 0 0 0 1px rgb(49 232 255 / 0.08) inset, var(--shadow); }
-:root[data-theme="cinematic-synthwave"] .workspace-tabs { border-bottom: 1px solid #9b58c6; background: #1b0b30; }
-:root[data-theme="cinematic-synthwave"] .workspace-tabs [role="tab"] { border-color: #7547a1; background: linear-gradient(#351454, #180927); color: var(--muted); }
-:root[data-theme="cinematic-synthwave"] .workspace-tabs [role="tab"][aria-selected="true"] { border-color: var(--accent); background: linear-gradient(100deg, #ff4fb8 0 0.3rem, #273e67 0.3rem); color: #fff; box-shadow: 0 0 0.9rem rgb(49 232 255 / 0.18); }
-:root[data-theme="cinematic-synthwave"] .workspace-deck { background: linear-gradient(145deg, rgb(71 25 101 / 0.48), rgb(8 3 19 / 0.78)); }
-:root[data-theme="cinematic-synthwave"] [data-workspace-pane] { border-color: #5f347f; background: rgb(16 5 34 / 0.78); }
-:root[data-theme="cinematic-synthwave"] .panel { border: 1px solid #7547a1; border-top: 0.22rem solid var(--accent); background: linear-gradient(135deg, rgb(255 79 184 / 0.07), transparent 30%), #1a0b2e; box-shadow: 0 0.6rem 1.4rem rgb(0 0 0 / 0.45); }
-:root[data-theme="cinematic-synthwave"] #radio-activity-panel { border-color: #ae77cf; border-top-color: var(--danger); background: linear-gradient(90deg, rgb(49 232 255 / 0.11), transparent 50%), #11051f; }
-:root[data-theme="cinematic-synthwave"] .radio-view-controls { border: 1px solid #7547a1; border-left: 0.3rem solid var(--danger); background: #201039; }
-:root[data-theme="cinematic-synthwave"] .radio-field-groups { border-color: #5f347f; background: rgb(49 232 255 / 0.035); }
-:root[data-theme="cinematic-synthwave"] :is(button, .recording-action, select, input, textarea) { border-color: #9b58c6; background: linear-gradient(#421a62, #1a0a2a); color: var(--text); }
-:root[data-theme="cinematic-synthwave"] :is(button, .recording-action):hover:not(:disabled) { border-color: var(--accent); background: #4a286d; box-shadow: 0 0 0.7rem rgb(49 232 255 / 0.18); }
-:root[data-theme="cinematic-synthwave"] .status-badge { letter-spacing: 0.07em; text-transform: uppercase; }
-@media (prefers-reduced-motion: reduce) { :root[data-theme="cinematic-synthwave"] *, :root[data-theme="cinematic-synthwave"] *::before, :root[data-theme="cinematic-synthwave"] *::after { animation: none !important; transition: none !important; } }
-@media (forced-colors: active) { :root[data-theme="cinematic-synthwave"] { --background: Canvas; --surface: Canvas; --surface-emphasis: Canvas; --text: CanvasText; --muted: CanvasText; --border: CanvasText; --accent: Highlight; --accent-strong: Highlight; --focus: Highlight; } :root[data-theme="cinematic-synthwave"] :is(.site-header, .workspace-shell, .workspace-tabs, .workspace-deck, [data-workspace-pane], .panel, .radio-view-controls, .radio-field-groups) { background: Canvas; box-shadow: none; } :root[data-theme="cinematic-synthwave"] .site-header::after { display: none; } }
+
+:root[data-theme="cinematic-synthwave"] .theme-stage {
+  display: block;
+  opacity: 0.5;
+}
+
+:root[data-theme="cinematic-synthwave"] .theme-stage-a,
+:root[data-theme="cinematic-synthwave"] .theme-stage-b,
+:root[data-theme="cinematic-synthwave"] .theme-stage-c {
+  border: 1px solid rgb(61 239 255 / 0.24);
+  background: repeating-linear-gradient(90deg, transparent 0 2.6rem, rgb(255 79 197 / 0.08) 2.6rem 2.66rem);
+}
+
+:root[data-theme="cinematic-synthwave"] .theme-stage-a {
+  right: -8vw;
+  bottom: -8rem;
+  left: -8vw;
+  height: 24rem;
+  transform: perspective(24rem) rotateX(65deg);
+}
+
+:root[data-theme="cinematic-synthwave"] .theme-stage-b {
+  top: 18%;
+  left: -10rem;
+  width: 22rem;
+  height: 22rem;
+  border-radius: 50%;
+  background: repeating-linear-gradient(0deg, #ff52c8 0 0.22rem, transparent 0.22rem 1.15rem);
+}
+
+:root[data-theme="cinematic-synthwave"] .theme-stage-c {
+  top: 24%;
+  right: -8rem;
+  width: 19rem;
+  height: 19rem;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from 14deg, #42efff 0 1deg, transparent 1deg 17deg);
+}
+
+:root[data-theme="cinematic-synthwave"] .site-header {
+  position: relative;
+  border: 1px solid #9a55c3;
+  border-bottom: 0.24rem solid var(--danger);
+  border-radius: 0;
+  background: linear-gradient(105deg, #2c1052, #10041f 72%);
+  box-shadow: 0 0 1.6rem rgb(255 79 197 / 0.2), var(--shadow);
+}
+
+:root[data-theme="cinematic-synthwave"] .site-header::after {
+  position: absolute;
+  right: 1rem;
+  bottom: 0.46rem;
+  width: min(28rem, 36vw);
+  height: 0.18rem;
+  background: linear-gradient(90deg, var(--danger), var(--accent));
+  content: "";
+  box-shadow: 0 0 0.85rem var(--accent);
+}
+
+:root[data-theme="cinematic-synthwave"] :is(
+  .brand h1,
+  .panel h2,
+  .panel h3,
+  .workspace-tabs [role="tab"]
+) {
+  font-family: "Audiowide", sans-serif;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+:root[data-theme="cinematic-synthwave"] :is(.eyebrow, .panel-kicker, .theme-picker label) {
+  color: var(--accent-strong);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+:root[data-theme="cinematic-synthwave"] .status-badge {
+  border: 1px solid var(--success);
+  border-radius: 0;
+  background: rgb(7 41 47 / 0.88);
+  clip-path: polygon(0.55rem 0, 100% 0, 100% calc(100% - 0.55rem), calc(100% - 0.55rem) 100%, 0 100%, 0 0.55rem);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+:root[data-theme="cinematic-synthwave"] .workspace-shell {
+  border: 1px solid #9755bc;
+  border-radius: 0;
+  background: #0d041a;
+  box-shadow: 0 0 0 1px rgb(56 239 255 / 0.08) inset, var(--shadow);
+  clip-path: polygon(1.4rem 0, calc(100% - 1.4rem) 0, 100% 1.4rem, 100% 100%, 0 100%, 0 1.4rem);
+}
+
+:root[data-theme="cinematic-synthwave"] .workspace-tabs {
+  padding: 0.4rem;
+  border-bottom: 1px solid #914eb8;
+  background: #170727;
+}
+
+:root[data-theme="cinematic-synthwave"] .workspace-tabs [role="tab"] {
+  border-color: #704091;
+  border-radius: 0;
+  color: var(--muted);
+  background: linear-gradient(#341250, #150722);
+  clip-path: polygon(0.4rem 0, calc(100% - 0.4rem) 0, 100% 50%, calc(100% - 0.4rem) 100%, 0.4rem 100%, 0 50%);
+}
+
+:root[data-theme="cinematic-synthwave"] .workspace-tabs [role="tab"][aria-selected="true"] {
+  border-color: var(--accent);
+  color: #fff;
+  background: linear-gradient(100deg, #ff4fc5 0 0.3rem, #243d64 0.3rem);
+  box-shadow: 0 0 0.9rem rgb(56 239 255 / 0.22);
+}
+
+:root[data-theme="cinematic-synthwave"] .workspace-deck {
+  background: linear-gradient(145deg, rgb(70 24 99 / 0.46), rgb(6 2 16 / 0.82));
+}
+
+:root[data-theme="cinematic-synthwave"] [data-workspace-pane] {
+  border-color: #5d327b;
+  background: rgb(12 3 25 / 0.76);
+}
+
+:root[data-theme="cinematic-synthwave"] .panel {
+  border: 1px solid #744397;
+  border-top: 0.22rem solid var(--accent);
+  border-radius: 0;
+  background: linear-gradient(135deg, rgb(255 79 197 / 0.07), transparent 30%), #170928;
+  box-shadow: 0 0.6rem 1.5rem rgb(0 0 0 / 0.46);
+}
+
+:root[data-theme="cinematic-synthwave"] #radio-activity-panel {
+  border-color: #a36ac4;
+  border-top-color: var(--danger);
+  background: linear-gradient(90deg, rgb(56 239 255 / 0.11), transparent 50%), #0d031a;
+}
+
+:root[data-theme="cinematic-synthwave"] .radio-view-controls {
+  border: 1px solid #744397;
+  border-left: 0.3rem solid var(--danger);
+  border-radius: 0;
+  background: #1d0c35;
+}
+
+:root[data-theme="cinematic-synthwave"] :is(.radio-summary, .radio-field-groups) {
+  border-color: #5b3079;
+  border-radius: 0;
+  background: rgb(56 239 255 / 0.035);
+}
+
+:root[data-theme="cinematic-synthwave"] .scanner-display-hierarchy > div {
+  border-color: #6f3c8e;
+  border-radius: 0;
+  background: linear-gradient(112deg, rgb(53 17 75 / 0.88), rgb(8 7 28 / 0.92));
+}
+
+:root[data-theme="cinematic-synthwave"] .radio-field-list > div {
+  border-bottom-color: #552e70;
+}
+
+:root[data-theme="cinematic-synthwave"] :is(button, .recording-action, select, input, textarea) {
+  border-color: #9853bd;
+  border-radius: 0;
+  color: var(--text);
+  background: linear-gradient(#3d175b, #170823);
+}
+
+:root[data-theme="cinematic-synthwave"] :is(button, .recording-action):hover:not(:disabled):not([aria-selected="true"]) {
+  border-color: var(--accent);
+  background: #452267;
+  box-shadow: 0 0 0.75rem rgb(56 239 255 / 0.22);
+}
+
+:root[data-theme="cinematic-synthwave"] button[aria-pressed="true"] {
+  color: #090315;
+  border-color: var(--warning);
+  background: var(--warning);
+}
+
+/* Full-HD production environment: a purpose-built night-drive cockpit. */
+@media (min-width: 1280px) and (min-height: 720px) and (min-aspect-ratio: 3/2) {
+  :root[data-theme="cinematic-synthwave"] body {
+    background: #040109;
+  }
+
+  :root[data-theme="cinematic-synthwave"] .theme-stage > span {
+    display: none;
+  }
+
+  :root[data-theme="cinematic-synthwave"]
+    .cinematic-stage-art
+    [data-cinematic-scene="synthwave"] {
+    display: inline;
+  }
+
+  :root[data-theme="cinematic-synthwave"] .cinematic-stage-art {
+    opacity: 0.98;
+  }
+
+  :root[data-theme="cinematic-synthwave"] .site-header {
+    width: min(86vw, 103rem);
+    min-height: 5.25rem;
+    padding-inline: 2.1rem;
+    border: 1px solid rgb(104 241 255 / 0.58);
+    border-top: 0.22rem solid #ff52c8;
+    border-bottom: 0.34rem solid #4cf2ff;
+    background:
+      linear-gradient(90deg, rgb(9 5 31 / 0.94), rgb(43 9 67 / 0.82) 48%, rgb(8 12 38 / 0.94)),
+      repeating-linear-gradient(90deg, transparent 0 5.4rem, rgb(93 238 255 / 0.045) 5.4rem 5.48rem);
+    box-shadow:
+      inset 0 0 2.5rem rgb(255 65 195 / 0.08),
+      0 0 2rem rgb(60 239 255 / 0.12),
+      0 1rem 3.4rem rgb(0 0 0 / 0.7);
+    clip-path: polygon(1rem 0, calc(100% - 1rem) 0, 100% 50%, calc(100% - 1rem) 100%, 1rem 100%, 0 50%);
+  }
+
+  :root[data-theme="cinematic-synthwave"] .site-header::before {
+    position: absolute;
+    top: 0.56rem;
+    right: 1.9rem;
+    left: 1.9rem;
+    height: 0.12rem;
+    background: linear-gradient(90deg, transparent, #ff57c9 18%, #fff06d 50%, #45efff 82%, transparent);
+    content: "";
+    box-shadow: 0 0 0.85rem rgb(255 79 197 / 0.48);
+  }
+
+  :root[data-theme="cinematic-synthwave"] .site-header::after {
+    right: 2.4rem;
+    bottom: 0.68rem;
+    width: min(31rem, 34vw);
+    background: repeating-linear-gradient(90deg, #ff4fc5 0 1.8rem, transparent 1.8rem 2.4rem, #42efff 2.4rem 3.2rem, transparent 3.2rem 3.8rem);
+  }
+
+  :root[data-theme="cinematic-synthwave"] .brand h1 {
+    color: #fff5ff;
+    text-shadow: 0 0 0.8rem rgb(255 74 196 / 0.48), 0.18rem 0.13rem #421665;
+  }
+
+  :root[data-theme="cinematic-synthwave"] .overview {
+    width: min(84vw, 101rem);
+    margin-inline: auto;
+    text-shadow: 0 0 0.7rem rgb(71 237 255 / 0.45);
+  }
+
+  :root[data-theme="cinematic-synthwave"] .workspace-shell {
+    isolation: isolate;
+    width: min(84vw, 101rem);
+    margin-inline: auto;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 0;
+    border: 1px solid rgb(98 238 255 / 0.6);
+    border-top: 0.24rem solid #ff4fc5;
+    background:
+      linear-gradient(90deg, rgb(8 3 25 / 0.88), rgb(27 8 47 / 0.54) 18% 82%, rgb(7 4 26 / 0.88)),
+      repeating-linear-gradient(90deg, transparent 0 5rem, rgb(93 238 255 / 0.025) 5rem 5.08rem);
+    box-shadow:
+      inset 0 0 0 1px rgb(255 92 204 / 0.08),
+      inset 0 0 5rem rgb(48 13 76 / 0.18),
+      0 1.4rem 4rem rgb(0 0 0 / 0.78);
+    clip-path: polygon(2.3rem 0, calc(100% - 2.3rem) 0, 100% 2.3rem, 100% calc(100% - 1.35rem), calc(100% - 1.35rem) 100%, 1.35rem 100%, 0 calc(100% - 1.35rem), 0 2.3rem);
+  }
+
+  :root[data-theme="cinematic-synthwave"] .workspace-deck {
+    position: relative;
+    z-index: 2;
+    grid-row: 1;
+    margin: 0.68rem 0.75rem 0.25rem;
+    border: 1px solid rgb(91 229 248 / 0.5);
+    background:
+      linear-gradient(90deg, rgb(5 3 20 / 0.72), rgb(22 8 42 / 0.42) 18% 82%, rgb(5 3 20 / 0.72)),
+      radial-gradient(circle at 50% 105%, rgb(255 63 193 / 0.13), transparent 42%);
+    box-shadow: inset 0 0 0 1px rgb(255 95 205 / 0.08), inset 0 0 4rem rgb(61 227 255 / 0.04);
+    clip-path: polygon(1rem 0, calc(100% - 1rem) 0, 100% 1rem, 100% calc(100% - 0.8rem), calc(100% - 0.8rem) 100%, 0.8rem 100%, 0 calc(100% - 0.8rem), 0 1rem);
+  }
+
+  :root[data-theme="cinematic-synthwave"] .workspace-tabs {
+    position: relative;
+    z-index: 4;
+    grid-row: 2;
+    gap: 0.55rem;
+    padding: 0.72rem 1.25rem 0.82rem;
+    border: 0;
+    border-top: 0.34rem solid #1e1439;
+    background:
+      linear-gradient(180deg, rgb(48 23 70 / 0.97), rgb(10 7 25 / 0.98)),
+      repeating-linear-gradient(90deg, transparent 0 4rem, rgb(81 237 255 / 0.055) 4rem 4.08rem);
+    box-shadow: inset 0 1px #b066ce, inset 0 -0.45rem #06030e;
+  }
+
+  :root[data-theme="cinematic-synthwave"] .workspace-tabs::before,
+  :root[data-theme="cinematic-synthwave"] .workspace-tabs::after {
+    position: absolute;
+    top: 50%;
+    width: 0.62rem;
+    height: 0.62rem;
+    border: 1px solid #ffe88b;
+    border-radius: 50%;
+    background: #ff4fc5;
+    content: "";
+    box-shadow: 0 0 0.85rem rgb(255 80 196 / 0.7);
+    translate: 0 -50%;
+  }
+
+  :root[data-theme="cinematic-synthwave"] .workspace-tabs::before { left: 0.36rem; }
+  :root[data-theme="cinematic-synthwave"] .workspace-tabs::after {
+    right: 0.36rem;
+    background: #42efff;
+    box-shadow: 0 0 0.85rem rgb(66 239 255 / 0.7);
+  }
+
+  :root[data-theme="cinematic-synthwave"] .workspace-tabs [role="tab"] {
+    position: relative;
+    min-height: 3.25rem;
+    border-color: rgb(174 92 203 / 0.7);
+    color: #dcbce9;
+    background:
+      linear-gradient(180deg, rgb(71 31 93 / 0.96), rgb(17 8 33 / 0.98)),
+      linear-gradient(90deg, rgb(255 78 195 / 0.12), transparent 45%, rgb(65 238 255 / 0.08));
+    box-shadow: inset 0 1px rgb(255 198 241 / 0.14), inset 0 -0.38rem rgb(3 2 10 / 0.36);
+  }
+
+  :root[data-theme="cinematic-synthwave"] .workspace-tabs [role="tab"]::before {
+    position: absolute;
+    top: 0.3rem;
+    left: 50%;
+    width: 38%;
+    height: 0.15rem;
+    background: rgb(255 82 199 / 0.54);
+    content: "";
+    translate: -50% 0;
+  }
+
+  :root[data-theme="cinematic-synthwave"] .workspace-tabs [role="tab"][aria-selected="true"] {
+    color: #13041d;
+    border-color: #fff19a;
+    background-color: #fff4a8;
+    background-image: linear-gradient(115deg, #fff4a8, #ff65c8 54%, #56efff);
+    box-shadow: 0 0 1.15rem rgb(255 78 195 / 0.38), inset 0 1px #fffbd8;
+    text-shadow: 0 1px rgb(255 255 255 / 0.45);
+  }
+
+  :root[data-theme="cinematic-synthwave"] .workspace-tabs [role="tab"][aria-selected="true"]::before {
+    background: #ffffff;
+    box-shadow: 0 0 0.75rem #ffffff;
+  }
+
+  :root[data-theme="cinematic-synthwave"] #radio-activity-panel {
+    position: relative;
+    border: 1px solid rgb(110 238 252 / 0.64);
+    border-top: 0.24rem solid #ff50c5;
+    background:
+      linear-gradient(90deg, rgb(5 2 19 / 0.78), rgb(29 9 50 / 0.45) 20% 80%, rgb(5 2 19 / 0.78)),
+      repeating-linear-gradient(0deg, transparent 0 3rem, rgb(74 235 255 / 0.025) 3rem 3.08rem);
+    box-shadow: inset 0 0 4.6rem rgb(52 231 255 / 0.045);
+  }
+
+  :root[data-theme="cinematic-synthwave"] #radio-activity-panel::before {
+    position: absolute;
+    z-index: 0;
+    inset: 0.5rem;
+    background:
+      linear-gradient(#ff55c8, #ff55c8) 0 0 / 4rem 1px no-repeat,
+      linear-gradient(#ff55c8, #ff55c8) 0 0 / 1px 2.8rem no-repeat,
+      linear-gradient(#50efff, #50efff) 100% 100% / 4rem 1px no-repeat,
+      linear-gradient(#50efff, #50efff) 100% 100% / 1px 2.8rem no-repeat;
+    content: "";
+    opacity: 0.82;
+    pointer-events: none;
+  }
+
+  :root[data-theme="cinematic-synthwave"] #radio-activity-panel::after {
+    position: absolute;
+    z-index: 0;
+    top: 0;
+    bottom: 0;
+    left: -18%;
+    width: 14%;
+    background: linear-gradient(90deg, transparent, rgb(95 242 255 / 0.08), transparent);
+    content: "";
+    pointer-events: none;
+    transform: skewX(-14deg);
+  }
+
+  :root[data-theme="cinematic-synthwave"] #radio-activity-panel > * {
+    position: relative;
+    z-index: 2;
+  }
+
+  :root[data-theme="cinematic-synthwave"] .radio-view-controls {
+    border-color: rgb(164 88 195 / 0.64);
+    border-left: 0.35rem solid #ff50c5;
+    background: linear-gradient(90deg, rgb(51 17 74 / 0.92), rgb(12 7 31 / 0.92));
+  }
+
+  :root[data-theme="cinematic-synthwave"] .scanner-display-hierarchy {
+    gap: 0.45rem;
+    border: 0;
+    background: transparent;
+  }
+
+  :root[data-theme="cinematic-synthwave"] .scanner-display-hierarchy > div {
+    border: 1px solid rgb(112 229 244 / 0.56);
+    border-left: 0.32rem solid #ff4fc5;
+    background: linear-gradient(108deg, rgb(49 14 70 / 0.9), rgb(7 10 31 / 0.84));
+    box-shadow: inset 0 1px rgb(255 198 241 / 0.08), inset 0 -1rem 2rem rgb(2 1 9 / 0.3);
+    clip-path: polygon(0 0, calc(100% - 0.75rem) 0, 100% 0.75rem, 100% 100%, 0 100%);
+  }
+
+  :root[data-theme="cinematic-synthwave"] .scanner-display-hierarchy > div:nth-child(even) {
+    border-left-color: #4befff;
+  }
+
+  :root[data-theme="cinematic-synthwave"] .radio-summary {
+    border-color: rgb(103 221 237 / 0.46);
+    background: rgb(7 4 24 / 0.62);
+  }
+
+  :root[data-theme="cinematic-synthwave"] .radio-field-groups {
+    position: relative;
+    isolation: isolate;
+    border: 1px solid rgb(113 228 244 / 0.46);
+    background:
+      radial-gradient(ellipse at 50% 112%, rgb(255 69 196 / 0.18), transparent 49%),
+      linear-gradient(90deg, rgb(5 2 18 / 0.74), rgb(24 8 43 / 0.36) 22% 78%, rgb(5 2 18 / 0.74));
+    box-shadow: inset 0 0 3.5rem rgb(50 230 255 / 0.04);
+  }
+
+  :root[data-theme="cinematic-synthwave"] .radio-field-groups::before {
+    position: absolute;
+    z-index: 0;
+    right: 8%;
+    bottom: -12%;
+    left: 8%;
+    height: 68%;
+    background:
+      repeating-linear-gradient(0deg, rgb(82 44 158 / 0.2) 0 1px, transparent 1px 2.2rem),
+      repeating-linear-gradient(90deg, rgb(72 232 255 / 0.14) 0 1px, transparent 1px 4rem);
+    content: "";
+    opacity: 0.64;
+    transform: perspective(24rem) rotateX(58deg);
+    transform-origin: center bottom;
+  }
+
+  :root[data-theme="cinematic-synthwave"] .radio-field-groups::after {
+    position: absolute;
+    z-index: 0;
+    top: 12%;
+    left: 50%;
+    width: min(33rem, 48vh);
+    aspect-ratio: 2.2;
+    border: solid rgb(255 80 197 / 0.5);
+    border-width: 1px 0;
+    background:
+      radial-gradient(ellipse, rgb(255 222 105 / 0.12), transparent 58%),
+      repeating-linear-gradient(0deg, transparent 0 0.55rem, rgb(255 81 197 / 0.17) 0.55rem 0.62rem);
+    content: "";
+    clip-path: polygon(12% 0, 88% 0, 100% 100%, 0 100%);
+    opacity: 0.7;
+    translate: -50% 0;
+  }
+
+  :root[data-theme="cinematic-synthwave"] .radio-field-group {
+    position: relative;
+    z-index: 2;
+    background: transparent;
+  }
+
+  :root[data-theme="cinematic-synthwave"] .radio-field-group h3 {
+    width: max-content;
+    padding: 0.14rem 0.85rem 0.16rem 0.42rem;
+    border-left: 0.22rem solid #ff4fc5;
+    color: #e7fbff;
+    background: linear-gradient(90deg, rgb(40 13 62 / 0.94), transparent);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  :root[data-theme="cinematic-synthwave"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list {
+    position: relative;
+    z-index: 3;
+    display: grid !important;
+    height: calc(100% - 1.25rem);
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-rows: repeat(5, minmax(2.1rem, max-content)) !important;
+    align-content: start !important;
+    gap: 0.18rem 5.6rem !important;
+    margin-top: 0.22rem;
+  }
+
+  :root[data-theme="cinematic-synthwave"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > div {
+    position: relative;
+    z-index: 4;
+    min-width: 0;
+    padding: 0.16rem 0.42rem;
+    border: 1px solid rgb(96 205 226 / 0.4);
+    border-left: 0.22rem solid #ff4fc5;
+    background: linear-gradient(100deg, rgb(39 12 62 / 0.88), rgb(4 12 29 / 0.82));
+    clip-path: polygon(0.28rem 0, 100% 0, calc(100% - 0.28rem) 100%, 0 100%);
+  }
+
+  :root[data-theme="cinematic-synthwave"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    > div:nth-child(n + 6) {
+    border-left-color: #47efff;
+  }
+
+  :root[data-theme="cinematic-synthwave"]
+    .radio-field-group[data-radio-group="hierarchy"]
+    .radio-field-list
+    :is(dt, dd) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+}
+
+/* A held scanner scope surges through the horizon and cockpit indicators. */
+:root[data-theme="cinematic-synthwave"]:has(
+  #radio-activity-panel [data-hold-state="held"]
+) .synthwave-horizon {
+  animation: synthwave-hold-surge 1.2s ease-in-out infinite alternate;
+  filter: drop-shadow(0 0 0.9rem #ffdd69);
+}
+
+:root[data-theme="cinematic-synthwave"]:has(
+  #radio-activity-panel [data-hold-state="held"]
+) .synthwave-dash-lights {
+  fill: #ffffff;
+  filter: drop-shadow(0 0 0.8rem #ffdd69);
+}
+
+/* Compact and portrait displays deliberately remain a restrained colorway. */
+@media (width < 1280px), (height < 720px), (aspect-ratio < 3/2) {
+  :root[data-theme="cinematic-synthwave"] {
+    font-family: system-ui, sans-serif;
+  }
+
+  :root[data-theme="cinematic-synthwave"] .cinematic-stage-art {
+    display: none;
+  }
+
+  :root[data-theme="cinematic-synthwave"] :is(
+    .site-header,
+    .workspace-shell,
+    .panel,
+    .scanner-display-hierarchy > div
+  ) {
+    clip-path: none;
+  }
+
+  :root[data-theme="cinematic-synthwave"] :is(
+    h1,
+    h2,
+    h3,
+    button,
+    select,
+    input,
+    textarea,
+    dt,
+    dd,
+    .recording-item-meta,
+    .workspace-tabs [role="tab"]
+  ) {
+    font-family: system-ui, sans-serif;
+    letter-spacing: normal;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cinematic-synthwave"] .synthwave-stars {
+    animation: synthwave-star-pulse 7s ease-in-out infinite alternate;
+  }
+
+  :root[data-theme="cinematic-synthwave"] .synthwave-sun-glare {
+    animation: synthwave-sun-breathe 5.4s ease-in-out infinite;
+    transform-origin: center;
+  }
+
+  :root[data-theme="cinematic-synthwave"] .synthwave-mountains-far {
+    animation: synthwave-mountain-drift 18s ease-in-out infinite alternate;
+  }
+
+  :root[data-theme="cinematic-synthwave"] .synthwave-road-dashes {
+    animation: synthwave-road-flow 2.8s ease-in-out infinite alternate;
+  }
+
+  :root[data-theme="cinematic-synthwave"] .synthwave-horizon {
+    animation: synthwave-horizon-pulse 4.4s ease-in-out infinite;
+  }
+
+  :root[data-theme="cinematic-synthwave"] .synthwave-equalizer rect {
+    animation: synthwave-equalizer 2.6s ease-in-out infinite alternate;
+    transform-box: fill-box;
+    transform-origin: center bottom;
+  }
+
+  :root[data-theme="cinematic-synthwave"] .synthwave-equalizer rect:nth-child(2n) {
+    animation-delay: -1.1s;
+  }
+
+  :root[data-theme="cinematic-synthwave"] .synthwave-equalizer rect:nth-child(3n) {
+    animation-delay: -1.8s;
+  }
+
+  :root[data-theme="cinematic-synthwave"] #radio-activity-panel::after {
+    animation: synthwave-console-scan 9s linear infinite;
+  }
+}
+
+@keyframes synthwave-star-pulse { 50% { opacity: 0.58; } }
+@keyframes synthwave-sun-breathe { 50% { opacity: 0.52; transform: scale(1.035); } }
+@keyframes synthwave-mountain-drift { to { transform: translateX(0.7rem); } }
+@keyframes synthwave-road-flow { to { transform: translateY(0.85rem); } }
+@keyframes synthwave-horizon-pulse { 50% { opacity: 0.7; } }
+@keyframes synthwave-equalizer {
+  0% { transform: scaleY(0.38); opacity: 0.62; }
+  100% { transform: scaleY(1); opacity: 0.94; }
+}
+
+@keyframes synthwave-hold-surge {
+  to {
+    opacity: 0.64;
+    filter: drop-shadow(0 0 1.1rem #ffdd69);
+  }
+}
+@keyframes synthwave-console-scan { to { left: 112%; } }
+
+/* Live scanner telemetry becomes the cockpit's instrument drive. Signal
+ * strength energizes the paired equalizers, RSSI brightens the horizon, and
+ * active traffic accelerates the road markers and dash lamps. The existing
+ * held-scope surge remains authoritative while a hold is present. */
+:root[data-theme="cinematic-synthwave"][data-theme-effects="subtle"][data-theme-signal-state="available"]
+  .synthwave-equalizer rect {
+  fill-opacity: calc(0.5 + var(--theme-signal-normalized, 0.5) * 0.28);
+  filter: drop-shadow(
+    0 0 calc(0.08rem + var(--theme-signal-normalized, 0.5) * 0.2rem)
+      rgb(255 79 197 / 0.46)
+  );
+  transition: fill-opacity 620ms ease-out, filter 620ms ease-out;
+}
+
+:root[data-theme="cinematic-synthwave"][data-theme-effects="subtle"][data-theme-rssi-state="available"]:not(:has(
+  #radio-activity-panel [data-hold-state="held"]
+)) .synthwave-horizon {
+  stroke-opacity: calc(0.4 + var(--theme-rssi-normalized, 0.5) * 0.28);
+  filter: drop-shadow(
+    0 0 calc(0.12rem + var(--theme-rssi-normalized, 0.5) * 0.28rem)
+      rgb(56 239 255 / 0.48)
+  );
+  transition: stroke-opacity 720ms ease-out, filter 720ms ease-out;
+}
+
+:root[data-theme="cinematic-synthwave"][data-theme-effects="full"][data-theme-signal-state="available"]
+  .synthwave-equalizer rect {
+  fill-opacity: calc(0.38 + var(--theme-signal-normalized, 0.5) * 0.62);
+  filter: drop-shadow(
+    0 0 calc(0.12rem + var(--theme-signal-normalized, 0.5) * 0.58rem)
+      rgb(255 79 197 / 0.82)
+  );
+  transition: fill-opacity 420ms cubic-bezier(0.2, 0.75, 0.25, 1), filter 420ms ease-out;
+}
+
+:root[data-theme="cinematic-synthwave"][data-theme-effects="full"][data-theme-rssi-state="available"]:not(:has(
+  #radio-activity-panel [data-hold-state="held"]
+)) .synthwave-horizon {
+  stroke-opacity: calc(0.3 + var(--theme-rssi-normalized, 0.5) * 0.7);
+  filter: drop-shadow(
+    0 0 calc(0.16rem + var(--theme-rssi-normalized, 0.5) * 0.82rem)
+      rgb(56 239 255 / 0.78)
+  );
+  transition: stroke-opacity 480ms cubic-bezier(0.2, 0.75, 0.25, 1), filter 480ms ease-out;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cinematic-synthwave"][data-theme-effects="subtle"][data-theme-activity="active"]
+    .synthwave-road-dashes {
+    animation-duration: 2.1s;
+  }
+
+  :root[data-theme="cinematic-synthwave"][data-theme-effects="full"][data-theme-activity="active"]
+    .synthwave-road-dashes {
+    animation-duration: 1.25s;
+    filter: drop-shadow(0 0 0.5rem rgb(255 221 105 / 0.72));
+  }
+}
+
+:root[data-theme="cinematic-synthwave"][data-theme-effects="full"][data-theme-activity="active"]:not(:has(
+  #radio-activity-panel [data-hold-state="held"]
+)) .synthwave-dash-lights {
+  opacity: calc(0.58 + var(--theme-activity-level, 0.5) * 0.42);
+  filter: drop-shadow(
+    0 0 calc(0.2rem + var(--theme-activity-level, 0.5) * 0.52rem)
+      rgb(255 221 105 / 0.74)
+  );
+  transition: opacity 320ms ease-out, filter 320ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="cinematic-synthwave"] *,
+  :root[data-theme="cinematic-synthwave"] *::before,
+  :root[data-theme="cinematic-synthwave"] *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (forced-colors: active) {
+  :root[data-theme="cinematic-synthwave"] {
+    --background: Canvas;
+    --surface: Canvas;
+    --surface-emphasis: Canvas;
+    --text: CanvasText;
+    --muted: CanvasText;
+    --border: CanvasText;
+    --accent: Highlight;
+    --accent-strong: Highlight;
+    --focus: Highlight;
+  }
+
+  :root[data-theme="cinematic-synthwave"] .theme-stage {
+    display: none;
+  }
+
+  :root[data-theme="cinematic-synthwave"] :is(
+    .site-header,
+    .workspace-shell,
+    .workspace-tabs,
+    .workspace-deck,
+    [data-workspace-pane],
+    .panel,
+    .radio-view-controls,
+    .radio-field-groups,
+    .scanner-display-hierarchy > div
+  ) {
+    background: Canvas;
+    box-shadow: none;
+    clip-path: none;
+  }
+
+  :root[data-theme="cinematic-synthwave"] :is(.site-header, .panel)::before,
+  :root[data-theme="cinematic-synthwave"] :is(.site-header, .panel)::after,
+  :root[data-theme="cinematic-synthwave"] .workspace-tabs::before,
+  :root[data-theme="cinematic-synthwave"] .workspace-tabs::after,
+  :root[data-theme="cinematic-synthwave"] .workspace-tabs [role="tab"]::before,
+  :root[data-theme="cinematic-synthwave"] .radio-field-groups::before,
+  :root[data-theme="cinematic-synthwave"] .radio-field-groups::after {
+    display: none;
+  }
+}

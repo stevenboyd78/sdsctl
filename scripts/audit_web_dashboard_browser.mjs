@@ -69,6 +69,7 @@ const HERO_PANORAMA_SCENES = Object.freeze([
   Object.freeze({theme: "cinematic-galactic-operations", scene: "galactic-operations"}),
   Object.freeze({theme: "cinematic-mission-control", scene: "mission-control"}),
   Object.freeze({theme: "cinematic-cyberpunk-night", scene: "cyberpunk-night"}),
+  Object.freeze({theme: "cinematic-synthwave", scene: "synthwave"}),
 ]);
 
 const HERO_PANORAMA_BOUNDARIES = Object.freeze([
@@ -93,6 +94,7 @@ const RADIO_FIELD_IDS = Object.freeze([
   "radio-mode",
   "radio-screen-raw",
   "radio-screen",
+  "radio-favorites-list",
   "radio-system",
   "radio-department",
   "radio-site",
@@ -135,8 +137,8 @@ Usage: node scripts/audit_web_dashboard_browser.mjs [options]
 
 Run the deterministic dashboard and Home Assistant waterfall-card browser audit in one local
 Chrome/Chromium session. The audit writes no PNGs. It covers all 700 built-in
-theme × reference CSS viewport × workspace pane cases, 30 exact panoramic-boundary
-cases for the six hero environments, all 210 explicit System
+theme × reference CSS viewport × workspace pane cases, 35 exact panoramic-boundary
+cases for the seven hero environments, all 210 explicit System
 palette responsive cases, plus media-preference, enlarged-text,
 pagination-focus, trusted Tab/Shift+Tab traversal, WCAG AA contrast, complete
 adaptive-presentation, DPR-transition, and prefixed-URL probes. It also covers
@@ -2515,6 +2517,73 @@ export function browserAuditLibrary() {
     const failures = [];
     const header = document.querySelector(".site-header");
     const brand = header?.querySelector(".brand");
+    if (
+      theme === "pip-boy-inspired" &&
+      matchMedia(
+        "(min-width: 1280px) and (min-height: 720px) and " +
+          "(min-aspect-ratio: 3/2)",
+      ).matches
+    ) {
+      const chassis = document.querySelector(".theme-stage-b");
+      if (!(chassis instanceof HTMLElement) || !rendered(chassis)) {
+        failures.push("Pip-Boy signal-meter chassis is unavailable");
+      } else {
+        const chassisStyle = getComputedStyle(chassis);
+        const meterStyle = getComputedStyle(chassis, "::before");
+        const chassisRect = chassis.getBoundingClientRect();
+        const borderLeft = Number.parseFloat(chassisStyle.borderLeftWidth);
+        const borderRight = Number.parseFloat(chassisStyle.borderRightWidth);
+        const meterWidth = Number.parseFloat(meterStyle.width);
+        const meterBorderLeft = Number.parseFloat(meterStyle.borderLeftWidth);
+        const meterBorderRight = Number.parseFloat(meterStyle.borderRightWidth);
+        const meterLeftOffset = Number.parseFloat(meterStyle.left);
+        let meterTranslateX = 0;
+        try {
+          if (meterStyle.transform !== "none") {
+            meterTranslateX = new DOMMatrixReadOnly(meterStyle.transform).m41;
+          }
+        } catch (_error) {
+          meterTranslateX = Number.NaN;
+        }
+        const values = [
+          borderLeft,
+          borderRight,
+          meterWidth,
+          meterBorderLeft,
+          meterBorderRight,
+          meterLeftOffset,
+          meterTranslateX,
+        ];
+        if (meterStyle.content === "none" || values.some((value) => !Number.isFinite(value))) {
+          failures.push("Pip-Boy signal meter has invalid computed geometry");
+        } else {
+          const meterPaintedWidth =
+            meterWidth +
+            (meterStyle.boxSizing === "border-box" ? 0 : meterBorderLeft + meterBorderRight);
+          const meterLeft =
+            chassisRect.left + borderLeft + meterLeftOffset + meterTranslateX;
+          const meterRight = meterLeft + meterPaintedWidth;
+          const chassisContentLeft = chassisRect.left + borderLeft;
+          const chassisContentRight = chassisRect.right - borderRight;
+          if (
+            meterLeft < chassisContentLeft - tolerance ||
+            meterRight > chassisContentRight + tolerance
+          ) {
+            failures.push(
+              `Pip-Boy signal meter escapes its side chassis ` +
+                `(${meterLeft.toFixed(1)}..${meterRight.toFixed(1)} outside ` +
+                `${chassisContentLeft.toFixed(1)}..${chassisContentRight.toFixed(1)})`,
+            );
+          }
+          if (meterLeft < -tolerance || meterRight > innerWidth + tolerance) {
+            failures.push(
+              `Pip-Boy signal meter is clipped by the CSS viewport ` +
+                `(${meterLeft.toFixed(1)}..${meterRight.toFixed(1)} of ${innerWidth})`,
+            );
+          }
+        }
+      }
+    }
     if (theme === "lcars" && rendered(header) && rendered(brand)) {
       const railWidth = Number.parseFloat(getComputedStyle(header).borderLeftWidth);
       if (brand.getBoundingClientRect().left < header.getBoundingClientRect().left + railWidth + 4) {
@@ -2559,10 +2628,15 @@ export function browserAuditLibrary() {
       2 * rootFontSize,
     );
     const edgeInset = responsiveGutter / 2;
-    const expectedWidth = Math.min(
-      innerWidth - responsiveGutter,
-      120 * rootFontSize,
-    );
+    const usesPipBoyChassis =
+      document.documentElement.dataset.theme === "pip-boy-inspired" &&
+      matchMedia(
+        "(min-width: 1280px) and (min-height: 720px) and " +
+          "(min-aspect-ratio: 3/2)",
+      ).matches;
+    const expectedWidth = usesPipBoyChassis
+      ? Math.min(innerWidth * 0.84, 100 * rootFontSize)
+      : Math.min(innerWidth - responsiveGutter, 120 * rootFontSize);
     const regions = [".site-header", ".dashboard"];
     for (const selector of regions) {
       const region = document.querySelector(selector);
@@ -2956,8 +3030,10 @@ export function browserAuditLibrary() {
 
   function hierarchyFieldAlignmentFailures() {
     const failures = [];
+    const hierarchySelector =
+      ".scanner-display-hierarchy:not(.scanner-display-favorites)";
     for (const field of document.querySelectorAll(
-      ".scanner-display-hierarchy .secondary-value",
+      `${hierarchySelector} .secondary-value`,
     )) {
       const minHeight = Number.parseFloat(getComputedStyle(field).minHeight);
       if (!Number.isFinite(minHeight) || minHeight > tolerance) {
@@ -2967,9 +3043,9 @@ export function browserAuditLibrary() {
         );
       }
     }
-    const hierarchy = document.querySelector(".scanner-display-hierarchy");
+    const hierarchy = document.querySelector(hierarchySelector);
     const channel = document.querySelector(
-      '.scanner-display-hierarchy > [data-hold-scope="channel"]',
+      `${hierarchySelector} > [data-hold-scope="channel"]`,
     );
     if (
       hierarchy instanceof HTMLElement &&
@@ -3066,8 +3142,8 @@ export function browserAuditLibrary() {
     const failures = [];
     const seen = new Set();
     const views = ["hierarchy", "rf", "identity", "special"];
-    if (fieldIds.length !== 35 || new Set(fieldIds).size !== 35) {
-      failures.push(`audit field inventory is not exactly 35 unique targets`);
+    if (fieldIds.length !== 36 || new Set(fieldIds).size !== 36) {
+      failures.push(`audit field inventory is not exactly 36 unique targets`);
     }
     for (const id of fieldIds) {
       if (!(document.getElementById(id) instanceof HTMLElement)) {
@@ -3820,6 +3896,7 @@ async function auditUniversalDrawer(cdp, context) {
     const overview = document.querySelector('.overview');
     const controls = [
       '.theme-picker',
+      '#theme-rotation-settings',
       '#system-palette-picker',
       '#lcars-v2-appearance-pickers',
       '#theme-typography-pickers',
@@ -3861,7 +3938,9 @@ async function auditUniversalDrawer(cdp, context) {
       'dashboard-status-details', 'theme-select', 'system-palette-select',
       'theme-font-select', 'theme-typography-select', 'matrix-rain-speed',
       'matrix-rain-density', 'matrix-rain-transparency', 'matrix-rain-trail',
-      'matrix-rain-reset'];
+      'matrix-rain-reset', 'theme-rotation-settings', 'theme-rotation-enabled',
+      'theme-rotation-interval', 'theme-rotation-mode', 'theme-rotation-themes',
+      'theme-rotation-theme-list', 'theme-rotation-status'];
     if (!unique.every(id => document.querySelectorAll('#' + id).length === 1)) {
       failures.push('drawer controls and moved metadata must remain unique');
     }
@@ -3973,33 +4052,44 @@ async function auditMatrixRainControls(cdp, baseUrl, timeoutMs) {
     throw new Error(`Matrix rain controls did not apply and persist: ${JSON.stringify(configured)}`);
   }
 
-  const baselinePackets = await evaluate(cdp, `(() => {
+  const changedPacketCounts = await evaluate(cdp, `(async () => {
     const canvas = document.querySelector('.matrix-rain-canvas');
     const field = document.querySelector('#radio-channel');
-    const baseline = Number(canvas.dataset.matrixRainPacketCount);
+    const before = Number(canvas.dataset.matrixRainPacketCount);
     field.textContent = 'Audit telemetry update';
-    return baseline;
+    await new Promise(resolve => setTimeout(resolve, 0));
+    return {
+      before,
+      after: Number(canvas.dataset.matrixRainPacketCount),
+    };
   })()`);
-  await frames(cdp);
-  const changedPackets = await evaluate(cdp,
-    `Number(document.querySelector('.matrix-rain-canvas').dataset.matrixRainPacketCount)`);
-  if (!Number.isFinite(baselinePackets) || changedPackets !== baselinePackets + 1) {
+  const changedPackets = changedPacketCounts.after;
+  if (!Number.isFinite(changedPacketCounts.before) ||
+      changedPackets !== changedPacketCounts.before + 1) {
     throw new Error(
       `Matrix telemetry update did not preserve the old packet and add one new packet: `
-      + `${baselinePackets} -> ${changedPackets}`,
+      + `${JSON.stringify(changedPacketCounts)}`,
     );
   }
-  await evaluate(cdp, `(() => {
+  const repeatedPacketCounts = await evaluate(cdp, `(async () => {
+    const canvas = document.querySelector('.matrix-rain-canvas');
     const field = document.querySelector('#radio-channel');
+    const before = Number(canvas.dataset.matrixRainPacketCount);
     field.textContent = field.textContent;
+    await new Promise(resolve => setTimeout(resolve, 0));
+    return {
+      before,
+      after: Number(canvas.dataset.matrixRainPacketCount),
+    };
   })()`);
-  await frames(cdp);
-  const repeatedPackets = await evaluate(cdp,
-    `Number(document.querySelector('.matrix-rain-canvas').dataset.matrixRainPacketCount)`);
-  if (repeatedPackets !== changedPackets) {
+  // The demo's live scanner refresh may legitimately restore the field between
+  // these two CDP evaluations and enqueue its own packet. Judge only the
+  // identical redraw's atomic before/after snapshot so that real duplicate
+  // packets still fail without racing unrelated live data.
+  if (repeatedPacketCounts.after !== repeatedPacketCounts.before) {
     throw new Error(
       `Identical Matrix telemetry redraw spawned a duplicate packet: `
-      + `${changedPackets} -> ${repeatedPackets}`,
+      + `${JSON.stringify(repeatedPacketCounts)}`,
     );
   }
 
@@ -4037,11 +4127,205 @@ async function auditMatrixRainControls(cdp, baseUrl, timeoutMs) {
   await pressKey(cdp, 'Escape', 'Escape', 27);
 }
 
+async function auditThemeRotation(cdp) {
+  const behavior = await evaluate(cdp, `(() => {
+    const failures = [];
+    const themeKey = 'sdsctl.web.theme';
+    const rotationKey = 'sdsctl.web.theme-rotation.v1';
+    const controller = window.sdsctlTheme;
+    const rotation = window.sdsctlThemeRotation;
+    const picker = document.querySelector('#theme-select');
+    const settings = document.querySelector('#theme-rotation-settings');
+    const originalTheme = controller?.current();
+    const originalStoredTheme = localStorage.getItem(themeKey);
+    const originalStoredRotation = localStorage.getItem(rotationKey);
+    const sequence = ['system', 'lcars', 'matrix'];
+
+    const expectedNext = current => {
+      const index = sequence.indexOf(current);
+      return sequence[index < 0 ? 0 : (index + 1) % sequence.length];
+    };
+    const verifyApplied = (expected, description) => {
+      if (controller.current() !== expected ||
+          document.documentElement.dataset.theme !== expected ||
+          picker?.value !== expected) {
+        failures.push(description + ' did not synchronize the theme controller, document and picker');
+      }
+    };
+
+    try {
+      if (controller === undefined || rotation === undefined ||
+          !(picker instanceof HTMLSelectElement) ||
+          !(settings instanceof HTMLDetailsElement)) {
+        return {failures: ['theme rotation controls are unavailable']};
+      }
+      if (!sequence.every(theme => controller.choices.includes(theme))) {
+        return {failures: ['theme rotation audit themes are unavailable']};
+      }
+
+      const focusTarget = document.querySelector('#pane-tab-scanner');
+      focusTarget?.focus({preventScroll: true});
+      const storedThemeBeforeRotation = localStorage.getItem(themeKey);
+      const policy = rotation.setPolicy({
+        enabled: true,
+        intervalMinutes: 5,
+        mode: 'sequential',
+        themes: sequence,
+      });
+      if (!policy.enabled || policy.intervalMinutes !== 5 ||
+          rotation.manualTheme() !== originalTheme) {
+        failures.push('valid sequential rotation policy did not preserve its manual theme');
+      }
+
+      let expected = expectedNext(controller.current());
+      rotation.advance();
+      verifyApplied(expected, 'first sequential advance');
+      if (localStorage.getItem(themeKey) !== storedThemeBeforeRotation) {
+        failures.push('rotation preview overwrote the saved manual theme');
+      }
+      if (focusTarget !== null && document.activeElement !== focusTarget) {
+        failures.push('rotation preview moved keyboard focus');
+      }
+
+      expected = expectedNext(expected);
+      rotation.advance();
+      verifyApplied(expected, 'second sequential advance');
+
+      rotation.setPolicy({
+        enabled: true,
+        intervalMinutes: 5,
+        mode: 'shuffle',
+        themes: sequence,
+      });
+      for (let index = 0; index < 12; index += 1) {
+        const previous = controller.current();
+        const current = rotation.advance();
+        if (current === previous || !sequence.includes(current)) {
+          failures.push('shuffle repeated immediately or escaped its allowlist');
+          break;
+        }
+      }
+
+      settings.open = true;
+      const pausedTheme = controller.current();
+      rotation.advance();
+      if (controller.current() !== pausedTheme) {
+        failures.push('rotation advanced while its settings were open');
+      }
+      settings.open = false;
+
+      picker.value = 'lcars';
+      picker.dispatchEvent(new Event('change', {bubbles: true}));
+      if (rotation.manualTheme() !== 'lcars') {
+        failures.push('manual theme change did not update the restoration theme');
+      }
+      rotation.advance();
+      rotation.setPolicy({
+        enabled: false,
+        intervalMinutes: 5,
+        mode: 'sequential',
+        themes: sequence,
+      });
+      verifyApplied('lcars', 'rotation disable restoration');
+
+      const rejected = rotation.setPolicy({
+        enabled: true,
+        intervalMinutes: 1,
+        mode: 'sequential',
+        themes: ['system'],
+      });
+      if (rejected.enabled || rejected.intervalMinutes !== 30) {
+        failures.push('invalid one-theme policy did not fail closed with the default interval');
+      }
+    } catch (error) {
+      failures.push('theme rotation audit threw: ' +
+        (error instanceof Error ? error.message : String(error)));
+    } finally {
+      if (settings instanceof HTMLDetailsElement) settings.open = false;
+      rotation?.setPolicy({
+        enabled: false,
+        intervalMinutes: 30,
+        mode: 'sequential',
+        themes: sequence,
+      });
+      if (typeof originalTheme === 'string') controller?.select(originalTheme);
+      if (originalStoredTheme === null) localStorage.removeItem(themeKey);
+      else localStorage.setItem(themeKey, originalStoredTheme);
+      if (originalStoredRotation === null) localStorage.removeItem(rotationKey);
+      else localStorage.setItem(rotationKey, originalStoredRotation);
+    }
+    return {failures};
+  })()`);
+  if (behavior.failures.length) {
+    throw new Error(`Theme rotation behavior: ${behavior.failures.join('; ')}`);
+  }
+  await frames(cdp);
+
+  for (const viewport of [
+    {width: 1920, height: 1080, dpr: 1},
+    {width: 800, height: 480, dpr: 1},
+    {width: 390, height: 844, dpr: 2},
+  ]) {
+    await setViewport(cdp, viewport);
+    await clickElement(cdp, '#native-menu-toggle');
+    const geometry = await evaluate(cdp, `(() => {
+      const menu = document.querySelector('#native-menu');
+      const settings = document.querySelector('#theme-rotation-settings');
+      const panel = document.querySelector('.theme-rotation-controls');
+      if (!(menu instanceof HTMLDialogElement) ||
+          !(settings instanceof HTMLDetailsElement) ||
+          !(panel instanceof HTMLElement)) {
+        return {failures: ['theme rotation panel is unavailable']};
+      }
+      settings.open = true;
+      settings.scrollIntoView({block: 'nearest'});
+      const failures = [];
+      const themeChoices = panel.querySelectorAll(
+        '#theme-rotation-theme-list input[type="checkbox"]',
+      );
+      if (themeChoices.length !== window.sdsctlTheme.choices.length) {
+        failures.push('theme allowlist does not expose every available theme');
+      }
+      const controls = [...panel.querySelectorAll('input, select')];
+      for (const control of controls) {
+        control.scrollIntoView({block: 'nearest'});
+        control.focus({preventScroll: true});
+        const rect = control.getBoundingClientRect();
+        const bounds = menu.getBoundingClientRect();
+        if (document.activeElement !== control || rect.width < 44 || rect.height < 44 ||
+            rect.left < bounds.left - 1 || rect.right > bounds.right + 1 ||
+            rect.top < bounds.top - 1 || rect.bottom > bounds.bottom + 1) {
+          failures.push('rotation control is not focusable, touch-sized and contained: ' + control.id);
+        }
+        if ((control.labels?.[0]?.textContent ?? '').trim() === '') {
+          failures.push('rotation control is missing a readable label: ' + control.id);
+        }
+      }
+      const menuRect = menu.getBoundingClientRect();
+      if (menuRect.left < -1 || menuRect.top < -1 ||
+          menuRect.right > innerWidth + 1 || menuRect.bottom > innerHeight + 1 ||
+          menu.scrollWidth > menu.clientWidth + 1) {
+        failures.push('open Menu or theme rotation panel escapes the CSS viewport');
+      }
+      return {controlCount: controls.length, failures};
+    })()`);
+    if (geometry.failures.length || geometry.controlCount < 6) {
+      throw new Error(
+        `Theme rotation panel ${viewport.width}x${viewport.height}@${viewport.dpr}: ` +
+        `${JSON.stringify(geometry)}`,
+      );
+    }
+    await pressKey(cdp, 'Escape', 'Escape', 27);
+  }
+  await setViewport(cdp, VIEWPORTS[0]);
+}
+
 export async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
   const collector = new FailureCollector();
   await setViewport(cdp, VIEWPORTS[0]);
   await navigate(cdp, `${baseUrl}/`, timeoutMs);
   await auditUniversalDrawer(cdp, "standalone dashboard");
+  await auditThemeRotation(cdp);
   await auditMatrixRainControls(cdp, baseUrl, timeoutMs);
 
   let caseCount = 0;
@@ -5377,10 +5661,15 @@ async function auditDisplayAudioOptIn(cdp, baseUrl, timeoutMs, pageFailures) {
       stopDisabled: document.querySelector('#audio-stop').disabled,
       status: document.querySelector('#audio-playback-status').textContent,
       summary: document.querySelector('#native-session-summary').textContent,
+      automaticVisible: document.querySelector('#display-audio-auto-start')?.getClientRects().length > 0,
+      automaticChecked: document.querySelector('#display-audio-auto-start')?.checked,
+      audioRequests: window.__displayAudioAudit.requests.filter(
+        path => path === '/api/v1/audio').length,
     })`);
     if (!initial.optedIn || !initial.controlsVisible || !initial.playEnabled ||
         !initial.stopDisabled || initial.status !== 'Stopped' ||
-        !initial.summary.includes('browser audio playback is enabled')) {
+        !initial.summary.includes('browser audio playback is enabled') ||
+        !initial.automaticVisible || initial.automaticChecked || initial.audioRequests !== 0) {
       throw new Error(`display audio opt-in initial state failed: ${JSON.stringify(initial)}`);
     }
     await clickElement(cdp, '#audio-play');
@@ -5416,10 +5705,73 @@ async function auditDisplayAudioOptIn(cdp, baseUrl, timeoutMs, pageFailures) {
         !stopped.stopDisabled || stopped.status !== 'Stopped' || stopped.requests !== 1) {
       throw new Error(`display audio Stop lifecycle failed: ${JSON.stringify(stopped)}`);
     }
+    await clickElement(cdp, '#display-audio-auto-start');
+    const enabled = await evaluate(cdp, `(async () => {
+      for (let attempt = 0; attempt < 100 &&
+          window.__displayAudioAudit.requests.filter(
+            path => path === '/api/v1/audio').length < 2; attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      return {
+        checked: document.querySelector('#display-audio-auto-start').checked,
+        preference: localStorage.getItem('sdsctl.web.display-audio-auto-start.v1'),
+        suppression: sessionStorage.getItem('sdsctl.web.display-audio-auto-suppressed.v1'),
+        requests: window.__displayAudioAudit.requests.filter(
+          path => path === '/api/v1/audio').length,
+      };
+    })()`);
+    if (!enabled.checked || enabled.preference !== 'enabled' ||
+        enabled.suppression !== null || enabled.requests !== 2) {
+      throw new Error(`display automatic-audio enable failed: ${JSON.stringify(enabled)}`);
+    }
+
+    await navigate(cdp, baseUrl + "/?kiosk=display-audio", timeoutMs, {
+      installAuditLibrary: false, waitForDashboardReady: false,
+    });
+    const automatic = await evaluate(cdp, `(async () => {
+      for (let attempt = 0; attempt < 100 &&
+          !window.__displayAudioAudit.requests.includes('/api/v1/audio'); attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      stopEventStream();
+      return {
+        checked: document.querySelector('#display-audio-auto-start').checked,
+        requests: window.__displayAudioAudit.requests.filter(
+          path => path === '/api/v1/audio').length,
+        active: audioPlaybackActive,
+        status: document.querySelector('#audio-playback-status').textContent,
+      };
+    })()`);
+    if (!automatic.checked || automatic.requests !== 1 || !automatic.active ||
+        automatic.status !== 'Buffering…') {
+      throw new Error(`display automatic-audio reload failed: ${JSON.stringify(automatic)}`);
+    }
+
+    await clickElement(cdp, '#native-menu-toggle');
+    await clickElement(cdp, '#audio-stop');
+    await navigate(cdp, baseUrl + "/?kiosk=display-audio", timeoutMs, {
+      installAuditLibrary: false, waitForDashboardReady: false,
+    });
+    const suppressed = await evaluate(cdp, `(async () => {
+      await new Promise(resolve => setTimeout(resolve, 250));
+      stopEventStream();
+      return {
+        checked: document.querySelector('#display-audio-auto-start').checked,
+        suppression: sessionStorage.getItem('sdsctl.web.display-audio-auto-suppressed.v1'),
+        requests: window.__displayAudioAudit.requests.filter(
+          path => path === '/api/v1/audio').length,
+        active: audioPlaybackActive,
+        status: document.querySelector('#audio-playback-status').textContent,
+      };
+    })()`);
+    if (!suppressed.checked || suppressed.suppression !== 'suppressed' ||
+        suppressed.requests !== 0 || suppressed.active || suppressed.status !== 'Stopped') {
+      throw new Error(`display automatic-audio Stop suppression failed: ${JSON.stringify(suppressed)}`);
+    }
     if (pageFailures.length !== baseline) {
       throw new Error('Display audio opt-in raised browser exceptions.');
     }
-    console.log('PASS: display-only audio opt-in Play request and Stop lifecycle');
+    console.log('PASS: display-only audio manual lifecycle, default-off automatic preference and session Stop suppression');
   } finally {
     await cdp.send("Page.removeScriptToEvaluateOnNewDocument", {identifier: installed.identifier});
   }
@@ -6035,7 +6387,7 @@ async function run(options) {
     }
     console.log(
       `PASS: ${result.caseCount} matrix cases plus ${result.panoramaBoundaryCases} ` +
-        `hero panoramic-boundary cases, theme switching, all 35 radio ` +
+        `hero panoramic-boundary cases, theme switching, all 36 radio ` +
         "fields, Simple/Detail and adaptive screens, trusted Tab/Shift+Tab and " +
         `pagination focus, ${result.hoverContrastCases} explicit workspace-tab hover states, ` +
         "WCAG AA normal/hover/forced-color contrast, reduced motion, " +
