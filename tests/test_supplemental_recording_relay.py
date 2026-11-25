@@ -9,7 +9,7 @@ import json
 import select
 import sys
 import time
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from copy import deepcopy
 from dataclasses import asdict, replace
 from datetime import datetime, timedelta
@@ -80,7 +80,14 @@ def files(tree, prepared, monkeypatch):
 @contextmanager
 def joined(prepared, actors, calibration, ledger, monkeypatch):
     peers = []
-    with begin.ready_tests.attached(prepared, actors, monkeypatch, tap=peers) as (client, requests):
+    attachment = ExitStack()
+    # The broad synthetic attach is not a deadline test. Exclude shared-runner
+    # scheduling delay, then restore the real clock before every phase check.
+    with compressed_scheduler_time(monkeypatch):
+        client, requests = attachment.enter_context(
+            begin.ready_tests.attached(prepared, actors, monkeypatch, tap=peers)
+        )
+    with attachment:
         ready = begin.ready_tests.capture(client, calibration)
         try:
             begin.intent(ledger, prepared)
