@@ -40,6 +40,11 @@ The verified USB executor rejects state beneath scanner media and creates or
 checks private host directories with its existing ownership and permission
 rules. `--usb-host-state` is invalid with `--copied-tree`.
 
+The separate experimental
+[Favorites web workspace foundation](favorites-web-workspace.md) reuses this
+editor's renderer-neutral in-memory and exact-review contracts. It currently
+adds no HTTP route, browser UI, or write execution.
+
 The library also exposes a separate headless additive-only FTP write executor.
 It is not wired into this editor or a public CLI command. The caller must supply
 an exact reviewed FavoritesWritePlan, explicitly separate write credential,

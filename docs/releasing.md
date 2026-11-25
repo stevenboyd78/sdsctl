@@ -115,6 +115,12 @@ not a transitive reproducibility lock. Do not replace them with a single-host
 lock design must cover every supported Python version, build isolation, optional
 extras, hashes, regeneration, and automated maintenance.
 
+Before extending the supported-Python badge, classifiers, CI matrix or release
+containers, complete the coordinated
+[Python 3.15 qualification](python-3.15-qualification.md). A permissive
+`requires-python` lower bound and successful dependency resolution are not a
+runtime support declaration.
+
 ## 2. Run validation
 
 Install Node.js 24 or newer as well as the Python development dependencies. The

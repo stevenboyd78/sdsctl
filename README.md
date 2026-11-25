@@ -162,6 +162,7 @@ Advanced, version-controlled references remain in the repository:
 - [Home Assistant App](docs/home-assistant-app.md)
 - [Advanced Home Assistant App access](docs/home-assistant-advanced-access.md)
 - [Favorites Workspace](docs/favorites-workspace-editor.md)
+- [Favorites web workspace foundation](docs/favorites-web-workspace.md)
 - [Capability and field-parity audit](docs/capability-field-parity-audit.md)
 
 ## Security and safety

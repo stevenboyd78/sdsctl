@@ -16,6 +16,12 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   and kiosk commands, legacy v0.33.0 units remain available, and browser device
   credentials remain explicitly deferred until a server-side enrollment and
   revocation protocol is accepted.
+- Add a bounded, process-local Favorites web workspace foundation for a future
+  operator-only browser editor. It uses configured copied-tree source labels,
+  opaque owner-bound workspaces and navigation IDs, exact revisions, aggregate
+  no-store review presentation, resource/lifetime limits, and path-free source
+  failures. It intentionally adds no HTTP route, browser UI, durable draft,
+  target discovery, or write executor.
 
 ### Changed
 
