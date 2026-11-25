@@ -9,6 +9,12 @@ This is not a browser-kiosk guide. A browser uses the native HTTPS dashboard,
 its dedicated password, and its own session cookie. Never put a daemon-client
 credential in browser storage or JavaScript.
 
+New installations can stage a strict private manifest and a thin launcher as
+described in [Portable display-service configuration](service-configuration.md).
+The versioned migration is deliberately one host at a time. Existing v0.33.0
+units remain supported and must not be rewritten merely because a manifest
+candidate was generated.
+
 ## Safety boundary
 
 The managed display:

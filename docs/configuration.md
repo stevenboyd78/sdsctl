@@ -8,6 +8,12 @@ profiles. The existing global `--config PATH` option still selects the legacy
 connection-profile document; it does not select an application configuration
 file.
 
+Long-running display and kiosk services use a third, separate strict document.
+See [Portable display-service configuration](service-configuration.md). A
+service manifest selects an existing authorized client and its durable host
+behavior; it is not layered into this application schema and never replaces a
+daemon client profile or browser identity.
+
 ## Precedence
 
 Values are resolved in this fixed order, from lowest to highest precedence:

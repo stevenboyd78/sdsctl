@@ -12,6 +12,12 @@ the exact limits.
 This guide does not replace the
 [production TUI guide](managed-pi-display.md).
 
+New installations can stage the durable origin, CA, browser, role and
+role-bound profile in a strict private manifest; see
+[Portable display-service configuration](service-configuration.md). Schema
+version 1 does not accept a password or device key and does not change the
+manual-login contract described below.
+
 Display remains the default role. Select operator only for a physically
 controlled station that deliberately needs privileged dashboard capabilities.
 The two roles use different login routes, passwords and private browser

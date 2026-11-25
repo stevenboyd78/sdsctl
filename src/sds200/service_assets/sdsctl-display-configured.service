@@ -1,0 +1,61 @@
+[Unit]
+Description=sdsctl configured observe-only remote TUI display
+Documentation=https://github.com/stevenboyd78/sdsctl/blob/main/docs/service-configuration.md
+DefaultDependencies=no
+Wants=network-online.target getty@tty2.service
+After=basic.target network-online.target systemd-user-sessions.service plymouth-quit-wait.service cloud-init.target
+Conflicts=getty@tty1.service shutdown.target
+Before=shutdown.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Slice=system.slice
+User=sdsctl-display
+Group=sdsctl-display
+WorkingDirectory=/var/lib/sdsctl-display
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/sdsctl-display/bin/sdsctl service-config run --manifest /etc/sdsctl/display-client.toml
+Restart=no
+RestartSec=15s
+RestartForceExitStatus=75
+KillSignal=SIGTERM
+TimeoutStopSec=20s
+
+StandardInput=tty-force
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=no
+
+StateDirectory=sdsctl-display
+StateDirectoryMode=0700
+CacheDirectory=sdsctl-display
+CacheDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+DevicePolicy=closed
+DeviceAllow=/dev/tty1 rw
+DeviceAllow=char-alsa rw
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

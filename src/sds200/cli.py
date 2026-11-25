@@ -780,8 +780,10 @@ def build_parser(
     subparsers = parser.add_subparsers(dest="action", required=True)
 
     from .scanner_display_profile_cli import add_display_profile_parser
+    from .service_configuration_cli import add_service_configuration_parser
 
     add_display_profile_parser(subparsers)
+    add_service_configuration_parser(subparsers)
 
     discover = subparsers.add_parser(
         "discover",
@@ -6778,6 +6780,10 @@ def main(
         return _run_browser_device_server_setup(args)
     if args.action in {"browser-device-service", "browser-device-maintenance"}:
         return _run_browser_device_lifecycle(args)
+    if args.action == "service-config":
+        from .service_configuration_cli import run_service_configuration_command
+
+        return run_service_configuration_command(args)
 
     try:
         _apply_cli_configuration(
