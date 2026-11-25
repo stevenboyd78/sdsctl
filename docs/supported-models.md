@@ -92,6 +92,12 @@ is based on Uniden's remote-command specification and hardware-independent
 regression tests. Reports from physical SDS150 hardware are welcome; include
 firmware, platform, USB path, and sanitized command results.
 
+Uniden firmware 1.27.00 remains unqualified. Its bounded post-release safety,
+backup, transport, mode, audio, Waterfall and model-specific acceptance gates
+are defined in the
+[SDS100/SDS200 firmware 1.27 qualification plan](firmware-1.27-qualification.md).
+Do not replace the 1.26.01 hardware record merely because an update installs.
+
 Bluetooth, U/AWARE integration, and scanner programming databases remain outside
 this milestone.
 
