@@ -6,8 +6,21 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Added
+
+- Add a route-free Favorites browser-workspace appearance shell with a
+  pre-paint Auto/Light/Dark selector, semantic responsive panels, reduced-motion
+  and forced-colors fallbacks, and an exact packaged-asset allowlist. The shell
+  exposes no HTTP route, source path, workspace owner, draft, confirmation
+  token, scanner operation, or write executor.
+
 ### Changed
 
+- Let daemon-backed dashboard and Mimic-SDS TUIs follow scanner-reported
+  Waterfall mode with debounced automatic entry and return. The standard TUI
+  retains its relative diagnostic waterfall, while Mimic-SDS uses a distinct
+  SDS-style white FFT plot, green marker, and newest-first five-band rolling
+  history over the same validated shared daemon stream.
 - Reorganize the Ingress-only Home Assistant page around a three-step ordinary
   setup path with one recommended install/update action and inline restart/key
   guidance. Move digests, rollback/removal, bridge-key rotation, and optional

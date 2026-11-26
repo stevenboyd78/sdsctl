@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en" data-favorites-appearance="auto" data-favorites-palette="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f3f6fa">
+  <title>Favorites workspace preview</title>
+  <script src="/assets/favorites-appearance.js"></script>
+  <link rel="stylesheet" href="/assets/favorites-workspace.css">
+</head>
+<body data-workspace-state="unwired">
+  <a class="skip-link" href="#favorites-main">Skip to workspace</a>
+
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">sdsctl Favorites</p>
+      <h1>Favorites workspace</h1>
+      <p class="subtitle">Review copied Favorites data without scanner ownership.</p>
+    </div>
+    <div class="header-controls">
+      <span class="state-badge" data-state="foundation">
+        <span aria-hidden="true">◇</span> Foundation only
+      </span>
+      <label for="favorites-appearance-select">
+        Appearance
+        <select id="favorites-appearance-select" autocomplete="off">
+          <option value="auto">Auto</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+    </div>
+  </header>
+
+  <div class="safety-banner" role="status" aria-live="polite">
+    <span class="safety-icon" aria-hidden="true">i</span>
+    <div>
+      <strong>Preview shell — no workspace route is connected.</strong>
+      <span>This packaged surface cannot contact a scanner, execute a write, or retain a draft.</span>
+    </div>
+  </div>
+
+  <main id="favorites-main" class="workspace-layout" tabindex="-1">
+    <aside class="panel source-panel" aria-labelledby="source-heading">
+      <div class="panel-heading">
+        <div>
+          <p class="section-kicker">Source</p>
+          <h2 id="source-heading">Copied data</h2>
+        </div>
+        <span class="count-badge" aria-label="No configured sources">0</span>
+      </div>
+
+      <label for="favorites-source-select">Configured source</label>
+      <select id="favorites-source-select" disabled>
+        <option>No source adapter connected</option>
+      </select>
+      <button type="button" disabled>Open workspace</button>
+
+      <div class="empty-state compact" role="note">
+        <span class="empty-icon" aria-hidden="true">▱</span>
+        <p><strong>No workspace is open.</strong></p>
+        <p>A future operator-only adapter will provide configured labels without exposing host paths.</p>
+      </div>
+
+      <nav aria-labelledby="navigation-heading">
+        <div class="subheading-row">
+          <h3 id="navigation-heading">Hierarchy</h3>
+          <span>Revision —</span>
+        </div>
+        <ul class="tree" aria-label="Favorites hierarchy">
+          <li aria-disabled="true"><span aria-hidden="true">▹</span> System</li>
+          <li aria-disabled="true"><span aria-hidden="true">▹</span> Department</li>
+          <li aria-disabled="true"><span aria-hidden="true">▹</span> Channel</li>
+        </ul>
+      </nav>
+    </aside>
+
+    <section class="panel editor-panel" aria-labelledby="editor-heading">
+      <div class="panel-heading">
+        <div>
+          <p class="section-kicker">Editor</p>
+          <h2 id="editor-heading">Workspace overview</h2>
+        </div>
+        <span class="state-badge" data-state="clean">
+          <span aria-hidden="true">✓</span> No changes
+        </span>
+      </div>
+
+      <dl class="metric-grid">
+        <div><dt>Documents</dt><dd>—</dd></div>
+        <div><dt>Records</dt><dd>—</dd></div>
+        <div><dt>Diagnostics</dt><dd>—</dd></div>
+        <div><dt>Expires</dt><dd>—</dd></div>
+      </dl>
+
+      <div class="toolbar" aria-label="Workspace tools">
+        <label for="favorites-search">Search hierarchy</label>
+        <input id="favorites-search" type="search" placeholder="Open a workspace to search" disabled>
+        <button type="button" disabled>Undo</button>
+        <button type="button" disabled>Reset</button>
+      </div>
+
+      <div class="empty-state editor-empty" role="note">
+        <span class="empty-icon" aria-hidden="true">⌁</span>
+        <h3>Copied Favorites will appear here</h3>
+        <p>
+          The future adapter will present revision-bound, path-free nodes. Unsupported
+          fields and exact source provenance remain outside this browser boundary.
+        </p>
+      </div>
+
+      <div class="table-shell" aria-hidden="true">
+        <table>
+          <thead><tr><th>Name</th><th>Kind</th><th>Children</th><th>Available actions</th></tr></thead>
+          <tbody><tr><td>—</td><td>—</td><td>—</td><td>None</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <aside class="panel review-panel" aria-labelledby="review-heading">
+      <div class="panel-heading">
+        <div>
+          <p class="section-kicker">Review</p>
+          <h2 id="review-heading">Exact plan</h2>
+        </div>
+        <span class="state-badge" data-state="unavailable">
+          <span aria-hidden="true">!</span> Unavailable
+        </span>
+      </div>
+
+      <dl class="review-summary">
+        <div><dt>Revision</dt><dd>—</dd></div>
+        <div><dt>Changed sources</dt><dd>—</dd></div>
+        <div><dt>Ambiguities</dt><dd>—</dd></div>
+        <div><dt>Blockers</dt><dd>Not reviewed</dd></div>
+      </dl>
+
+      <div class="callout warning" role="note">
+        <span aria-hidden="true">△</span>
+        <p><strong>Execution is deliberately absent.</strong> A later packet must add stale-target refusal, backup, exact readback, and recovery evidence.</p>
+      </div>
+
+      <button class="primary-action" type="button" disabled>Review exact plan</button>
+      <button type="button" disabled>Discard workspace</button>
+    </aside>
+  </main>
+
+  <footer>
+    <p>Process-local and route-free. No autosave, browser draft, filesystem path, credential, or confirmation token is stored here.</p>
+  </footer>
+</body>
+</html>
