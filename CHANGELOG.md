@@ -6,6 +6,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Added
+
+- Add a route-free Favorites browser-workspace appearance shell with a
+  pre-paint Auto/Light/Dark selector, semantic responsive panels, reduced-motion
+  and forced-colors fallbacks, and an exact packaged-asset allowlist. The shell
+  exposes no HTTP route, source path, workspace owner, draft, confirmation
+  token, scanner operation, or write executor.
+
 ## [0.34.0] - 2026-11-24
 
 Adaptive dashboard presentation, live theme behavior, portable display

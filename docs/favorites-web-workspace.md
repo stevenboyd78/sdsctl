@@ -111,7 +111,8 @@ generic PATCH endpoint or raw file-replacement API.
 This slice does not provide:
 
 - an HTTP or WebSocket endpoint;
-- HTML, CSS, or JavaScript;
+- a reachable or data-connected browser editor (the packaged appearance shell
+  remains route-free and every workspace action is disabled);
 - browser-supplied filesystem paths;
 - autosave or durable draft persistence;
 - implicit source or write-target discovery;
@@ -149,6 +150,25 @@ testing. Browser acceptance must include both explicit modes, Auto under light
 and dark system settings, a live Auto transition, reduced-motion and
 forced-colors checks, and proof that no light background flashes before the
 chosen palette is applied.
+
+### Prepared route-free appearance shell
+
+The package now contains a deliberately unwired browser shell and an exact
+asset allowlist for the future editor. The blocking same-origin appearance
+bootstrap runs before the stylesheet and supports only `Auto`, `Light`, and
+`Dark`. `Auto` follows live `prefers-color-scheme` changes; the one selected
+appearance value may use browser-local storage. Semantic tokens cover ordinary,
+muted, selected, success, warning, error, disabled, and focus states across
+responsive one-, two-, and three-panel layouts, reduced motion, and forced
+colors.
+
+The shell contains no route, API request, session owner, source path, workspace
+identifier, draft, confirmation token, or execution control. Every workspace
+and plan action is disabled and the page identifies itself as a foundation-only
+preview. Packaging these assets does not make the editor reachable from the
+dashboard or authorize an HTTP adapter. Session-derived ownership, operator-only
+admission, logout/revocation cleanup, no-store DTO delivery, CSRF enforcement,
+and browser acceptance remain required before a route can expose the shell.
 
 ## Acceptance before browser integration
 
