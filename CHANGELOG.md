@@ -6,6 +6,15 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Changed
+
+- Reorganize the Ingress-only Home Assistant page around a three-step ordinary
+  setup path with one recommended install/update action and inline restart/key
+  guidance. Move digests, rollback/removal, bridge-key rotation, and optional
+  private-LAN identities, passwords, and clients behind clearly labeled
+  advanced disclosures while keeping App Configuration responsible for service
+  switches, private names/addresses, and Network host-port mappings.
+
 ## [0.34.0] - 2026-11-24
 
 Adaptive dashboard presentation, live theme behavior, portable display

@@ -4345,6 +4345,72 @@ function setHomeAssistantIntegrationMessage(message, state = "ready") {
   node.dataset.state = state;
 }
 
+function renderHomeAssistantIntegrationRecommendation() {
+  const artifact = record(homeAssistantIntegrationStatus.artifact);
+  const publication = record(homeAssistantIntegrationStatus.publication);
+  const artifactDigest = artifact.digest;
+  const currentDigest = publication.current_digest;
+  const rollbackDigest = publication.rollback_digest;
+  const recommended = element("home-assistant-integration-recommended");
+  const state = element("home-assistant-integration-state");
+  let action = null;
+  let buttonLabel = "No action needed";
+  let title = "Integration files are current";
+  let copy =
+    "Restart Home Assistant after a recent file change, then add or reconfigure sdsctl with the connection key below.";
+  let stateText = "Installed files match the packaged integration.";
+  let stateKind = "ready";
+
+  if (typeof artifactDigest !== "string") {
+    buttonLabel = "Status unavailable";
+    title = "Setup status is unavailable";
+    copy = "Refresh the page. No integration action is available until the packaged identity is known.";
+    stateText = "Packaged integration identity is unavailable.";
+    stateKind = "error";
+  } else if (typeof currentDigest !== "string") {
+    action = "install";
+    buttonLabel = "Install integration";
+    title = "Install the Home Assistant integration";
+    copy =
+      "This copies the packaged sdsctl integration into Home Assistant. You will restart Home Assistant yourself afterward.";
+    stateText = "The sdsctl integration is not installed.";
+    stateKind = "warning";
+  } else if (currentDigest !== artifactDigest && typeof rollbackDigest === "string") {
+    action = "maintenance";
+    buttonLabel = "Review retained rollback";
+    title = "Finish the previous maintenance step";
+    copy =
+      "A rollback copy already exists. Review it before installing another update so the recovery copy is not overwritten.";
+    stateText = "An update is available, but a retained rollback needs review first.";
+    stateKind = "warning";
+  } else if (currentDigest !== artifactDigest) {
+    action = "update";
+    buttonLabel = `Update to ${displayValue(artifact.version, "packaged version")}`;
+    title = "Update the Home Assistant integration";
+    copy =
+      "This replaces the installed files and retains the current version for rollback. You will restart Home Assistant yourself afterward.";
+    stateText = "The installed integration differs from the packaged version.";
+    stateKind = "warning";
+  }
+
+  state.textContent = stateText;
+  state.dataset.state = stateKind;
+  setText("home-assistant-next-step-title", title);
+  setText("home-assistant-next-step-copy", copy);
+  setText(
+    "home-assistant-integration-version-summary",
+    `Packaged ${displayValue(artifact.version)} · Installed ${displayValue(publication.current_version, "not installed")}`,
+  );
+  recommended.textContent = buttonLabel;
+  recommended.disabled = homeAssistantIntegrationBusy || action === null;
+  delete recommended.dataset.confirming;
+  if (action === null) {
+    delete recommended.dataset.homeAssistantRecommendedAction;
+  } else {
+    recommended.dataset.homeAssistantRecommendedAction = action;
+  }
+}
+
 function clearHomeAssistantIntegrationActionConfirmation() {
   const actions = {
     remove: ["home-assistant-integration-remove", "Remove"],
@@ -4363,6 +4429,7 @@ function clearHomeAssistantIntegrationActionConfirmation() {
     delete button.dataset.confirming;
   }
   homeAssistantIntegrationArmedAction = null;
+  renderHomeAssistantIntegrationRecommendation();
 }
 
 function confirmHomeAssistantIntegrationAction(action, guidance) {
@@ -4442,6 +4509,7 @@ function setHomeAssistantIntegrationBusy(busy) {
     busy || !rollback;
   element("home-assistant-integration-use-bridge").disabled =
     busy || typeof homeAssistantIntegrationStatus.bridge_key_digest !== "string";
+  renderHomeAssistantIntegrationRecommendation();
 }
 
 function renderHomeAssistantIntegrationStatus(payload) {
@@ -4481,6 +4549,47 @@ function renderHomeAssistantIntegrationStatus(payload) {
     homeAssistantIntegrationStatus.bridge_key_digest,
   );
   setHomeAssistantIntegrationBusy(homeAssistantIntegrationBusy);
+}
+
+async function performRecommendedHomeAssistantIntegrationAction() {
+  if (homeAssistantIntegrationBusy) {
+    return;
+  }
+  const button = element("home-assistant-integration-recommended");
+  const action = button.dataset.homeAssistantRecommendedAction;
+  if (action === "maintenance") {
+    const maintenance = element("home-assistant-integration-maintenance");
+    maintenance.open = true;
+    element("home-assistant-integration-discard-rollback").focus();
+    setHomeAssistantIntegrationMessage(
+      "Review the retained rollback. Choose Rollback to restore it or Discard rollback to remove it before updating.",
+      "warning",
+    );
+    return;
+  }
+  if (!["install", "update"].includes(action)) {
+    return;
+  }
+  if (button.dataset.confirming !== "true") {
+    button.dataset.confirming = "true";
+    button.textContent = `Confirm ${action}`;
+    setHomeAssistantIntegrationMessage(
+      `${action === "install" ? "Install" : "Update"} the packaged integration files? Home Assistant Core will not be restarted automatically. Press “${button.textContent}” to continue.`,
+      "warning",
+    );
+    return;
+  }
+
+  const artifact = record(homeAssistantIntegrationStatus.artifact);
+  if (typeof artifact.digest !== "string") {
+    setHomeAssistantIntegrationMessage(
+      "The packaged integration identity is unavailable. Refresh status before trying again.",
+      "error",
+    );
+    return;
+  }
+  element("home-assistant-integration-confirm").value = artifact.digest;
+  await performHomeAssistantIntegrationAction(action);
 }
 
 async function homeAssistantIntegrationRequest(path, options = {}) {
@@ -4695,6 +4804,10 @@ function initializeHomeAssistantIntegrationLifecycle() {
   element("home-assistant-integration-refresh").addEventListener("click", () => {
     void refreshHomeAssistantIntegrationStatus();
   });
+  element("home-assistant-integration-recommended").addEventListener(
+    "click",
+    () => void performRecommendedHomeAssistantIntegrationAction(),
+  );
   element("home-assistant-integration-confirm").addEventListener(
     "input",
     clearHomeAssistantIntegrationActionConfirmation,
