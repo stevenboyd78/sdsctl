@@ -352,9 +352,15 @@ separately, a physical cold start. Old data must be labeled stale. Neither
 console TUI may be disrupted by the new display.
 
 For upgrades, stop only this kiosk's service, preserve its private profile and
-public trust material, update the isolated package, rerun preflight and the
-interactive check, and restart only that service. Keep a verified rollback
-package. Browser profile compatibility is separate from Python package rollback.
+public trust material, install a fresh versioned package, rerun preflight and
+the interactive check, atomically select the candidate through the stable
+`/opt/sdsctl-kiosk` path, and restart only that service. The stable selector is
+required boot state and is not disposable cleanup. Keep the accepted release
+available through functional and cold-boot acceptance; only then retire its
+exact payload. Browser profile compatibility is separate from Python package
+rollback. See
+[Clean release replacement for managed displays](managed-display-release-upgrades.md)
+for the complete transaction and rollback boundary.
 
 For removal, stop/disable only the installed kiosk unit and remove its exact
 unit/environment file. Rotate the shared display password and restart the web
