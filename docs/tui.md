@@ -178,6 +178,17 @@ commands, open scanner hardware, or create a second acquisition owner. Closing
 the view releases that consumer lease while the daemon remains responsible for
 the demand-driven scanner session and last-consumer cleanup.
 
+A daemon-backed TUI also follows the classified scanner screen automatically.
+After Waterfall remains current for 750 ms, the ordinary dashboard opens its
+existing relative waterfall; an active Mimic-SDS screen instead opens the
+SDS-style presentation described below. After the scanner leaves Waterfall for
+1.25 seconds, the temporary view closes and returns to the exact dashboard or
+Mimic-SDS screen it covered. These short delays prevent transient PSI records
+from flashing the interface. Closing an automatically opened waterfall by hand
+suppresses another automatic open until the scanner first leaves Waterfall.
+Direct-scanner and replay TUIs have no daemon waterfall client and therefore do
+not perform this transition.
+
 The view validates exactly 240 hexadecimal source strings, converts them to a
 per-frame relative 0-to-1 range, and renders a bounded 256-row terminal history.
 A constant frame uses the neutral midpoint. Each row redundantly represents
@@ -189,6 +200,17 @@ an uncalibrated relative display: it does not label values as dB, signal
 strength, spectrum power, FFT magnitude, or a higher acquisition rate. Lower,
 center and upper frequency fields are shown literally as raw scanner metadata
 without inferred units.
+
+When Waterfall covers Mimic-SDS, the same validated data is deliberately
+presented in the radio's visual grammar rather than passed to the normal
+Mimic-SDS frame adapter as an unsupported scanner screen. The upper region is a
+white relative FFT plot with the reported marker position in green. The lower
+region is a newest-first rolling history with five redundant color/glyph bands,
+followed by reported lower, center, upper, marker, modulation and FFT-area
+metadata. This follows the documented SDS200 division between live FFT and
+rolling waterfall regions, but remains a scalable terminal interpretation—not
+a pixel replica and not a calibrated spectrum analyzer. Its pause and clear
+actions are local display operations and never control the scanner.
 
 The footer retains the validated timezone-aware source timestamp in the model
 and converts only its displayed form to the TUI host's configured local timezone.
@@ -209,7 +231,10 @@ Inside the waterfall view:
   daemon stream continues so lifecycle and loss counters stay current.
 - **C** clears only this client's local latest frame and history. It does not
   clear daemon state or send a scanner command.
-- **W** or **Esc** closes the view and returns to the ordinary dashboard.
+- **W** or **Esc** closes a manually opened standard view and returns to the
+  ordinary dashboard. **Esc** from an automatically opened Mimic waterfall
+  returns to Mimic-SDS and suppresses reopening until the scanner leaves
+  Waterfall mode.
 - **Q** quits the TUI, and **Ctrl+P** opens the limited waterfall command
   palette. Ordinary scanner, audio and recording actions remain inactive until
   returning to the dashboard.

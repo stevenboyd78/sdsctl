@@ -38,6 +38,20 @@ _LOW_INTENSITY_CEILING = 1.0 / 3.0
 _MID_INTENSITY_CEILING = 2.0 / 3.0
 _DARK_INTENSITY_STYLES = ("#5fd75f", "#ffaf00", "bold #ff5f5f")
 _LIGHT_INTENSITY_STYLES = ("#15803d", "#b45309", "bold #b91c1c")
+_MIMIC_INTENSITY_STYLES = (
+    "#173b8f",
+    "#00b7ff",
+    "#24d36b",
+    "#ffe45e",
+    "bold #ff4b3e",
+)
+_MIMIC_INTENSITY_GLYPHS = "░▒▓██"
+_MIMIC_FFT_AREA_LABELS = {
+    "0": "25%",
+    "1": "50%",
+    "2": "75%",
+    "3": "100%",
+}
 
 
 class TuiWaterfallClient(Protocol):
@@ -354,6 +368,45 @@ class WaterfallScreen(ModalScreen[None]):
     WaterfallScreen #waterfall-history { height: 1fr; border: round; padding: 0 1; }
     WaterfallScreen #waterfall-scale { height: 2; }
     WaterfallScreen #waterfall-keys { height: 1; }
+    WaterfallScreen.mimic {
+        padding: 0;
+        background: #000000;
+        color: #edf4fc;
+    }
+    WaterfallScreen.mimic #waterfall-title {
+        background: #173552;
+        color: #edf4fc;
+        text-style: bold;
+        padding: 0 1;
+    }
+    WaterfallScreen.mimic #waterfall-health {
+        height: 3;
+        background: #07111c;
+        color: #71e1c1;
+        padding: 0 1;
+    }
+    WaterfallScreen.mimic #waterfall-spectrum {
+        height: 1fr;
+        border: solid #31516a;
+        background: #000000;
+        padding: 0;
+    }
+    WaterfallScreen.mimic #waterfall-history {
+        height: 1fr;
+        border: solid #31516a;
+        background: #000000;
+        padding: 0;
+    }
+    WaterfallScreen.mimic #waterfall-scale {
+        height: 2;
+        background: #07111c;
+        padding: 0 1;
+    }
+    WaterfallScreen.mimic #waterfall-keys {
+        background: #173552;
+        color: #edf4fc;
+        padding: 0 1;
+    }
     """
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("w,escape", "back", "Dashboard"),
@@ -369,19 +422,31 @@ class WaterfallScreen(ModalScreen[None]):
         *,
         screen_class: str | None = None,
         history_limit: int = TUI_WATERFALL_HISTORY_LIMIT,
+        mimic: bool = False,
+        on_manual_close: Callable[[], None] | None = None,
     ) -> None:
+        if on_manual_close is not None and not callable(on_manual_close):
+            raise TypeError("Waterfall close callback must be callable or None.")
         super().__init__()
         self.model = TuiWaterfallModel(history_limit=history_limit)
         self.reader = TuiWaterfallReader(factory, self.model)
+        self.mimic = mimic
+        self._on_manual_close = on_manual_close
         self._timer: Timer | None = None
         self._rendered: TuiWaterfallSnapshot | None = None
         self._rendered_size: tuple[int, int] | None = None
         if screen_class is not None:
             self.add_class(screen_class)
+        if mimic:
+            self.add_class("mimic")
 
     def compose(self) -> ComposeResult:
         yield Static(
-            _waterfall_title(light=self.has_class("light")),
+            (
+                Text("SDS200 | WATERFALL | FFT + 10 SECOND HISTORY")
+                if self.mimic
+                else _waterfall_title(light=self.has_class("light"))
+            ),
             id="waterfall-title",
             markup=False,
         )
@@ -390,7 +455,11 @@ class WaterfallScreen(ModalScreen[None]):
         yield Static(id="waterfall-history", markup=False)
         yield Static(id="waterfall-scale", markup=False)
         yield Static(
-            "W/Esc Back | Space Pause/Resume | C Clear local history | Q Quit",
+            (
+                "Esc Return to Mimic | Space Pause/Resume | C Clear local history | Q Quit"
+                if self.mimic
+                else "W/Esc Back | Space Pause/Resume | C Clear local history | Q Quit"
+            ),
             id="waterfall-keys",
             markup=False,
         )
@@ -411,6 +480,8 @@ class WaterfallScreen(ModalScreen[None]):
         self.call_after_refresh(lambda: self._refresh(force=True))
 
     def action_back(self) -> None:
+        if self._on_manual_close is not None:
+            self._on_manual_close()
         self.dismiss()
 
     def action_pause(self) -> None:
@@ -432,18 +503,51 @@ class WaterfallScreen(ModalScreen[None]):
         self._rendered_size = size
 
         health = self.query_one("#waterfall-health", Static)
-        health.update(
-            f"{snapshot.status}{' — PAUSED locally' if snapshot.paused else ''}\n"
-            f"Frames: {snapshot.frames_received} | Sequence: "
-            f"{snapshot.sequence if snapshot.sequence is not None else '—'} | "
-            f"Queue loss: {snapshot.responses_dropped} | Overflows: {snapshot.overflows} | "
-            f"Reconnects: {snapshot.reconnects}"
-        )
+        if self.mimic:
+            health.update(_mimic_health_text(snapshot))
+        else:
+            health.update(
+                f"{snapshot.status}{' — PAUSED locally' if snapshot.paused else ''}\n"
+                f"Frames: {snapshot.frames_received} | Sequence: "
+                f"{snapshot.sequence if snapshot.sequence is not None else '—'} | "
+                f"Queue loss: {snapshot.responses_dropped} | Overflows: {snapshot.overflows} | "
+                f"Reconnects: {snapshot.reconnects}"
+            )
 
         spectrum = self.query_one("#waterfall-spectrum", Static)
         history = self.query_one("#waterfall-history", Static)
-        width = max(1, history.content_size.width - 2)
-        visible_rows = max(1, history.content_size.height - 2)
+        history_width = max(1, history.content_size.width - (0 if self.mimic else 2))
+        visible_rows = max(1, history.content_size.height - (0 if self.mimic else 2))
+        if self.mimic:
+            spectrum_width = max(1, spectrum.content_size.width)
+            spectrum_height = max(1, spectrum.content_size.height)
+            if snapshot.latest is None:
+                spectrum.update(Text("Waiting for live FFT data…"))
+            else:
+                spectrum.update(
+                    _render_mimic_fft(
+                        snapshot.latest,
+                        spectrum_width,
+                        spectrum_height,
+                        marker_position=_session_integer(
+                            snapshot.session,
+                            "waterfall_status",
+                            "marker_position",
+                        ),
+                    )
+                )
+            rows = tuple(reversed(snapshot.history[-visible_rows:]))
+            history.update(
+                _render_mimic_history(rows, history_width)
+                if rows
+                else Text("Waiting for rolling waterfall history…")
+            )
+            self.query_one("#waterfall-scale", Static).update(
+                _mimic_scale_text(snapshot)
+            )
+            return
+
+        width = history_width
         spectrum_text = Text("Latest: ")
         if snapshot.latest is None:
             spectrum_text.append("No current frame")
@@ -525,6 +629,123 @@ def _render_relative_row(
     if run_style is not None:
         rendered.append("".join(run), style=run_style)
     return rendered
+
+
+def _render_mimic_fft(
+    values: Sequence[float],
+    width: int,
+    height: int,
+    *,
+    marker_position: int | None = None,
+) -> Text:
+    """Render an SDS-style white FFT plot with a green tuning marker."""
+
+    rendered = Text(no_wrap=True, overflow="crop")
+    if width <= 0 or height <= 0:
+        return rendered
+    if not values:
+        return Text(" " * width)
+
+    count = len(values)
+    levels: list[float] = []
+    for column in range(width):
+        start = column * count // width
+        stop = max(start + 1, (column + 1) * count // width)
+        levels.append(sum(values[start:stop]) / (stop - start))
+    marker_source = count // 2 if marker_position is None else marker_position
+    marker_column = min(width - 1, max(0, marker_source * width // count))
+
+    for row in range(height):
+        if row:
+            rendered.append("\n")
+        threshold = (height - row) / height
+        for column, level in enumerate(levels):
+            if column == marker_column:
+                rendered.append("◆" if level >= threshold else "│", style="bold #24d36b")
+            elif level >= threshold:
+                rendered.append("█", style="bold #edf4fc")
+            elif row == height - 1:
+                rendered.append("·", style="#31516a")
+            else:
+                rendered.append(" ")
+    return rendered
+
+
+def _render_mimic_history(
+    rows: Sequence[Sequence[float]],
+    width: int,
+) -> Text:
+    """Render newest-first rolling history with five signal-strength bands."""
+
+    rendered = Text(no_wrap=True, overflow="crop")
+    for row_index, values in enumerate(rows):
+        if row_index:
+            rendered.append("\n")
+        count = len(values)
+        if width <= 0:
+            continue
+        if count == 0:
+            rendered.append(" " * width)
+            continue
+        for column in range(width):
+            start = column * count // width
+            stop = max(start + 1, (column + 1) * count // width)
+            level = sum(values[start:stop]) / (stop - start)
+            band = min(4, max(0, int(level * 5)))
+            rendered.append(
+                _MIMIC_INTENSITY_GLYPHS[band],
+                style=_MIMIC_INTENSITY_STYLES[band],
+            )
+    return rendered
+
+
+def _mimic_health_text(snapshot: TuiWaterfallSnapshot) -> str:
+    status = _waterfall_status(snapshot)
+    marker = _session_value(status, "marker_frequency")
+    modulation = _session_value(status, "modulation")
+    fft_area = _MIMIC_FFT_AREA_LABELS.get(
+        _session_value(status, "fft_area_size"),
+        "Unavailable",
+    )
+    return (
+        f"{snapshot.status}{' — LOCAL HOLD' if snapshot.paused else ''} | "
+        f"MARKER {marker} | {modulation} | FFT {fft_area}\n"
+        f"Frames {snapshot.frames_received} | Queue loss {snapshot.responses_dropped} | "
+        f"Overflows {snapshot.overflows} | Reconnects {snapshot.reconnects}"
+    )
+
+
+def _mimic_scale_text(snapshot: TuiWaterfallSnapshot) -> str:
+    status = _waterfall_status(snapshot)
+    lower = _session_value(status, "lower_frequency")
+    center = _session_value(status, "center_frequency")
+    upper = _session_value(status, "upper_frequency")
+    marker = _session_value(status, "marker_frequency")
+    modulation = _session_value(status, "modulation")
+    return (
+        f"LOW {lower} | CENTER {center} | HIGH {upper}\n"
+        f"MARKER {marker} | MOD {modulation} | Relative live data; no scanner control"
+    )
+
+
+def _waterfall_status(snapshot: TuiWaterfallSnapshot) -> Mapping[str, object]:
+    value = snapshot.session.get("waterfall_status")
+    return value if isinstance(value, Mapping) else {}
+
+
+def _session_integer(
+    session: Mapping[str, object],
+    group: str,
+    key: str,
+) -> int | None:
+    value = session.get(group)
+    mapping = value if isinstance(value, Mapping) else {}
+    raw = mapping.get(key)
+    if isinstance(raw, str) and raw.isdecimal():
+        return int(raw)
+    if type(raw) is int and raw >= 0:
+        return raw
+    return None
 
 
 def _scale_text(

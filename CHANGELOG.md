@@ -6,6 +6,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Changed
+
+- Let daemon-backed dashboard and Mimic-SDS TUIs follow scanner-reported
+  Waterfall mode with debounced automatic entry and return. The standard TUI
+  retains its relative diagnostic waterfall, while Mimic-SDS uses a distinct
+  SDS-style white FFT plot, green marker, and newest-first five-band rolling
+  history over the same validated shared daemon stream.
+
 ## [0.34.0] - 2026-11-24
 
 Adaptive dashboard presentation, live theme behavior, portable display

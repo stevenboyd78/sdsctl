@@ -71,6 +71,8 @@ TerminalFailureSubscribe = Callable[
 ]
 logger = logging.getLogger(__name__)
 AUTO_PSI_RECOVERY_LABEL = "Recover stale PSI"
+TUI_WATERFALL_AUTO_SWITCH_DELAY = 0.75
+TUI_WATERFALL_AUTO_RETURN_DELAY = 1.25
 
 
 def _local_now() -> datetime:
@@ -609,6 +611,11 @@ class ScannerTuiApp(App[None]):
         self._details_screen: ScannerDetailsScreen | None = None
         self._waterfall_client_factory = waterfall_client_factory
         self._waterfall_screen: WaterfallScreen | None = None
+        self._waterfall_auto_active = False
+        self._waterfall_auto_suppressed = False
+        self._waterfall_auto_origin: str | None = None
+        self._waterfall_auto_switch_timer: Timer | None = None
+        self._waterfall_auto_return_timer: Timer | None = None
         self._details_current = connected is True
         self._mimic_style = "preferred"
         self._mimic_treatment = "strips"
@@ -798,6 +805,7 @@ class ScannerTuiApp(App[None]):
                 )
         if self._startup_view == "mimic":
             self.call_after_refresh(self.action_mimic)
+        self.call_after_refresh(self._reconcile_automatic_waterfall)
 
     def on_resize(self, event: Resize) -> None:
         """Refresh size-dependent summaries after terminal resizing."""
@@ -813,6 +821,8 @@ class ScannerTuiApp(App[None]):
 
     def on_unmount(self) -> None:
         self._shutdown_started.set()
+        self._stop_automatic_waterfall_timer("switch")
+        self._stop_automatic_waterfall_timer("return")
         if self._mimic_reader is not None:
             self._mimic_reader.close()
         for timer in self._poll_timers:
@@ -912,24 +922,117 @@ class ScannerTuiApp(App[None]):
             or self._details_screen is not None
         ):
             return
+        self._open_waterfall(mimic=False, automatic=False)
+
+    def _open_waterfall(self, *, mimic: bool, automatic: bool) -> None:
+        factory = self._waterfall_client_factory
+        if factory is None or self._waterfall_screen is not None:
+            return
         waterfall = WaterfallScreen(
-            self._waterfall_client_factory,
+            factory,
             screen_class=self._theme_screen_class,
+            mimic=mimic,
+            on_manual_close=(
+                self._manual_close_automatic_waterfall if automatic else None
+            ),
+        )
+        self._waterfall_auto_active = automatic
+        self._waterfall_auto_origin = (
+            "mimic" if automatic and mimic else "dashboard" if automatic else None
         )
         self._waterfall_screen = waterfall
         self.push_screen(waterfall, self._waterfall_closed)
+
+    def _reconcile_automatic_waterfall(self) -> None:
+        if self._shutdown_started.is_set() or not self.waterfall_available:
+            return
+        is_waterfall = self._snapshot.screen_kind is ScannerScreenKind.WATERFALL
+        if is_waterfall:
+            self._stop_automatic_waterfall_timer("return")
+            if (
+                self._waterfall_auto_suppressed
+                or self._waterfall_screen is not None
+                or self._details_screen is not None
+                or self._waterfall_auto_switch_timer is not None
+            ):
+                return
+            self._waterfall_auto_switch_timer = self.set_timer(
+                TUI_WATERFALL_AUTO_SWITCH_DELAY,
+                self._activate_automatic_waterfall,
+            )
+            return
+
+        self._waterfall_auto_suppressed = False
+        self._stop_automatic_waterfall_timer("switch")
+        if not self._waterfall_auto_active:
+            return
+        if self._waterfall_screen is None:
+            self._waterfall_auto_active = False
+            self._waterfall_auto_origin = None
+            return
+        if self._waterfall_auto_return_timer is None:
+            self._waterfall_auto_return_timer = self.set_timer(
+                TUI_WATERFALL_AUTO_RETURN_DELAY,
+                self._deactivate_automatic_waterfall,
+            )
+
+    def _activate_automatic_waterfall(self) -> None:
+        self._waterfall_auto_switch_timer = None
+        if (
+            self._shutdown_started.is_set()
+            or self._snapshot.screen_kind is not ScannerScreenKind.WATERFALL
+            or self._waterfall_auto_suppressed
+            or self._waterfall_screen is not None
+            or self._details_screen is not None
+        ):
+            return
+        self._open_waterfall(
+            mimic=self._mimic_screen is not None,
+            automatic=True,
+        )
+
+    def _deactivate_automatic_waterfall(self) -> None:
+        self._waterfall_auto_return_timer = None
+        if self._snapshot.screen_kind is ScannerScreenKind.WATERFALL:
+            return
+        waterfall = self._waterfall_screen
+        self._waterfall_auto_active = False
+        self._waterfall_auto_origin = None
+        if waterfall is not None:
+            waterfall.dismiss()
+
+    def _manual_close_automatic_waterfall(self) -> None:
+        self._stop_automatic_waterfall_timer("return")
+        self._waterfall_auto_active = False
+        self._waterfall_auto_origin = None
+        self._waterfall_auto_suppressed = (
+            self._snapshot.screen_kind is ScannerScreenKind.WATERFALL
+        )
+
+    def _stop_automatic_waterfall_timer(self, timer: str) -> None:
+        attribute = (
+            "_waterfall_auto_switch_timer"
+            if timer == "switch"
+            else "_waterfall_auto_return_timer"
+        )
+        current = getattr(self, attribute)
+        if current is not None:
+            current.stop()
+            setattr(self, attribute, None)
 
     def _waterfall_closed(self, result: None) -> None:
         del result
         self._waterfall_screen = None
         self._pi_dashboard_layout = None
         self._refresh_view()
+        self._reconcile_automatic_waterfall()
 
     def _details_closed(self, result: None) -> None:
         del result
         self._details_screen = None
         self._pi_dashboard_layout = None
         self._refresh_view()
+        self._reconcile_automatic_waterfall()
 
     def _mimic_closed(self, result: None) -> None:
         del result
@@ -939,6 +1042,7 @@ class ScannerTuiApp(App[None]):
         self._mimic_screen = None
         self._pi_dashboard_layout = None
         self._refresh_view()
+        self._reconcile_automatic_waterfall()
 
     def _mimic_runtime(self) -> Text:
         rows = [
@@ -1454,6 +1558,7 @@ class ScannerTuiApp(App[None]):
         self._stream_mode = "LIVE PSI"
         self._status_message = "Live PSI update received"
         self._refresh_view()
+        self._reconcile_automatic_waterfall()
 
     def check_stale(self) -> None:
         """Update freshness after comparing the last PSI update with the threshold."""
