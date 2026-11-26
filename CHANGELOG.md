@@ -13,6 +13,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   and forced-colors fallbacks, and an exact packaged-asset allowlist. The shell
   exposes no HTTP route, source path, workspace owner, draft, confirmation
   token, scanner operation, or write executor.
+- Add a private server-side Favorites profile store with explicit SDS100,
+  SDS200, or shared compatibility, exact immutable snapshots, bounded revision
+  history, stable path-free summaries, and optimistic-concurrency protection.
+  This persistence foundation adds no browser route, scanner target, USB/FTP
+  mutation, autosave, or deployment behavior.
 
 ### Changed
 
