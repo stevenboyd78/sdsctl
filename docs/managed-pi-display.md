@@ -15,6 +15,13 @@ The versioned migration is deliberately one host at a time. Existing v0.33.0
 units remain supported and must not be rewritten merely because a manifest
 candidate was generated.
 
+For later application releases, do not upgrade this virtual environment in
+place or treat its stable `/opt/sdsctl-display` path as disposable cleanup.
+Follow [Clean release replacement for managed displays](managed-display-release-upgrades.md):
+preserve configuration and identity, build a fresh versioned candidate,
+atomically select it, validate and cold-boot, and only then retire the old
+payload.
+
 ## Safety boundary
 
 The managed display:

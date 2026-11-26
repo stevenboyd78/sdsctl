@@ -259,3 +259,18 @@ Migrate one host at a time:
 
 Do not migrate both display hosts at once. A candidate file is not authority to
 rotate credentials, alter Home Assistant, wake a scanner, or start audio.
+
+## Clean release replacement
+
+Once a host uses a portable manifest, application-code upgrades should use a
+fresh versioned environment rather than modifying the accepted environment in
+place. The stable `/opt/sdsctl-display` or `/opt/sdsctl-kiosk` selector is part
+of the installed boot contract and must survive cleanup whenever its service
+remains installed. Preserve the manifest and all protected runtime state,
+preflight a clean candidate, stop the exact service, atomically switch the
+selector, validate and cold-boot, and only then retire the old payload.
+
+See [Clean release replacement for managed displays](managed-display-release-upgrades.md)
+for the complete path classification, transaction, rollback and automation
+boundaries. That procedure is deliberately separate from manifest migration,
+credential rotation and automatic deployment.

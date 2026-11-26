@@ -453,6 +453,14 @@ the development installation before replacing it.
 
 ## 9. Verify the published package
 
+Managed Raspberry Pi display upgrades use the separate
+[clean release replacement procedure](managed-display-release-upgrades.md).
+Treat the versioned application payload as replaceable, but preserve portable
+manifests, protected configuration and identities, recordings, dedicated
+browser state, service integration and the stable release selector. Do not
+permanently delete the accepted payload until the clean candidate passes its
+one-host-at-a-time functional and cold-boot gates.
+
 Install the exact release in a clean environment after the Trusted Publishing workflow succeeds:
 
 ```bash
