@@ -21,6 +21,12 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   retains its relative diagnostic waterfall, while Mimic-SDS uses a distinct
   SDS-style white FFT plot, green marker, and newest-first five-band rolling
   history over the same validated shared daemon stream.
+- Reorganize the Ingress-only Home Assistant page around a three-step ordinary
+  setup path with one recommended install/update action and inline restart/key
+  guidance. Move digests, rollback/removal, bridge-key rotation, and optional
+  private-LAN identities, passwords, and clients behind clearly labeled
+  advanced disclosures while keeping App Configuration responsible for service
+  switches, private names/addresses, and Network host-port mappings.
 
 ## [0.34.0] - 2026-11-24
 

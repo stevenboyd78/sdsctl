@@ -760,6 +760,23 @@ memory and are cleared after 60 seconds, when explicitly cleared, or when the
 page is hidden or left. Persistent private keys and credentials remain below
 App-owned `/data/advanced-access` with private permissions.
 
+The Ingress-only Home Assistant page presents ordinary setup first: install or
+update the packaged integration through one recommended two-step action,
+restart Home Assistant Core manually, then reveal the short-lived bridge key
+only when Home Assistant requests it. Exact digests, rollback, removal, and key
+rotation remain available under **Advanced integration maintenance** rather
+than competing with the normal path.
+
+Private-LAN access is a separate collapsed expert workflow. App Configuration
+owns its service enable switches, private server name, host address, and
+Supervisor Network host-port mappings. The dashboard creates the private
+identity, one-time operator/display passwords, certificate, and revocable
+client files only after those options are saved and the App has restarted.
+Those generated secrets are intentionally not App options and are never stored
+in browser storage. Open **Settings > Apps > sds200 > Configuration** for the
+persistent options; return to **Web UI > Home Assistant** for generated runtime
+material.
+
 The SDS200's own LAN protocols and the current non-TLS MQTT adapter are not
 encrypted. The App keeps generic daemon MQTT commands disabled, but its seven
 dedicated Home Assistant control topics still make authorized broker publishers

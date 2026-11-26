@@ -120,6 +120,20 @@ The dashboard runs through authenticated Home Assistant Ingress and supports:
 - finalized recording inventory and playback; and
 - the existing dashboard themes and API documentation.
 
+The **Home Assistant** page is organized around the ordinary setup path:
+
+1. install or update the packaged integration with the recommended action;
+2. restart Home Assistant Core from Home Assistant settings; and
+3. reveal the short-lived connection key only when the integration asks for it.
+
+Version digests, rollback/removal, and key rotation are collapsed under
+**Advanced integration maintenance**. The separate **Advanced remote access**
+section is also collapsed because most installations do not need it. Configure
+its service switches, private name/address, and Network host ports at
+**Settings > Apps > sds200 > Configuration**; return to **Web UI > Home
+Assistant** only to generate runtime identity, password, certificate, or client
+material after restarting the App.
+
 On desktop, Scanner connection also contains daemon runtime, while Browser audio,
 Capture, and Recent recordings each have their own lower dashboard panel.
 Responsive layouts preserve those functional groups on narrower screens.

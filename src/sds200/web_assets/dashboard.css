@@ -2152,6 +2152,159 @@ body {
   display: block;
 }
 
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.home-assistant-setup-intro {
+  max-width: 76ch;
+  margin: clamp(0.25rem, 0.8vmin, 0.65rem) 0;
+  color: var(--muted);
+  font-size: clamp(0.72rem, 1.55vmin, 0.92rem);
+}
+
+.home-assistant-guided-grid {
+  display: grid;
+  grid-template-columns: minmax(17rem, 1.2fr) minmax(17rem, 1fr);
+  gap: var(--workspace-gap);
+  margin-top: clamp(0.35rem, 1vmin, 0.8rem);
+}
+
+.home-assistant-setup-steps {
+  display: grid;
+  gap: clamp(0.35rem, 0.9vmin, 0.7rem);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-assistant-setup-steps li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(0.35rem, 0.9vmin, 0.7rem);
+  min-width: 0;
+  padding: clamp(0.4rem, 1vmin, 0.75rem);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  background: color-mix(in srgb, var(--surface-emphasis) 45%, transparent);
+}
+
+.home-assistant-setup-steps li > span:last-child {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.home-assistant-setup-steps small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.setup-step-number {
+  display: grid;
+  width: 1.65rem;
+  height: 1.65rem;
+  place-items: center;
+  border: 0.125rem solid var(--accent);
+  border-radius: 50%;
+  color: var(--accent-strong);
+  font-weight: 850;
+}
+
+.home-assistant-next-step,
+.home-assistant-configuration-boundary,
+.home-assistant-integration-secret {
+  min-width: 0;
+  padding: clamp(0.45rem, 1.2vmin, 0.85rem);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  background: color-mix(in srgb, var(--surface-emphasis) 45%, transparent);
+}
+
+.home-assistant-next-step h3,
+.home-assistant-integration-secret h3 {
+  margin: 0;
+  font-size: clamp(0.82rem, 1.8vmin, 1.05rem);
+}
+
+.home-assistant-next-step > p:not(.panel-kicker),
+.home-assistant-integration-secret > p {
+  margin: clamp(0.25rem, 0.7vmin, 0.55rem) 0;
+  color: var(--muted);
+  font-size: clamp(0.68rem, 1.45vmin, 0.86rem);
+}
+
+.technical-summary {
+  overflow-wrap: anywhere;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", monospace;
+}
+
+.home-assistant-detail-disclosure {
+  margin-top: clamp(0.35rem, 1vmin, 0.8rem);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  background: color-mix(in srgb, var(--surface-emphasis) 30%, transparent);
+}
+
+.home-assistant-detail-disclosure > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--workspace-gap);
+  align-items: center;
+  min-height: 2.75rem;
+  padding: clamp(0.45rem, 1.1vmin, 0.8rem);
+  color: var(--text);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.home-assistant-detail-disclosure > summary small {
+  color: var(--muted);
+  font-weight: 650;
+  text-align: right;
+}
+
+.home-assistant-detail-disclosure > summary::marker {
+  color: var(--accent);
+}
+
+.home-assistant-detail-content {
+  padding: 0 clamp(0.45rem, 1.1vmin, 0.8rem) clamp(0.45rem, 1.1vmin, 0.8rem);
+  border-top: 1px solid var(--border);
+}
+
+.home-assistant-configuration-boundary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--workspace-gap);
+  margin-top: clamp(0.35rem, 1vmin, 0.8rem);
+}
+
+.home-assistant-configuration-boundary > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.home-assistant-configuration-boundary span,
+.advanced-access-technical-guidance {
+  color: var(--muted);
+  font-size: clamp(0.68rem, 1.45vmin, 0.86rem);
+}
+
+.advanced-access-technical-guidance {
+  margin: clamp(0.3rem, 0.9vmin, 0.7rem) 0 0;
+}
+
 .home-assistant-integration-message {
   min-height: 1.2em;
   margin: clamp(0.25rem, 0.8vmin, 0.65rem) 0;
@@ -2176,7 +2329,7 @@ body {
 }
 
 .home-assistant-integration-confirmation label,
-.home-assistant-integration-secret label {
+.home-assistant-integration-secret label:not(.visually-hidden) {
   color: var(--muted);
   font-weight: 750;
 }
@@ -2271,6 +2424,23 @@ body {
   margin: clamp(0.3rem, 0.9vmin, 0.7rem) 0 0;
   color: var(--muted);
   font-size: clamp(0.68rem, 1.45vmin, 0.86rem);
+}
+
+@media (max-width: 56rem) {
+  .home-assistant-guided-grid,
+  .home-assistant-configuration-boundary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 36rem) {
+  .home-assistant-detail-disclosure > summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .home-assistant-detail-disclosure > summary small {
+    text-align: left;
+  }
 }
 
 .scanner-panel {

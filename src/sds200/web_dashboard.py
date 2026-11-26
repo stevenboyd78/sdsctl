@@ -1621,8 +1621,71 @@ def _home_assistant_integration_panel() -> str:
       >
         <header class="panel-header">
           <p class="panel-kicker">Home Assistant Core</p>
-          <h2 id="home-assistant-integration-title">Live-audio integration</h2>
+          <h2 id="home-assistant-integration-title">Home Assistant setup</h2>
         </header>
+
+        <p class="home-assistant-setup-intro">
+          Connect sdsctl to Home Assistant in three guided steps. Most users
+          only need this section; maintenance identities and rollback tools are
+          available below when they are actually needed.
+        </p>
+
+        <div class="home-assistant-guided-grid">
+          <ol class="home-assistant-setup-steps" aria-label="Home Assistant setup steps">
+            <li>
+              <span class="setup-step-number" aria-hidden="true">1</span>
+              <span>
+                <strong>Install the integration</strong>
+                <small id="home-assistant-integration-state">
+                  Checking installed files.
+                </small>
+              </span>
+            </li>
+            <li>
+              <span class="setup-step-number" aria-hidden="true">2</span>
+              <span>
+                <strong>Restart Home Assistant</strong>
+                <small>
+                  Use Settings → System → Restart after an install, update,
+                  rollback, or removal.
+                </small>
+              </span>
+            </li>
+            <li>
+              <span class="setup-step-number" aria-hidden="true">3</span>
+              <span>
+                <strong>Add or reconfigure sdsctl</strong>
+                <small>
+                  When Home Assistant asks for the bridge key, reveal and copy
+                  it below.
+                </small>
+              </span>
+            </li>
+          </ol>
+
+          <section
+            class="home-assistant-next-step"
+            aria-labelledby="home-assistant-next-step-title"
+          >
+            <p class="panel-kicker">Recommended next step</p>
+            <h3 id="home-assistant-next-step-title">Checking setup</h3>
+            <p id="home-assistant-next-step-copy">
+              Reading the packaged and installed integration versions.
+            </p>
+            <p
+              id="home-assistant-integration-version-summary"
+              class="technical-summary"
+            >Checking versions</p>
+            <div class="home-assistant-integration-actions">
+              <button id="home-assistant-integration-recommended" type="button" disabled>
+                Checking
+              </button>
+              <button id="home-assistant-integration-refresh" type="button">
+                Refresh status
+              </button>
+            </div>
+          </section>
+        </div>
 
         <p
           id="home-assistant-integration-message"
@@ -1631,6 +1694,15 @@ def _home_assistant_integration_panel() -> str:
           aria-live="polite"
         >Loading integration lifecycle status.</p>
 
+        <details
+          id="home-assistant-integration-maintenance"
+          class="home-assistant-detail-disclosure"
+        >
+          <summary>
+            <span>Advanced integration maintenance</span>
+            <small>Versions, exact identities, rollback, removal, and key rotation</small>
+          </summary>
+          <div class="home-assistant-detail-content">
         <dl class="status-list status-list-compact">
           <div>
             <dt>Packaged version</dt>
@@ -1716,9 +1788,6 @@ def _home_assistant_integration_panel() -> str:
           role="group"
           aria-label="Home Assistant integration lifecycle"
         >
-          <button id="home-assistant-integration-refresh" type="button">
-            Refresh
-          </button>
           <button
             id="home-assistant-integration-install"
             type="button"
@@ -1744,10 +1813,27 @@ def _home_assistant_integration_panel() -> str:
             type="button"
             data-home-assistant-integration-action="discard-rollback"
           >Discard rollback</button>
+          <button
+            id="home-assistant-integration-rotate-key"
+            type="button"
+          >Rotate bridge key</button>
         </div>
+          </div>
+        </details>
 
-        <div class="home-assistant-integration-secret">
-          <label for="home-assistant-integration-bridge-key">Bridge key</label>
+        <section
+          class="home-assistant-integration-secret"
+          aria-labelledby="home-assistant-bridge-key-title"
+        >
+          <h3 id="home-assistant-bridge-key-title">Home Assistant connection key</h3>
+          <p>
+            Reveal this only when Home Assistant asks for the sdsctl bridge
+            key. The value clears from this page after 60 seconds.
+          </p>
+          <label
+            class="visually-hidden"
+            for="home-assistant-integration-bridge-key"
+          >Home Assistant connection key</label>
           <input
             id="home-assistant-integration-bridge-key"
             class="technical-value"
@@ -1770,17 +1856,12 @@ def _home_assistant_integration_panel() -> str:
               type="button"
               disabled
             >Copy</button>
-            <button
-              id="home-assistant-integration-rotate-key"
-              type="button"
-            >Rotate key</button>
           </div>
-        </div>
+        </section>
 
         <p class="home-assistant-integration-guidance">
-          Core is never restarted automatically. Restart Core after an install,
-          update, rollback, or removal. Restart this App immediately after key
-          rotation, then complete integration reauthentication.
+          sdsctl never restarts Home Assistant Core automatically. Existing
+          scanner and App configuration is not changed by viewing this page.
         </p>
       </section>"""
 
@@ -1795,6 +1876,41 @@ def _home_assistant_advanced_access_panel() -> str:
           <p class="panel-kicker">Optional private LAN</p>
           <h2 id="home-assistant-advanced-title">Advanced remote access</h2>
         </header>
+
+        <p class="home-assistant-setup-intro">
+          Most Home Assistant users do not need this. Use it only for a native
+          dashboard or a separate sdsctl client on a trusted private network.
+        </p>
+
+        <div class="home-assistant-configuration-boundary" role="note">
+          <div>
+            <strong>Set in App Configuration</strong>
+            <span>
+              Open Home Assistant Settings → Apps → sds200 → Configuration.
+              Set service enable switches, the private server name, host
+              address, and Network host ports there.
+            </span>
+          </div>
+          <div>
+            <strong>Created here after restart</strong>
+            <span>Server identity, one-time dashboard passwords, and revocable client files.</span>
+          </div>
+        </div>
+
+        <p class="home-assistant-integration-guidance">
+          Leave the advanced App options and Network mappings disabled unless a
+          private-LAN client or native dashboard needs them.
+        </p>
+
+        <details
+          id="home-assistant-advanced-access-details"
+          class="home-assistant-detail-disclosure"
+        >
+          <summary>
+            <span>Configure advanced private-LAN access</span>
+            <small>Identity, passwords, clients, certificate, and readiness</small>
+          </summary>
+          <div class="home-assistant-detail-content">
 
         <p
           id="home-assistant-advanced-message"
@@ -1974,16 +2090,19 @@ def _home_assistant_advanced_access_panel() -> str:
           </div>
         </section>
 
-        <p class="home-assistant-integration-guidance">
-          In App Configuration, set the private server name, enable only the
-          service you need, and assign its private-LAN Network host port. Save
-          and restart this App; an unprepared listener remains safely withheld.
+        <p class="advanced-access-technical-guidance">
+          In Home Assistant Settings → Apps → sds200 → Configuration, set the
+          private server name, enable only the service you need, and assign its
+          private-LAN Network host port. Save and restart this App; an
+          unprepared listener remains safely withheld.
           Return here to create its identity, password, or client, save every
           one-time value, and restart once more to activate it. Home Assistant
           publishes enabled ports on all host interfaces; restrict them to
           trusted private clients with your firewall. Internet exposure, router
           forwarding, and reverse proxies are unsupported.
         </p>
+          </div>
+        </details>
       </section>"""
 
 

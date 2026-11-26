@@ -306,8 +306,14 @@ def test_lifecycle_routes_and_panel_exist_only_in_ingress(
 
     assert ingress_shell.status_code == 200
     assert 'id="home-assistant-integration-title"' in ingress_shell.text
+    assert 'id="home-assistant-integration-recommended"' in ingress_shell.text
+    assert 'id="home-assistant-integration-maintenance"' in ingress_shell.text
     assert 'id="home-assistant-advanced-title"' in ingress_shell.text
+    assert 'id="home-assistant-advanced-access-details"' in ingress_shell.text
     assert 'id="home-assistant-advanced-clients"' in ingress_shell.text
+    assert "Most Home Assistant users do not need this." in ingress_shell.text
+    assert "Set in App Configuration" in ingress_shell.text
+    assert "Created here after restart" in ingress_shell.text
     assert 'class="home-assistant-workspace"' in ingress_shell.text
     assert 'id="pane-tab-home-assistant"' in ingress_shell.text
     assert 'data-workspace-tab="home-assistant"' in ingress_shell.text
@@ -353,6 +359,30 @@ def test_ingress_destructive_actions_use_in_page_confirmation() -> None:
     assert "Press “${button.textContent}” to continue." in script
     assert '"discard-rollback"' in script
     assert '"rotate-bridge-key"' in script
+
+
+def test_ingress_recommended_path_is_guided_and_preserves_exact_confirmation() -> None:
+    script = (
+        Path(__file__).parents[1]
+        / "src"
+        / "sds200"
+        / "web_assets"
+        / "dashboard.js"
+    ).read_text(encoding="utf-8")
+    recommended = script[
+        script.index("function renderHomeAssistantIntegrationRecommendation") :
+        script.index("async function homeAssistantIntegrationRequest")
+    ]
+
+    assert 'action = "install"' in recommended
+    assert 'action = "update"' in recommended
+    assert 'action = "maintenance"' in recommended
+    assert 'button.dataset.confirming = "true"' in recommended
+    assert 'element("home-assistant-integration-confirm").value = artifact.digest' in recommended
+    assert "Home Assistant Core will not be restarted automatically" in recommended
+    assert "window.confirm(" not in recommended
+    assert "localStorage" not in recommended
+    assert "sessionStorage" not in recommended
 
 
 def test_advanced_access_one_time_material_stays_out_of_browser_storage() -> None:
