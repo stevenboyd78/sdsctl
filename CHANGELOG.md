@@ -32,6 +32,9 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   private-LAN identities, passwords, and clients behind clearly labeled
   advanced disclosures while keeping App Configuration responsible for service
   switches, private names/addresses, and Network host-port mappings.
+- Add concise document descriptions to the dashboard, Favorites workspace,
+  display administration and API documentation shells so the same packaged
+  metadata is available from static previews and the standalone server.
 
 ## [0.34.0] - 2026-11-24
 
