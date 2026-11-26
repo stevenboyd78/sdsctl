@@ -4,6 +4,7 @@ import asyncio
 import queue
 import threading
 import time
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta, timezone
 from math import nextafter
 
@@ -11,22 +12,29 @@ import pytest
 from rich.text import Text
 from textual.widgets import Static
 
+from sds200 import tui as tui_module
 from sds200.daemon_waterfall_protocol import (
     DaemonWaterfallRecord,
     DaemonWaterfallRecordKind,
 )
-from sds200.state import snapshot_from_scanner_info
+from sds200.scanner_display_reader import DisplayFrameSource
+from sds200.scanner_display_tui import MimicScreen
+from sds200.state import ScannerScreenKind, snapshot_from_scanner_info
 from sds200.theme import DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME, ThemePalette
 from sds200.tui import ScannerIdentity, ScannerTuiApp
 from sds200.tui_waterfall import (
     TuiWaterfallModel,
     TuiWaterfallReader,
+    _render_mimic_fft,
+    _render_mimic_history,
     _render_relative_row,
     _scale_text,
     _waterfall_title,
     normalize_waterfall_values,
 )
 from sds200.xml_protocol import ScannerInfoParser
+
+from .test_scanner_display_web import scenarios
 
 XML = """<?xml version="1.0" encoding="utf-8"?>
 <ScannerInfo Mode="Trunk Scan" V_Screen="trunk_scan">
@@ -50,6 +58,11 @@ def _checkpoint(sequence: int = 1) -> DaemonWaterfallRecord:
                 "lower_frequency": "1540000",
                 "center_frequency": "1550000",
                 "upper_frequency": "1560000",
+                "marker_frequency": "1552500",
+                "marker_position": "120",
+                "modulation": "NFM",
+                "fft_area_size": "1",
+                "waterfall_mode": "1",
             },
         },
     )
@@ -71,6 +84,11 @@ def _gwf(sequence: int, *, offset: int = 0) -> DaemonWaterfallRecord:
                     "lower_frequency": "1540000",
                     "center_frequency": "1550000",
                     "upper_frequency": "1560000",
+                    "marker_frequency": "1552500",
+                    "marker_position": "120",
+                    "modulation": "NFM",
+                    "fft_area_size": "1",
+                    "waterfall_mode": "1",
                 },
             },
         },
@@ -152,6 +170,35 @@ def test_waterfall_relative_intensity_band_boundaries_are_exact() -> None:
         (2, 4, "#ffaf00"),
         (4, 6, "bold #ff5f5f"),
     ]
+
+
+def test_mimic_waterfall_uses_radio_style_fft_marker_and_five_bands() -> None:
+    fft = _render_mimic_fft(
+        tuple(index / 239 for index in range(240)),
+        24,
+        6,
+        marker_position=120,
+    )
+    assert len(fft.plain.splitlines()) == 6
+    assert all(len(line) == 24 for line in fft.plain.splitlines())
+    assert "│" in fft.plain or "◆" in fft.plain
+    assert {span.style for span in fft.spans} >= {
+        "bold #24d36b",
+        "bold #edf4fc",
+    }
+
+    history = _render_mimic_history(
+        ((0.0, 0.21, 0.41, 0.61, 1.0),),
+        5,
+    )
+    assert history.plain == "░▒▓██"
+    assert {span.style for span in history.spans} == {
+        "#173b8f",
+        "#00b7ff",
+        "#24d36b",
+        "#ffe45e",
+        "bold #ff4b3e",
+    }
 
 
 def test_waterfall_source_timestamp_is_presented_in_local_time_only() -> None:
@@ -415,6 +462,113 @@ def test_daemon_tui_waterfall_is_responsive_and_releases_lease(
             assert app._waterfall_screen is None
             assert clients[0].closed.is_set()
             assert not waterfall.reader.alive
+
+    asyncio.run(exercise())
+
+
+def test_dashboard_tui_automatically_tracks_waterfall_and_honors_manual_close(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def exercise() -> None:
+        monkeypatch.setattr(tui_module, "TUI_WATERFALL_AUTO_SWITCH_DELAY", 0.05)
+        monkeypatch.setattr(tui_module, "TUI_WATERFALL_AUTO_RETURN_DELAY", 0.05)
+        clients: list[_QueueClient] = []
+
+        def factory() -> _QueueClient:
+            client = _QueueClient([_checkpoint(), _gwf(2)])
+            clients.append(client)
+            return client
+
+        app = _app(factory)
+        scanning = app._snapshot
+        waterfall_state = replace(
+            scanning,
+            mode="Waterfall",
+            screen="waterfall",
+            screen_kind=ScannerScreenKind.WATERFALL,
+        )
+        async with app.run_test(size=(100, 30)) as pilot:
+            app.update_snapshot(waterfall_state, connected=True)
+            await pilot.pause(0.2)
+            first = app._waterfall_screen
+            assert first is not None
+            assert not first.mimic
+            assert app._waterfall_auto_origin == "dashboard"
+
+            await pilot.press("escape")
+            await pilot.pause(0.2)
+            assert app._waterfall_screen is None
+            assert app._waterfall_auto_suppressed
+            assert clients[0].closed.is_set()
+
+            app.update_snapshot(scanning, connected=True)
+            await pilot.pause(0.1)
+            assert not app._waterfall_auto_suppressed
+            app.update_snapshot(waterfall_state, connected=True)
+            await pilot.pause(0.2)
+            second = app._waterfall_screen
+            assert second is not None and second is not first
+
+            app.update_snapshot(scanning, connected=True)
+            await pilot.pause(0.2)
+            assert app._waterfall_screen is None
+            assert clients[-1].closed.is_set()
+
+    asyncio.run(exercise())
+
+
+def test_mimic_tui_automatically_uses_sds_style_waterfall_and_returns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def exercise() -> None:
+        monkeypatch.setattr(tui_module, "TUI_WATERFALL_AUTO_SWITCH_DELAY", 0.05)
+        monkeypatch.setattr(tui_module, "TUI_WATERFALL_AUTO_RETURN_DELAY", 0.05)
+        packet = scenarios()["held_trunk"]["display"]
+        client = _QueueClient([_checkpoint(), _gwf(2)])
+        baseline = _app()
+        app = ScannerTuiApp(
+            ScannerIdentity("sdsctl-remote-daemon", "SDS200", "fixture"),
+            baseline._snapshot,
+            display_source=DisplayFrameSource(lambda: packet, lambda: None),
+            waterfall_client_factory=lambda: client,
+            startup_view="mimic",
+        )
+        scanning = app._snapshot
+        waterfall_state = replace(
+            scanning,
+            mode="Waterfall",
+            screen="waterfall",
+            screen_kind=ScannerScreenKind.WATERFALL,
+        )
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause(0.2)
+            mimic = app._mimic_screen
+            assert isinstance(app.screen, MimicScreen)
+            assert mimic is not None
+
+            app.update_snapshot(waterfall_state, connected=True)
+            await pilot.pause(0.25)
+            waterfall = app._waterfall_screen
+            assert waterfall is not None and waterfall.mimic
+            assert app.screen is waterfall
+            assert app._mimic_screen is mimic
+            assert app._waterfall_auto_origin == "mimic"
+            assert "SDS200 | WATERFALL" in _plain(
+                waterfall.query_one("#waterfall-title", Static)
+            )
+            assert "MARKER 1552500 | NFM | FFT 50%" in _plain(
+                waterfall.query_one("#waterfall-health", Static)
+            )
+            assert "Return to Mimic" in _plain(
+                waterfall.query_one("#waterfall-keys", Static)
+            )
+
+            app.update_snapshot(scanning, connected=True)
+            await pilot.pause(0.25)
+            assert app._waterfall_screen is None
+            assert app.screen is mimic
+            assert isinstance(app.screen, MimicScreen)
+            assert client.closed.is_set()
 
     asyncio.run(exercise())
 
