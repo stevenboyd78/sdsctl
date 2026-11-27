@@ -191,8 +191,15 @@ def test_progress_requires_original_actual_started_anchor(active, fault):
 
 
 @pytest.mark.parametrize("fault", ["extra", "replaced", "different", "rewritten"])
-def test_progress_rechecks_original_directory_and_full_acknowledged_chain(active, fault):
+def test_progress_rechecks_original_directory_and_full_acknowledged_chain(
+    active, fault, monkeypatch
+):
     case, relay = active, active.relay
+    # This test checks directory and acknowledged-chain continuity, not phase
+    # scheduling. Keep every read inside one original active-phase window so a
+    # slow coverage run cannot cross the short stop boundary between checks.
+    observed_at = relay.plan.stop_at - 0.01
+    monkeypatch.setattr(m, "time", SimpleNamespace(monotonic=lambda: observed_at))
     first = relay.read_progress(case.progress)
     publish(case, first)
     relay.read_progress(case.progress)
