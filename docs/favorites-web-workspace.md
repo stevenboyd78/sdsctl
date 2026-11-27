@@ -58,6 +58,17 @@ policy, restrictive CSP and permissions policy apply to both the page and
 assets. When the store is not explicitly supplied, the page, assets, and
 summary API do not exist.
 
+The daemon-backed `sdsctl web` command can explicitly own this read-only
+surface with `--favorites-profile-directory /absolute/private/directory`.
+Activation requires either authenticated native HTTPS or trusted Home Assistant
+Ingress; ordinary loopback mode and generic container exposure reject it. The
+directory is opened through the same owner-only profile-store checks before the
+web server starts, and the store is synchronously closed when server execution
+returns or startup fails. Omitting the option preserves the existing dashboard
+and creates no profile directory or routes. This option does not create,
+import, mutate, export, or write a profile and does not add Home Assistant App
+packaging configuration.
+
 This layer still deliberately provides no draft autosave, source discovery,
 scanner connection, target selection, import, export, or write executor. A
 future mutation adapter must retain the existing no-store, CSRF, same-origin,

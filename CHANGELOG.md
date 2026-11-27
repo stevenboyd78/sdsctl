@@ -28,6 +28,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   same-origin-resource, permissions-policy, and display-identity denial
   boundaries. Snapshot access, editor workspaces, browser drafts, imports,
   exports, mutations, target selection, and write execution remain absent.
+- Add explicit daemon-web ownership for the read-only Favorites profile surface
+  through one absolute private directory, limited to authenticated native HTTPS
+  or trusted Home Assistant Ingress and closed on server exit or startup failure.
+  The option remains default-off and adds no Home Assistant packaging, profile
+  mutation, import, export, scanner discovery, target selection, or write path.
 
 ### Changed
 

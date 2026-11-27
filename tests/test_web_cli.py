@@ -1121,6 +1121,126 @@ def test_web_cli_rejects_conflicting_container_exposure_options(
     assert cli.main(["web", *arguments], environ={}) == 2
     assert message in capsys.readouterr().err
 
+
+def test_web_cli_favorites_profiles_require_guarded_absolute_directory(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    arguments = (
+        ["--favorites-profile-directory", "relative/profiles"],
+        ["--favorites-profile-directory", str(tmp_path / "profiles")],
+        [
+            "--container-exposure",
+            "--favorites-profile-directory",
+            str(tmp_path / "profiles"),
+        ],
+    )
+
+    for extra in arguments:
+        assert cli.main(["web", *extra], environ={}) == 2
+        assert (
+            "Favorites profiles require one absolute private directory and "
+            "native HTTPS or Home Assistant Ingress"
+        ) in capsys.readouterr().err
+
+
+def test_web_cli_home_assistant_ingress_owns_and_closes_favorites_profiles(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from sds200.favorites_profile_store import (
+        FavoritesProfileStore,
+        FavoritesProfileStoreClosedError,
+    )
+
+    app = object()
+    captured: list[FavoritesProfileStore] = []
+
+    def fake_create_app(
+        *args: object,
+        home_assistant_ingress: bool = False,
+        lan_authentication: WebDashboardAuthentication | None = None,
+        managed_theme_root: Path | None = None,
+        favorites_profile_store: FavoritesProfileStore | None = None,
+    ) -> object:
+        del args
+        assert home_assistant_ingress is True
+        assert lan_authentication is None
+        assert managed_theme_root is not None
+        assert favorites_profile_store is not None
+        assert favorites_profile_store.list_profiles() == ()
+        captured.append(favorites_profile_store)
+        return app
+
+    def fake_run_server(
+        selected_app: object,
+        **options: object,
+    ) -> int:
+        assert selected_app is app
+        assert options["home_assistant_ingress"] is True
+        assert captured[0].list_profiles() == ()
+        return 0
+
+    monkeypatch.setattr(web_dashboard, "create_web_dashboard_app", fake_create_app)
+    monkeypatch.setattr(cli, "run_web_dashboard_server", fake_run_server)
+    directory = tmp_path / "profiles"
+
+    result = cli.main(
+        [
+            "web",
+            "--home-assistant-ingress",
+            "--favorites-profile-directory",
+            str(directory),
+        ],
+        environ={},
+    )
+
+    assert result == 0
+    assert directory.is_dir()
+    assert len(captured) == 1
+    with pytest.raises(FavoritesProfileStoreClosedError):
+        captured[0].list_profiles()
+
+
+def test_web_cli_closes_favorites_profiles_when_app_construction_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from sds200.favorites_profile_store import (
+        FavoritesProfileStore,
+        FavoritesProfileStoreClosedError,
+    )
+
+    captured: list[FavoritesProfileStore] = []
+
+    def failing_create_app(
+        *args: object,
+        favorites_profile_store: FavoritesProfileStore | None = None,
+        **options: object,
+    ) -> object:
+        del args, options
+        assert favorites_profile_store is not None
+        captured.append(favorites_profile_store)
+        raise RuntimeError("synthetic app construction failure")
+
+    monkeypatch.setattr(web_dashboard, "create_web_dashboard_app", failing_create_app)
+
+    with pytest.raises(RuntimeError, match="synthetic app construction failure"):
+        cli.main(
+            [
+                "web",
+                "--home-assistant-ingress",
+                "--favorites-profile-directory",
+                str(tmp_path / "profiles"),
+            ],
+            environ={},
+        )
+
+    assert len(captured) == 1
+    with pytest.raises(FavoritesProfileStoreClosedError):
+        captured[0].list_profiles()
+
+
 def test_web_cli_rejects_scanner_connection_options(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
