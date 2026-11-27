@@ -10,6 +10,38 @@ The first slice intentionally stops at exact-plan review. It is safe to use in
 tests and future server adapters with copied Favorites data, but it does not
 authorize a scanner, USB, FTP, or production-tree write.
 
+## Persistent named profiles
+
+`FavoritesProfileStore` is the separate durable foundation for browser profile
+selection. It keeps exact `FavoritesStorageSnapshot` values in one private
+owner-only SQLite database. Every profile has a user-facing name and one
+explicit compatibility value: `sds100`, `sds200`, or `shared`. Names are
+unique without case ambiguity, while opaque profile identifiers—not names or
+filesystem paths—are the stable application identity.
+
+Creation publishes immutable revision 1. A later save must provide the exact
+current revision that its caller reviewed; a stale save is rejected before any
+new bytes are committed. An accepted change appends one immutable revision and
+atomically selects it as current. The exact catalog bytes, ordered HPD names and
+bytes, compatibility, name, content digest, sizes, and timestamps for earlier
+revisions remain readable. Repeating the exact current snapshot and metadata is
+idempotent and does not invent another revision.
+
+The configured directory must be canonical, non-symbolic, owned by the current
+account, and mode `0700`; the database must be one owner-only mode-`0600`
+regular file. Profile, revision, document, snapshot-byte, and name limits fail
+closed without evicting or partly publishing another profile. The store uses a
+full-synchronous transaction and serializes operations within one process;
+SQLite write locking plus the exact-revision check also protects concurrent
+store instances.
+
+This layer deliberately provides no HTTP route, authentication adapter, draft
+autosave, source discovery, scanner connection, target selection, or write
+executor. A future operator-only route may list path-free summaries and import
+or export exact snapshots, but it must retain the existing no-store, CSRF,
+same-origin, logout/revocation, worker-admission, and explicit write-review
+boundaries. Profile persistence is not permission to mutate a scanner.
+
 ## Ownership and source selection
 
 `FavoritesWebWorkspaces` receives administrator-configured
