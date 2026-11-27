@@ -10,6 +10,7 @@ from math import nextafter
 
 import pytest
 from rich.text import Text
+from textual.pilot import Pilot
 from textual.widgets import Static
 
 from sds200 import tui as tui_module
@@ -25,6 +26,7 @@ from sds200.tui import ScannerIdentity, ScannerTuiApp
 from sds200.tui_waterfall import (
     TuiWaterfallModel,
     TuiWaterfallReader,
+    WaterfallScreen,
     _render_mimic_fft,
     _render_mimic_history,
     _render_relative_row,
@@ -111,6 +113,49 @@ def _app(
 def _plain(widget: Static) -> str:
     content = widget.content
     return content if isinstance(content, str) else content.plain
+
+
+async def _wait_for_waterfall_screen(
+    app: ScannerTuiApp,
+    pilot: Pilot[None],
+    *,
+    previous: WaterfallScreen | None = None,
+    expected_health: str | None = None,
+) -> WaterfallScreen:
+    for _ in range(200):
+        waterfall = app._waterfall_screen
+        if waterfall is not None and waterfall is not previous and waterfall.is_mounted:
+            health_ready = expected_health is None or expected_health in _plain(
+                waterfall.query_one("#waterfall-health", Static)
+            )
+            if health_ready:
+                return waterfall
+        await pilot.pause(0.01)
+    raise AssertionError("Automatic waterfall screen did not become ready")
+
+
+async def _wait_for_mimic_screen(
+    app: ScannerTuiApp,
+    pilot: Pilot[None],
+) -> MimicScreen:
+    for _ in range(200):
+        mimic = app._mimic_screen
+        if mimic is not None and mimic.is_mounted and app.screen is mimic:
+            return mimic
+        await pilot.pause(0.01)
+    raise AssertionError("Mimic screen did not become ready")
+
+
+async def _wait_for_waterfall_close(
+    app: ScannerTuiApp,
+    pilot: Pilot[None],
+    closed: threading.Event,
+) -> None:
+    for _ in range(200):
+        if app._waterfall_screen is None and closed.is_set():
+            return
+        await pilot.pause(0.01)
+    raise AssertionError("Automatic waterfall screen or client did not close")
 
 
 def test_waterfall_normalization_is_strict_and_relative_only() -> None:
@@ -489,29 +534,22 @@ def test_dashboard_tui_automatically_tracks_waterfall_and_honors_manual_close(
         )
         async with app.run_test(size=(100, 30)) as pilot:
             app.update_snapshot(waterfall_state, connected=True)
-            await pilot.pause(0.2)
-            first = app._waterfall_screen
-            assert first is not None
+            first = await _wait_for_waterfall_screen(app, pilot)
             assert not first.mimic
             assert app._waterfall_auto_origin == "dashboard"
 
             await pilot.press("escape")
-            await pilot.pause(0.2)
-            assert app._waterfall_screen is None
+            await _wait_for_waterfall_close(app, pilot, clients[0].closed)
             assert app._waterfall_auto_suppressed
             assert clients[0].closed.is_set()
 
             app.update_snapshot(scanning, connected=True)
-            await pilot.pause(0.1)
             assert not app._waterfall_auto_suppressed
             app.update_snapshot(waterfall_state, connected=True)
-            await pilot.pause(0.2)
-            second = app._waterfall_screen
-            assert second is not None and second is not first
+            await _wait_for_waterfall_screen(app, pilot, previous=first)
 
             app.update_snapshot(scanning, connected=True)
-            await pilot.pause(0.2)
-            assert app._waterfall_screen is None
+            await _wait_for_waterfall_close(app, pilot, clients[-1].closed)
             assert clients[-1].closed.is_set()
 
     asyncio.run(exercise())
@@ -541,31 +579,27 @@ def test_mimic_tui_automatically_uses_sds_style_waterfall_and_returns(
             screen_kind=ScannerScreenKind.WATERFALL,
         )
         async with app.run_test(size=(100, 30)) as pilot:
-            await pilot.pause(0.2)
-            mimic = app._mimic_screen
+            mimic = await _wait_for_mimic_screen(app, pilot)
             assert isinstance(app.screen, MimicScreen)
-            assert mimic is not None
 
             app.update_snapshot(waterfall_state, connected=True)
-            await pilot.pause(0.25)
-            waterfall = app._waterfall_screen
-            assert waterfall is not None and waterfall.mimic
+            waterfall = await _wait_for_waterfall_screen(
+                app,
+                pilot,
+                expected_health="MARKER 1552500 | NFM | FFT 50%",
+            )
+            assert waterfall.mimic
             assert app.screen is waterfall
             assert app._mimic_screen is mimic
             assert app._waterfall_auto_origin == "mimic"
-            assert "SDS200 | WATERFALL" in _plain(
-                waterfall.query_one("#waterfall-title", Static)
-            )
+            assert "SDS200 | WATERFALL" in _plain(waterfall.query_one("#waterfall-title", Static))
             assert "MARKER 1552500 | NFM | FFT 50%" in _plain(
                 waterfall.query_one("#waterfall-health", Static)
             )
-            assert "Return to Mimic" in _plain(
-                waterfall.query_one("#waterfall-keys", Static)
-            )
+            assert "Return to Mimic" in _plain(waterfall.query_one("#waterfall-keys", Static))
 
             app.update_snapshot(scanning, connected=True)
-            await pilot.pause(0.25)
-            assert app._waterfall_screen is None
+            await _wait_for_waterfall_close(app, pilot, client.closed)
             assert app.screen is mimic
             assert isinstance(app.screen, MimicScreen)
             assert client.closed.is_set()
