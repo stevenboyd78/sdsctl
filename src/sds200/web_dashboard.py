@@ -35,6 +35,7 @@ from .daemon_recording_file_client import (
 from .daemon_recording_file_protocol import RecordingFileResponseStatus
 from .daemon_waterfall_protocol import DaemonWaterfallRecord
 from .exceptions import DaemonRequestError, SDS200Error
+from .favorites_profile_browser import attach_favorites_profile_browser_routes
 from .favorites_profile_http import attach_favorites_profile_read_routes
 from .favorites_profile_store import FavoritesProfileStore
 from .front_panel_keys import FrontPanelKey
@@ -642,6 +643,7 @@ def create_web_dashboard_app(
         attach_supplemental_routes(app, api_client_factory, demand=supplemental_demand)
     if favorites_profile_store is not None:
         attach_favorites_profile_read_routes(app, favorites_profile_store)
+        attach_favorites_profile_browser_routes(app)
 
     @app.get(
         "/",
