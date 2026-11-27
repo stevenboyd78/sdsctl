@@ -8,7 +8,7 @@ import subprocess
 import sys
 from contextlib import suppress
 from pathlib import Path
-from threading import Event, Timer
+from threading import Event
 from unittest.mock import patch
 
 import pytest
@@ -86,23 +86,26 @@ def test_hung_child_is_stopped_at_independent_deadline(directory, ignore_term):
     assert report["child_exit_confirmed"] and not report["restoration_verified"]
 
 
-def test_external_cancellation_stops_child_without_waiting_for_window(directory):
+def test_external_cancellation_stops_child_without_waiting_for_window(directory, monkeypatch):
     cancel = Event()
-    timer = Timer(0.15, cancel.set)
-    timer.start()
-    try:
-        assert (
-            guard.supervise(
-                [sys.executable, "-c", "import time; time.sleep(30)"],
-                directory,
-                deadline_seconds=5,
-                cancel=cancel,
-            )
-            == 1
+
+    real_popen = subprocess.Popen
+
+    def spawn(*args, **kwargs):
+        child = real_popen(*args, **kwargs)
+        cancel.set()
+        return child
+
+    monkeypatch.setattr(subprocess, "Popen", spawn)
+    assert (
+        guard.supervise(
+            [sys.executable, "-c", "import time; time.sleep(30)"],
+            directory,
+            deadline_seconds=5,
+            cancel=cancel,
         )
-    finally:
-        timer.cancel()
-        timer.join()
+        == 1
+    )
     assert result(directory)["outcome"] == "cancelled"
     assert result(directory)["child_exit_confirmed"]
 
