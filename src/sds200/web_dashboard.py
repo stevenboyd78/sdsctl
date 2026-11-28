@@ -35,6 +35,8 @@ from .daemon_recording_file_client import (
 from .daemon_recording_file_protocol import RecordingFileResponseStatus
 from .daemon_waterfall_protocol import DaemonWaterfallRecord
 from .exceptions import DaemonRequestError, SDS200Error
+from .favorites_profile_http import attach_favorites_profile_read_routes
+from .favorites_profile_store import FavoritesProfileStore
 from .front_panel_keys import FrontPanelKey
 from .home_assistant_app_advanced_ingress import (
     home_assistant_app_advanced_ingress_status,
@@ -502,6 +504,7 @@ def create_web_dashboard_app(
     supplemental_delivery: bool = False,
     supplemental_demand: bool = False,
     supplemental_consumer: bool = False,
+    favorites_profile_store: FavoritesProfileStore | None = None,
 ) -> FastAPI:
     """Create the daemon-backed web application without scanner ownership."""
 
@@ -545,6 +548,17 @@ def create_web_dashboard_app(
         raise ValueError("Supplemental consumer requires explicit supplemental delivery.")
     if supplemental_delivery and not (home_assistant_ingress or lan_authentication is not None):
         raise ValueError("Supplemental delivery requires authenticated dashboard admission.")
+    if favorites_profile_store is not None and not isinstance(
+        favorites_profile_store,
+        FavoritesProfileStore,
+    ):
+        raise TypeError("Favorites profile store must be FavoritesProfileStore or None.")
+    if favorites_profile_store is not None and not (
+        home_assistant_ingress or lan_authentication is not None
+    ):
+        raise ValueError(
+            "Favorites profile summary reads require authenticated dashboard admission."
+        )
     if lan_authentication is not None and not isinstance(
         lan_authentication,
         WebDashboardAuthentication,
@@ -626,6 +640,8 @@ def create_web_dashboard_app(
 
     if supplemental_delivery:
         attach_supplemental_routes(app, api_client_factory, demand=supplemental_demand)
+    if favorites_profile_store is not None:
+        attach_favorites_profile_read_routes(app, favorites_profile_store)
 
     @app.get(
         "/",

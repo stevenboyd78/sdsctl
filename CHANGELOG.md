@@ -18,6 +18,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   history, stable path-free summaries, and optimistic-concurrency protection.
   This persistence foundation adds no browser route, scanner target, USB/FTP
   mutation, autosave, or deployment behavior.
+- Add an opt-in authenticated Favorites profile summary adapter with operator-
+  only list and current-summary reads, no-store responses, generic unavailable
+  failures, trusted Home Assistant Ingress admission, and no snapshot, path,
+  draft, mutation, target-selection, scanner, USB, FTP, CLI, or configuration
+  surface.
 
 ### Changed
 

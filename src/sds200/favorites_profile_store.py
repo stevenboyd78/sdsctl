@@ -755,6 +755,20 @@ class FavoritesProfileStore:
             ).fetchall()
             return tuple(self._summary_from_row(row) for row in rows)
 
+    def get_profile_summary(self, profile_id: str) -> FavoritesProfileSummary:
+        """Read current path-free metadata without loading snapshot bytes."""
+
+        with self._lock:
+            self._require_open()
+            self._profile_row(self._connection, profile_id)
+            row = self._connection.execute(
+                self._summary_query(where="WHERE p.profile_id = ?"),
+                (profile_id,),
+            ).fetchone()
+            if row is None:
+                raise FavoritesProfileNotFoundError()
+            return self._summary_from_row(row)
+
 
 __all__ = [
     "FAVORITES_PROFILE_DEFAULT_MAX_DOCUMENTS",

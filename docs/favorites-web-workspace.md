@@ -3,8 +3,10 @@
 The Favorites web workspace is an experimental server-side foundation for a
 future browser editor. It reuses the existing lossless Favorites parser,
 navigation model, in-memory editor, validation, exact write plan, and
-confirmation token. It does not add an HTTP route, a browser UI, a write
-executor, scanner discovery, or target selection.
+confirmation token. The editor workspace still has no HTTP route, browser UI,
+write executor, scanner discovery, or target selection. The separate durable
+profile store has one explicitly opt-in summary-only read adapter described
+below; that adapter does not connect the editor workspace or expose snapshots.
 
 The first slice intentionally stops at exact-plan review. It is safe to use in
 tests and future server adapters with copied Favorites data, but it does not
@@ -35,12 +37,22 @@ full-synchronous transaction and serializes operations within one process;
 SQLite write locking plus the exact-revision check also protects concurrent
 store instances.
 
-This layer deliberately provides no HTTP route, authentication adapter, draft
-autosave, source discovery, scanner connection, target selection, or write
-executor. A future operator-only route may list path-free summaries and import
-or export exact snapshots, but it must retain the existing no-store, CSRF,
-same-origin, logout/revocation, worker-admission, and explicit write-review
-boundaries. Profile persistence is not permission to mutate a scanner.
+An opt-in read-only adapter may expose the current path-free summaries to an
+existing authenticated dashboard operator. It lists summaries and retrieves
+one current summary; it never returns catalog bytes, document names or bytes,
+filesystem paths, older revisions, drafts, or confirmation tokens. Native-LAN
+display identities cannot use it, and Home Assistant access still requires the
+trusted Ingress peer. Every response is no-store, malformed and unknown
+identifiers share one generic unavailable response, and store failures fail
+closed. The adapter has no CLI or configuration wiring, so ordinary dashboard
+construction does not create the routes.
+
+This layer still deliberately provides no draft autosave, source discovery,
+scanner connection, target selection, import, export, or write executor. A
+future mutation adapter must retain the existing no-store, CSRF, same-origin,
+logout/revocation, worker-admission, and explicit write-review boundaries.
+Profile persistence and summary visibility are not permission to mutate a
+scanner.
 
 ## Ownership and source selection
 
@@ -142,9 +154,10 @@ generic PATCH endpoint or raw file-replacement API.
 
 This slice does not provide:
 
-- an HTTP or WebSocket endpoint;
+- a profile mutation, snapshot, import, export, workspace, or WebSocket
+  endpoint;
 - a reachable or data-connected browser editor (the packaged appearance shell
-  remains route-free and every workspace action is disabled);
+  remains disconnected and every workspace action is disabled);
 - browser-supplied filesystem paths;
 - autosave or durable draft persistence;
 - implicit source or write-target discovery;
