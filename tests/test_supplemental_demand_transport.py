@@ -1,11 +1,13 @@
 """Separate authenticated mutation on one real native loopback owner; no hardware."""
 
 import json
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import asdict
 from threading import Event
+from time import monotonic
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -47,7 +49,6 @@ from sds200.web_supplemental import (
 )
 
 from .test_daemon_display_frames import configured as configured
-from .test_daemon_quick_key_worker import wait_for
 from .test_daemon_supplemental_acquisition import rig as rig
 from .test_scanner_display_supplemental_transport import (
     ORIGIN,
@@ -56,6 +57,14 @@ from .test_scanner_display_supplemental_transport import (
     request,
     web,
 )
+
+
+def wait_for(predicate: Callable[[], bool], *, timeout: float = 10.0) -> None:
+    """Allow loaded runners to schedule native background demand work."""
+    deadline = monotonic() + timeout
+    while not predicate():
+        assert monotonic() < deadline, "Background condition did not complete"
+        Event().wait(0.005)
 
 
 @pytest.fixture
