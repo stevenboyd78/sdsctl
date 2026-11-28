@@ -517,7 +517,9 @@ def test_actual_feed_worker_and_trigger_lifecycle(
             runtime._scanner_model, runtime._scanner_firmware = "SDS200", FIRMWARE
             emitter.start()
             handler = signal.getsignal(signal.SIGUSR1)
-            assert handler.__self__._armed.wait(1)
+            # A coverage-loaded runner may not schedule the trigger worker immediately.
+            # This bounds fixture startup only; the lifecycle assertions below stay exact.
+            assert handler.__self__._armed.wait(5.0)
             assert not scanner.reads
             if outcome != "expiry":
                 handler(signal.SIGUSR1, None)
