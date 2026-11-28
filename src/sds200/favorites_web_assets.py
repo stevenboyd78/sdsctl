@@ -6,6 +6,7 @@ from importlib.resources import files
 
 FAVORITES_WEB_ASSET_NAMES = (
     "favorites-appearance.js",
+    "favorites-profiles.js",
     "favorites-workspace.css",
     "favorites-workspace.html",
 )

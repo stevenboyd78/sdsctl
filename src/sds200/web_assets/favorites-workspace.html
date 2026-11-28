@@ -6,22 +6,23 @@
   <meta name="description" content="Review and prepare Uniden SDS100 and SDS200 Favorites Lists in an accessible light, dark, or automatic browser workspace.">
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#f3f6fa">
-  <title>Favorites workspace preview</title>
-  <script src="/assets/favorites-appearance.js"></script>
-  <link rel="stylesheet" href="/assets/favorites-workspace.css">
+  <title>Favorites profiles</title>
+  <script src="assets/favorites-appearance.js"></script>
+  <link rel="stylesheet" href="assets/favorites-workspace.css">
+  <script src="assets/favorites-profiles.js" defer></script>
 </head>
-<body data-workspace-state="unwired">
+<body data-workspace-state="profiles-loading">
   <a class="skip-link" href="#favorites-main">Skip to workspace</a>
 
   <header class="app-header">
     <div>
       <p class="eyebrow">sdsctl Favorites</p>
-      <h1>Favorites workspace</h1>
-      <p class="subtitle">Review copied Favorites data without scanner ownership.</p>
+      <h1>Favorites profiles</h1>
+      <p class="subtitle">Review saved server-side summaries without scanner ownership.</p>
     </div>
     <div class="header-controls">
       <span class="state-badge" data-state="foundation">
-        <span aria-hidden="true">◇</span> Foundation only
+        <span aria-hidden="true">◇</span> Read-only profiles
       </span>
       <label for="favorites-appearance-select">
         Appearance
@@ -37,8 +38,8 @@
   <div class="safety-banner" role="status" aria-live="polite">
     <span class="safety-icon" aria-hidden="true">i</span>
     <div>
-      <strong>Preview shell — no workspace route is connected.</strong>
-      <span>This packaged surface cannot contact a scanner, execute a write, or retain a draft.</span>
+      <strong>Profile summaries only — editor workspaces remain disconnected.</strong>
+      <span>This surface cannot expose Favorites bytes, contact a scanner, execute a write, or retain a draft.</span>
     </div>
   </div>
 
@@ -46,28 +47,27 @@
     <aside class="panel source-panel" aria-labelledby="source-heading">
       <div class="panel-heading">
         <div>
-          <p class="section-kicker">Source</p>
-          <h2 id="source-heading">Copied data</h2>
+          <p class="section-kicker">Server</p>
+          <h2 id="source-heading">Saved profiles</h2>
         </div>
-        <span class="count-badge" aria-label="No configured sources">0</span>
+        <span id="favorites-profile-count" class="count-badge" aria-label="Saved profile count">—</span>
       </div>
 
-      <label for="favorites-source-select">Configured source</label>
-      <select id="favorites-source-select" disabled>
-        <option>No source adapter connected</option>
+      <label for="favorites-profile-select">Saved profile</label>
+      <select id="favorites-profile-select" disabled>
+        <option>Loading saved profiles…</option>
       </select>
-      <button type="button" disabled>Open workspace</button>
 
-      <div class="empty-state compact" role="note">
+      <div id="favorites-source-state" class="empty-state compact" role="status" aria-live="polite">
         <span class="empty-icon" aria-hidden="true">▱</span>
-        <p><strong>No workspace is open.</strong></p>
-        <p>A future operator-only adapter will provide configured labels without exposing host paths.</p>
+        <p><strong>Loading saved profile summaries.</strong></p>
+        <p>No source paths or Favorites document bytes are sent to this page.</p>
       </div>
 
       <nav aria-labelledby="navigation-heading">
         <div class="subheading-row">
           <h3 id="navigation-heading">Hierarchy</h3>
-          <span>Revision —</span>
+          <span id="favorites-selected-revision">Revision —</span>
         </div>
         <ul class="tree" aria-label="Favorites hierarchy">
           <li aria-disabled="true"><span aria-hidden="true">▹</span> System</li>
@@ -77,45 +77,28 @@
       </nav>
     </aside>
 
-    <section class="panel editor-panel" aria-labelledby="editor-heading">
+    <section class="panel editor-panel" aria-labelledby="favorites-selected-name">
       <div class="panel-heading">
         <div>
-          <p class="section-kicker">Editor</p>
-          <h2 id="editor-heading">Workspace overview</h2>
+          <p class="section-kicker">Read-only</p>
+          <h2 id="favorites-selected-name">Profile summary</h2>
         </div>
-        <span class="state-badge" data-state="clean">
-          <span aria-hidden="true">✓</span> No changes
+        <span id="favorites-selection-state" class="state-badge" data-state="foundation">
+          Loading
         </span>
       </div>
 
       <dl class="metric-grid">
-        <div><dt>Documents</dt><dd>—</dd></div>
-        <div><dt>Records</dt><dd>—</dd></div>
-        <div><dt>Diagnostics</dt><dd>—</dd></div>
-        <div><dt>Expires</dt><dd>—</dd></div>
+        <div><dt>Compatibility</dt><dd id="favorites-metric-compatibility">—</dd></div>
+        <div><dt>Documents</dt><dd id="favorites-metric-documents">—</dd></div>
+        <div><dt>Revision</dt><dd id="favorites-metric-revision">—</dd></div>
+        <div><dt>Stored snapshot</dt><dd id="favorites-metric-storage">—</dd></div>
       </dl>
 
-      <div class="toolbar" aria-label="Workspace tools">
-        <label for="favorites-search">Search hierarchy</label>
-        <input id="favorites-search" type="search" placeholder="Open a workspace to search" disabled>
-        <button type="button" disabled>Undo</button>
-        <button type="button" disabled>Reset</button>
-      </div>
-
-      <div class="empty-state editor-empty" role="note">
+      <div id="favorites-selection-message" class="empty-state editor-empty" role="status" aria-live="polite">
         <span class="empty-icon" aria-hidden="true">⌁</span>
-        <h3>Copied Favorites will appear here</h3>
-        <p>
-          The future adapter will present revision-bound, path-free nodes. Unsupported
-          fields and exact source provenance remain outside this browser boundary.
-        </p>
-      </div>
-
-      <div class="table-shell" aria-hidden="true">
-        <table>
-          <thead><tr><th>Name</th><th>Kind</th><th>Children</th><th>Available actions</th></tr></thead>
-          <tbody><tr><td>—</td><td>—</td><td>—</td><td>None</td></tr></tbody>
-        </table>
+        <h3>Waiting for a saved profile</h3>
+        <p>Editor workspaces, exact source data, and mutations remain unavailable.</p>
       </div>
     </section>
 
@@ -148,7 +131,7 @@
   </main>
 
   <footer>
-    <p>Process-local and route-free. No autosave, browser draft, filesystem path, credential, or confirmation token is stored here.</p>
+    <p>Server-side summaries only. No autosave, browser draft, filesystem path, Favorites bytes, credential, or confirmation token is stored here.</p>
   </footer>
 </body>
 </html>

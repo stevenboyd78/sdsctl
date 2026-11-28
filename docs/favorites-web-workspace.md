@@ -47,6 +47,17 @@ identifiers share one generic unavailable response, and store failures fail
 closed. The adapter has no CLI or configuration wiring, so ordinary dashboard
 construction does not create the routes.
 
+The same opt-in also makes an authenticated `/favorites` shell and its three
+fixed same-origin assets available. The shell lists and selects only those
+summary objects and displays compatibility, document count, current/history
+revision numbers, and aggregate snapshot size. It does not fetch a snapshot or
+workspace, accept a mutation, store a profile or draft in browser storage, or
+enable its review and execution controls. Native display identities cannot
+load the shell or its assets. A strict no-store policy, same-origin resource
+policy, restrictive CSP and permissions policy apply to both the page and
+assets. When the store is not explicitly supplied, the page, assets, and
+summary API do not exist.
+
 This layer still deliberately provides no draft autosave, source discovery,
 scanner connection, target selection, import, export, or write executor. A
 future mutation adapter must retain the existing no-store, CSRF, same-origin,

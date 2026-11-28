@@ -23,6 +23,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   failures, trusted Home Assistant Ingress admission, and no snapshot, path,
   draft, mutation, target-selection, scanner, USB, FTP, CLI, or configuration
   surface.
+- Add an opt-in authenticated Favorites profile selector that presents only
+  server-side path-free summary metadata under strict no-store, CSP,
+  same-origin-resource, permissions-policy, and display-identity denial
+  boundaries. Snapshot access, editor workspaces, browser drafts, imports,
+  exports, mutations, target selection, and write execution remain absent.
 
 ### Changed
 
