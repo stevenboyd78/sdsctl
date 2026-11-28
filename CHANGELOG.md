@@ -33,6 +33,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   or trusted Home Assistant Ingress and closed on server exit or startup failure.
   The option remains default-off and adds no Home Assistant packaging, profile
   mutation, import, export, scanner discovery, target selection, or write path.
+- Add an internal exact-revision Favorites profile preview adapter that opens a
+  selected immutable profile snapshot in a bounded owner-isolated process-local
+  workspace and exposes only path-free read-only navigation. It has no HTTP
+  route, browser activation, mutation/review API, raw snapshot response, target
+  discovery, scanner/USB/FTP execution, or write path.
 
 ### Changed
 

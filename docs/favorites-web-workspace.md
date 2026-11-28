@@ -5,8 +5,9 @@ future browser editor. It reuses the existing lossless Favorites parser,
 navigation model, in-memory editor, validation, exact write plan, and
 confirmation token. The editor workspace still has no HTTP route, browser UI,
 write executor, scanner discovery, or target selection. The separate durable
-profile store has one explicitly opt-in summary-only read adapter described
-below; that adapter does not connect the editor workspace or expose snapshots.
+profile store has an explicitly opt-in summary-only HTTP adapter and a separate
+route-free read-only workspace-preview adapter described below. Neither surface
+returns raw snapshots to a renderer.
 
 The first slice intentionally stops at exact-plan review. It is safe to use in
 tests and future server adapters with copied Favorites data, but it does not
@@ -75,6 +76,33 @@ future mutation adapter must retain the existing no-store, CSRF, same-origin,
 logout/revocation, worker-admission, and explicit write-review boundaries.
 Profile persistence and summary visibility are not permission to mutate a
 scanner.
+
+### Route-free profile workspace previews
+
+`FavoritesProfileWorkspacePreviews` is the first internal bridge between a
+durable profile and the bounded process-local workspace model. A trusted
+server-side caller provides an already-authorized owner secret, one opaque
+profile identifier, and the exact current profile revision it reviewed. A
+stale revision is rejected before a workspace is created. The immutable
+snapshot is loaded only inside the process and published into a read-only
+workspace with the existing owner, capacity, idle-expiry, absolute-expiry and
+opaque navigation-ID boundaries.
+
+The returned summary identifies the opaque profile and exact source revision;
+navigation nodes force every rename, duplicate and delete capability to false.
+The adapter itself exposes only open, summary, nodes, discard, owner-discard,
+expiry purge and close. The underlying workspace also rejects mutation and
+review calls for a read-only snapshot, including no-op undo or reset. Logout or
+revocation can discard every preview owned by that server-derived secret, and
+closing previews does not close the separately owned profile store.
+
+This bridge deliberately has no HTTP route or CLI wiring. It does not return
+catalog bytes, HPD filenames or bytes, accept filesystem paths, persist drafts,
+open scanners, discover local or remote USB devices, use FTP, review a write
+plan, or execute a write. A later HTTP adapter must still provide operator-only
+authentication, same-origin and CSRF enforcement for workspace creation,
+bounded worker admission, no-store DTO responses, and logout/revocation
+cleanup before the browser shell can consume it.
 
 ## Ownership and source selection
 

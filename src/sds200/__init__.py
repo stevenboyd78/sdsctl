@@ -541,6 +541,7 @@ __all__ = [
     "FavoritesProfileStoreLimits",
     "FavoritesProfileStoreUnavailableError",
     "FavoritesProfileSummary",
+    "FavoritesProfileWorkspacePreviews",
     "FAVORITES_WEB_DEFAULT_ABSOLUTE_SECONDS",
     "FAVORITES_WEB_DEFAULT_IDLE_SECONDS",
     "FAVORITES_WEB_DEFAULT_MAX_DOCUMENTS",

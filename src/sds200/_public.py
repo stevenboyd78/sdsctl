@@ -787,6 +787,7 @@ from .favorites_profile_store import (
     FavoritesProfileStoreUnavailableError,
     FavoritesProfileSummary,
 )
+from .favorites_profile_workspace import FavoritesProfileWorkspacePreviews
 from .favorites_query import (
     FavoritesNavigationQuery,
     query_favorites_navigation,
@@ -1855,6 +1856,7 @@ __all__ = [
     "FavoritesProfileStoreLimits",
     "FavoritesProfileStoreUnavailableError",
     "FavoritesProfileSummary",
+    "FavoritesProfileWorkspacePreviews",
     "FAVORITES_WEB_DEFAULT_ABSOLUTE_SECONDS",
     "FAVORITES_WEB_DEFAULT_IDLE_SECONDS",
     "FAVORITES_WEB_DEFAULT_MAX_DOCUMENTS",

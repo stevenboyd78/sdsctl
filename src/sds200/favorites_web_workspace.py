@@ -26,7 +26,10 @@ from .favorites_comparison import (
     FavoritesComparisonSource,
 )
 from .favorites_editor import (
+    FavoritesEditorError,
     FavoritesEditorSession,
+    FavoritesEditorSourceKind,
+    FavoritesEditorWriteResult,
     open_favorites_copied_tree_editor,
 )
 from .favorites_file import FavoritesFileParseError
@@ -39,9 +42,9 @@ from .favorites_schema import (
     FavoritesSchemaRule,
     FavoritesSchemaSeverity,
 )
-from .favorites_storage import FavoritesStorageFilenameError
+from .favorites_storage import FavoritesStorageFilenameError, FavoritesStorageSnapshot
 from .favorites_storage_local import FavoritesCopiedTreeStorageError
-from .favorites_write_plan import FavoritesWriteBlocker
+from .favorites_write_plan import FavoritesWriteBlocker, FavoritesWritePlan
 
 FAVORITES_WEB_DEFAULT_MAX_WORKSPACES = 8
 FAVORITES_WEB_DEFAULT_MAX_WORKSPACES_PER_OWNER = 2
@@ -140,6 +143,8 @@ class FavoritesWebWorkspaceSummary:
 
     workspace_id: str
     source_label: str
+    source_revision: int | None
+    read_only: bool
     revision: int
     dirty: bool
     undo_count: int
@@ -205,6 +210,8 @@ class _Workspace:
     workspace_id: str
     owner_digest: bytes = field(repr=False)
     source_label: str
+    source_revision: int | None
+    read_only: bool
     editor: FavoritesEditorSession = field(repr=False)
     revision: int
     mutation_count: int
@@ -223,6 +230,31 @@ class _Workspace:
         default_factory=dict,
         repr=False,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class _ReadOnlySnapshotStorage:
+    """Hold one trusted server-side snapshot without a writable target."""
+
+    snapshot: FavoritesStorageSnapshot = field(repr=False)
+
+    @property
+    def kind(self) -> FavoritesEditorSourceKind:
+        return FavoritesEditorSourceKind.COPIED_TREE
+
+    @property
+    def requested_path(self) -> Path:
+        return Path("<read-only-favorites-snapshot>")
+
+    @property
+    def favorites_directory(self) -> Path:
+        return self.requested_path
+
+    def read_snapshot(self) -> FavoritesStorageSnapshot:
+        return self.snapshot
+
+    def execute(self, _plan: FavoritesWritePlan) -> FavoritesEditorWriteResult:
+        raise FavoritesEditorError("Favorites snapshot workspace is read-only.")
 
 
 def _owner_digest(owner_secret: bytes) -> bytes:
@@ -252,6 +284,7 @@ class FavoritesWebWorkspaces:
         self,
         sources: tuple[FavoritesWebWorkspaceSource, ...],
         *,
+        allow_read_only_snapshots: bool = False,
         limits: FavoritesWebWorkspaceLimits | None = None,
         clock: _Clock = time.monotonic,
         token_factory: _TokenFactory | None = None,
@@ -261,7 +294,9 @@ class FavoritesWebWorkspaces:
             not isinstance(source, FavoritesWebWorkspaceSource) for source in sources
         ):
             raise TypeError("Favorites web workspace sources must be one exact tuple.")
-        if not sources:
+        if type(allow_read_only_snapshots) is not bool:
+            raise TypeError("Favorites web snapshot policy must be boolean.")
+        if not sources and not allow_read_only_snapshots:
             raise ValueError("Favorites web workspace requires a configured source.")
         by_label = {source.label: source for source in sources}
         if len(by_label) != len(sources):
@@ -277,6 +312,7 @@ class FavoritesWebWorkspaces:
         ):
             raise TypeError("Favorites web workspace factories must be callable.")
         self._sources = by_label
+        self._allow_read_only_snapshots = allow_read_only_snapshots
         self._limits = limits
         self._clock = clock
         self._token_factory = token_factory or (lambda: secrets.token_urlsafe(32))
@@ -356,6 +392,51 @@ class FavoritesWebWorkspaces:
             )
         return documents, records, snapshot_bytes
 
+    def _require_capacity_locked(self, owner: bytes) -> None:
+        if len(self._workspaces) >= self._limits.max_workspaces:
+            raise FavoritesWebWorkspaceLimitError("Favorites web workspace capacity is full.")
+        if (
+            sum(
+                compare_digest(workspace.owner_digest, owner)
+                for workspace in self._workspaces.values()
+            )
+            >= self._limits.max_workspaces_per_owner
+        ):
+            raise FavoritesWebWorkspaceLimitError("Favorites web workspace owner capacity is full.")
+
+    def _publish_workspace_locked(
+        self,
+        *,
+        owner: bytes,
+        source_label: str,
+        source_revision: int | None,
+        read_only: bool,
+        editor: FavoritesEditorSession,
+        now: float,
+    ) -> FavoritesWebWorkspaceSummary:
+        documents, records, snapshot_bytes = self._snapshot_shape(editor)
+        workspace_id = self._new_id_locked()
+        absolute_expires_at = now + self._limits.absolute_seconds
+        workspace = _Workspace(
+            workspace_id=workspace_id,
+            owner_digest=owner,
+            source_label=source_label,
+            source_revision=source_revision,
+            read_only=read_only,
+            editor=editor,
+            revision=0,
+            mutation_count=0,
+            document_count=documents,
+            record_count=records,
+            snapshot_bytes=snapshot_bytes,
+            created_at=now,
+            idle_expires_at=min(absolute_expires_at, now + self._limits.idle_seconds),
+            absolute_expires_at=absolute_expires_at,
+        )
+        summary = self._summary_locked(workspace)
+        self._workspaces[workspace_id] = workspace
+        return summary
+
     def create(self, owner_secret: bytes, source_label: str) -> FavoritesWebWorkspaceSummary:
         """Open one configured source without accepting a browser path."""
 
@@ -369,21 +450,17 @@ class FavoritesWebWorkspaces:
             source = self._sources.get(source_label)
             if source is None:
                 raise FavoritesWebWorkspaceNotFoundError()
-            if len(self._workspaces) >= self._limits.max_workspaces:
-                raise FavoritesWebWorkspaceLimitError("Favorites web workspace capacity is full.")
-            if (
-                sum(
-                    compare_digest(workspace.owner_digest, owner)
-                    for workspace in self._workspaces.values()
-                )
-                >= self._limits.max_workspaces_per_owner
-            ):
-                raise FavoritesWebWorkspaceLimitError(
-                    "Favorites web workspace owner capacity is full."
-                )
+            self._require_capacity_locked(owner)
             try:
                 editor = open_favorites_copied_tree_editor(source.directory)
-                documents, records, snapshot_bytes = self._snapshot_shape(editor)
+                return self._publish_workspace_locked(
+                    owner=owner,
+                    source_label=source.label,
+                    source_revision=None,
+                    read_only=False,
+                    editor=editor,
+                    now=now,
+                )
             except FavoritesWebWorkspaceLimitError:
                 raise
             except (
@@ -394,25 +471,52 @@ class FavoritesWebWorkspaces:
                 FavoritesStorageFilenameError,
             ):
                 raise FavoritesWebWorkspaceNotFoundError() from None
-            workspace_id = self._new_id_locked()
-            absolute_expires_at = now + self._limits.absolute_seconds
-            workspace = _Workspace(
-                workspace_id=workspace_id,
-                owner_digest=owner,
-                source_label=source.label,
-                editor=editor,
-                revision=0,
-                mutation_count=0,
-                document_count=documents,
-                record_count=records,
-                snapshot_bytes=snapshot_bytes,
-                created_at=now,
-                idle_expires_at=min(absolute_expires_at, now + self._limits.idle_seconds),
-                absolute_expires_at=absolute_expires_at,
-            )
-            summary = self._summary_locked(workspace)
-            self._workspaces[workspace_id] = workspace
-            return summary
+
+    def create_read_only_snapshot(
+        self,
+        owner_secret: bytes,
+        source_label: str,
+        *,
+        source_revision: int,
+        snapshot: FavoritesStorageSnapshot,
+    ) -> FavoritesWebWorkspaceSummary:
+        """Open one trusted server-side snapshot without a writable target."""
+
+        owner = _owner_digest(owner_secret)
+        if (
+            not isinstance(source_label, str)
+            or _SOURCE_LABEL.fullmatch(source_label) is None
+            or type(source_revision) is not int
+            or source_revision <= 0
+            or not isinstance(snapshot, FavoritesStorageSnapshot)
+        ):
+            raise ValueError("Favorites read-only snapshot source is invalid.")
+        with self._lock:
+            self._require_open_locked()
+            if not self._allow_read_only_snapshots:
+                raise FavoritesWebWorkspaceNotFoundError()
+            now = self._clock()
+            self._purge_locked(now)
+            self._require_capacity_locked(owner)
+            try:
+                editor = FavoritesEditorSession.open(_ReadOnlySnapshotStorage(snapshot))
+                return self._publish_workspace_locked(
+                    owner=owner,
+                    source_label=source_label,
+                    source_revision=source_revision,
+                    read_only=True,
+                    editor=editor,
+                    now=now,
+                )
+            except FavoritesWebWorkspaceLimitError:
+                raise
+            except (
+                FavoritesCatalogError,
+                FavoritesFileParseError,
+                FavoritesHierarchyError,
+                FavoritesStorageFilenameError,
+            ):
+                raise FavoritesWebWorkspaceNotFoundError() from None
 
     def _find_locked(
         self,
@@ -445,6 +549,8 @@ class FavoritesWebWorkspaces:
         return FavoritesWebWorkspaceSummary(
             workspace_id=workspace.workspace_id,
             source_label=workspace.source_label,
+            source_revision=workspace.source_revision,
+            read_only=workspace.read_only,
             revision=workspace.revision,
             dirty=workspace.editor.has_changes,
             undo_count=workspace.editor.undo_count,
@@ -545,13 +651,15 @@ class FavoritesWebWorkspaces:
                     kind=node.kind,
                     name=node.name,
                     child_count=len(node.children),
-                    can_rename=True,
-                    can_duplicate=node.kind
+                    can_rename=not workspace.read_only,
+                    can_duplicate=not workspace.read_only
+                    and node.kind
                     in (
                         FavoritesNavigationKind.CONVENTIONAL_CHANNEL,
                         FavoritesNavigationKind.TRUNK_CHANNEL,
                     ),
-                    can_delete=node.kind
+                    can_delete=not workspace.read_only
+                    and node.kind
                     in (
                         FavoritesNavigationKind.CONVENTIONAL_CHANNEL,
                         FavoritesNavigationKind.TRUNK_CHANNEL,
@@ -560,7 +668,12 @@ class FavoritesWebWorkspaces:
                 for node in nodes
             )
 
+    def _require_mutable_locked(self, workspace: _Workspace) -> None:
+        if workspace.read_only:
+            raise FavoritesWebWorkspaceNotFoundError()
+
     def _before_mutation_locked(self, workspace: _Workspace) -> None:
+        self._require_mutable_locked(workspace)
         if workspace.mutation_count >= self._limits.max_mutations:
             raise FavoritesWebWorkspaceLimitError(
                 "Favorites web workspace mutation limit was reached."
@@ -655,6 +768,7 @@ class FavoritesWebWorkspaces:
         owner = _owner_digest(owner_secret)
         with self._lock:
             workspace = self._find_locked(owner, workspace_id, expected_revision=expected_revision)
+            self._require_mutable_locked(workspace)
             if workspace.editor.undo_count == 0:
                 return self._summary_locked(workspace)
             self._before_mutation_locked(workspace)
@@ -674,6 +788,7 @@ class FavoritesWebWorkspaces:
         owner = _owner_digest(owner_secret)
         with self._lock:
             workspace = self._find_locked(owner, workspace_id, expected_revision=expected_revision)
+            self._require_mutable_locked(workspace)
             if not workspace.editor.has_changes:
                 return self._summary_locked(workspace)
             self._before_mutation_locked(workspace)
@@ -693,6 +808,7 @@ class FavoritesWebWorkspaces:
         owner = _owner_digest(owner_secret)
         with self._lock:
             workspace = self._find_locked(owner, workspace_id, expected_revision=expected_revision)
+            self._require_mutable_locked(workspace)
             reviewed = workspace.editor.review()
             plan = reviewed.plan
             change_counts = {kind: 0 for kind in FavoritesComparisonChangeKind}
