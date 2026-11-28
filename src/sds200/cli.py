@@ -1887,6 +1887,15 @@ def build_parser(
         help="Existing private server JSON; requires --experimental-browser-devices",
     )
     web.add_argument(
+        "--favorites-profile-directory",
+        type=Path,
+        metavar="PATH",
+        help=(
+            "Explicit private server directory for saved Favorites profiles; "
+            "requires authenticated LAN access or Home Assistant Ingress"
+        ),
+    )
+    web.add_argument(
         "--scanner-display-admin-config", type=Path, metavar="PATH",
         help="Explicit display-profile deployment TOML; Home Assistant Ingress only",
     )
@@ -5345,6 +5354,17 @@ def _run_web(
             "Experimental browser devices require native HTTPS or Home Assistant Ingress."
         )
 
+    favorites_profile_directory = args.favorites_profile_directory
+    if favorites_profile_directory is not None and (
+        not favorites_profile_directory.is_absolute()
+        or not (args.authenticated_lan or args.home_assistant_ingress)
+        or args.container_exposure
+    ):
+        raise ValueError(
+            "Favorites profiles require one absolute private directory and "
+            "native HTTPS or Home Assistant Ingress."
+        )
+
     lan_values = (
         args.lan_listen_address,
         args.lan_origin,
@@ -5636,43 +5656,54 @@ def _run_web(
     if args.lan_display_audio:
         browser_options["display_audio"] = True
 
-    app = create_web_dashboard_app(
-        api_client_factory,
-        event_client_factory,
-        pcmu_client_factory,
-        recording_file_client_factory,
-        waterfall_client_factory,
-        home_assistant_ingress=args.home_assistant_ingress,
-        lan_authentication=lan_authentication,
-        managed_theme_root=paths.theme_dir,
-        **browser_options,
-    )
-    server_host = (
-        args.lan_listen_address
-        if args.authenticated_lan
-        else (
-            WEB_DASHBOARD_HOME_ASSISTANT_INGRESS_HOST
-            if args.home_assistant_ingress
+    favorites_profile_store = None
+    if favorites_profile_directory is not None:
+        from .favorites_profile_store import FavoritesProfileStore
+
+        favorites_profile_store = FavoritesProfileStore(favorites_profile_directory)
+        browser_options["favorites_profile_store"] = favorites_profile_store
+
+    try:
+        app = create_web_dashboard_app(
+            api_client_factory,
+            event_client_factory,
+            pcmu_client_factory,
+            recording_file_client_factory,
+            waterfall_client_factory,
+            home_assistant_ingress=args.home_assistant_ingress,
+            lan_authentication=lan_authentication,
+            managed_theme_root=paths.theme_dir,
+            **browser_options,
+        )
+        server_host = (
+            args.lan_listen_address
+            if args.authenticated_lan
             else (
-                WEB_DASHBOARD_CONTAINER_EXPOSURE_HOST
-                if args.container_exposure
-                else (args.listen_address or WEB_DASHBOARD_DEFAULT_HOST)
+                WEB_DASHBOARD_HOME_ASSISTANT_INGRESS_HOST
+                if args.home_assistant_ingress
+                else (
+                    WEB_DASHBOARD_CONTAINER_EXPOSURE_HOST
+                    if args.container_exposure
+                    else (args.listen_address or WEB_DASHBOARD_DEFAULT_HOST)
+                )
             )
         )
-    )
-    assert server_host is not None
+        assert server_host is not None
 
-    return run_web_dashboard_server(
-        app,
-        host=server_host,
-        port=args.listen_port,
-        access_log=args.access_log,
-        home_assistant_ingress=args.home_assistant_ingress,
-        container_exposure=args.container_exposure,
-        authenticated_lan=args.authenticated_lan,
-        ssl_certfile=certificate_path,
-        ssl_keyfile=private_key_path,
-    )
+        return run_web_dashboard_server(
+            app,
+            host=server_host,
+            port=args.listen_port,
+            access_log=args.access_log,
+            home_assistant_ingress=args.home_assistant_ingress,
+            container_exposure=args.container_exposure,
+            authenticated_lan=args.authenticated_lan,
+            ssl_certfile=certificate_path,
+            ssl_keyfile=private_key_path,
+        )
+    finally:
+        if favorites_profile_store is not None:
+            favorites_profile_store.close()
 
 
 def _selected_terminal_theme(
